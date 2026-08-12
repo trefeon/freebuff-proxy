@@ -51,8 +51,8 @@ type RunSnapshot struct {
 	ActiveRuns    int
 	CooldownUntil time.Time
 	Requests      int
+	BanError      *upstream.BanError
 }
-
 // RunManager owns the current runs (one per agent) plus the draining list
 // for a single token.
 type RunManager struct {
@@ -338,7 +338,7 @@ func (m *RunManager) BanError() *upstream.BanError {
 func (m *RunManager) Snapshot() RunSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s := RunSnapshot{ActiveRuns: len(m.runs), CooldownUntil: m.cooldownUntil, Requests: m.totalRequests}
+	s := RunSnapshot{ActiveRuns: len(m.runs), CooldownUntil: m.cooldownUntil, Requests: m.totalRequests, BanError: m.ban}
 	return s
 }
 

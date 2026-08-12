@@ -36,13 +36,16 @@ func main() {
 	configPath := flag.String("config", "", "path to an optional JSON config file (keys mirror env names)")
 	verbose := flag.Bool("v", false, "verbose (debug) logging")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	showDoctor := flag.Bool("doctor", false, "run environment and configuration diagnostics")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println("freebuff-proxy", version)
 		os.Exit(0)
 	}
-
+	if *showDoctor {
+		runDoctor(*configPath)
+	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "freebuff-proxy: invalid config:", err)

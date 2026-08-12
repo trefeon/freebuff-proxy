@@ -49,15 +49,40 @@ What this is not: an official FreeBuff or Codebuff product. It is a community br
 >   not for proxy use. The maintainers have had accounts suspended while building and
 >   testing this project. This is not a toy warning.
 
+> **New here?** Start with the **[Getting Started Guide](docs/guides/getting-started.md)** for step-by-step setup, or see the **[Client Integration Guide](docs/guides/client-integration.md)** for copy-paste config for Continue, Cursor, aider, opencode, and more.
+
+## How it works
+
+```mermaid
+graph TD
+    Client[AI Client / Tool<br/>Continue, Cursor, aider] -->|POST /v1/chat/completions| Proxy[freebuff-proxy<br/>localhost:3457]
+    Proxy -->|1. Session & Run Lifecycle| Pool[Token Pool & Session Manager]
+    Proxy -->|2. Inject Envelope + Stealth| Upstream[Codebuff Upstream API<br/>codebuff.com]
+    Upstream -->|3. SSE Stream| Proxy
+    Proxy -->|4. OpenAI SSE Chunks| Client
+```
+
+### Glossary of terms
+
+| Term | Meaning |
+|---|---|
+| **Token** | Your FreeBuff authentication credential (`auth_code`). Obtained via web login at freebuff.llm.pm or official CLI. |
+| **Session** | A "free session" created upstream by the proxy so FreeBuff treats requests as coming from the official CLI. |
+| **Run** | An "agent run" inside a session required for model requests. Automatically rotated every 6h. |
+| **Rotation** | Periodically finishing old agent runs and starting new ones upstream to prevent long-lived session detection. |
+| **Cooldown** | When a token receives a 401 or 429 error, the proxy temporarily pauses it (30 min) and fails over to another token. |
+| **Bridge mode** | Proxy runs without configured tokens (`AUTH_TOKENS=`); each client sends their own token via `Authorization: Bearer <token>`. |
+| **Safe mode** | Preset (`SAFE_MODE=true`) applying conservative defaults for message caps, idle rotation, and request jitter. |
+
 ## What it does
 
 - Serves `/v1/chat/completions`, `/v1/models`, and `/healthz` on `127.0.0.1:3457` by default.
+- Self-diagnostic tool: `./freebuff-proxy -doctor` tests config, network, tokens, and upstream reachability (#15).
 - Pools tokens: `AUTH_TOKENS` accepts comma-separated values, round-robins across them, and cools a token down for 30 minutes after a 401.
 - Keeps free sessions alive: single-flight session create/poll/end, runs prewarmed at boot, rotated every `ROTATION_INTERVAL` (default 6h).
 - Refreshes the model catalog every 6h from the Codebuff sources (15 models at boot, served by `/v1/models`).
-- Sends outbound traffic through `HTTP_PROXY` or `SOCKS5_PROXY`, or impersonates a browser TLS fingerprint with `TLS_FINGERPRINT`.
-
-## Requirements
+- Sends outbound traffic through `HTTP_PROXY` or `SOCKS5_PROXY`, or impersonates a browser TLS fingerprint with `TLS_FINGERPRINT` (`chrome126`, `firefox128`, `safari18`, `edge126`, `auto`).
+- Account-safety knobs: `SAFE_MODE=true` preset, `MAX_MESSAGES_PER_DAY`, `IDLE_ROTATION_TIMEOUT`, and `REQUEST_JITTER`.
 
 - Zero or more FreeBuff auth tokens. With none, the proxy runs in **bridge mode** — each client sends their own token (see [Bridge mode](#bridge-mode)).
 - Release binaries run standalone. Building from source needs Go 1.26+ (see `go.mod`).

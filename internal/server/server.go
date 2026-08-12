@@ -517,16 +517,24 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 // --- error mapping ---
 
-// openAIError is the OpenAI error body; an empty code is omitted.
+// openAIError is the OpenAI error body with an optional human-readable hint (#19).
 type openAIError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code,omitempty"`
+	Hint    string `json:"hint,omitempty"`
 }
 
 // writeJSONError writes an OpenAI-shaped error response. Retry-After is set
 // (in ceil seconds) only when retryAfter > 0.
 func (s *Server) writeJSONError(w http.ResponseWriter, status int, message, typ, code string, retryAfter time.Duration) {
+	s.writeJSONErrorWithHint(w, status, message, typ, code, "", retryAfter)
+}
+
+func (s *Server) writeJSONErrorWithHint(w http.ResponseWriter, status int, message, typ, code, hint string, retryAfter time.Duration) {
+	if hint == "" {
+		hint = defaultHintForCode(code, message)
+	}
 	h := w.Header()
 	h.Set("Content-Type", "application/json")
 	if retryAfter > 0 {
@@ -534,10 +542,31 @@ func (s *Server) writeJSONError(w http.ResponseWriter, status int, message, typ,
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error": openAIError{Message: message, Type: typ, Code: code},
+		"error": openAIError{Message: message, Type: typ, Code: code, Hint: hint},
 	})
 }
 
+func defaultHintForCode(code, message string) string {
+	lowerMsg := strings.ToLower(message)
+	switch {
+	case code == "free_mode_cli_required" || strings.Contains(lowerMsg, "free_mode_cli_required"):
+		return "Upstream free tier gate requires official CLI traffic envelope. See FAQ: https://github.com/trefeon/freebuff-proxy#faq"
+	case code == "account_banned" || strings.Contains(lowerMsg, "banned"):
+		return "Account suspended upstream. Token is dead; create a fresh account with an established GitHub login."
+	case code == "upstream_auth_rejected" || code == "invalid_api_key" || strings.Contains(lowerMsg, "invalid api key"):
+		return "Token invalid or expired. Get a fresh token at https://freebuff.llm.pm or run scripts/get-freebuff-token.sh"
+	case code == "waiting_room_queued":
+		return "Upstream queue busy. Client will auto-retry after Retry-After duration."
+	case code == "rate_limited":
+		return "Daily message cap or rate limit reached. Wait for quota reset or add another token."
+	case code == "missing_bearer_token":
+		return "Bridge mode active: pass your FreeBuff token in Authorization: Bearer <token>"
+	case code == "model_not_found":
+		return "Check available models via GET /v1/models"
+	default:
+		return ""
+	}
+}
 // writeError maps any error from the pool/upstream to the PRD §6 matrix and
 // logs it once. Canceled client contexts are logged at debug and dropped (no
 // response written).

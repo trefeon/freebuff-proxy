@@ -188,70 +188,69 @@ if (-not (Test-Path -LiteralPath $exe) -or $Force) {
   }
 }
 
-# --- 7. .env -----------------------------------------------------------------
+# --- 7. .env - always copied from the shipped example ------------------------
+Write-Host "Step 3/3: configuration (.env)" -ForegroundColor Cyan
 $envPath = $EnvFile
 if (-not $envPath) { $envPath = Join-Path $Dir ".env" }
 if (-not $NoEnv) {
   $example = Join-Path $Dir ".env.example"
-  if (-not (Test-Path -LiteralPath $envPath)) {
+  if (-not (Test-Path -LiteralPath $envPath) -or $Force) {
     if (Test-Path -LiteralPath $example) {
-      Copy-Item -LiteralPath $example -Destination $envPath
-      Write-Host ".env created from .env.example" -ForegroundColor Green
+      Copy-Item -LiteralPath $example -Destination $envPath -Force
+      Write-Host ".env copied from .env.example" -ForegroundColor Green
     } else {
-      Set-Content -LiteralPath $envPath -Value "# freebuff-proxy config`n" -Encoding utf8
-      Write-Host ".env created (no .env.example in release; wrote a minimal file)" -ForegroundColor Green
-    }
-  } else {
-    Write-Host ".env already exists, leaving it as is" -ForegroundColor Green
-  }
-}
-
-# --- 8. token ----------------------------------------------------------------
-if (-not $SkipToken) {
-  $token = $null
-  $creds = Find-CredentialsFile
-  if ($creds) { $token = Get-AuthToken $creds }
-  if ($token -and $token.Length -gt 12) {
-    $content = Get-Content -LiteralPath $envPath -Raw
-    if ($content -match '(?m)^AUTH_TOKENS=.*$') {
-      $content = $content -replace '(?m)^AUTH_TOKENS=.*$', "AUTH_TOKENS=$token"
-    } else {
-      $content = $content.TrimEnd() + "`nAUTH_TOKENS=$token`n"
-    }
-    Set-Content -LiteralPath $envPath -Value $content -NoNewline -Encoding utf8
-    $masked = $token.Substring(0, 8) + "..." + $token.Substring($token.Length - 4)
-    Write-Host "Token found from your freebuff CLI login: $masked" -ForegroundColor Green
-    Write-Host "AUTH_TOKENS written into $envPath" -ForegroundColor Green
-  } else {
-    Write-Host "No freebuff CLI token found." -ForegroundColor Yellow
-    Write-Host "Get one from the web page, then paste it here (or press Enter to skip and set it manually):" -ForegroundColor Yellow
-    $pasted = Read-Host "Paste the login URL (https://freebuff.com/login?auth_code=...) or just the auth_code"
-    $pasted = $pasted.Trim()
-    if ($pasted) {
-      if ($pasted -match 'auth_code=([^&\s]+)') { $pasted = $Matches[1] }
-      if ($pasted.Length -gt 8) {
-        $content = Get-Content -LiteralPath $envPath -Raw
-        if ($content -match '(?m)^AUTH_TOKENS=.*$') {
-          $content = $content -replace '(?m)^AUTH_TOKENS=.*$', "AUTH_TOKENS=$pasted"
-        } else {
-          $content = $content.TrimEnd() + "`nAUTH_TOKENS=$pasted`n"
-        }
-        Set-Content -LiteralPath $envPath -Value $content -NoNewline -Encoding utf8
-        $masked = $pasted.Substring(0, 8) + "..." + $pasted.Substring($pasted.Length - 4)
-        Write-Host "AUTH_TOKENS written to $envPath ($masked)" -ForegroundColor Green
-      } else {
-        Write-Host "That does not look like a token; skipping. Set AUTH_TOKENS in $envPath manually." -ForegroundColor Yellow
+      $exampleUrl = "https://raw.githubusercontent.com/$Repo/main/.env.example"
+      try {
+        Invoke-WebRequest -Uri $exampleUrl -OutFile $envPath
+        Write-Host ".env downloaded from the documented .env.example" -ForegroundColor Green
+      } catch {
+        Set-Content -LiteralPath $envPath -Value "AUTH_TOKENS=`nLISTEN_ADDR=127.0.0.1:3457`nCOST_MODE=free`nMAX_MESSAGES_PER_DAY=0`nIDLE_ROTATION_TIMEOUT=0`n" -Encoding utf8
+        Write-Host ".env created (minimal fallback)" -ForegroundColor Yellow
       }
-    } else {
-      Write-Host "Skipped. To add the token manually:" -ForegroundColor Yellow
-      Write-Host "  1. Log in at https://freebuff.llm.pm, Freebuff Auth -> Generate login URL" -ForegroundColor Yellow
-      Write-Host "  2. Copy the URL it shows (https://freebuff.com/login?auth_code=...)" -ForegroundColor Yellow
-      Write-Host "  3. Edit $envPath and set:  AUTH_TOKENS=<the auth_code value from that link>" -ForegroundColor Yellow
-      Write-Host "  No Bearer prefix, no quotes needed." -ForegroundColor Yellow
     }
+  } else {
+    Write-Host ".env already exists; keeping it (use -Force to recreate)." -ForegroundColor Green
   }
 }
 
+function Set-EnvValue([string]$key, [string]$value) {
+  if ($NoEnv) { return }
+  $content = if (Test-Path -LiteralPath $envPath) { Get-Content -LiteralPath $envPath -Raw } else { "" }
+  if ($content -match "(?m)^$([regex]::Escape($key))=.*$") {
+    $content = $content -replace "(?m)^$([regex]::Escape($key))=.*$", "$key=$value"
+  } else {
+    $content = $content.TrimEnd() + "`n$key=$value`n"
+  }
+  Set-Content -LiteralPath $envPath -Value $content -NoNewline -Encoding utf8
+}
+
+if (-not $NoEnv) {
+  if ($SkipToken) {
+    $existing = (Get-Content -LiteralPath $envPath | Where-Object { $_ -match '^AUTH_TOKENS=' } | Select-Object -First 1) -replace '^AUTH_TOKENS=', ''
+    if ($existing -match 'cb_xxx|cb_yyy|changeme|your[-_]?token|^<') {
+      Set-EnvValue "AUTH_TOKENS" ""
+      Write-Host "Cleared the placeholder AUTH_TOKENS; empty is safer than a fake token." -ForegroundColor Yellow
+    }
+  } elseif ($token -and $token.Length -gt 12) {
+    Set-EnvValue "AUTH_TOKENS" $token
+    Write-Host "AUTH_TOKENS written into $envPath (value hidden)." -ForegroundColor Green
+  } else {
+    Write-Host "No CLI token available." -ForegroundColor Yellow
+    $pasted = Read-Host "Paste a FreeBuff login URL or auth_code (Enter to leave empty / bridge mode)"
+    $pasted = $pasted.Trim()
+    if ($pasted -match 'auth_code=([^&\s]+)') { $pasted = $Matches[1] }
+    if ($pasted.Length -gt 8) {
+      Set-EnvValue "AUTH_TOKENS" $pasted
+      Write-Host "AUTH_TOKENS written into $envPath (value hidden)." -ForegroundColor Green
+    } else {
+      Set-EnvValue "AUTH_TOKENS" ""
+      Write-Host "AUTH_TOKENS left empty. The proxy starts in bridge mode; clients must send their own token." -ForegroundColor Yellow
+    }
+  }
+  Set-EnvValue "MAX_MESSAGES_PER_DAY" "150"
+  Set-EnvValue "IDLE_ROTATION_TIMEOUT" "30m"
+  Write-Host "Safety defaults: MAX_MESSAGES_PER_DAY=150, IDLE_ROTATION_TIMEOUT=30m" -ForegroundColor Green
+}
 # --- 9. next steps -----------------------------------------------------------
 Write-Host ""
 Write-Host "Done. Next:" -ForegroundColor Cyan
@@ -267,3 +266,4 @@ Write-Host "  curl http://localhost:3457/healthz"
 Write-Host "  curl http://localhost:3457/v1/models"
 Write-Host ""
 Write-Host "See the README (in the zip) for the full guide and 9router wiring."
+
