@@ -40,14 +40,25 @@ func SanitizeHeaders(h http.Header) {
 }
 
 // ApplyProfileHeaders sets browser-typical headers on h from the profile.
-// Only non-empty profile fields are written. Sec-Fetch-* and
-// Upgrade-Insecure-Requests are always set (real browsers always send them).
+// Only non-empty profile fields are written. Sec-Fetch-* headers are set to
+// values appropriate for a cross-origin API request (not a navigation):
+//   - Sec-Fetch-Site: cross-site (the request targets a different origin)
+//   - Sec-Fetch-Mode: cors       (API POST, not navigate)
+//   - Sec-Fetch-Dest: empty      (not a document/script/image load)
+//
+// Upgrade-Insecure-Requests is deliberately NOT set: real browsers only send
+// it on top-level navigation requests (GET to a page), never on API POSTs.
+// Its presence on a POST is a fingerprinting signal.
+//
+// Sec-CH-UA-Mobile is set to "?0" for Chromium profiles because real desktop
+// Chrome always sends it; its absence is detectable.
 func ApplyProfileHeaders(h http.Header, p *Profile) {
 	if p.UserAgent != "" {
 		h.Set("User-Agent", p.UserAgent)
 	}
 	if p.SecChUA != "" {
 		h.Set("Sec-CH-UA", p.SecChUA)
+		h.Set("Sec-CH-UA-Mobile", "?0")
 	}
 	if p.SecChUAPlatform != "" {
 		h.Set("Sec-CH-UA-Platform", p.SecChUAPlatform)
@@ -58,10 +69,9 @@ func ApplyProfileHeaders(h http.Header, p *Profile) {
 	if p.AcceptEncoding != "" {
 		h.Set("Accept-Encoding", p.AcceptEncoding)
 	}
-	h.Set("Sec-Fetch-Site", "none")
+	h.Set("Sec-Fetch-Site", "cross-site")
 	h.Set("Sec-Fetch-Mode", "cors")
 	h.Set("Sec-Fetch-Dest", "empty")
-	h.Set("Upgrade-Insecure-Requests", "1")
 }
 
 // SanitizeAndApply removes proxy headers and applies browser profile headers.

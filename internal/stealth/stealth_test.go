@@ -79,14 +79,20 @@ func TestApplyProfileHeaders(t *testing.T) {
 		if got := h.Get("Sec-CH-UA"); got != ProfileChrome120.SecChUA {
 			t.Errorf("Sec-CH-UA = %q", got)
 		}
-		if got := h.Get("Sec-Fetch-Site"); got != "none" {
-			t.Errorf("Sec-Fetch-Site = %q, want none", got)
+		if got := h.Get("Sec-CH-UA-Mobile"); got != "?0" {
+			t.Errorf("Sec-CH-UA-Mobile = %q, want ?0", got)
+		}
+		if got := h.Get("Sec-Fetch-Site"); got != "cross-site" {
+			t.Errorf("Sec-Fetch-Site = %q, want cross-site", got)
 		}
 		if got := h.Get("Sec-Fetch-Mode"); got != "cors" {
 			t.Errorf("Sec-Fetch-Mode = %q, want cors", got)
 		}
 		if got := h.Get("Sec-Fetch-Dest"); got != "empty" {
 			t.Errorf("Sec-Fetch-Dest = %q, want empty", got)
+		}
+		if got := h.Get("Upgrade-Insecure-Requests"); got != "" {
+			t.Errorf("Upgrade-Insecure-Requests = %q, want absent (only for navigation GETs)", got)
 		}
 	})
 
@@ -97,8 +103,14 @@ func TestApplyProfileHeaders(t *testing.T) {
 		if got := h.Get("Sec-CH-UA"); got != "" {
 			t.Errorf("Firefox Sec-CH-UA = %q, want empty", got)
 		}
+		if got := h.Get("Sec-CH-UA-Mobile"); got != "" {
+			t.Errorf("Firefox Sec-CH-UA-Mobile = %q, want empty (Firefox has no Client Hints)", got)
+		}
 		if got := h.Get("User-Agent"); got == "" || got != ProfileFirefox120.UserAgent {
 			t.Errorf("User-Agent = %q", got)
+		}
+		if got := h.Get("Sec-Fetch-Site"); got != "cross-site" {
+			t.Errorf("Sec-Fetch-Site = %q, want cross-site", got)
 		}
 	})
 }
