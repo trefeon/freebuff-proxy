@@ -760,6 +760,9 @@ func TestBridgeModeModelsAndHealthz(t *testing.T) {
 	// After a bridged chat the healthz counter reflects the cached entry.
 	doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), map[string]string{"Authorization": "Bearer client-tok-h"})
 	resp, data = doJSON(t, http.MethodGet, ts.URL+"/healthz", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("healthz status = %d, want 200: %s", resp.StatusCode, data)
+	}
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("healthz is not JSON: %v: %s", err, data)
 	}

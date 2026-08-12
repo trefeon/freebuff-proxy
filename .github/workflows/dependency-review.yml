@@ -12,5 +12,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check dependency review availability
+        id: precheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPARE_PATH: repos/${{ github.repository }}/dependency-graph/compare/${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}
+        run: |
+          status_code=0
+          gh api "${COMPARE_PATH}" > response.json || status_code="$?"
+
+          if [ "${status_code}" = "0" ]; then
+            echo "supported=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          message="$(jq -r '.message // ""' response.json)"
+          if echo "${message}" | grep -qi "dependency graph"; then
+            echo "::notice::Skipping dependency review: ${message}"
+            echo "supported=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "::error::Dependency review precheck failed (exit code ${status_code}): ${message}"
+          cat response.json
+          exit 1
+
       - name: Review dependencies
+        if: steps.precheck.outputs.supported == 'true'
         uses: actions/dependency-review-action@v5
