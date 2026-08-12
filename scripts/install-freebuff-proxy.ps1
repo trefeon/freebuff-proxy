@@ -64,34 +64,66 @@ Write-Host ""
 if (-not $Dir) { $Dir = (Get-Location).Path }
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
 
-# --- 2. dependencies: detect what is missing, install it ---------------------
-# Required for the proxy: none (standalone binary). Required for the installer:
-# Invoke-WebRequest/Expand-Archive (built into PowerShell), TLS 1.2+ (default).
-# Optional for the token flow: node/npm (freebuff CLI). Offer to install node
-# via winget when the CLI is not present.
-$haveWinget = (Get-Command winget -ErrorAction SilentlyContinue) -ne $null
-$haveNode = (Get-Command node -ErrorAction SilentlyContinue) -ne $null
-$haveFreebuff = (Get-Command freebuff -ErrorAction SilentlyContinue) -ne $null
+# --- 2. TOKEN PREREQUISITE (before downloading the proxy) --------------------
+# If no authToken exists, make sure the official CLI is installed, then launch
+# it so the user can log in. This fails early instead of installing a proxy that
+# can only return "Invalid API key" later.
+$token = $null
+$creds = Find-CredentialsFile
+if ($creds) { $token = Get-AuthToken $creds }
 
-if (-not $haveNode -and -not $haveFreebuff -and $haveWinget) {
-  Write-Host "Node.js not found. It is only needed to log in via the freebuff CLI" -ForegroundColor Yellow
-  Write-Host "(for the web flow you do not need it). Install it now? [Y/n]" -ForegroundColor Yellow
-  $ans = Read-Host "> "
-  if ($ans -ne "n" -and $ans -ne "N") {
-    Write-Host "Installing Node.js via winget..." -ForegroundColor Cyan
-    winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+if (-not $SkipToken -and (-not $token -or $token.Length -le 12)) {
+  Write-Host "Step 1/3: FreeBuff token (required before installing the proxy)" -ForegroundColor Cyan
+  $haveWinget = (Get-Command winget -ErrorAction SilentlyContinue) -ne $null
+  $haveNpm = (Get-Command npm -ErrorAction SilentlyContinue) -ne $null
+  $haveFreebuff = (Get-Command freebuff -ErrorAction SilentlyContinue) -ne $null
+
+  if (-not $haveFreebuff) {
+    Write-Host "The official freebuff CLI is NOT installed." -ForegroundColor Yellow
+    Write-Host "The installer needs it to mint/read your token. It will run:" -ForegroundColor Yellow
+    Write-Host "  npm install -g freebuff" -ForegroundColor White
+    $ans = Read-Host "Install the freebuff CLI now? [Y/n]"
+    if ($ans -ne "n" -and $ans -ne "N") {
+      if (-not $haveNpm) {
+        if (-not $haveWinget) {
+          Write-Host "ERROR: npm and winget are unavailable. Install Node.js 20+ from https://nodejs.org, then re-run." -ForegroundColor Red
+          exit 1
+        }
+        Write-Host "Installing Node.js LTS via winget..." -ForegroundColor Cyan
+        winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+      }
+      Write-Host "Installing the freebuff CLI (npm install -g freebuff)..." -ForegroundColor Cyan
+      npm install -g freebuff
+      if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: npm install -g freebuff failed." -ForegroundColor Red; exit 1 }
+      $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+      $haveFreebuff = (Get-Command freebuff -ErrorAction SilentlyContinue) -ne $null
+      if (-not $haveFreebuff) { Write-Host "ERROR: freebuff installed but is not on PATH. Open a new terminal and re-run." -ForegroundColor Red; exit 1 }
+    }
+  } else {
+    Write-Host "freebuff CLI detected: $((Get-Command freebuff).Source)" -ForegroundColor Green
+  }
+
+  if ($haveFreebuff) {
+    Write-Host "No login token found. Starting 'freebuff' now." -ForegroundColor Yellow
+    Write-Host "Complete the browser login, then quit the CLI (Ctrl+C or /exit) to continue." -ForegroundColor Yellow
+    & freebuff
+    $creds = Find-CredentialsFile
+    if ($creds) { $token = Get-AuthToken $creds }
+    if (-not $token -or $token.Length -le 12) {
+      Write-Host "No authToken found after login. Open another terminal, run 'freebuff', finish login, then press Enter here." -ForegroundColor Yellow
+      Read-Host | Out-Null
+      $creds = Find-CredentialsFile
+      if ($creds) { $token = Get-AuthToken $creds }
+    }
   }
 }
-$haveNode = (Get-Command node -ErrorAction SilentlyContinue) -ne $null
-$haveFreebuff = (Get-Command freebuff -ErrorAction SilentlyContinue) -ne $null
-if (-not $haveFreebuff -and $haveNode) {
-  Write-Host "Installing the freebuff CLI (npm i -g freebuff)..." -ForegroundColor Cyan
-  npm install -g freebuff
-  if ($LASTEXITCODE -ne 0) { Write-Host "npm install failed; the web token flow still works." -ForegroundColor Yellow }
+if ($token -and $token.Length -gt 12) {
+  Write-Host "FreeBuff login ready (token value hidden)." -ForegroundColor Green
 }
-Write-Host "Dependencies OK (PowerShell built-ins; node/CLI optional)." -ForegroundColor Green
 
+# --- 3. proxy installer dependencies ----------------------------------------
+Write-Host "Step 2/3: installing freebuff-proxy" -ForegroundColor Cyan
 # --- 3. resolve the latest release ------------------------------------------
 $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers @{ "User-Agent" = "freebuff-proxy-installer" }
 $version = $release.tag_name -replace '^v', ''  # assets use 0.1.1, tag is v0.1.1

@@ -8,6 +8,14 @@ An OpenAI-compatible proxy bridge for the FreeBuff free tier. Point any OpenAI c
 
 FreeBuff (Codebuff's free coding agent) exposes its models only through the official CLI. The backend fingerprints CLI traffic and rejects direct API calls with `403 free_mode_cli_required`. freebuff-proxy replicates the CLI request envelope, manages the free-session and agent-run lifecycle upstream, and pools multiple tokens. Clients see a plain OpenAI-compatible API.
 
+> **Current upstream status (read before installing).** Since roughly 2026-08-03, upstream
+> rejects free-tier `POST /api/v1/chat/completions` with `403 free_mode_cli_required` even
+> for valid, non-banned tokens. Sessions and agent runs still succeed, so `/healthz` and
+> `/v1/models` work normally and your install will look healthy while chat fails. The check is
+> server-side and bound to the account, and it is **not** bypassable from this project: see
+> [the FAQ entry](#faq) for the full list of what was tested against a live token. Install
+> anyway to be ready for an upstream change, but do not expect working chat today.
+
 What this is not: an official FreeBuff or Codebuff product. It is a community bridge for an unofficial service. See the FAQ and Terms of use at the bottom.
 
 > ## WARNING: your account can get suspended or banned
@@ -55,6 +63,19 @@ What this is not: an official FreeBuff or Codebuff product. It is a community br
 - Release binaries run standalone. Building from source needs Go 1.26+ (see `go.mod`).
 
 ## Install
+
+Four ways to install. If you are new, pick Option 1.
+
+| Option | Pick it when | Needs |
+|---|---|---|
+| 1. One-command installer | You just want it running (interactive menu picks the rest for you) | `curl`, a terminal |
+| 2. Manual download | You want to see every step, or the installer is blocked | `curl`, `tar`/`unzip` |
+| 3. Docker Compose | You run containers, or want it always-on with a healthcheck | Docker + Compose v2 |
+| 4. Build from source | You want to audit or modify the code | Go 1.26+ |
+
+All four end the same way: a proxy listening on `127.0.0.1:3457` (or `:3457` in a container)
+plus a `.env`. Then run the [Quick start](#quick-start) smoke test and compare against the
+results table there before wiring any client.
 
 ### Option 1: one-command installer (recommended)
 
@@ -109,7 +130,7 @@ sha256sum -c checksums.txt --ignore-missing 2>/dev/null || echo "checksum mismat
 ```powershell
 $v = (Invoke-RestMethod https://api.github.com/repos/trefeon/freebuff-proxy/releases/latest).tag_name
 Invoke-WebRequest -OutFile freebuff-proxy.zip "https://github.com/trefeon/freebuff-proxy/releases/latest/download/freebuff-proxy_${v}_windows_amd64.zip"
-Expand-Archive freebuff-proxy.zip
+Expand-Archive freebuff-proxy.zip -DestinationPath . -Force
 .\freebuff-proxy.exe
 ```
 
@@ -117,15 +138,32 @@ For the fully automatic path (download + checksum + `.env` + token + next steps)
 
 ### Option 3: Docker
 
-Copy `.env.example` to `.env` and set `AUTH_TOKENS` first, then:
+Copy `.env.example` to `.env` and set `AUTH_TOKENS` first (or leave it empty for bridge
+mode), then:
 
 ```bash
-docker compose up --build
+docker compose up -d --build
+docker compose ps          # wait for "healthy" before smoke testing
 ```
 
-The compose file publishes port 3457 and runs a healthcheck against `/healthz`. For a one-shot setup on Linux, `scripts/setup-proxy-docker.sh` clones the repo, grabs the token, starts the container, and prints the 9router config with the right Docker gateway IP.
+The compose file publishes port 3457, sets `LISTEN_ADDR=:3457`, and runs a healthcheck
+against `/healthz`. For a one-shot setup on Linux, `scripts/setup-proxy-docker.sh` clones the
+repo, grabs the token, starts the container, and prints the 9router config with the right
+Docker gateway IP.
 
-### Option 3: build from source
+**If you run the image without Compose, you must set `LISTEN_ADDR` yourself.** The default
+(`127.0.0.1:3457`) binds loopback *inside* the container, so a published port leads nowhere
+and `curl` fails with "connection refused" while the container looks fine:
+
+```bash
+docker build -t freebuff-proxy .
+docker run -d -p 3457:3457 --env-file .env -e LISTEN_ADDR=:3457 freebuff-proxy
+```
+
+Leaving out `-e LISTEN_ADDR=:3457` is the single most common "my setup does not work"
+report. Compose sets it for you; plain `docker run` does not.
+
+### Option 4: build from source
 
 ```bash
 go build -o freebuff-proxy ./cmd/freebuff-proxy
@@ -175,7 +213,30 @@ Use the token without any `Bearer ` prefix; the proxy adds it upstream itself. F
      -d '{"model":"deepseek/deepseek-v4-flash","messages":[{"role":"user","content":"Say hello in one short sentence."}],"stream":true}'
    ```
 
-`/healthz` returns uptime, model count, and the token pool snapshot. `/v1/models` returns the model list from the registry. The chat call streams SSE tokens back; with a dummy token you get an upstream error, which is expected.
+### What the smoke test should return
+
+Read this table before concluding your setup is broken. **`/healthz` and `/v1/models`
+returning 200 means your setup is correct** — those two prove the binary, config, port, and
+model registry all work. The chat call additionally depends on your account and on upstream,
+so a failure there is usually *not* a setup problem.
+
+| Call | Result | Meaning |
+|---|---|---|
+| `/healthz` | `200` + JSON (`uptime_seconds`, `models`, `tokens`) | Proxy is up. Setup OK. |
+| `/healthz` | connection refused | Not running, or in a container without `LISTEN_ADDR=:3457` (see [Option 3](#option-3-docker)). |
+| `/v1/models` | `200` + ~12 model ids | Registry loaded. Setup OK. |
+| `/v1/models` | `401 invalid_api_key` | You set `API_KEYS`; send `Authorization: Bearer <your-api-key>`. |
+| chat | SSE stream (`data: {...}`) | Everything works end to end. |
+| chat | `502` wrapping `403 free_mode_cli_required` | **Upstream's CLI-only gate, not your setup.** See the FAQ entry below. |
+| chat | `502` wrapping `401`/`404 Invalid API key or user not found` | The token in `.env` is invalid, expired, or the account is gone. Get a fresh token. |
+| chat | `403 account_banned` | Account suspended upstream. Token is dead, see the WARNING at the top. |
+| chat | `429 rate_limited` | Daily session quota used up (6/day on limited tier). Wait for the Pacific-midnight reset or add a token. |
+| chat | `503 waiting_room_queued` | Normal. Retry after `Retry-After`; 9router and opencode do this automatically. |
+| chat | `401 missing_bearer_token` | Bridge mode with no client token. Send `Authorization: Bearer <your-freebuff-token>`. |
+| chat | `400 invalid_json` | Shell quoting mangled the `-d` payload. On Windows use `--data @file.json` instead of inline quotes. |
+
+If `/healthz` and `/v1/models` are 200 and only chat fails, your installation is fine: the
+problem is the token or upstream, and no config change in this project will fix it.
 
 ## Configuration
 
@@ -235,9 +296,31 @@ Alternatively, **bridge mode**: leave `AUTH_TOKENS` empty on the proxy and use *
 
 ## FAQ
 
-**The proxy returns `403 free_mode_cli_required`.**
+**The smoke test chat returns `403 free_mode_cli_required` (often wrapped in a `502`).**
 
-The CLI envelope did not satisfy the anti-bot gate. Check `COST_MODE` (must be `free`, the default) and the `client_id` format (13-char base36). If it started failing after a FreeBuff update, open an issue with the debug log (`LOG_LEVEL=debug`).
+The full message is *"Free mode is only available through the freebuff CLI. Install it with
+`npm i -g freebuff`, then run `freebuff`. Calling the API directly is not supported and may
+get your account banned."*
+
+**This is not a broken setup and not a bad token.** Upstream added a CLI-only gate on the
+free tier (first reported around 2026-08-03, see
+[Quorinex/Freebuff2API#18](https://github.com/Quorinex/Freebuff2API/issues/18)). If
+`/healthz` and `/v1/models` return 200, your install is correct.
+
+What was tested against a live, non-banned token, all still returning `403`:
+
+- the CLI/AI-SDK user agent (`ai-sdk/openai-compatible/<ver>/codebuff`)
+- a stable `client_id` reused across session, run, and chat
+- `x-freebuff-model` on session creation, `x-freebuff-instance-id` on chat
+- `COST_MODE=free` (verified in the startup log) and a valid 13-char base36 `client_id`
+- `TLS_FINGERPRINT=chrome120` (browser JA3 impersonation)
+- a hand-built request sent straight to upstream with no proxy involved
+
+Session creation and agent-run START both succeed (`200`); only
+`POST /api/v1/chat/completions` is rejected, and only once the run actually exists — so the
+check is server-side and bound to the account/run, not to anything in the request. No setting
+in this project bypasses it. Your options are to use the official CLI directly, or wait and
+re-test after an upstream change. Open an issue if you see it start working again.
 
 **I get `402` / "Out of credits. Please add credits at codebuff.com/usage".**
 
@@ -262,7 +345,33 @@ Normal. The free session is queued in the waiting room. The `Retry-After` header
 
 **Windows Defender or Kaspersky flags the binary or test executables.**
 
-Go binaries trip AV heuristics; this is a validated false positive, not malware. For local `go test`, add the `go-build*` cache path to AV exclusions or run the compiled test binary directly. Details in the repo history; open an issue if you see a signature match (we have never seen one).
+This is a heuristic false positive, not malware. The trigger is the optional TLS-fingerprint
+module (`internal/stealth`): it links `refraction-networking/utls`, a library whose purpose
+is impersonating a browser's TLS fingerprint (JA3). Malware uses the same technique to evade
+network detection, so AV vendors heuristically flag any executable containing uTLS (that is
+a static pattern match, not a behavior detection). The proxy is a plain HTTP server: no
+persistence, no injection, no extra network traffic beyond the documented upstream relay,
+and all token values are redacted from logs and dumps.
+
+Verify it yourself in under a minute: build from source and compare with the release
+checksums:
+
+```bash
+go build -o freebuff-proxy.exe ./cmd/freebuff-proxy
+sha256sum freebuff-proxy.exe         # must match the value in the release's checksums.txt
+```
+
+If the hashes match, the flagged binary is exactly the public source. You can also submit
+the binary for re-analysis at [opentip.kaspersky.com](https://opentip.kaspersky.com) with the
+build-from-source repro. Practical workarounds:
+
+- Add the binary and the Go build cache (`go-build*` paths) to AV exclusions so `go test`
+  and normal use are not interrupted.
+- `TLS_FINGERPRINT` is **empty by default**, so the uTLS path is only compiled in, not
+  active, unless you set it. You lose nothing by leaving it unset.
+
+Open an issue if you see a detection name (we have never seen a real signature match — only
+heuristics).
 
 **Is this against FreeBuff's terms?**
 

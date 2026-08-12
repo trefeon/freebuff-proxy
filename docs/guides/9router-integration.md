@@ -422,7 +422,9 @@ message.
 
 | Symptom | Cause / fix |
 |---|---|
-| 9router: connection refused on base_url | Proxy not running, wrong port, or firewall. Check `systemctl status freebuff-proxy` / `docker compose ps`; `curl http://127.0.0.1:3457/healthz` |
+| `502` wrapping `403 free_mode_cli_required` | Upstream's CLI-only gate on the free tier (since ~2026-08-03). Not a 9router or proxy misconfiguration: `/healthz` and `/v1/models` stay 200 and sessions/runs still succeed. Nothing in the proxy config bypasses it; see the README FAQ for the full list of what was tested against a live token |
+| `502` wrapping `401`/`404 Invalid API key or user not found` | The token in the proxy `.env` is invalid, expired, or the account no longer exists. Replace it with a fresh token |
+| 9router: connection refused on base_url | Proxy not running, wrong port, or firewall. Check `systemctl status freebuff-proxy` / `docker compose ps`; `curl http://127.0.0.1:3457/healthz`. If the proxy runs via plain `docker run`, it also needs `-e LISTEN_ADDR=:3457` or it binds loopback inside the container |
 | "URL not allowed" on **Check** from a remote browser | The SSRF guard rejects private URLs for non-local dashboard requests (section 3). Click Create anyway and validate via **Add API Key**, which has no SSRF guard; or use a public URL |
 | 401 from the proxy | `API_KEYS` is set in the proxy `.env` and 9router's api_key does not match one of them |
 | `400 model_not_found` (proxy) | Model not in the registry catalog. Check `/v1/models` |
