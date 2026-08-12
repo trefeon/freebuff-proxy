@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"freebuff-proxy/internal/config"
 )
 
 // fileSource builds a file:// URL for a local fixture path (no network).
@@ -282,6 +284,31 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 	default:
 		t.Errorf("unexpected final model count %d", len(models))
+	}
+}
+func TestModelAliases(t *testing.T) {
+	cfg := &config.Config{
+		ModelAliases: map[string]string{
+			"gpt-4o": "deepseek/deepseek-v4-flash",
+			"glm":    "z-ai/glm-5.2",
+		},
+	}
+	r := New(cfg, nil)
+	r.LoadFallback()
+
+	if got := r.ResolveModel("gpt-4o"); got != "deepseek/deepseek-v4-flash" {
+		t.Errorf("ResolveModel(gpt-4o) = %q, want deepseek/deepseek-v4-flash", got)
+	}
+	if got := r.ResolveModel("unknown"); got != "unknown" {
+		t.Errorf("ResolveModel(unknown) = %q, want unknown", got)
+	}
+
+	agent, err := r.AgentForModel("gpt-4o")
+	if err != nil {
+		t.Fatalf("AgentForModel(gpt-4o) error: %v", err)
+	}
+	if agent != "base2-free" {
+		t.Errorf("AgentForModel(gpt-4o) = %q, want base2-free", agent)
 	}
 }
 

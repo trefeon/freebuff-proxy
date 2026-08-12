@@ -30,8 +30,10 @@ type Config struct {
 	APIKeys             []string
 	HTTPProxy           string
 	SOCKS5Proxy         string
-	CostMode            string // "" (omit) or "free"; A/B pending, PRD §8
-	TLSFingerprint      string // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
+	SOCKS5Proxies       []string // comma-separated list of SOCKS5 proxies (#23)
+	ProxyRotation       string   // "per-token" (default), "round-robin", "random" (#23)
+	CostMode            string   // "" (omit) or "free"; A/B pending, PRD §8
+	TLSFingerprint      string   // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
 	RegistryRefresh     time.Duration
 	DebugDump           bool
 	LogFile             string
@@ -40,7 +42,8 @@ type Config struct {
 	IdleRotationTimeout time.Duration // 0 = disabled: pause rotation/refresh after this idle period
 	SafeMode            bool          // true = apply recommended anti-ban safe defaults
 	RequestJitter       time.Duration // random delay range [0, RequestJitter) before upstream chat calls
-	CLIVersion          string        // upstream CLI version string (default: 0.10.7)
+	CLIVersion          string            // upstream CLI version string (default: 0.10.7)
+	ModelAliases        map[string]string // map model alias -> real model ID (#25)
 }
 // BridgeMode reports whether the proxy runs without any AUTH_TOKENS: every
 // client supplies their own FreeBuff token per request (Authorization: Bearer
@@ -59,6 +62,8 @@ type rawConfig struct {
 	APIKeys             []string `json:"API_KEYS"`
 	HTTPProxy           string   `json:"HTTP_PROXY"`
 	SOCKS5Proxy         string   `json:"SOCKS5_PROXY"`
+	SOCKS5Proxies       []string `json:"SOCKS5_PROXIES"`
+	ProxyRotation       string   `json:"PROXY_ROTATION"`
 	CostMode            string   `json:"COST_MODE"`
 	TLSFingerprint      string   `json:"TLS_FINGERPRINT"`
 	RegistryRefresh     string   `json:"REGISTRY_REFRESH"`
@@ -70,6 +75,7 @@ type rawConfig struct {
 	SafeMode            bool     `json:"SAFE_MODE"`
 	RequestJitter       string   `json:"REQUEST_JITTER"`
 	CLIVersion          string   `json:"CLI_VERSION"`
+	ModelAliases        string   `json:"MODEL_ALIASES"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -124,6 +130,8 @@ func Load(configPath string) (Config, error) {
 	overrideBool(&raw.SafeMode, "SAFE_MODE")
 	overrideString(&raw.RequestJitter, "REQUEST_JITTER")
 	overrideString(&raw.CLIVersion, "CLI_VERSION")
+	overrideString(&raw.ModelAliases, "MODEL_ALIASES")
+
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
 		if err != nil {
@@ -178,6 +186,8 @@ func Load(configPath string) (Config, error) {
 		APIKeys:             dedupeStrings(raw.APIKeys),
 		HTTPProxy:           strings.TrimSpace(raw.HTTPProxy),
 		SOCKS5Proxy:         strings.TrimSpace(raw.SOCKS5Proxy),
+		SOCKS5Proxies:       dedupeStrings(raw.SOCKS5Proxies),
+		ProxyRotation:       strings.TrimSpace(raw.ProxyRotation),
 		CostMode:            strings.TrimSpace(raw.CostMode),
 		TLSFingerprint:      strings.TrimSpace(raw.TLSFingerprint),
 		RegistryRefresh:     registryRefresh,
@@ -189,6 +199,7 @@ func Load(configPath string) (Config, error) {
 		SafeMode:            raw.SafeMode,
 		RequestJitter:       requestJitter,
 		CLIVersion:          strings.TrimSpace(raw.CLIVersion),
+		ModelAliases:        parseMap(raw.ModelAliases),
 	}
 
 	// SafeMode presets: when SAFE_MODE=true, apply recommended defaults
@@ -434,6 +445,24 @@ func splitList(value string) []string {
 		return r == ',' || r == '\n' || r == '\r'
 	})
 	return compactStrings(fields)
+}
+func parseMap(value string) map[string]string {
+	out := make(map[string]string)
+	if strings.TrimSpace(value) == "" {
+		return out
+	}
+	pairs := splitList(value)
+	for _, p := range pairs {
+		parts := strings.SplitN(p, "=", 2)
+		if len(parts) == 2 {
+			k := strings.TrimSpace(parts[0])
+			v := strings.TrimSpace(parts[1])
+			if k != "" && v != "" {
+				out[k] = v
+			}
+		}
+	}
+	return out
 }
 
 func compactStrings(values []string) []string {

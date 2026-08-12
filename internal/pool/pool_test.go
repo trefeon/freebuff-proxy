@@ -830,6 +830,124 @@ func TestIdleRotationDisabled(t *testing.T) {
 		t.Fatalf("finished runs = %v with idle rotation disabled, want none", got)
 	}
 }
+func TestBridgeLRUEviction(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ids := make([]string, 40)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("run-%04d", i)
+	}
+	mock.RunIDs = ids
+	p := newBridgePool(t, mock)
+
+	for i := 0; i < 35; i++ {
+		token := fmt.Sprintf("bridge-token-%d", i)
+		lease, err := p.AcquireBridge(context.Background(), token, modelA)
+		if err != nil {
+			t.Fatalf("AcquireBridge token %d failed: %v", i, err)
+		}
+		p.LeaseRelease(lease)
+	}
+
+	if count := p.BridgeCount(); count > 32 {
+		t.Errorf("BridgeCount = %d, want <= 32 (LRU eviction)", count)
+	}
+}
+
+func TestWaitingRoomRankings(t *testing.T) {
+	err1 := &session.WaitingRoomError{Position: 5, QueueDepth: 10, RetryAfter: time.Second}
+	err2 := &session.WaitingRoomError{Position: 2, QueueDepth: 10, RetryAfter: time.Second}
+	errUnknown := &session.WaitingRoomError{Position: 0, QueueDepth: 10, RetryAfter: time.Second}
+
+	if !betterWait(err2, err1) {
+		t.Errorf("betterWait position 2 vs 5: want true")
+	}
+	if betterWait(err1, err2) {
+		t.Errorf("betterWait position 5 vs 2: want false")
+	}
+	if betterWait(errUnknown, err1) {
+		t.Errorf("betterWait position 0 vs 5: want false (unknown ranks lower)")
+	}
+}
+
+func TestPoolCooldownRateLimitAndBan(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newTestPool(t, mock)
+
+	rle := &upstream.RateLimitError{Body: "rate limit", RetryAfter: 10 * time.Minute}
+	p.CooldownTokenRateLimit(0, rle)
+
+	be := &upstream.BanError{Body: "account banned", ResumesAt: time.Now().Add(1 * time.Hour)}
+	p.CooldownTokenBan(0, be)
+
+	snap := p.Snapshot()[0]
+	if snap.RiskLevel != "critical" && snap.RiskLevel != "high" {
+		t.Errorf("RiskLevel = %q, want high or critical", snap.RiskLevel)
+	}
+}
+
+func TestBridgeInvalidationAndCooldowns(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newBridgePool(t, mock)
+
+	lease, err := p.AcquireBridge(context.Background(), "bridge-tok-1", modelA)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p.InvalidateBridgeSession(lease)
+	p.InvalidateBridgeRun(lease, lease.AgentID)
+	p.CooldownBridge(lease, 5*time.Minute)
+	p.CooldownBridgeRateLimit(lease, &upstream.RateLimitError{Body: "rate limit", RetryAfter: 5 * time.Minute})
+	p.CooldownBridgeBan(lease, &upstream.BanError{Body: "banned", ResumesAt: time.Now().Add(5 * time.Minute)})
+
+	p.LeaseRelease(lease)
+}
+
+func TestPoolInvalidateToken(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newTestPool(t, mock)
+
+	p.InvalidateSession(0)
+	p.InvalidateSession(999) // out of range safe
+	p.InvalidateRun(0, "base2-free")
+	p.InvalidateRun(999, "base2-free") // out of range safe
+	p.CooldownToken(0, 5*time.Minute)
+	p.CooldownToken(999, 5*time.Minute)
+	p.CooldownTokenRateLimit(999, nil)
+	p.CooldownTokenBan(999, nil)
+}
+
+func TestMultiTokenRateLimitAndBanFailover(t *testing.T) {
+	mock0 := testutil.NewMock()
+	defer mock0.Close()
+	mock1 := testutil.NewMock()
+	defer mock1.Close()
+
+	p := newTestPool(t, mock0, mock1)
+
+	rle := &upstream.RateLimitError{Body: "rate limit", RetryAfter: 10 * time.Minute}
+	be := &upstream.BanError{Body: "banned", ResumesAt: time.Now().Add(1 * time.Hour)}
+
+	p.CooldownTokenRateLimit(0, rle)
+	p.CooldownTokenRateLimit(1, rle)
+
+	_, err := p.Acquire(context.Background(), modelA)
+	if err == nil || !errors.Is(err, upstream.ErrRateLimited) {
+		t.Errorf("Acquire with all rate limited = %v, want rate limit error", err)
+	}
+
+	p.CooldownTokenBan(0, be)
+	p.CooldownTokenBan(1, be)
+
+	_, err = p.Acquire(context.Background(), modelA)
+	if err == nil || !errors.Is(err, upstream.ErrBanned) {
+		t.Errorf("Acquire with all banned = %v, want ban error", err)
+	}
+}
 
 // eventually polls cond until it holds or the deadline passes.
 func eventually(t *testing.T, what string, cond func() bool) {

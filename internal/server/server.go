@@ -71,6 +71,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/completions", s.requireAuth(s.handleChat))
 	mux.HandleFunc("GET /v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
+	mux.HandleFunc("POST /admin/reload", s.requireAuth(s.handleReload))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
@@ -222,6 +224,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			"invalid_request_error", "model_not_found", 0)
 		return
 	}
+	model = s.reg.ResolveModel(model)
 	stream := false
 	if v, ok := raw["stream"].(bool); ok {
 		stream = v
@@ -506,12 +509,88 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 // handleHealthz reports uptime, model count, the per-token snapshot, and
 // the cached bridge entries (bridge mode).
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	snaps := s.pool.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"uptime_seconds": int64(time.Since(s.started).Seconds()),
+		"status":         "ok",
+		"uptime_seconds": time.Since(s.started).Seconds(),
 		"models":         s.reg.ModelCount(),
-		"tokens":         s.pool.Snapshot(),
+		"tokens":         snaps,
 		"bridge_tokens":  s.pool.BridgeCount(),
+	})
+}
+
+// handleMetrics exports Prometheus metrics (#24).
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	var sb strings.Builder
+	uptime := time.Since(s.started).Seconds()
+	snaps := s.pool.Snapshot()
+
+	sb.WriteString("# HELP freebuff_proxy_uptime_seconds Process uptime in seconds\n")
+	sb.WriteString("# TYPE freebuff_proxy_uptime_seconds gauge\n")
+	fmt.Fprintf(&sb, "freebuff_proxy_uptime_seconds %.2f\n\n", uptime)
+
+	sb.WriteString("# HELP freebuff_proxy_models_total Count of models available in registry\n")
+	sb.WriteString("# TYPE freebuff_proxy_models_total gauge\n")
+	fmt.Fprintf(&sb, "freebuff_proxy_models_total %d\n\n", s.reg.ModelCount())
+
+	sb.WriteString("# HELP freebuff_proxy_tokens_total Count of configured tokens in pool\n")
+	sb.WriteString("# TYPE freebuff_proxy_tokens_total gauge\n")
+	fmt.Fprintf(&sb, "freebuff_proxy_tokens_total %d\n\n", len(snaps))
+
+	sb.WriteString("# HELP freebuff_proxy_token_messages_24h Rolling 24h message count per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_token_messages_24h gauge\n")
+	for _, snap := range snaps {
+		fmt.Fprintf(&sb, "freebuff_proxy_token_messages_24h{token=\"%d\"} %d\n", snap.Token+1, snap.Messages24h)
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("# HELP freebuff_proxy_token_requests_total Total requests served per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_token_requests_total counter\n")
+	for _, snap := range snaps {
+		fmt.Fprintf(&sb, "freebuff_proxy_token_requests_total{token=\"%d\"} %d\n", snap.Token+1, snap.Requests)
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("# HELP freebuff_proxy_token_active_runs Active agent runs per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_token_active_runs gauge\n")
+	for _, snap := range snaps {
+		fmt.Fprintf(&sb, "freebuff_proxy_token_active_runs{token=\"%d\"} %d\n", snap.Token+1, snap.ActiveRuns)
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("# HELP freebuff_proxy_token_cooldown_active Is token currently cooling down (1=yes, 0=no)\n")
+	sb.WriteString("# TYPE freebuff_proxy_token_cooldown_active gauge\n")
+	now := time.Now()
+	for _, snap := range snaps {
+		cd := 0
+		if !snap.CooldownUntil.IsZero() && now.Before(snap.CooldownUntil) {
+			cd = 1
+		}
+		fmt.Fprintf(&sb, "freebuff_proxy_token_cooldown_active{token=\"%d\"} %d\n", snap.Token+1, cd)
+	}
+	sb.WriteString("\n")
+
+	_, _ = w.Write([]byte(sb.String()))
+}
+
+// handleReload handles POST /admin/reload for hot configuration reloads (#26).
+func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("admin reload requested")
+	newCfg, err := config.Load("")
+	if err != nil {
+		s.writeJSONError(w, http.StatusInternalServerError, "failed to reload config: "+err.Error(), "internal_error", "reload_failed", 0)
+		return
+	}
+	s.cfg = &newCfg
+	s.logger.Info("config reloaded successfully", "auth_tokens", len(newCfg.AuthTokens), "safe_mode", newCfg.SafeMode)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":      "ok",
+		"message":     "configuration reloaded",
+		"auth_tokens": len(newCfg.AuthTokens),
+		"safe_mode":   newCfg.SafeMode,
 	})
 }
 

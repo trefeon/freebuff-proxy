@@ -174,9 +174,21 @@ func (r *Registry) LoadFallback() {
 	r.mu.Unlock()
 }
 
-// AgentForModel returns the agent id that serves model, or an
-// ErrModelNotFound-wrapped error.
+// ResolveModel resolves an alias (e.g. "gpt-4o") to its real model ID if mapped
+// in cfg.ModelAliases, or returns model unchanged.
+func (r *Registry) ResolveModel(model string) string {
+	if r != nil && r.cfg != nil && len(r.cfg.ModelAliases) > 0 {
+		if realModel, ok := r.cfg.ModelAliases[model]; ok && realModel != "" {
+			return realModel
+		}
+	}
+	return model
+}
+
+// AgentForModel returns the agent id that serves model (after resolving aliases),
+// or an ErrModelNotFound-wrapped error.
 func (r *Registry) AgentForModel(model string) (string, error) {
+	model = r.ResolveModel(model)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	agent, ok := r.modelToAgent[model]

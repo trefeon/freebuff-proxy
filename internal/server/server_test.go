@@ -551,21 +551,49 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, data)
 	}
 	var out struct {
-		UptimeSeconds int64 `json:"uptime_seconds"`
-		Models        int   `json:"models"`
-		Tokens        []any `json:"tokens"`
+		UptimeSeconds float64 `json:"uptime_seconds"`
+		Models        int     `json:"models"`
+		Tokens        []any   `json:"tokens"`
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("response is not JSON: %v: %s", err, data)
 	}
 	if out.UptimeSeconds < 0 {
-		t.Errorf("uptime_seconds = %d, want >= 0", out.UptimeSeconds)
+		t.Errorf("uptime_seconds = %v, want >= 0", out.UptimeSeconds)
 	}
 	if out.Models < 15 {
 		t.Errorf("models = %d, want >= 15", out.Models)
 	}
 	if len(out.Tokens) != 2 {
 		t.Errorf("tokens = %d, want 2", len(out.Tokens))
+	}
+}
+func TestMetricsEndpoint(t *testing.T) {
+	mock0 := testutil.NewMock()
+	defer mock0.Close()
+	ts, _ := newTestServer(t, nil, mock0)
+
+	resp, data := doJSON(t, http.MethodGet, ts.URL+"/metrics", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	body := string(data)
+	if !strings.Contains(body, "freebuff_proxy_uptime_seconds") || !strings.Contains(body, "freebuff_proxy_models_total") {
+		t.Errorf("metrics missing expected keys: %s", body)
+	}
+}
+
+func TestAdminReload(t *testing.T) {
+	mock0 := testutil.NewMock()
+	defer mock0.Close()
+	ts, _ := newTestServer(t, nil, mock0)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/admin/reload", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	if !strings.Contains(string(data), `"status":"ok"`) {
+		t.Errorf("reload response missing ok status: %s", data)
 	}
 }
 

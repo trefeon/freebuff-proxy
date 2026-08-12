@@ -355,3 +355,63 @@ func (e *atomicError) get() error {
 	defer e.mu.Unlock()
 	return e.err
 }
+func TestFinishAllRuns(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr, _ := newTestManager(t, mock, time.Hour)
+
+	lease, err := mgr.Acquire(context.Background(), agentA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr.Release(lease)
+
+	mgr.FinishAllRuns(context.Background())
+	snap := mgr.Snapshot()
+	if snap.ActiveRuns != 0 {
+		t.Errorf("ActiveRuns = %d, want 0 after FinishAllRuns", snap.ActiveRuns)
+	}
+}
+
+func TestRateLimitAndBanCooldowns(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr, _ := newTestManager(t, mock, time.Hour)
+
+	rle := &upstream.RateLimitError{Body: "rate limit", RetryAfter: 5 * time.Minute}
+	mgr.CooldownRateLimit(rle)
+
+	if mgr.RateLimitError() == nil {
+		t.Errorf("RateLimitError() = nil, want rate limit error")
+	}
+
+	be := &upstream.BanError{Body: "account banned", ResumesAt: time.Now().Add(10 * time.Minute)}
+	mgr.CooldownBan(be)
+
+	if mgr.BanError() == nil {
+		t.Errorf("BanError() = nil, want ban error")
+	}
+
+	snap := mgr.Snapshot()
+	if snap.BanError == nil {
+		t.Errorf("Snapshot.BanError = nil, want non-nil")
+	}
+}
+
+func TestInvalidateRun(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr, _ := newTestManager(t, mock, time.Hour)
+
+	lease, err := mgr.Acquire(context.Background(), agentA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr.Release(lease)
+
+	mgr.Invalidate(agentA)
+	snap := mgr.Snapshot()
+	if snap.ActiveRuns != 0 {
+		t.Errorf("ActiveRuns = %d after Invalidate, want 0", snap.ActiveRuns)
+	}
+}

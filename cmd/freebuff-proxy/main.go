@@ -84,8 +84,8 @@ func main() {
 	// together with a per-token run manager.
 	clients := make([]*upstream.Client, 0, len(cfg.AuthTokens))
 	sessions := make([]*session.Manager, 0, len(cfg.AuthTokens))
-	for _, token := range cfg.AuthTokens {
-		client, err := upstream.New(token, &cfg)
+	for i, token := range cfg.AuthTokens {
+		client, err := upstream.NewWithIndex(token, i, &cfg)
 		if err != nil {
 			logger.Error("failed to build upstream client", "err", err)
 			os.Exit(1)

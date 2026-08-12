@@ -183,9 +183,14 @@ type Client struct {
 // constant so the envelope is identical on every request.
 const cliUserAgent = "ai-sdk/openai-compatible/0.10.7/codebuff"
 
-// New builds the client for one token. HTTP_PROXY (CONNECT) and SOCKS5_PROXY
-// are honored; SOCKS5 wins when both are set (cleaner geo-bypass path).
+// New builds the client for one token.
 func New(token string, cfg *config.Config) (*Client, error) {
+	return NewWithIndex(token, 0, cfg)
+}
+
+// NewWithIndex builds the client for token at index tokenIndex. SOCKS5Proxies
+// (plural) binds each token to an outbound proxy round-robin (#23).
+func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, error) {
 	if token == "" {
 		return nil, errors.New("upstream: empty token")
 	}
@@ -193,10 +198,16 @@ func New(token string, cfg *config.Config) (*Client, error) {
 		return nil, errors.New("upstream: nil config")
 	}
 
+	socksProxy := cfg.SOCKS5Proxy
+	if len(cfg.SOCKS5Proxies) > 0 {
+		idx := tokenIndex % len(cfg.SOCKS5Proxies)
+		socksProxy = cfg.SOCKS5Proxies[idx]
+	}
+
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	var baseDial func(ctx context.Context, network, addr string) (net.Conn, error)
-	if cfg.SOCKS5Proxy != "" {
-		socksAddr, err := parseProxyAddr(cfg.SOCKS5Proxy)
+	if socksProxy != "" {
+		socksAddr, err := parseProxyAddr(socksProxy)
 		if err != nil {
 			return nil, fmt.Errorf("upstream: SOCKS5_PROXY: %w", err)
 		}
@@ -215,7 +226,6 @@ func New(token string, cfg *config.Config) (*Client, error) {
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
-
 	var stealthProf *stealth.Profile
 	if cfg.TLSFingerprint != "" {
 		profile, ok := stealth.Lookup(cfg.TLSFingerprint)
