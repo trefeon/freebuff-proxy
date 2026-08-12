@@ -28,10 +28,20 @@ import (
 	"freebuff-proxy/internal/upstream"
 )
 
+// version is injected at build time by GoReleaser (-ldflags -X main.version=...).
+// When building without GoReleaser it stays "dev".
+var version = "dev"
+
 func main() {
 	configPath := flag.String("config", "", "path to an optional JSON config file (keys mirror env names)")
 	verbose := flag.Bool("v", false, "verbose (debug) logging")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("freebuff-proxy", version)
+		os.Exit(0)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -93,8 +103,9 @@ func main() {
 		ReadHeaderTimeout: 15 * time.Second,
 	}
 
-	// Startup summary — token values are never logged, only counts.
+	// Startup summary -- token values are never logged, only counts.
 	logger.Info("freebuff-proxy starting",
+		"version", version,
 		"listen_addr", cfg.ListenAddr,
 		"upstream", cfg.UpstreamBaseURL,
 		"auth_tokens", len(cfg.AuthTokens),
@@ -109,6 +120,30 @@ func main() {
 		"verbose", *verbose,
 	)
 	logger.Info("listening", "addr", cfg.ListenAddr)
+
+	// Human-readable startup banner for interactive terminals. Suppressed
+	// when stderr is piped (containers, log files, systemd) -- detected by
+	// checking if the output is a character device (terminal).
+	if fileInfo, _ := os.Stderr.Stat(); fileInfo != nil && fileInfo.Mode()&os.ModeCharDevice != 0 {
+		mode := fmt.Sprintf("pooled (%d tokens)", len(cfg.AuthTokens))
+		if cfg.BridgeMode() {
+			mode = "bridge (clients send their own token)"
+		}
+		fmt.Fprintf(os.Stderr, "\n"+
+			"  freebuff-proxy %s is running!\n"+
+			"\n"+
+			"  API endpoint:  http://%s/v1\n"+
+			"  Health check:  http://%s/healthz\n"+
+			"  Models:        http://%s/v1/models\n"+
+			"  Mode:          %s\n"+
+			"\n"+
+			"  Quick test:\n"+
+			"    curl http://%s/healthz\n"+
+			"\n"+
+			"  Press Ctrl+C to stop.\n\n",
+			version, cfg.ListenAddr, cfg.ListenAddr, cfg.ListenAddr, mode, cfg.ListenAddr,
+		)
+	}
 
 	// Serve until the server fails or a shutdown signal arrives.
 	serveErr := make(chan error, 1)
