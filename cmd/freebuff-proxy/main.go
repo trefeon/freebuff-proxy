@@ -37,6 +37,7 @@ func main() {
 	verbose := flag.Bool("v", false, "verbose (debug) logging")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	showDoctor := flag.Bool("doctor", false, "run environment and configuration diagnostics")
+	showUpdate := flag.Bool("update", false, "check for and download the latest release update")
 	flag.Parse()
 
 	if *showVersion {
@@ -45,6 +46,9 @@ func main() {
 	}
 	if *showDoctor {
 		runDoctor(*configPath)
+	}
+	if *showUpdate {
+		runUpdate()
 	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
