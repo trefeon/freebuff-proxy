@@ -1,0 +1,19 @@
+[Unit]
+Description=FreeBuff Proxy Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/freebuff-proxy
+EnvironmentFile=/etc/freebuff-proxy/env
+Restart=on-failure
+RestartSec=5
+User=freebuff-proxy
+Group=freebuff-proxy
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
