@@ -91,7 +91,10 @@ type TokenSnapshot struct {
 	SessionQueueDepth    int
 	ActiveRuns           int
 	Requests             int
-	Messages24h          int // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
+	Messages24h          int    // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
+	DailyLimit           int    // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
+	UsagePct             int    // percentage of daily limit used (0 when unlimited)
+	RiskLevel            string // "low", "moderate", "high", "critical" account safety indicator (#6)
 }
 
 // Pool balances requests across the configured tokens.
@@ -543,15 +546,45 @@ func (p *Pool) Shutdown(ctx context.Context) {
 // Snapshot returns the per-token healthz view.
 func (p *Pool) Snapshot() []TokenSnapshot {
 	out := make([]TokenSnapshot, 0, len(p.toks))
+	dailyLimit := p.cfg.MaxMessagesPerDay
 	for i, tok := range p.toks {
 		rs := tok.runs.Snapshot()
 		ss := tok.session.Snapshot()
+		msgs := p.usageCount(i)
+
+		usagePct := 0
+		if dailyLimit > 0 {
+			usagePct = (msgs * 100) / dailyLimit
+			if usagePct > 100 {
+				usagePct = 100
+			}
+		}
+
+		riskLevel := "low"
+		switch {
+		case !rs.CooldownUntil.IsZero() && time.Now().Before(rs.CooldownUntil):
+			riskLevel = "high"
+		case rs.BanError != nil:
+			riskLevel = "critical"
+		case dailyLimit > 0 && usagePct >= 90:
+			riskLevel = "critical"
+		case dailyLimit > 0 && usagePct >= 70:
+			riskLevel = "high"
+		case msgs > 120:
+			riskLevel = "high"
+		case (dailyLimit > 0 && usagePct >= 30) || msgs >= 50:
+			riskLevel = "moderate"
+		}
+
 		out = append(out, TokenSnapshot{
 			Token:                i,
 			CooldownUntil:        rs.CooldownUntil,
 			ActiveRuns:           rs.ActiveRuns,
 			Requests:             rs.Requests,
-			Messages24h:          p.usageCount(i),
+			Messages24h:          msgs,
+			DailyLimit:           dailyLimit,
+			UsagePct:             usagePct,
+			RiskLevel:            riskLevel,
 			SessionStatus:        ss.Status,
 			SessionInstanceID:    ss.InstanceID,
 			SessionQueuePosition: ss.QueuePosition,
