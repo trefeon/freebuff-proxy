@@ -31,15 +31,17 @@ type Config struct {
 	HTTPProxy           string
 	SOCKS5Proxy         string
 	CostMode            string // "" (omit) or "free"; A/B pending, PRD §8
-	TLSFingerprint      string // "" (plain Go transport) | chrome120 | safari17 | firefox120 | random
+	TLSFingerprint      string // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
 	RegistryRefresh     time.Duration
 	DebugDump           bool
 	LogFile             string
 	LogLevel            string        // "" (use -v/default) or debug|info|warn|error
 	MaxMessagesPerDay   int           // 0 = unlimited: per-token cap on successful chats per 24h
 	IdleRotationTimeout time.Duration // 0 = disabled: pause rotation/refresh after this idle period
+	SafeMode            bool          // true = apply recommended anti-ban safe defaults
+	RequestJitter       time.Duration // random delay range [0, RequestJitter) before upstream chat calls
+	CLIVersion          string        // upstream CLI version string (default: 0.10.7)
 }
-
 // BridgeMode reports whether the proxy runs without any AUTH_TOKENS: every
 // client supplies their own FreeBuff token per request (Authorization: Bearer
 // or x-api-key), and the proxy relays with that token upstream.
@@ -65,6 +67,9 @@ type rawConfig struct {
 	LogLevel            string   `json:"LOG_LEVEL"`
 	MaxMessagesPerDay   int      `json:"MAX_MESSAGES_PER_DAY"`
 	IdleRotationTimeout string   `json:"IDLE_ROTATION_TIMEOUT"`
+	SafeMode            bool     `json:"SAFE_MODE"`
+	RequestJitter       string   `json:"REQUEST_JITTER"`
+	CLIVersion          string   `json:"CLI_VERSION"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -78,6 +83,9 @@ func defaultRawConfig() rawConfig {
 		CostMode:            "free", // free-tier mode; omission routes requests as PAID and fresh free accounts get 402 "Out of credits" (upstream check: cost_mode !== 'free' → billing)
 		MaxMessagesPerDay:   0,      // 0 = unlimited
 		IdleRotationTimeout: "0",    // 0 = disabled
+		SafeMode:            false,
+		RequestJitter:       "0s",
+		CLIVersion:          "0.10.7",
 	}
 }
 
@@ -113,7 +121,9 @@ func Load(configPath string) (Config, error) {
 	overrideString(&raw.LogLevel, "LOG_LEVEL")
 	overrideInt(&raw.MaxMessagesPerDay, "MAX_MESSAGES_PER_DAY")
 	overrideString(&raw.IdleRotationTimeout, "IDLE_ROTATION_TIMEOUT")
-
+	overrideBool(&raw.SafeMode, "SAFE_MODE")
+	overrideString(&raw.RequestJitter, "REQUEST_JITTER")
+	overrideString(&raw.CLIVersion, "CLI_VERSION")
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
 		if err != nil {
@@ -140,13 +150,19 @@ func Load(configPath string) (Config, error) {
 	}
 	// IDLE_ROTATION_TIMEOUT is zero-tolerant: "" or "0" both mean disabled.
 	idleRotationTimeout := time.Duration(0)
-	if strings.TrimSpace(raw.IdleRotationTimeout) != "" {
+	if strings.TrimSpace(raw.IdleRotationTimeout) != "" && strings.TrimSpace(raw.IdleRotationTimeout) != "0" {
 		idleRotationTimeout, err = parseDuration(raw.IdleRotationTimeout, "IDLE_ROTATION_TIMEOUT")
 		if err != nil {
 			return Config{}, err
 		}
 	}
-
+	requestJitter := time.Duration(0)
+	if strings.TrimSpace(raw.RequestJitter) != "" {
+		requestJitter, err = parseDuration(raw.RequestJitter, "REQUEST_JITTER")
+		if err != nil {
+			return Config{}, err
+		}
+	}
 	upstreamBaseURL, err := normalizeUpstreamBaseURL(raw.UpstreamBaseURL)
 	if err != nil {
 		return Config{}, err
@@ -170,6 +186,23 @@ func Load(configPath string) (Config, error) {
 		LogLevel:            strings.TrimSpace(raw.LogLevel),
 		MaxMessagesPerDay:   raw.MaxMessagesPerDay,
 		IdleRotationTimeout: idleRotationTimeout,
+		SafeMode:            raw.SafeMode,
+		RequestJitter:       requestJitter,
+		CLIVersion:          strings.TrimSpace(raw.CLIVersion),
+	}
+
+	// SafeMode presets: when SAFE_MODE=true, apply recommended defaults
+	// for any zero-valued account-safety knob.
+	if cfg.SafeMode {
+		if cfg.MaxMessagesPerDay == 0 {
+			cfg.MaxMessagesPerDay = 150
+		}
+		if cfg.IdleRotationTimeout == 0 {
+			cfg.IdleRotationTimeout = 30 * time.Minute
+		}
+		if cfg.RequestJitter == 0 {
+			cfg.RequestJitter = 2 * time.Second
+		}
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -179,10 +212,13 @@ func Load(configPath string) (Config, error) {
 }
 
 // Validate checks the resolved configuration. It must be called before use.
+// Includes actionable fix suggestions for common misconfigurations (#16).
 func (c Config) Validate() error {
 	switch {
 	case c.ListenAddr == "":
 		return errors.New("LISTEN_ADDR cannot be empty")
+	case !strings.Contains(c.ListenAddr, ":"):
+		return fmt.Errorf("LISTEN_ADDR %q missing port separator ':' (did you mean '127.0.0.1:3457' or ':3457'?)", c.ListenAddr)
 	case c.UpstreamBaseURL == "":
 		return errors.New("UPSTREAM_BASE_URL cannot be empty")
 	case c.RotationInterval <= 0:
@@ -193,14 +229,25 @@ func (c Config) Validate() error {
 		return errors.New("SESSION_CALL_TIMEOUT must be greater than zero")
 	case c.RegistryRefresh <= 0:
 		return errors.New("REGISTRY_REFRESH must be greater than zero")
+	case c.RequestJitter < 0:
+		return errors.New("REQUEST_JITTER cannot be negative")
+	}
+
+	for i, tok := range c.AuthTokens {
+		if strings.HasPrefix(strings.ToLower(tok), "bearer ") {
+			return fmt.Errorf("AUTH_TOKENS token #%d starts with 'Bearer ' prefix -- remove 'Bearer ' (the proxy adds it upstream automatically)", i+1)
+		}
+		if tok == "cb_xxx" || tok == "cb_yyy" || tok == "YOUR_TOKEN_HERE" {
+			return fmt.Errorf("AUTH_TOKENS token #%d is a placeholder %q -- replace with a real FreeBuff token from https://freebuff.llm.pm", i+1, tok)
+		}
 	}
 
 	if c.TLSFingerprint != "" {
-		switch c.TLSFingerprint {
-		case "chrome120", "safari17", "firefox120", "random":
+		switch strings.ToLower(c.TLSFingerprint) {
+		case "chrome120", "chrome126", "safari17", "safari18", "firefox120", "firefox128", "edge126", "random", "auto":
 			// valid
 		default:
-			return fmt.Errorf("TLS_FINGERPRINT %q must be one of: chrome120, safari17, firefox120, random", c.TLSFingerprint)
+			return fmt.Errorf("TLS_FINGERPRINT %q must be one of: chrome120, chrome126, safari17, safari18, firefox120, firefox128, edge126, random, auto", c.TLSFingerprint)
 		}
 	}
 

@@ -25,6 +25,7 @@ func Dialer(profile *Profile, baseDial func(ctx context.Context, network, addr s
 		profile = DefaultProfile()
 	}
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		connProfile := GetProfileForConnection(profile)
 		dialFN := baseDial
 		if dialFN == nil {
 			dialFN = (&net.Dialer{
@@ -45,7 +46,7 @@ func Dialer(profile *Profile, baseDial func(ctx context.Context, network, addr s
 			return nil, fmt.Errorf("stealth: invalid address %q: %w", addr, err)
 		}
 
-		helloID := profile.ClientHelloID
+		helloID := connProfile.ClientHelloID
 
 		uConn := utls.UClient(rawConn, &utls.Config{
 			ServerName:         host,
@@ -53,8 +54,8 @@ func Dialer(profile *Profile, baseDial func(ctx context.Context, network, addr s
 			MinVersion:         tls.VersionTLS12,
 		}, helloID)
 
-		if profile.CustomSpec != nil {
-			if err := uConn.ApplyPreset(profile.CustomSpec); err != nil {
+		if connProfile.CustomSpec != nil {
+			if err := uConn.ApplyPreset(connProfile.CustomSpec); err != nil {
 				_ = rawConn.Close()
 				return nil, fmt.Errorf("stealth: apply custom spec failed: %w", err)
 			}

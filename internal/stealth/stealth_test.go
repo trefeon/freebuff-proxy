@@ -17,32 +17,33 @@ import (
 
 func TestLookup(t *testing.T) {
 	tests := []struct {
-		name   string
-		want   *Profile
-		wantOK bool
+		name    string
+		wantID  ProfileID
+		wantOK  bool
 	}{
-		{"chrome120", ProfileChrome120, true},
-		{"Chrome120", ProfileChrome120, true},
-		{"CHROME120", ProfileChrome120, true},
-		{"safari17", ProfileSafari17, true},
-		{"Safari17", ProfileSafari17, true},
-		{"firefox120", ProfileFirefox120, true},
-		{"Firefox120", ProfileFirefox120, true},
-		{"random", ProfileRandom, true},
-		{"Random", ProfileRandom, true},
-		{"unknown", nil, false},
-		{"", nil, false},
+		{"chrome120", ProfileIDChrome120, true},
+		{"chrome126", ProfileIDChrome126, true},
+		{"chrome", ProfileIDChrome126, true},
+		{"safari17", ProfileIDSafari17, true},
+		{"safari18", ProfileIDSafari18, true},
+		{"safari", ProfileIDSafari18, true},
+		{"firefox120", ProfileIDFirefox120, true},
+		{"firefox128", ProfileIDFirefox128, true},
+		{"firefox", ProfileIDFirefox128, true},
+		{"edge126", ProfileIDEdge126, true},
+		{"edge", ProfileIDEdge126, true},
+		{"random", ProfileIDRandom, true},
+		{"auto", ProfileIDAuto, true},
+		{"unknown", "", false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := Lookup(tt.name)
-			if ok != tt.wantOK {
-				t.Errorf("Lookup(%q) ok = %v, want %v", tt.name, ok, tt.wantOK)
-			}
-			if got != tt.want {
-				t.Errorf("Lookup(%q) = %v, want %v", tt.name, got, tt.want)
-			}
-		})
+		got, ok := Lookup(tt.name)
+		if ok != tt.wantOK {
+			t.Errorf("Lookup(%q) ok = %v, want %v", tt.name, ok, tt.wantOK)
+		}
+		if ok && got.ID != tt.wantID {
+			t.Errorf("Lookup(%q) ID = %q, want %q", tt.name, got.ID, tt.wantID)
+		}
 	}
 }
 
@@ -193,7 +194,22 @@ func TestDialerTLS(t *testing.T) {
 
 func TestDefaultProfile(t *testing.T) {
 	dp := DefaultProfile()
-	if dp != ProfileChrome120 {
-		t.Errorf("DefaultProfile = %v, want ProfileChrome120", dp)
+	if dp != ProfileChrome126 {
+		t.Errorf("DefaultProfile = %v, want ProfileChrome126", dp)
 	}
+}
+
+func TestGetProfileForConnection(t *testing.T) {
+	t.Run("auto", func(t *testing.T) {
+		p := GetProfileForConnection(ProfileAuto)
+		if p == nil || p.ID == ProfileIDAuto {
+			t.Errorf("GetProfileForConnection(ProfileAuto) returned unresolved profile: %v", p)
+		}
+	})
+	t.Run("random", func(t *testing.T) {
+		p := GetProfileForConnection(ProfileRandom)
+		if p.UserAgent == "" {
+			t.Errorf("GetProfileForConnection(ProfileRandom) returned empty User-Agent")
+		}
+	})
 }

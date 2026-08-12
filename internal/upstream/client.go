@@ -11,7 +11,8 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"context"
-	"crypto/rand"
+	cryptoRand "crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -170,11 +171,12 @@ type Client struct {
 
 	requestTimeout     time.Duration
 	sessionCallTimeout time.Duration
+	requestJitter      time.Duration
+	cliVersion         string
 	costMode           string
 	debugDump          bool
 	stealthProfile     *stealth.Profile // nil when fingerprint unset
 }
-
 // cliUserAgent mirrors the official CLI / SDK user agent. The upstream
 // free-tier gate (403 free_mode_cli_required) requires requests to carry the
 // AI-SDK user agent; random browser UAs are rejected. Kept as a fixed
@@ -228,11 +230,18 @@ func New(token string, cfg *config.Config) (*Client, error) {
 		stealthProf = profile
 	}
 
+	cliVer := cfg.CLIVersion
+	if cliVer == "" {
+		cliVer = "0.10.7"
+	}
+
 	return &Client{
 		token:              token,
 		baseURL:            cfg.UpstreamBaseURL,
 		requestTimeout:     cfg.RequestTimeout,
 		sessionCallTimeout: cfg.SessionCallTimeout,
+		requestJitter:      cfg.RequestJitter,
+		cliVersion:         cliVer,
 		costMode:           cfg.CostMode,
 		debugDump:          cfg.DebugDump,
 		stealthProfile:     stealthProf,
@@ -254,11 +263,24 @@ func New(token string, cfg *config.Config) (*Client, error) {
 // returns a typed error. The returned reader must be closed; closing it
 // releases the connection.
 func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []byte) (io.ReadCloser, error) {
+	if c.requestJitter > 0 {
+		var b [8]byte
+		_, _ = cryptoRand.Read(b[:])
+		u := binary.BigEndian.Uint64(b[:])
+		jitterNano := int64(u % uint64(c.requestJitter))
+		timer := time.NewTimer(time.Duration(jitterNano))
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		}
+	}
+
 	enveloped, err := injectEnvelope(body, c.costMode, opts)
 	if err != nil {
 		return nil, fmt.Errorf("upstream: envelope: %w", err)
 	}
-
 	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/chat/completions", enveloped)
 	if err != nil {
 		return nil, err
@@ -465,9 +487,14 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 	if c.stealthProfile != nil {
-		stealth.SanitizeAndApply(req.Header, c.stealthProfile)
+		connProf := stealth.GetProfileForConnection(c.stealthProfile)
+		stealth.SanitizeAndApply(req.Header, connProf)
 	} else {
-		req.Header.Set("User-Agent", cliUserAgent)
+		ver := c.cliVersion
+		if ver == "" {
+			ver = "0.10.7"
+		}
+		req.Header.Set("User-Agent", fmt.Sprintf("ai-sdk/openai-compatible/%s/codebuff", ver))
 	}
 	return req, nil
 }
@@ -739,7 +766,7 @@ func unixFrom(secs int64) time.Time {
 // (Math.random().toString(36).substring(2, 15)).
 func generateClientID() string {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
+	if _, err := cryptoRand.Read(b[:]); err != nil {
 		// crypto/rand failure is unrecoverable in practice; fall back to a
 		// time-seeded value rather than panicking mid-request.
 		return strconv.FormatInt(time.Now().UnixNano(), 36)[:13]

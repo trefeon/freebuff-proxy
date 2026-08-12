@@ -15,9 +15,8 @@ var envKeys = []string{
 	"LISTEN_ADDR", "UPSTREAM_BASE_URL", "AUTH_TOKENS", "ROTATION_INTERVAL",
 	"REQUEST_TIMEOUT", "SESSION_CALL_TIMEOUT", "API_KEYS", "HTTP_PROXY",
 	"SOCKS5_PROXY", "COST_MODE", "TLS_FINGERPRINT", "REGISTRY_REFRESH", "DEBUG_DUMP", "LOG_FILE", "LOG_LEVEL",
-	"MAX_MESSAGES_PER_DAY", "IDLE_ROTATION_TIMEOUT",
+	"MAX_MESSAGES_PER_DAY", "IDLE_ROTATION_TIMEOUT", "SAFE_MODE", "REQUEST_JITTER", "CLI_VERSION",
 }
-
 func clearEnv(t *testing.T) {
 	t.Helper()
 	// Isolate from any real ./.env in the working directory (the repo ships
@@ -73,6 +72,56 @@ func TestDefaults(t *testing.T) {
 	if cfg.CostMode != "free" {
 		t.Errorf("CostMode = %q, want free (default: omission routes requests as paid -> 402)", cfg.CostMode)
 	}
+}
+
+func TestSafeMode(t *testing.T) {
+	t.Setenv("AUTH_TOKENS", "tok-1")
+	t.Setenv("SAFE_MODE", "true")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.MaxMessagesPerDay != 150 {
+		t.Errorf("MaxMessagesPerDay = %d, want 150 under SafeMode", cfg.MaxMessagesPerDay)
+	}
+	if cfg.IdleRotationTimeout != 30*time.Minute {
+		t.Errorf("IdleRotationTimeout = %v, want 30m under SafeMode", cfg.IdleRotationTimeout)
+	}
+	if cfg.RequestJitter != 2*time.Second {
+		t.Errorf("RequestJitter = %v, want 2s under SafeMode", cfg.RequestJitter)
+	}
+}
+
+func TestValidationFixSuggestions(t *testing.T) {
+	t.Run("Bearer prefix", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "Bearer token123")
+		_, err := Load("")
+		if err == nil || !strings.Contains(err.Error(), "starts with 'Bearer ' prefix") {
+			t.Errorf("expected Bearer prefix error, got: %v", err)
+		}
+	})
+
+	t.Run("Placeholder token", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "cb_xxx")
+		_, err := Load("")
+		if err == nil || !strings.Contains(err.Error(), "placeholder") {
+			t.Errorf("expected placeholder error, got: %v", err)
+		}
+	})
+
+	t.Run("ListenAddr missing colon", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok1")
+		t.Setenv("LISTEN_ADDR", "3457")
+		_, err := Load("")
+		if err == nil || !strings.Contains(err.Error(), "missing port separator ':'") {
+			t.Errorf("expected missing port separator error, got: %v", err)
+		}
+	})
 }
 
 func TestLoadNoTokensBridgeMode(t *testing.T) {
