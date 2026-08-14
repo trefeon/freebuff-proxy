@@ -232,7 +232,7 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 			continue
 		}
 
-		instanceID, err := tok.session.EnsureSession(ctx)
+		instanceID, err := tok.session.EnsureSessionForModel(ctx, model)
 		if err != nil {
 			// Release the run lease we just acquired — otherwise the
 			// inflight counter never returns to zero and the run can
@@ -339,7 +339,7 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		return nil, err
 	}
 
-	instanceID, err := entry.session.EnsureSession(ctx)
+	instanceID, err := entry.session.EnsureSessionForModel(ctx, model)
 	if err != nil {
 		// Release the run lease we just acquired — otherwise the inflight
 		// counter never returns to zero and the run can never be FINISHed

@@ -231,6 +231,9 @@ func Load(configPath string) (Config, error) {
 		if cfg.RequestJitter == 0 {
 			cfg.RequestJitter = 2 * time.Second
 		}
+		if cfg.TLSFingerprint == "" {
+			cfg.TLSFingerprint = "auto"
+		}
 	}
 
 	if err := cfg.Validate(); err != nil {

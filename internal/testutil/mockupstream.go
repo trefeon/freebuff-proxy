@@ -45,13 +45,14 @@ type MockUpstream struct {
 	RunIDs []string
 	runIdx int
 
-	ChatStatus    int    // 200 by default
-	ChatBody      string // SSE body served on 200
-	ChatErrorBody string // body served on ChatStatus >= 400
-	ChatDelay     time.Duration
-	ChatBlocks    bool // block until the request context is canceled
-	AbortDetected atomic.Bool
-	ChatHandler   func(w http.ResponseWriter, r *http.Request) // optional full override
+	ChatStatus     int    // 200 by default
+	ChatBody       string // SSE body served on 200
+	ChatErrorBody  string // body served on ChatStatus >= 400
+	ChatDelay      time.Duration
+	ChatBlocks     bool // block until the request context is canceled
+	AbortDetected  atomic.Bool
+	ChatHandler    func(w http.ResponseWriter, r *http.Request) // optional full override
+	SessionHandler func(w http.ResponseWriter, r *http.Request) // optional full override
 
 	SessionCreateDelay time.Duration // delay/create-block on session create+get
 
@@ -117,22 +118,31 @@ func (m *MockUpstream) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case r.URL.Path == "/api/v1/freebuff/session" && r.Method == http.MethodPost:
-		m.mu.Lock()
-		m.SessionCreates++
-		m.mu.Unlock()
-		m.handleSession(w, r)
-	case r.URL.Path == "/api/v1/freebuff/session" && r.Method == http.MethodGet:
-		m.mu.Lock()
-		m.SessionPolls++
-		m.mu.Unlock()
-		m.handleSession(w, r)
-	case r.URL.Path == "/api/v1/freebuff/session" && r.Method == http.MethodDelete:
-		m.mu.Lock()
-		m.SessionEnds++
-		m.mu.Unlock()
-		w.WriteHeader(200)
-		_, _ = io.WriteString(w, `{"status":"ended"}`)
+	case strings.HasPrefix(r.URL.Path, "/api/v1/freebuff/session"):
+		if m.SessionHandler != nil {
+			m.SessionHandler(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodPost:
+			m.mu.Lock()
+			m.SessionCreates++
+			m.mu.Unlock()
+			m.handleSession(w, r)
+		case http.MethodGet:
+			m.mu.Lock()
+			m.SessionPolls++
+			m.mu.Unlock()
+			m.handleSession(w, r)
+		case http.MethodDelete:
+			m.mu.Lock()
+			m.SessionEnds++
+			m.mu.Unlock()
+			w.WriteHeader(200)
+			_, _ = io.WriteString(w, `{"status":"ended"}`)
+		default:
+			writeJSON(w, 405, `{"error":"method not allowed"}`)
+		}
 	case r.URL.Path == "/api/v1/agent-runs" && r.Method == http.MethodPost:
 		m.handleAgentRuns(w, r)
 	case r.URL.Path == "/api/v1/chat/completions" && r.Method == http.MethodPost:

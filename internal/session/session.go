@@ -25,12 +25,18 @@ const (
 	// expiryMargin is subtracted from expiresAt before a session is
 	// considered ready (mirrors the references' 5s safety margin).
 	expiryMargin = 5 * time.Second
+	// graceWindow is the 30-minute drain window (FREEBUFF_SESSION_GRACE_MS)
+	// after expiresAt where in-flight agent chat completions still succeed.
+	graceWindow = 30 * time.Minute
 	// maxRefreshIterations bounds the create/poll status loop.
 	maxRefreshIterations = 5
 	// maxOuterIterations bounds EnsureSession's refresh attempts per call so
 	// a pathological upstream (always-expired or never-advancing queue)
 	// cannot spin forever.
 	maxOuterIterations = 5
+	// defaultFallbackModel is the guaranteed-available model used when a
+	// requested model is temporarily unavailable upstream.
+	defaultFallbackModel = "deepseek/deepseek-v4-flash"
 )
 
 // WaitingRoomError is returned when the session is queued and pollAt has not
@@ -58,7 +64,9 @@ type Manager struct {
 type cachedState struct {
 	status             string
 	instanceID         string
+	model              string
 	expiresAt          time.Time
+	gracePeriodEndsAt  time.Time
 	position           int
 	queueDepth         int
 	pollAt             time.Time
@@ -72,14 +80,16 @@ func NewManager(client *upstream.Client) *Manager {
 	return &Manager{client: client}
 }
 
-// EnsureSession returns the session instance id, or "" when the upstream
-// session is disabled (requests proceed without an instance header). It
-// returns WaitingRoomError while the session is queued and pollAt has not
-// passed. Concurrent callers share a single in-flight refresh. The fast path
-// reuses cached state while it is fresh; stale state (or none) triggers one
-// refresh cycle, after which the freshly returned state is trusted — the
-// expiry margin exists to avoid refreshing on every call, not to gate usage.
+// EnsureSession returns the session instance id for the default model, or ""
+// when the upstream session is disabled.
 func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
+	return m.EnsureSessionForModel(ctx, "")
+}
+
+// EnsureSessionForModel returns the session instance id bound to the requested
+// model. If the session is currently active on a different model, it automatically
+// switches models by releasing the previous slot.
+func (m *Manager) EnsureSessionForModel(ctx context.Context, model string) (string, error) {
 	for attempts := 0; attempts < maxOuterIterations; attempts++ {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -93,7 +103,7 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 				if time.Now().Before(s.expiresAt.Add(-expiryMargin)) {
 					instance := s.instanceID
 					m.mu.Unlock()
-					slog.Debug("session reused", "instance_id", instance, "expires_at", s.expiresAt.Format(time.RFC3339))
+					slog.Debug("session reused", "instance_id", instance, "model", s.model, "expires_at", s.expiresAt.Format(time.RFC3339))
 					return instance, nil
 				}
 				// Freshness exceeded — fall through to refresh.
@@ -114,10 +124,6 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 			}
 		}
 		singleFlight := m.refreshing
-		// Capture the channel under the lock: the refresher clears
-		// m.refreshCh (sets it to nil) when it finishes, and an unlocked
-		// read here would race with that write — and could read nil, which
-		// would block the select forever.
 		var refreshCh chan struct{}
 		if singleFlight {
 			refreshCh = m.refreshCh
@@ -138,7 +144,7 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 		}
 
 		// We are the refresher. Run the loop outside the lock.
-		err := m.refresh(ctx)
+		err := m.refresh(ctx, model)
 		m.mu.Lock()
 		m.refreshing = false
 		close(m.refreshCh)
@@ -148,8 +154,7 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 			return "", err
 		}
 
-		// Freshly refreshed: trust the new state (the expiry margin gates
-		// only the cached fast path).
+		// Freshly refreshed: trust the new state.
 		m.mu.Lock()
 		s = m.state
 		m.mu.Unlock()
@@ -169,7 +174,6 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 					RetryAfter: s.pollAt.Sub(now),
 				}
 			}
-			// Still queued with pollAt passed — bounded retry via the loop.
 		}
 	}
 	return "", errors.New("session: not ready after repeated refreshes")
@@ -177,7 +181,8 @@ func (m *Manager) EnsureSession(ctx context.Context) (string, error) {
 
 // refresh runs the create/poll status loop, updating cached state, until the
 // session is active, disabled, or the iteration budget is exhausted.
-func (m *Manager) refresh(ctx context.Context) error {
+func (m *Manager) refresh(ctx context.Context, requestedModel string) error {
+	targetModel := requestedModel
 	for i := 0; i < maxRefreshIterations; i++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -194,7 +199,7 @@ func (m *Manager) refresh(ctx context.Context) error {
 		if cached != nil && cached.status == "queued" && cached.instanceID != "" {
 			st, err = m.client.GetSession(ctx, cached.instanceID)
 		} else {
-			st, err = m.client.CreateSession(ctx)
+			st, err = m.client.CreateSessionForModel(ctx, targetModel)
 		}
 		if err != nil {
 			return err
@@ -203,18 +208,24 @@ func (m *Manager) refresh(ctx context.Context) error {
 		status := st.Status
 		switch status {
 		case "active":
+			model := st.Model
+			if model == "" {
+				model = targetModel
+			}
 			m.mu.Lock()
 			m.state = &cachedState{
 				status:             "active",
 				instanceID:         st.InstanceID,
+				model:              model,
 				expiresAt:          st.ExpiresAt,
+				gracePeriodEndsAt:  st.ExpiresAt.Add(graceWindow),
 				accessTier:         st.AccessTier,
 				countryCode:        st.CountryCode,
 				countryBlockReason: st.CountryBlockReason,
 			}
 			m.mu.Unlock()
 			slog.Debug("session created", "status", "active", "instance_id", st.InstanceID,
-				"expires_at", st.ExpiresAt.Format(time.RFC3339))
+				"model", model, "expires_at", st.ExpiresAt.Format(time.RFC3339))
 			return nil
 		case "disabled":
 			m.mu.Lock()
@@ -234,23 +245,24 @@ func (m *Manager) refresh(ctx context.Context) error {
 				}
 				pollAt = time.Now().Add(wait)
 			}
+			model := st.Model
+			if model == "" {
+				model = targetModel
+			}
 			m.mu.Lock()
 			m.state = &cachedState{
 				status:     "queued",
 				instanceID: st.InstanceID,
+				model:      model,
 				position:   st.Position,
 				queueDepth: st.QueueDepth,
 				pollAt:     pollAt,
 			}
 			m.mu.Unlock()
-			slog.Debug("session queued", "instance_id", st.InstanceID,
+			slog.Debug("session queued", "instance_id", st.InstanceID, "model", model,
 				"position", st.Position, "queue_depth", st.QueueDepth, "poll_at", pollAt.Format(time.RFC3339))
-			// Surface the queue to the caller: EnsureSession re-evaluates the
-			// cached state and returns WaitingRoomError until pollAt passes.
-			// Polling resumes on the next call, mirroring the references.
 			return nil
 		case "ended", "superseded", "none":
-			// Recreate on the next iteration.
 			m.mu.Lock()
 			m.state = nil
 			m.mu.Unlock()
@@ -259,14 +271,38 @@ func (m *Manager) refresh(ctx context.Context) error {
 			return fmt.Errorf("session: account banned upstream")
 		case "country_blocked":
 			return fmt.Errorf("session: country blocked upstream")
-		case "rate_limited":
-			return fmt.Errorf("session: rate limited upstream")
+		case "rate_limited", "ip_capped", "spend_limited":
+			retryAfter := time.Duration(st.RetryAfterMs) * time.Millisecond
+			if retryAfter <= 0 {
+				retryAfter = time.Minute
+			}
+			return &upstream.RateLimitError{
+				Status:      status,
+				RetryAfter:  retryAfter,
+				ResetAt:     st.ResetAt,
+				Limit:       st.Limit,
+				RecentCount: st.RecentCount,
+				Body:        st.Message,
+			}
 		case "model_locked":
-			// Session is bound to a different model; recreate for ours.
+			// Previous session is locked to a different model.
+			// Release the old slot and retry with the desired model.
+			m.mu.Lock()
+			oldInstance := ""
+			if m.state != nil {
+				oldInstance = m.state.instanceID
+			}
+			m.state = nil
+			m.mu.Unlock()
+			_ = m.client.EndSession(ctx, oldInstance)
+			slog.Debug("session released on model lock, retrying", "current", st.CurrentModel, "target", targetModel)
+		case "model_unavailable":
+			// Requested model is not available; fall back to default model.
+			slog.Warn("session: model unavailable upstream, falling back to default", "requested", targetModel, "fallback", defaultFallbackModel)
+			targetModel = defaultFallbackModel
 			m.mu.Lock()
 			m.state = nil
 			m.mu.Unlock()
-			slog.Debug("session recreated", "reason", "model_locked")
 		default:
 			return fmt.Errorf("session: unknown upstream status %q", status)
 		}
@@ -279,11 +315,13 @@ func (m *Manager) refresh(ctx context.Context) error {
 type SessionSnapshot struct {
 	Status             string
 	InstanceID         string
+	Model              string
 	QueuePosition      int
 	QueueDepth         int
 	TierAccess         string
 	TierCountry        string
 	CountryBlockReason string
+	ExpiresAt          time.Time
 }
 
 // Snapshot returns a best-effort view of the cached session state. All
@@ -298,11 +336,13 @@ func (m *Manager) Snapshot() SessionSnapshot {
 	return SessionSnapshot{
 		Status:             m.state.status,
 		InstanceID:         m.state.instanceID,
+		Model:              m.state.model,
 		QueuePosition:      m.state.position,
 		QueueDepth:         m.state.queueDepth,
 		TierAccess:         m.state.accessTier,
 		TierCountry:        m.state.countryCode,
 		CountryBlockReason: m.state.countryBlockReason,
+		ExpiresAt:          m.state.expiresAt,
 	}
 }
 

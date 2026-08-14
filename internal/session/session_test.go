@@ -3,6 +3,8 @@ package session
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -312,5 +314,86 @@ func TestModelLockedRecreates(t *testing.T) {
 	}
 	if mock.SessionCreates != 2 {
 		t.Errorf("creates = %d, want 2 (model_locked → recreate)", mock.SessionCreates)
+	}
+}
+func TestModelUnavailableFallback(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var createdModels []string
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			model := r.Header.Get("x-freebuff-model")
+			createdModels = append(createdModels, model)
+			w.Header().Set("Content-Type", "application/json")
+			if model == "rare/model" {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = io.WriteString(w, `{"status":"model_unavailable","requestedModel":"rare/model"}`)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-fallback","model":"`+model+`","expiresAt":"2030-01-01T00:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}
+
+	mgr := newTestManager(t, mock)
+	instance, err := mgr.EnsureSessionForModel(context.Background(), "rare/model")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if instance != "inst-fallback" {
+		t.Errorf("instance = %q, want inst-fallback", instance)
+	}
+	if len(createdModels) != 2 {
+		t.Fatalf("createdModels = %v, want 2 attempts", createdModels)
+	}
+	if createdModels[0] != "rare/model" || createdModels[1] != "deepseek/deepseek-v4-flash" {
+		t.Errorf("createdModels = %v, want rare/model then fallback", createdModels)
+	}
+}
+
+func TestRateLimitedError(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"status":"rate_limited","retryAfterMs":45000,"limit":5,"recentCount":5}`)
+	}
+
+	mgr := newTestManager(t, mock)
+	_, err := mgr.EnsureSession(context.Background())
+	if err == nil {
+		t.Fatal("want error on rate limited session")
+	}
+	var rle *upstream.RateLimitError
+	if !errors.As(err, &rle) {
+		t.Fatalf("want RateLimitError, got %T: %v", err, err)
+	}
+	if rle.RetryAfter != 45*time.Second {
+		t.Errorf("RetryAfter = %v, want 45s", rle.RetryAfter)
+	}
+}
+
+func TestSnapshotModelAndExpiresAt(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr := newTestManager(t, mock)
+
+	_, err := mgr.EnsureSessionForModel(context.Background(), "thudm/glm-5.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snap := mgr.Snapshot()
+	if snap.Status != "active" {
+		t.Errorf("Status = %q, want active", snap.Status)
+	}
+	if snap.Model != "thudm/glm-5.2" {
+		t.Errorf("Model = %q, want thudm/glm-5.2", snap.Model)
+	}
+	if snap.ExpiresAt.IsZero() {
+		t.Error("ExpiresAt should not be zero")
 	}
 }

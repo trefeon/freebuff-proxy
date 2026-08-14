@@ -674,3 +674,125 @@ func TestClassifyBan(t *testing.T) {
 		t.Fatalf("want UpstreamError, got %v", err3)
 	}
 }
+func TestCreateSessionForModelHeaders(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			model := r.Header.Get("x-freebuff-model")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1","model":"`+model+`","expiresAt":"2030-01-01T00:00:00Z"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}
+
+	client, err := New("tok-a", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := client.CreateSessionForModel(context.Background(), "thudm/glm-5.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Status != "active" || st.Model != "thudm/glm-5.2" || st.InstanceID != "inst-1" {
+		t.Errorf("got %+v, want active with model thudm/glm-5.2", st)
+	}
+}
+
+func TestGetSessionWithOptsHeaders(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var gotCompact, gotHeartbeat, gotInstance string
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		gotCompact = r.Header.Get("x-freebuff-compact-session")
+		gotHeartbeat = r.Header.Get("x-freebuff-heartbeat")
+		gotInstance = r.Header.Get("x-freebuff-instance-id")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1","expiresAt":"2030-01-01T00:00:00Z"}`)
+	}
+
+	client, err := New("tok-a", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := client.GetSessionWithOpts(context.Background(), "inst-1", true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Status != "active" {
+		t.Errorf("status = %q, want active", st.Status)
+	}
+	if gotCompact != "1" || gotHeartbeat != "1" || gotInstance != "inst-1" {
+		t.Errorf("headers: compact=%q, heartbeat=%q, instance=%q", gotCompact, gotHeartbeat, gotInstance)
+	}
+}
+
+func TestSessionCallStructured4xx(t *testing.T) {
+	cases := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantStatus string
+	}{
+		{
+			name:       "model_locked 409",
+			statusCode: http.StatusConflict,
+			body:       `{"status":"model_locked","currentModel":"deepseek/deepseek-v4-flash","requestedModel":"thudm/glm-5.2"}`,
+			wantStatus: "model_locked",
+		},
+		{
+			name:       "model_unavailable 409",
+			statusCode: http.StatusConflict,
+			body:       `{"status":"model_unavailable","requestedModel":"thudm/glm-5.2","availableHours":"08:00-20:00"}`,
+			wantStatus: "model_unavailable",
+		},
+		{
+			name:       "ip_capped 429",
+			statusCode: http.StatusTooManyRequests,
+			body:       `{"status":"ip_capped","activeUsersForIp":5,"limit":4,"retryAfterMs":30000}`,
+			wantStatus: "ip_capped",
+		},
+		{
+			name:       "spend_limited 429",
+			statusCode: http.StatusTooManyRequests,
+			body:       `{"status":"spend_limited","message":"Daily budget reached","retryAfterMs":60000}`,
+			wantStatus: "spend_limited",
+		},
+		{
+			name:       "country_blocked 403",
+			statusCode: http.StatusForbidden,
+			body:       `{"status":"country_blocked","countryCode":"CN","countryBlockReason":"country_not_allowed"}`,
+			wantStatus: "country_blocked",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := testutil.NewMock()
+			defer mock.Close()
+			mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.statusCode)
+				_, _ = io.WriteString(w, tc.body)
+			}
+
+			client, err := New("tok-a", testConfig(mock.URL(), nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			st, err := client.CreateSession(context.Background())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if st.Status != tc.wantStatus {
+				t.Errorf("status = %q, want %q", st.Status, tc.wantStatus)
+			}
+		})
+	}
+}

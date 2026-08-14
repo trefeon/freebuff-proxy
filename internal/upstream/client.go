@@ -100,6 +100,7 @@ func (e *UpstreamError) Error() string {
 // Retry-After header when the body is opaque). Unwrap makes
 // errors.Is(err, ErrRateLimited) work.
 type RateLimitError struct {
+	Status      string
 	RetryAfter  time.Duration
 	Limit       float64
 	RecentCount float64
@@ -146,7 +147,13 @@ func (e *BanError) Unwrap() error { return ErrBanned }
 type SessionState struct {
 	Status             string
 	InstanceID         string
+	Model              string
+	CurrentModel       string
+	RequestedModel     string
 	ExpiresAt          time.Time
+	AdmittedAt         time.Time
+	GracePeriodEndsAt  time.Time
+	GraceRemainingMs   int64
 	Position           int
 	QueueDepth         int
 	EstimatedWaitMs    int
@@ -154,6 +161,14 @@ type SessionState struct {
 	AccessTier         string // "full" | "limited" (empty when absent)
 	CountryCode        string
 	CountryBlockReason string
+	IpPrivacySignals   []string
+	ActiveUsersForIP   int
+	Limit              float64
+	RecentCount        float64
+	ResetAt            time.Time
+	RetryAfterMs       int64
+	AvailableHours     string
+	Message            string
 }
 
 // ChatOptions carries the envelope values for a chat completion request.
@@ -328,9 +343,17 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 
 // CreateSession POSTs /api/v1/freebuff/session with an empty object.
 func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
+	return c.CreateSessionForModel(ctx, "")
+}
+
+// CreateSessionForModel POSTs /api/v1/freebuff/session with the requested model header.
+func (c *Client) CreateSessionForModel(ctx context.Context, model string) (*SessionState, error) {
 	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", []byte("{}"))
 	if err != nil {
 		return nil, err
+	}
+	if model != "" {
+		req.Header.Set("x-freebuff-model", model)
 	}
 	return c.sessionCall(req)
 }
@@ -338,11 +361,24 @@ func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 // GetSession polls /api/v1/freebuff/session for the given instance. A 404
 // maps to Status "disabled" (proxy-freebuff treats it as disabled).
 func (c *Client) GetSession(ctx context.Context, instanceID string) (*SessionState, error) {
+	return c.GetSessionWithOpts(ctx, instanceID, false, false)
+}
+
+// GetSessionWithOpts polls /api/v1/freebuff/session with optional compact or heartbeat headers.
+func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, compact, heartbeat bool) (*SessionState, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-freebuff-instance-id", instanceID)
+	if instanceID != "" {
+		req.Header.Set("x-freebuff-instance-id", instanceID)
+	}
+	if compact {
+		req.Header.Set("x-freebuff-compact-session", "1")
+	}
+	if heartbeat {
+		req.Header.Set("x-freebuff-heartbeat", "1")
+	}
 	return c.sessionCall(req)
 }
 
@@ -447,43 +483,80 @@ func (c *Client) sessionCall(req *http.Request) (*SessionState, error) {
 	if resp.StatusCode == 404 {
 		return &SessionState{Status: "disabled"}, nil
 	}
-	if resp.StatusCode >= 400 {
-		return nil, classifyError(resp.StatusCode, body, resp.Header)
-	}
+
 	c.dump("session", req, resp.StatusCode, body)
 
 	var raw struct {
-		Status             string `json:"status"`
-		InstanceID         string `json:"instanceId"`
-		ExpiresAt          any    `json:"expiresAt"`
-		Position           int    `json:"position"`
-		QueueDepth         int    `json:"queueDepth"`
-		EstimatedWaitMs    int    `json:"estimatedWaitMs"`
-		PollAt             any    `json:"pollAt"`
-		AccessTier         string `json:"accessTier"`
-		CountryCode        string `json:"countryCode"`
-		CountryBlockReason string `json:"countryBlockReason"`
+		Status                 string   `json:"status"`
+		InstanceID             string   `json:"instanceId"`
+		Model                  string   `json:"model"`
+		CurrentModel           string   `json:"currentModel"`
+		RequestedModel         string   `json:"requestedModel"`
+		ExpiresAt              any      `json:"expiresAt"`
+		AdmittedAt             any      `json:"admittedAt"`
+		GracePeriodEndsAt      any      `json:"gracePeriodEndsAt"`
+		GracePeriodRemainingMs int64    `json:"gracePeriodRemainingMs"`
+		Position               int      `json:"position"`
+		QueueDepth             int      `json:"queueDepth"`
+		EstimatedWaitMs        int      `json:"estimatedWaitMs"`
+		PollAt                 any      `json:"pollAt"`
+		AccessTier             string   `json:"accessTier"`
+		CountryCode            string   `json:"countryCode"`
+		CountryBlockReason     string   `json:"countryBlockReason"`
+		IpPrivacySignals       []string `json:"ipPrivacySignals"`
+		ActiveUsersForIP       int      `json:"activeUsersForIp"`
+		Limit                  float64  `json:"limit"`
+		RecentCount            float64  `json:"recentCount"`
+		ResetAt                any      `json:"resetAt"`
+		RetryAfterMs           int64    `json:"retryAfterMs"`
+		AvailableHours         string   `json:"availableHours"`
+		Message                string   `json:"message"`
 	}
-	if err := json.Unmarshal([]byte(body), &raw); err != nil {
-		return nil, fmt.Errorf("upstream: parse session response %q: %w", truncate(body, 200), err)
+	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
+		state := &SessionState{
+			Status:             raw.Status,
+			InstanceID:         raw.InstanceID,
+			Model:              raw.Model,
+			CurrentModel:       raw.CurrentModel,
+			RequestedModel:     raw.RequestedModel,
+			GraceRemainingMs:   raw.GracePeriodRemainingMs,
+			Position:           raw.Position,
+			QueueDepth:         raw.QueueDepth,
+			EstimatedWaitMs:    raw.EstimatedWaitMs,
+			AccessTier:         raw.AccessTier,
+			CountryCode:        raw.CountryCode,
+			CountryBlockReason: raw.CountryBlockReason,
+			IpPrivacySignals:   raw.IpPrivacySignals,
+			ActiveUsersForIP:   raw.ActiveUsersForIP,
+			Limit:              raw.Limit,
+			RecentCount:        raw.RecentCount,
+			RetryAfterMs:       raw.RetryAfterMs,
+			AvailableHours:     raw.AvailableHours,
+			Message:            raw.Message,
+		}
+		if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
+			state.ExpiresAt = time.Time{}
+		}
+		if state.AdmittedAt, err = parseFlexTime(raw.AdmittedAt); err != nil {
+			state.AdmittedAt = time.Time{}
+		}
+		if state.GracePeriodEndsAt, err = parseFlexTime(raw.GracePeriodEndsAt); err != nil {
+			state.GracePeriodEndsAt = time.Time{}
+		}
+		if state.PollAt, err = parseFlexTime(raw.PollAt); err != nil {
+			state.PollAt = time.Time{}
+		}
+		if state.ResetAt, err = parseFlexTime(raw.ResetAt); err != nil {
+			state.ResetAt = time.Time{}
+		}
+		return state, nil
 	}
-	state := &SessionState{
-		Status:             raw.Status,
-		InstanceID:         raw.InstanceID,
-		Position:           raw.Position,
-		QueueDepth:         raw.QueueDepth,
-		EstimatedWaitMs:    raw.EstimatedWaitMs,
-		AccessTier:         raw.AccessTier,
-		CountryCode:        raw.CountryCode,
-		CountryBlockReason: raw.CountryBlockReason,
+
+	if resp.StatusCode >= 400 {
+		return nil, classifyError(resp.StatusCode, body, resp.Header)
 	}
-	if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
-		state.ExpiresAt = time.Time{}
-	}
-	if state.PollAt, err = parseFlexTime(raw.PollAt); err != nil {
-		state.PollAt = time.Time{}
-	}
-	return state, nil
+
+	return nil, fmt.Errorf("upstream: unparseable session response %q", truncate(body, 200))
 }
 
 func (c *Client) newRequest(ctx context.Context, method, path string, body []byte) (*http.Request, error) {
@@ -652,18 +725,18 @@ func classifyError(status int, body string, hdr http.Header) error {
 	retryAfter := parseRetryAfter(hdr)
 
 	switch {
-	case status == http.StatusForbidden && strings.Contains(lower, `"status":"banned"`):
+	case status == http.StatusForbidden && (strings.Contains(lower, `"status":"banned"`) || strings.Contains(lower, "banned")):
 		return parseBan(body)
 	case status == http.StatusUnauthorized:
 		return fmt.Errorf("%w: %d %s", ErrAuthRejected, status, truncate(body, 200))
 	case status == http.StatusServiceUnavailable:
 		return &WaitingRoomError{RetryAfter: retryAfter, Detail: truncate(body, 200)}
 	case containsAny(lower, "freebuff_update_required", "waiting_room_required", "waiting_room_queued",
-		"session_superseded", "session_expired", "session_model_mismatch"):
+		"session_superseded", "session_expired", "session_model_mismatch", "model_locked"):
 		return fmt.Errorf("%w: %s%s", ErrSessionInvalid, truncate(body, 200), retryDetail(retryAfter))
 	case status == http.StatusBadRequest && containsAny(lower, "runid not found", "runid not running"):
 		return fmt.Errorf("%w: %s", ErrRunInvalid, truncate(body, 200))
-	case status == http.StatusTooManyRequests:
+	case status == http.StatusTooManyRequests || containsAny(lower, "rate_limited", "ip_capped", "spend_limited"):
 		return parseRateLimit(body, parseRetryAfter(hdr))
 	default:
 		return &UpstreamError{Status: status, Body: truncate(body, 500), RetryAfter: retryAfter}
