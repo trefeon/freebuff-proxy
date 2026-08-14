@@ -676,3 +676,46 @@ func TestAccumulator(t *testing.T) {
 		}
 	})
 }
+func TestNormalizeRequestInjectsEndTurnTool(t *testing.T) {
+	body := map[string]any{
+		"model":    "deepseek/deepseek-v4-flash",
+		"messages": []any{map[string]any{"role": "user", "content": "hi"}},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "custom_tool",
+					"description": "custom user tool",
+					"parameters":  map[string]any{"type": "object"},
+				},
+			},
+		},
+	}
+
+	out, err := NormalizeRequest(mustJSON(t, body))
+	if err != nil {
+		t.Fatalf("NormalizeRequest: %v", err)
+	}
+	got := decode(t, out)
+	tools, ok := got["tools"].([]any)
+	if !ok || len(tools) != 2 {
+		t.Fatalf("want 2 tools (custom_tool + end_turn), got %v", tools)
+	}
+
+	hasCustom, hasEndTurn := false, false
+	for _, tVal := range tools {
+		if tm, ok := tVal.(map[string]any); ok {
+			if fn, ok := tm["function"].(map[string]any); ok {
+				if fn["name"] == "custom_tool" {
+					hasCustom = true
+				}
+				if fn["name"] == "end_turn" {
+					hasEndTurn = true
+				}
+			}
+		}
+	}
+	if !hasCustom || !hasEndTurn {
+		t.Errorf("hasCustom = %v, hasEndTurn = %v", hasCustom, hasEndTurn)
+	}
+}

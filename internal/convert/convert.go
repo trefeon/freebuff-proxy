@@ -125,6 +125,10 @@ func normalizeRoles(payload map[string]any) {
 // the payload, in place.
 func normalizeToolSchemas(payload map[string]any) {
 	tools, _ := payload["tools"].([]any)
+	if len(tools) == 0 {
+		return
+	}
+	hasEndTurn := false
 	for _, t := range tools {
 		tool, ok := t.(map[string]any)
 		if !ok {
@@ -134,11 +138,28 @@ func normalizeToolSchemas(payload map[string]any) {
 		if !ok {
 			continue
 		}
+		if name, ok := fn["name"].(string); ok && name == "end_turn" {
+			hasEndTurn = true
+		}
 		params, ok := fn["parameters"].(map[string]any)
 		if !ok {
 			continue
 		}
 		fn["parameters"] = normalizeSchemaMap(params, extractDefinitions(params), maxSchemaDepth)
+	}
+	// Inject end_turn tool definition to pass Codebuff's foreign_toolset validation
+	if !hasEndTurn {
+		payload["tools"] = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "end_turn",
+				"description": "Signal the end of the current task.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
 	}
 }
 

@@ -378,3 +378,27 @@ func (m *Manager) EndSession(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Heartbeat sends a periodic compact GET with x-freebuff-heartbeat: 1 for active sessions,
+// keeping last_seen_at fresh on the server so the session concurrency slot is maintained.
+func (m *Manager) Heartbeat(ctx context.Context) error {
+	m.mu.Lock()
+	if m.state == nil || m.state.status != "active" || m.state.instanceID == "" {
+		m.mu.Unlock()
+		return nil
+	}
+	instanceID := m.state.instanceID
+	m.mu.Unlock()
+
+	st, err := m.client.GetSessionWithOpts(ctx, instanceID, true, true)
+	if err != nil {
+		return err
+	}
+	if st.Status == "ended" || st.Status == "superseded" || st.Status == "none" {
+		m.mu.Lock()
+		m.state = nil
+		m.mu.Unlock()
+		slog.Debug("session ended during heartbeat", "reason", st.Status, "instance_id", instanceID)
+	}
+	return nil
+}
