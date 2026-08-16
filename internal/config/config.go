@@ -49,6 +49,8 @@ type Config struct {
 	CLIVersion            string            // upstream CLI version string (default: 0.10.7)
 	ModelAliases          map[string]string // map model alias -> real model ID (#25)
 	TransientRetries      int               // max additional attempts after a transient transport failure (0 = disabled; default 1)
+	SessionPersist        bool              // true = persist session state to disk so restart resumes unexpired sessions (SESSION_PERSIST)
+	SessionStateFile      string            // path to the session state file (SESSION_STATE_FILE; default .freebuff-session-state.json)
 	DiscoveredSource      string            // auto-discovered credentials file path (if any)
 	DiscoveredEmail       string            // auto-discovered account email (if any)
 }
@@ -109,6 +111,8 @@ type rawConfig struct {
 	CLIVersion            string   `json:"CLI_VERSION"`
 	ModelAliases          string   `json:"MODEL_ALIASES"`
 	TransientRetries      *int     `json:"TRANSIENT_RETRIES"`
+	SessionPersist        bool     `json:"SESSION_PERSIST"`
+	SessionStateFile      string   `json:"SESSION_STATE_FILE"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -127,6 +131,8 @@ func defaultRawConfig() rawConfig {
 		RequestJitter:       "",    // "" = disabled (unset → SAFE_MODE preset may fill)
 		CLIVersion:          "0.10.7",
 		TransientRetries:    nil, // nil = 1 (one retry after a transient transport failure; 0 disables)
+		SessionPersist:      false, // opt-in: persist session state across restarts
+		SessionStateFile:    ".freebuff-session-state.json",
 	}
 }
 
@@ -182,6 +188,8 @@ func Load(configPath string) (Config, error) {
 	overrideString(&raw.CLIVersion, "CLI_VERSION")
 	overrideString(&raw.ModelAliases, "MODEL_ALIASES")
 	overrideInt(&raw.TransientRetries, "TRANSIENT_RETRIES")
+	overrideBool(&raw.SessionPersist, "SESSION_PERSIST")
+	overrideString(&raw.SessionStateFile, "SESSION_STATE_FILE")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
@@ -275,6 +283,8 @@ func Load(configPath string) (Config, error) {
 		CLIVersion:            strings.TrimSpace(raw.CLIVersion),
 		ModelAliases:          parseMap(raw.ModelAliases),
 		TransientRetries:      transientRetries,
+		SessionPersist:        raw.SessionPersist,
+		SessionStateFile:      strings.TrimSpace(raw.SessionStateFile),
 	}
 
 	// Auto-discover CLI token if no AUTH_TOKENS were explicitly configured
@@ -387,6 +397,8 @@ func (c Config) Validate() error {
 		return errors.New("REQUEST_JITTER cannot be negative")
 	case c.TransientRetries < 0:
 		return errors.New("TRANSIENT_RETRIES cannot be negative")
+	case c.SessionPersist && strings.TrimSpace(c.SessionStateFile) == "":
+		return errors.New("SESSION_STATE_FILE cannot be empty when SESSION_PERSIST is enabled")
 	case c.CostMode != "" && c.CostMode != "free":
 		return errors.New(`COST_MODE must be "free" or unset -- any other value (e.g. a typo) routes requests as PAID and fresh free accounts get 402 "Out of credits"`)
 	case c.ProxyRotation != "" && c.ProxyRotation != "per-token" && c.ProxyRotation != "round-robin" && c.ProxyRotation != "random":
@@ -536,6 +548,8 @@ func applyDotenv(raw *rawConfig) error {
 	overrideStringFrom(&raw.ModelAliases, get, "MODEL_ALIASES")
 	overrideIntFrom(&raw.TransientRetries, get, "TRANSIENT_RETRIES")
 	overrideStringFrom(&raw.ProxyRotation, get, "PROXY_ROTATION")
+	overrideBoolFrom(&raw.SessionPersist, get, "SESSION_PERSIST")
+	overrideStringFrom(&raw.SessionStateFile, get, "SESSION_STATE_FILE")
 	return nil
 }
 

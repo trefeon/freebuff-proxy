@@ -13,6 +13,8 @@ import (
 	"compress/gzip"
 	"context"
 	cryptoRand "crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -330,6 +332,14 @@ type Client struct {
 	// retryBackoff overrides the randomized 200-600ms pre-retry sleep (test
 	// seam; nil uses the crypto/rand jitter).
 	retryBackoff func() time.Duration
+}
+
+// TokenKey returns a stable, non-secret key derived from the client token
+// for session-state persistence. The key is a SHA-256 hex digest of the raw
+// token, so the token itself never appears in the persisted file.
+func (c *Client) TokenKey() string {
+	sum := sha256.Sum256([]byte(c.token))
+	return hex.EncodeToString(sum[:])
 }
 
 // cliUserAgent mirrors the official CLI / SDK user agent. The upstream

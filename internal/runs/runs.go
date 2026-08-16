@@ -286,8 +286,8 @@ func (m *RunManager) Shutdown(ctx context.Context) {
 			errs = append(errs, fmt.Sprintf("finish run %s: %v", run.RunID, err))
 		}
 	}
-	if err := m.session.EndSession(ctx); err != nil {
-		errs = append(errs, fmt.Sprintf("end session: %v", err))
+	if err := m.session.Shutdown(ctx); err != nil {
+		errs = append(errs, fmt.Sprintf("shutdown session: %v", err))
 	}
 	if len(errs) > 0 {
 		slog.Warn("runs: shutdown with errors", "errors", strings.Join(errs, "; "))
