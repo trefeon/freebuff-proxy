@@ -65,7 +65,7 @@ func TestPollForCompletionSurvivesTransientErrors(t *testing.T) {
 		case 2:
 			w.WriteHeader(http.StatusUnauthorized) // pending (silent)
 		default:
-			w.Write([]byte(`{"authToken":"cb_after_500","user":{"id":"gh-1","name":"Ada","email":"ada@example.com"}}`))
+			_, _ = w.Write([]byte(`{"authToken":"cb_after_500","user":{"id":"gh-1","name":"Ada","email":"ada@example.com"}}`))
 		}
 	}
 
