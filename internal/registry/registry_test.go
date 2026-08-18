@@ -34,21 +34,16 @@ func fileSource(t *testing.T, path string) string {
 // agents), and the gemini helper models belong to file-picker / file-picker-max
 // (which precede file-lister / researcher-* / basher).
 var expectedFallback = map[string]string{
-	"deepseek/deepseek-v4-pro":         "base2-free",
-	"deepseek/deepseek-v4-flash":       "base2-free",
-	"minimax/minimax-m3":               "base2-free",
-	"openai/gpt-5.6-luna":              "base2-free",
-	"mimo/mimo-v2.5":                   "base2-free",
-	"z-ai/glm-5.2":                     "base2-free-glm",
-	"poolside/laguna-s-2.1":            "base2-free-laguna-s-2-1",
-	"openrouter/poolside/laguna-s-2.1": "base2-free-laguna-s-2-1-openrouter",
-	"inclusionai/ling-3.0-flash:free":  "base2-free-ling-3-flash",
-	"crof/greg-2-ultra":                "base2-free-greg-2-ultra",
-	"crof/greg-2-super":                "base2-free-greg-2-super",
-	"anthropic/claude-fable-5":         "base2-free-fable",
-	"google/gemini-2.5-flash-lite":     "file-picker",
-	"google/gemini-3.1-flash-lite":     "file-picker-max",
-	"google/gemini-3.5-flash-lite":     "file-picker-max",
+	"deepseek/deepseek-v4-pro":     "base2-free",
+	"deepseek/deepseek-v4-flash":   "base2-free",
+	"minimax/minimax-m3":           "base2-free",
+	"openai/gpt-5.6-luna":          "base2-free",
+	"mimo/mimo-v2.5":               "base2-free",
+	"z-ai/glm-5.2":                 "base2-free-glm",
+	"anthropic/claude-fable-5":     "base2-free-fable",
+	"google/gemini-2.5-flash-lite": "file-picker",
+	"google/gemini-3.1-flash-lite": "file-picker-max",
+	"google/gemini-3.5-flash-lite": "file-picker-max",
 }
 
 func TestFallbackMap(t *testing.T) {
@@ -96,6 +91,111 @@ func TestFallbackMap(t *testing.T) {
 
 	if _, err := r.AgentForModel("does/not-exist"); !errors.Is(err, ErrModelNotFound) {
 		t.Errorf("unknown model err = %v, want ErrModelNotFound", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Issue #121 — fallback must not advertise retired agents.
+// ---------------------------------------------------------------------------
+
+// liveFreeModeAgents is a snapshot of the FREE_MODE_AGENT_MODELS allowlist
+// (reference/freebuff/common/src/constants/free-agents.ts) for every agent
+// the fallback table lists. The vendored reference clone is gitignored and
+// only present in the main checkout, so the snapshot lives in the test
+// instead of being parsed at run time; keep it in sync with the reference
+// when free-agents.ts changes.
+var liveFreeModeAgents = map[string][]string{
+	"base2-free": {
+		"deepseek/deepseek-v4-pro",
+		"deepseek/deepseek-v4-flash",
+		"minimax/minimax-m3",
+		"openai/gpt-5.6-luna",
+		"mimo/mimo-v2.5",
+	},
+	"base2-free-deepseek":       {"deepseek/deepseek-v4-pro"},
+	"base2-free-deepseek-flash": {"deepseek/deepseek-v4-flash"},
+	"base2-free-mimo":           {"mimo/mimo-v2.5"},
+	"base2-free-minimax-m3":     {"minimax/minimax-m3"},
+	"base2-free-luna":           {"openai/gpt-5.6-luna"},
+	"base2-free-glm":            {"z-ai/glm-5.2"},
+	"base2-free-fable":          {"anthropic/claude-fable-5"},
+	"file-picker":               {"google/gemini-2.5-flash-lite"},
+	"file-picker-max":           {"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"},
+	"file-lister":               {"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"},
+	"researcher-web":            {"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"},
+	"researcher-docs":           {"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"},
+	"basher":                    {"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"},
+	"code-reviewer-lite":        {"deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash", "mimo/mimo-v2.5"},
+}
+
+// retiredFallbackAgents are the five fallback rows pruned for issue #121:
+// all were removed from FREE_MODE_AGENT_MODELS on 2026-08-04/08-07
+// (reference/freebuff/common/src/constants/free-agents.ts) and now 403
+// free_mode_invalid_agent_model upstream.
+var retiredFallbackAgents = []string{
+	"base2-free-laguna-s-2-1",
+	"base2-free-laguna-s-2-1-openrouter",
+	"base2-free-ling-3-flash",
+	"base2-free-greg-2-ultra",
+	"base2-free-greg-2-super",
+}
+
+// TestFallbackAgentsLiveOnly pins issue #121: every fallback agent and model
+// must exist in the live FREE_MODE_AGENT_MODELS allowlist, the five retired
+// rows must stay pruned, and the alive rows the JS fallback table lists must
+// still be present. In fallback state (boot before first refresh, or refresh
+// failures) /v1/models is built from this table, so a dead row would advertise
+// a model that cannot run.
+func TestFallbackAgentsLiveOnly(t *testing.T) {
+	fallback := make(map[string][]string, len(fallbackAgents))
+	for _, entry := range fallbackAgents {
+		fallback[entry.agent] = entry.models
+	}
+
+	// Every fallback entry must exist in the live allowlist with its models
+	// allowed for that agent.
+	for agent, models := range fallback {
+		allowed, ok := liveFreeModeAgents[agent]
+		if !ok {
+			t.Errorf("fallback agent %q is absent from FREE_MODE_AGENT_MODELS (reference/freebuff/common/src/constants/free-agents.ts)", agent)
+			continue
+		}
+		for _, model := range models {
+			if !contains(allowed, model) {
+				t.Errorf("fallback agent %q model %q is not in its FREE_MODE_AGENT_MODELS allowlist", agent, model)
+			}
+		}
+	}
+
+	// The five retired rows must stay pruned.
+	for _, agent := range retiredFallbackAgents {
+		if _, ok := fallback[agent]; ok {
+			t.Errorf("retired fallback agent %q is still advertised (issue #121)", agent)
+		}
+	}
+
+	// The alive rows the JS fallback table lists must still be present.
+	for agent := range liveFreeModeAgents {
+		if _, ok := fallback[agent]; !ok {
+			t.Errorf("live fallback agent %q missing from fallbackAgents", agent)
+		}
+	}
+
+	// User-visible acceptance: in fallback state the dead model ids must not
+	// resolve to an agent (a request would otherwise send x-freebuff-model
+	// upstream and 403 free_mode_invalid_agent_model).
+	r := New(nil, nil)
+	r.LoadFallback()
+	for _, model := range []string{
+		"poolside/laguna-s-2.1",
+		"openrouter/poolside/laguna-s-2.1",
+		"inclusionai/ling-3.0-flash:free",
+		"crof/greg-2-ultra",
+		"crof/greg-2-super",
+	} {
+		if _, err := r.AgentForModel(model); !errors.Is(err, ErrModelNotFound) {
+			t.Errorf("AgentForModel(%q) after LoadFallback = %v, want ErrModelNotFound (issue #121)", model, err)
+		}
 	}
 }
 

@@ -73,10 +73,19 @@ var LimitedTierModels = map[string]bool{
 }
 
 // fallbackAgents is the hardcoded model→agent fallback used when the sources
-// are unreachable. Ported verbatim from registry.js (lines 14-41), entry
-// order preserved: first-seen assignment decides which agent owns models that
+// are unreachable. Ported from registry.js (lines 14-41), entry order
+// preserved: first-seen assignment decides which agent owns models that
 // appear in several entries (e.g. the gemini helpers all list the same two
 // models; file-picker-max comes first).
+//
+// Five rows that referenced retired agents (base2-free-laguna-s-2-1,
+// base2-free-laguna-s-2-1-openrouter, base2-free-ling-3-flash,
+// base2-free-greg-2-ultra, base2-free-greg-2-super) were pruned: they were
+// removed from FREE_MODE_AGENT_MODELS on 2026-08-04/08-07
+// (reference/freebuff/common/src/constants/free-agents.ts) and 403
+// free_mode_invalid_agent_model upstream, so a fallback advertising them
+// would list models that cannot run in boot / refresh-failure state
+// (issue #121).
 var fallbackAgents = []agentModels{
 	{agent: "base2-free", models: []string{
 		"deepseek/deepseek-v4-pro",
@@ -91,11 +100,6 @@ var fallbackAgents = []agentModels{
 	{agent: "base2-free-deepseek-flash", models: []string{"deepseek/deepseek-v4-flash"}},
 	{agent: "base2-free-mimo", models: []string{"mimo/mimo-v2.5"}},
 	{agent: "base2-free-glm", models: []string{"z-ai/glm-5.2"}},
-	{agent: "base2-free-laguna-s-2-1", models: []string{"poolside/laguna-s-2.1"}},
-	{agent: "base2-free-laguna-s-2-1-openrouter", models: []string{"openrouter/poolside/laguna-s-2.1"}},
-	{agent: "base2-free-ling-3-flash", models: []string{"inclusionai/ling-3.0-flash:free"}},
-	{agent: "base2-free-greg-2-ultra", models: []string{"crof/greg-2-ultra"}},
-	{agent: "base2-free-greg-2-super", models: []string{"crof/greg-2-super"}},
 	{agent: "base2-free-fable", models: []string{"anthropic/claude-fable-5"}},
 	{agent: "file-picker", models: []string{"google/gemini-2.5-flash-lite"}},
 	{agent: "file-picker-max", models: []string{"google/gemini-3.1-flash-lite", "google/gemini-3.5-flash-lite"}},
