@@ -24,6 +24,7 @@ var envKeys = []string{
 	"SESSION_PERSIST", "SESSION_STATE_FILE",
 	"HTTP2_UPSTREAM",
 	"WEBHOOK_URL", "FALLBACK_AFTER_MS", "FALLBACK_MODEL", "ADOPT_CLI_SESSION", "WAITING_ROOM_CHAIN",
+	"EGRESS_PROBE_ENABLED",
 }
 
 // TestMain strips ambient freebuff-proxy config env vars for the whole test
@@ -564,6 +565,7 @@ func TestValidate(t *testing.T) {
 		{"zero registry refresh", func(c *Config) { c.RegistryRefresh = 0 }},
 		{"bad cost mode", func(c *Config) { c.CostMode = "Free" }},
 		{"negative max messages", func(c *Config) { c.MaxMessagesPerDay = -1 }},
+		{"negative max spend", func(c *Config) { c.MaxSpendPerDay = -1 }},
 		{"session persist with empty state file", func(c *Config) { c.SessionPersist = true; c.SessionStateFile = "" }},
 		{"invalid listen port non-int", func(c *Config) { c.ListenAddr = "127.0.0.1:abc" }},
 		{"invalid listen port overflow", func(c *Config) { c.ListenAddr = "127.0.0.1:99999" }},
@@ -1112,6 +1114,62 @@ func TestMaxMessagesPerDay(t *testing.T) {
 	}
 }
 
+// TestMaxSpendPerDay pins the advisory spend-ceiling knob (issue #122):
+// default 0 (unlimited), env override, unparseable env ignored, JSON file
+// value, and .env value. The knob is advisory-only — the upstream $ ceilings
+// are server-enforced and the pool never blocks on it.
+func TestMaxSpendPerDay(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("AUTH_TOKENS", "tok")
+
+	// default: 0 (unlimited)
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load: %v", err)
+	} else if cfg.MaxSpendPerDay != 0 {
+		t.Errorf("MaxSpendPerDay = %d, want 0 (unlimited default)", cfg.MaxSpendPerDay)
+	}
+
+	// env override
+	t.Setenv("MAX_SPEND_PER_DAY", "1000")
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (env): %v", err)
+	} else if cfg.MaxSpendPerDay != 1000 {
+		t.Errorf("MaxSpendPerDay = %d, want 1000 (env)", cfg.MaxSpendPerDay)
+	}
+
+	// unparseable env value is ignored (keeps the file value)
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"MAX_SPEND_PER_DAY": 250}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MAX_SPEND_PER_DAY", "soon")
+	if cfg, err := Load(path); err != nil {
+		t.Fatalf("Load (bad env + file): %v", err)
+	} else if cfg.MaxSpendPerDay != 250 {
+		t.Errorf("MaxSpendPerDay = %d, want 250 (bad env ignored, file kept)", cfg.MaxSpendPerDay)
+	}
+
+	// JSON file value
+	t.Setenv("MAX_SPEND_PER_DAY", "")
+	if cfg, err := Load(path); err != nil {
+		t.Fatalf("Load (file): %v", err)
+	} else if cfg.MaxSpendPerDay != 250 {
+		t.Errorf("MaxSpendPerDay = %d, want 250 (file)", cfg.MaxSpendPerDay)
+	}
+
+	// .env value (clearEnv chdirs to a fresh temp dir, so ./.env is the
+	// file ResolveEnvFile reads)
+	t.Setenv("MAX_SPEND_PER_DAY", "")
+	if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok\nMAX_SPEND_PER_DAY=75\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (.env): %v", err)
+	} else if cfg.MaxSpendPerDay != 75 {
+		t.Errorf("MaxSpendPerDay = %d, want 75 (from .env)", cfg.MaxSpendPerDay)
+	}
+}
+
 func TestIdleRotationTimeout(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok")
@@ -1555,6 +1613,7 @@ func TestDotenvFullKeySet(t *testing.T) {
 		"CLI_VERSION=9.9.9",
 		"MODEL_ALIASES=gpt-4o:deepseek/deepseek-v4-flash,glm:z-ai/glm-5.2",
 		"TRANSIENT_RETRIES=2",
+		"MAX_SPEND_PER_DAY=500",
 	}, "\n")
 	if err := os.WriteFile(".env", []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -1581,6 +1640,9 @@ func TestDotenvFullKeySet(t *testing.T) {
 	}
 	if cfg.TransientRetries != 2 {
 		t.Errorf("TransientRetries = %d, want 2 (from .env)", cfg.TransientRetries)
+	}
+	if cfg.MaxSpendPerDay != 500 {
+		t.Errorf("MaxSpendPerDay = %d, want 500 (from .env)", cfg.MaxSpendPerDay)
 	}
 }
 

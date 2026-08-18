@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -39,17 +40,27 @@ import (
 )
 
 // freebuffLoginUserAgent is the official CLI login user agent (reference
-// account_login.go freebuffLoginUserAgent).
-const freebuffLoginUserAgent = "ai-sdk/openai-compatible/2.0.42/codebuff"
+// account_login.go freebuffLoginUserAgent). The CLI sends no UA override on
+// the login endpoints (bun default), and the only SDK-shaped UA the official
+// tree ever emits is the @codebuff/llm-providers package version — 1.0.0 in
+// the vendored tree (packages/llm-providers/package.json) — not the 2.0.x
+// third-party value this constant used to carry.
+const freebuffLoginUserAgent = "ai-sdk/openai-compatible/1.0.0/codebuff"
+
+// freebuffCLIUserAgent is the ads/streak request User-Agent the official CLI
+// sends on the waiting-room chain (reference use-gravity-ad.ts
+// getCliAdRequestUserAgent: "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; the
+// vendored release and the installed binary are 0.0.149).
+const freebuffCLIUserAgent = "Freebuff-CLI/0.0.149"
 
 // loginCallTimeout bounds each login HTTP call (code request, status poll,
 // protocol page walk).
 const loginCallTimeout = 30 * time.Second
 
 // loginPollInterval is how long between status polls (the upstream device
-// code takes a human to complete; 3s matches the reference
-// freebuffLoginPollSeconds).
-const loginPollInterval = 3 * time.Second
+// code takes a human to complete; 5s matches login-flow.ts pollLoginStatus
+// intervalMs=5000, timeout 5min).
+const loginPollInterval = 5 * time.Second
 
 // NewForAuth builds a token-less client for the headless OAuth login flow
 // (#62/#66). The transport/stealth/proxy wiring is identical to a pooled
@@ -369,8 +380,18 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 	return c.pollForCompletion(ctx, code, 0)
 }
 
-// pollForCompletion polls PollCLILogin until Done, up to pollTimeout.
-func (c *Client) pollForCompletion(ctx context.Context, code *CLILoginCode, _ time.Duration) (*CLILoginStatus, error) {
+// pollForCompletion polls PollCLILogin until Done, up to a 5-minute cap
+// (login-flow.ts pollLoginStatus timeoutMs). Transient PollCLILogin errors —
+// 5xx statuses and transport failures — are logged and the loop continues,
+// exactly like the official CLI: non-401 non-ok responses warn, network
+// errors log, 401 (pending) stays silent, and only the 5-minute deadline or
+// caller cancellation stops the loop. pollInterval overrides the default
+// cadence when non-zero (test seam; the protocol login passes 0).
+func (c *Client) pollForCompletion(ctx context.Context, code *CLILoginCode, pollInterval time.Duration) (*CLILoginStatus, error) {
+	interval := loginPollInterval
+	if pollInterval > 0 {
+		interval = pollInterval
+	}
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
 		if ctx.Err() != nil {
@@ -381,15 +402,14 @@ func (c *Client) pollForCompletion(ctx context.Context, code *CLILoginCode, _ ti
 		}
 		status, err := c.PollCLILogin(ctx, code)
 		if err != nil {
-			return nil, err
-		}
-		if status.Done {
+			slog.Warn("login poll transient failure; continuing", "err", err)
+		} else if status.Done {
 			return status, nil
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(loginPollInterval):
+		case <-time.After(interval):
 		}
 	}
 }

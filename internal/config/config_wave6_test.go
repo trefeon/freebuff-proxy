@@ -187,6 +187,53 @@ func TestAdoptCLISessionParsed(t *testing.T) {
 	}
 }
 
+// --- #123: EGRESS_PROBE_ENABLED ---------------------------------------------
+
+func TestEgressProbeEnabledParsed(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("AUTH_TOKENS", "tok-1")
+
+	// Default: periodic egress probing is OFF (anti-ban, #123); the
+	// one-shot startup probe still runs.
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EgressProbeEnabled {
+		t.Error("EgressProbeEnabled = true, want false default (periodic probes opt-in)")
+	}
+
+	// Explicit enable turns the periodic loop on.
+	t.Setenv("EGRESS_PROBE_ENABLED", "true")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EgressProbeEnabled {
+		t.Error("EgressProbeEnabled = false after EGRESS_PROBE_ENABLED=true")
+	}
+
+	// Garbage value is silently ignored, default stands.
+	t.Setenv("EGRESS_PROBE_ENABLED", "garbage")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EgressProbeEnabled {
+		t.Error("EgressProbeEnabled = true from garbage EGRESS_PROBE_ENABLED value")
+	}
+
+	// Explicit false also wins.
+	t.Setenv("EGRESS_PROBE_ENABLED", "false")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EgressProbeEnabled {
+		t.Error("EgressProbeEnabled = true after EGRESS_PROBE_ENABLED=false")
+	}
+}
+
 // --- #39: XDG / AppData config search ---------------------------------------
 
 func TestEnvFileCandidatesOrderAndShape(t *testing.T) {

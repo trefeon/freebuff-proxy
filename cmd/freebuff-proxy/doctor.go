@@ -226,13 +226,16 @@ func runDoctor(configPath string) {
 		ok(fmt.Sprintf("TLS connection to %s:%s succeeded", targetHost, targetPort))
 	}
 
-	// Egress region check: one live probe of the direct outbound path
-	// through a plain dialer, read back from the cache the doctor shares
-	// with the runtime. A failed probe is a warning, not a doctor failure —
-	// the proxy keeps working, only the region readout is missing.
+	// Egress region check: one live probe of the direct outbound path, read
+	// back from the cache the doctor shares with the runtime. The probe uses
+	// the same utls stealth dialer as API traffic when TLS_FINGERPRINT is
+	// set (issue #123 — a Go-default TLS handshake to the Cloudflare edge is
+	// itself a fingerprint mismatch); with no fingerprint it falls back to
+	// the plain direct dialer. A failed probe is a warning, not a doctor
+	// failure — the proxy keeps working, only the region readout is missing.
 	egressCache := egress.NewCache()
 	probeCtx, probeCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	res := egress.Probe(probeCtx, egress.DirectDialer(5*time.Second), 5*time.Second)
+	res := egress.ProbeTLS(probeCtx, egress.StealthDialer(cfg.TLSFingerprint), 5*time.Second)
 	probeCancel()
 	egressCache.Set("direct", res)
 	if line, isWarn := egressRegionRow(egressCache); isWarn {

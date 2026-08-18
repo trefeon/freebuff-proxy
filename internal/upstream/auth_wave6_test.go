@@ -108,8 +108,12 @@ func TestClassifyWaitingRoomRequired(t *testing.T) {
 	if !errors.Is(err, ErrWaitingRoomRequired) {
 		t.Fatalf("428 waiting_room_required: errors.Is = false, want ErrWaitingRoomRequired (got %v)", err)
 	}
-	if errors.Is(err, ErrSessionInvalid) {
-		t.Fatal("428 waiting_room_required must NOT be ErrSessionInvalid (#94)")
+	// Issue #116: FREEBUFF_GATE_CODES marks waiting_room_required
+	// endsTheSession:true — the refused session row is ENDED upstream, so
+	// the error must ALSO unwrap to ErrSessionInvalid (session-ending:
+	// chatAttempt invalidates + reacquires once).
+	if !errors.Is(err, ErrSessionInvalid) {
+		t.Fatal("428 waiting_room_required must be session-ending (unwrap to ErrSessionInvalid) since #116")
 	}
 	if errors.Is(err, ErrWaitingRoom) {
 		t.Fatal("428 waiting_room_required must NOT be ErrWaitingRoom (it is its own signal)")

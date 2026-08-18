@@ -24,13 +24,14 @@ import (
 // Test models must map to agents with EXCLUSIVE ownership in the registry
 // FALLBACK map (see internal/registry/registry_test.go expectedFallback):
 // the five base2-free models are first-seen-assigned to the generic
-// base2-free agent, while glm-5.2 and laguna-s-2.1 are owned by their
+// base2-free agent, while glm-5.2 and claude-fable-5 are owned by their
 // dedicated one-model agents. Tests pin the offline (fallback) state.
+// (The laguna-s-2.1 pair was retired from the fallback in issue #121.)
 const (
 	modelA = "z-ai/glm-5.2"
-	modelB = "poolside/laguna-s-2.1"
+	modelB = "anthropic/claude-fable-5"
 	agentA = "base2-free-glm"
-	agentB = "base2-free-laguna-s-2-1"
+	agentB = "base2-free-fable"
 )
 
 // newTestPool wires one mock upstream per token through real clients and
@@ -1816,10 +1817,11 @@ func TestPoolSnapshotTransientRetryCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first upstream call (agent-runs START during Acquire) fails at the
-	// transport level once; TRANSIENT_RETRIES replays it and succeeds.
-	client.SetTransport(&flakyFirstRT{base: http.DefaultTransport})
-
+	// #120: the session POST is bodyless (no GetBody) and cannot be replayed
+	// by the transient retry (mirrors the CLI's bare bodyless fetch) —
+	// pre-admit the session on the healthy transport, then arm the flaky
+	// transport so its first victim is the agent-runs START during Acquire:
+	// a replayable request, which is what this test exercises.
 	sess := session.NewManager(client)
 	reg := registry.New(cfg, nil)
 	reg.LoadFallback()
@@ -1827,6 +1829,13 @@ func TestPoolSnapshotTransientRetryCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	if _, err := sess.EnsureSessionForModel(context.Background(), modelA); err != nil {
+		t.Fatal(err)
+	}
+	// The first upstream call (agent-runs START during Acquire) fails at the
+	// transport level once; TRANSIENT_RETRIES replays it and succeeds.
+	client.SetTransport(&flakyFirstRT{base: http.DefaultTransport})
 
 	lease, err := p.Acquire(context.Background(), modelA)
 	if err != nil {
@@ -2433,16 +2442,16 @@ func TestAcquireIpCappedCooldownBounded(t *testing.T) {
 		t.Errorf("RetryAfter = %s, want 45s (bounded to retryAfterMs)", ice.RetryAfter)
 	}
 
-	// Cooldown is bounded to the retry window, NOT the Pacific midnight
-	// quota lock (which would be many hours away).
+	// Cooldown is bounded to the retry window (+ the CLI-style up-to-20%
+	// jitter since #118), NOT the Pacific midnight quota lock (which would
+	// be many hours away).
 	snap := p.Snapshot()[0]
 	if snap.CooldownUntil.IsZero() {
 		t.Fatal("CooldownUntil zero, want bounded window")
 	}
-	want := time.Now().Add(45 * time.Second)
-	diff := snap.CooldownUntil.Sub(want)
-	if diff < -2*time.Second || diff > 2*time.Second {
-		t.Errorf("CooldownUntil = %v, want ≈ now+45s (bounded), not Pacific midnight", snap.CooldownUntil)
+	maxWant := time.Now().Add(45*time.Second + 45*time.Second/5 + time.Second)
+	if snap.CooldownUntil.Before(time.Now()) || snap.CooldownUntil.After(maxWant) {
+		t.Errorf("CooldownUntil = %v, want now..now+45s(+20%% jitter), not Pacific midnight", snap.CooldownUntil)
 	}
 
 	// While the window is active, a second acquire surfaces the remembered
@@ -2467,10 +2476,11 @@ func TestPoolCooldownTokenIpCappedBounded(t *testing.T) {
 	if snap.CooldownUntil.IsZero() {
 		t.Fatal("CooldownUntil zero, want bounded window")
 	}
-	want := time.Now().Add(30 * time.Second)
-	diff := snap.CooldownUntil.Sub(want)
-	if diff < -2*time.Second || diff > 2*time.Second {
-		t.Errorf("CooldownUntil = %v, want ≈ now+30s (bounded), not Pacific midnight", snap.CooldownUntil)
+	// #118: the window is the full retryAfterMs plus up to 20% jitter (the
+	// CLI's poll-jitter pattern), never the Pacific-midnight quota lock.
+	maxWant := time.Now().Add(30*time.Second + 30*time.Second/5 + time.Second)
+	if snap.CooldownUntil.Before(time.Now()) || snap.CooldownUntil.After(maxWant) {
+		t.Errorf("CooldownUntil = %v, want now..now+30s(+20%% jitter), not Pacific midnight", snap.CooldownUntil)
 	}
 
 	// Out-of-range tokens are ignored without panicking.

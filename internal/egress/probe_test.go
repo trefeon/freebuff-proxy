@@ -2,6 +2,7 @@ package egress
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -53,6 +54,73 @@ func TestProbeParsesTrace(t *testing.T) {
 	}
 	if dialed.Load() == 0 {
 		t.Error("probe did not dial through the provided dialer")
+	}
+}
+
+// TestProbeTLSGuardsDialTLS pins the issue #123 stealth path: ProbeTLS
+// dials the TLS layer through the given DialTLSContext (the utls dialer)
+// instead of Go's default handshake, so the probe's ClientHello matches the
+// gateway's API traffic.
+func TestProbeTLSGuardsDialTLS(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ip=203.0.113.9\nloc=CA\n"))
+	}))
+	defer ts.Close()
+
+	orig := ProbeURL
+	ProbeURL = ts.URL
+	defer func() { ProbeURL = orig }()
+
+	var tlsDialed atomic.Int64
+	dialTLS := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		tlsDialed.Add(1)
+		// The httptest cert is self-signed and issued to example.com;
+		// InsecureSkipVerify stands in for the utls dialer's verification.
+		return tls.Dial(network, addr, &tls.Config{InsecureSkipVerify: true, ServerName: "example.com"})
+	}
+	res := ProbeTLS(context.Background(), dialTLS, 5*time.Second)
+	if res.Err != nil {
+		t.Fatalf("ProbeTLS failed: %v", res.Err)
+	}
+	if res.IP != "203.0.113.9" || res.Country != "CA" {
+		t.Errorf("ProbeTLS = ip %q loc %q, want 203.0.113.9 / CA", res.IP, res.Country)
+	}
+	if tlsDialed.Load() == 0 {
+		t.Error("ProbeTLS did not dial TLS through the provided dialTLS")
+	}
+}
+
+// TestProbeTLSNilFallback pins that a nil dialTLS degrades to the plain
+// direct dialer (Go TLS), so StealthDialer("") stays safe.
+func TestProbeTLSNilFallback(t *testing.T) {
+	ts := traceServer(t, "ip=203.0.113.10\nloc=CA\n", http.StatusOK)
+	orig := ProbeURL
+	ProbeURL = ts.URL
+	defer func() { ProbeURL = orig }()
+
+	res := ProbeTLS(context.Background(), nil, 5*time.Second)
+	if res.Err != nil {
+		t.Fatalf("ProbeTLS(nil) failed: %v", res.Err)
+	}
+	if res.IP != "203.0.113.10" || res.Country != "CA" {
+		t.Errorf("ProbeTLS(nil) = ip %q loc %q, want 203.0.113.10 / CA", res.IP, res.Country)
+	}
+}
+
+// TestStealthDialer pins the fingerprint → utls dialer mapping: known
+// fingerprints (incl. auto, SafeMode's default) yield a dialer, empty or
+// unknown fingerprints yield nil (plain-TLS fallback).
+func TestStealthDialer(t *testing.T) {
+	for _, fp := range []string{"", "nope"} {
+		if d := StealthDialer(fp); d != nil {
+			t.Errorf("StealthDialer(%q) = non-nil, want nil", fp)
+		}
+	}
+	for _, fp := range []string{"chrome126", "auto", "random", "safari18", "CHROME120"} {
+		if d := StealthDialer(fp); d == nil {
+			t.Errorf("StealthDialer(%q) = nil, want the utls dialer", fp)
+		}
 	}
 }
 
@@ -332,6 +400,53 @@ func TestRunLoop(t *testing.T) {
 		}()
 		RunLoop(context.Background(), slog.Default(), nil, nil, 5*time.Second, time.Minute)
 	})
+}
+
+// TestProbeOnce pins the startup one-shot contract (issue #123): a single
+// pass probes exactly once, caches the result, and never loops — the
+// default behavior when EGRESS_PROBE_ENABLED is off.
+func TestProbeOnce(t *testing.T) {
+	ts := traceServer(t, "ip=198.51.100.7\nloc=DE\n", http.StatusOK)
+	old := ProbeURL
+	ProbeURL = ts.URL
+	defer func() { ProbeURL = old }()
+
+	var probes atomic.Int64
+	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		probes.Add(1)
+		return DirectDialer(5*time.Second)(ctx, network, addr)
+	}
+	cache := NewCache()
+	ProbeOnce(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), cache,
+		[]Path{{Key: "direct", Dialer: dialer}}, 5*time.Second)
+	r, ok := cache.Get("direct")
+	if !ok || r.Err != nil || r.IP != "198.51.100.7" || r.Country != "DE" {
+		t.Errorf("cached result = %+v (ok=%v), want parsed success", r, ok)
+	}
+	if got := probes.Load(); got != 1 {
+		t.Errorf("probes = %d, want exactly 1 (single pass, no loop)", got)
+	}
+}
+
+// TestJittered pins the ±DefaultJitter symmetric jitter: every draw stays
+// within [interval×(1-jitter), interval×(1+jitter)], and non-positive
+// intervals pass through unchanged (no timer panic).
+func TestJittered(t *testing.T) {
+	base := 10 * time.Minute
+	lo := time.Duration(float64(base) * (1 - DefaultJitter))
+	hi := time.Duration(float64(base) * (1 + DefaultJitter))
+	for i := 0; i < 200; i++ {
+		got := jittered(base)
+		if got < lo || got > hi {
+			t.Fatalf("jittered(%v) = %v, want within [%v, %v]", base, got, lo, hi)
+		}
+	}
+	if got := jittered(0); got != 0 {
+		t.Errorf("jittered(0) = %v, want 0", got)
+	}
+	if got := jittered(-time.Minute); got != -time.Minute {
+		t.Errorf("jittered(-1m) = %v, want unchanged", got)
+	}
 }
 
 // TestCache guards the in-package TTL cache: get/set round-trip, expiry,

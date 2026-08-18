@@ -267,7 +267,7 @@ func TestErrorClassification(t *testing.T) {
 	}{
 		{"run invalid", 400, `{"error":"runId not found"}`, ErrRunInvalid},
 		{"run not running", 400, `{"error":"runId not running"}`, ErrRunInvalid},
-		{"session superseded", 400, `{"error":"session_superseded"}`, ErrSessionInvalid},
+		{"session superseded", 400, `{"error":"session_superseded"}`, ErrSessionSuperseded},
 		{"session expired", 400, `{"error":"session_expired"}`, ErrSessionInvalid},
 		{"update required", 400, `{"error":"freebuff_update_required"}`, ErrSessionInvalid},
 		{"auth", 401, `{"error":"unauthorized"}`, ErrAuthRejected},
@@ -380,6 +380,83 @@ func TestSessionControlCalls(t *testing.T) {
 	// end + tolerated 404
 	if err := client.EndSession(context.Background(), "inst-abc-123"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestSessionCallWireShape pins issue #120: the session POST carries NO
+// body and NO Content-Type; the GET/DELETE likewise carry no Content-Type;
+// and the DELETE is Authorization-only (no x-freebuff-instance-id) —
+// exactly the official CLI's callFreebuffSession wire shape
+// (reference/freebuff/cli/src/utils/freebuff-session-api.ts:105-119).
+func TestSessionCallWireShape(t *testing.T) {
+	type seenReq struct {
+		method        string
+		bodyLen       int64
+		contentType   string
+		instanceHdr   string
+		authorization string
+	}
+	var mu sync.Mutex
+	var seen []seenReq
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		seen = append(seen, seenReq{
+			method:        r.Method,
+			bodyLen:       int64(len(body)),
+			contentType:   r.Header.Get("Content-Type"),
+			instanceHdr:   r.Header.Get("x-freebuff-instance-id"),
+			authorization: r.Header.Get("Authorization"),
+		})
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-abc-123"}`)
+	}
+
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CreateSessionForModel(context.Background(), "deepseek/deepseek-v4-flash"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.GetSession(context.Background(), "inst-abc-123"); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.EndSession(context.Background(), "inst-abc-123"); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 3 {
+		t.Fatalf("mock saw %d session calls, want 3 (POST/GET/DELETE)", len(seen))
+	}
+	wantAuth := "Bearer tok"
+	for _, call := range seen {
+		switch call.method {
+		case http.MethodPost:
+			if call.bodyLen != 0 {
+				t.Errorf("session POST body = %d bytes, want 0 (no body)", call.bodyLen)
+			}
+		case http.MethodGet:
+			if call.instanceHdr == "" {
+				t.Error("session GET missing x-freebuff-instance-id")
+			}
+		case http.MethodDelete:
+			if call.instanceHdr != "" {
+				t.Errorf("session DELETE x-freebuff-instance-id = %q, want absent (Authorization-only)", call.instanceHdr)
+			}
+		}
+		if call.contentType != "" {
+			t.Errorf("session %s Content-Type = %q, want empty (set only when a body exists)", call.method, call.contentType)
+		}
+		if call.authorization != wantAuth {
+			t.Errorf("session %s Authorization = %q, want %q", call.method, call.authorization, wantAuth)
+		}
 	}
 }
 
@@ -1531,6 +1608,13 @@ type flakyRT struct {
 	seenHeaders []http.Header
 }
 
+// roundTripFunc adapts a bare function to http.RoundTripper for tests that
+// need a one-shot failing transport without body capture (bodyless requests
+// have a nil Body, which flakyRT's io.ReadAll cannot read).
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
 func (f *flakyRT) RoundTrip(req *http.Request) (*http.Response, error) {
 	f.calls.Add(1)
 	b, _ := io.ReadAll(req.Body)
@@ -1672,18 +1756,23 @@ func TestChatCompletionsRetriesTwiceWhenAllowed(t *testing.T) {
 	}
 }
 
-func TestCreateSessionRetriesConnectionReset(t *testing.T) {
+func TestCreateSessionNoRetryOnConnectionReset(t *testing.T) {
 	// A real abrupt connection close surfaces as context.Canceled on some
 	// platforms (Go cancels the request context when the server tears the
 	// connection down mid-request), which MUST NOT be retried. Inject the
 	// transport-level reset at the RoundTripper boundary instead: this is
 	// the same code path a live dial/TLS failure takes.
-	rt := &flakyRT{
-		failN:  1,
-		err:    errors.New("read tcp 127.0.0.1:443: connection reset by peer"),
-		header: http.Header{"Content-Type": []string{"application/json"}},
-		body:   []byte(`{"status":"active","instanceId":"inst-1","expiresAt":"2030-01-01T00:00:00Z"}`),
-	}
+	//
+	// #120: the session POST is bodyless (no GetBody), so a transport-level
+	// failure on it is NOT replayable by the transient retry — mirroring
+	// the CLI's bare bodyless fetch, which never retries the session POST
+	// (reference/freebuff/cli/src/utils/freebuff-session-api.ts
+	// callFreebuffSession). Exactly one upstream attempt, zero retries.
+	var calls atomic.Int32
+	rt := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls.Add(1)
+		return nil, errors.New("read tcp 127.0.0.1:443: connection reset by peer")
+	})
 	client, err := New("tok-a", testConfig("", func(c *config.Config) { c.TransientRetries = 1 }))
 	if err != nil {
 		t.Fatal(err)
@@ -1691,22 +1780,14 @@ func TestCreateSessionRetriesConnectionReset(t *testing.T) {
 	client.retryBackoff = func() time.Duration { return time.Millisecond }
 	client.SetTransport(rt)
 
-	st, err := client.CreateSession(context.Background())
-	if err != nil {
-		t.Fatalf("CreateSession failed after retry: %v", err)
+	if _, err := client.CreateSession(context.Background()); err == nil {
+		t.Fatal("CreateSession succeeded despite the failed transport, want error (bodyless POST cannot replay)")
 	}
-	if st.Status != "active" || st.InstanceID != "inst-1" {
-		t.Errorf("session = %+v, want active inst-1", st)
+	if got := calls.Load(); got != 1 {
+		t.Errorf("upstream attempts = %d, want 1 (bodyless session POST must not be retried)", got)
 	}
-	if rt.calls.Load() != 2 {
-		t.Errorf("upstream attempts = %d, want 2 (1 failure + 1 retry)", rt.calls.Load())
-	}
-	if got := client.TransientRetries(); got != 1 {
-		t.Errorf("TransientRetries = %d, want 1", got)
-	}
-	// The session POST body was replayed identically.
-	if len(rt.seen) != 2 || string(rt.seen[0]) != string(rt.seen[1]) {
-		t.Errorf("replayed session body differs: %q vs %q", rt.seen[0], rt.seen[1])
+	if got := client.TransientRetries(); got != 0 {
+		t.Errorf("TransientRetries = %d, want 0", got)
 	}
 }
 

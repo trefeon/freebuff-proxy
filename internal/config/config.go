@@ -34,13 +34,14 @@ type Config struct {
 	AdminToken            string // bearer token required for POST /admin/reload ("" = unauthenticated in default deployments)
 	HTTP2Upstream         bool   // true = negotiate HTTP/2 with the upstream so the ALPN matches real browsers (HTTP2_UPSTREAM); false forces HTTP/1.1 (#51)
 	CostMode              string // "" (omit) or "free"; A/B pending, PRD §8
-	UserID                string // optional FreeBuff account id sent as x-freebuff-acting-user-id (CLI parity; empty = omitted)
+	UserID                string // optional x-freebuff-acting-user-id (trusted server-to-server header — the CLI never sends it; enabling is a BAN RISK; empty = omitted, the CLI-parity default)
 	TLSFingerprint        string // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
 	RegistryRefresh       time.Duration
 	DebugDump             bool
 	LogFile               string
 	LogLevel              string            // "" (use -v/default) or debug|info|warn|error
 	MaxMessagesPerDay     int               // 0 = unlimited: per-token cap on successful chats per 24h
+	MaxSpendPerDay        int64             // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $0.50 restricted, compose by minimum, server-enforced) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
 	IdleRotationTimeout   time.Duration     // 0 = disabled: pause rotation/refresh after this idle period
 	SafeMode              bool              // true = apply recommended anti-ban safe defaults
 	HybridMode            bool              // true = relay client tokens like bridge AND serve token-less requests from the pool
@@ -118,6 +119,16 @@ type Config struct {
 	// session create after an upstream 428 waiting_room_required (issue
 	// #94(b), gated stub — best-effort, never blocks the request).
 	WaitingRoomChain bool
+	// EgressProbeEnabled, when set (EGRESS_PROBE_ENABLED=false default),
+	// keeps the periodic egress probe loop running: the gateway GETs
+	// https://www.cloudflare.com/cdn-cgi/trace on a jittered interval
+	// through the same utls stealth dialer as API traffic (issue #123).
+	// Off by default because the official CLI never talks to
+	// cloudflare.com — a clockwork probe from the gateway IP is a machine
+	// signature with a Go-default JA3 that mismatches the API traffic's
+	// browser fingerprint. The one-shot startup probe (and -doctor) still
+	// run regardless; this knob only controls the recurring loop.
+	EgressProbeEnabled bool
 	// EnvFile is the .env path actually loaded ("" when none existed).
 	// Resolved via ResolveEnvFile (issue #39): ./.env in the working
 	// directory wins; otherwise the platform config dir is tried.
@@ -171,6 +182,7 @@ type rawConfig struct {
 	LogFile                          string   `json:"LOG_FILE"`
 	LogLevel                         string   `json:"LOG_LEVEL"`
 	MaxMessagesPerDay                *int     `json:"MAX_MESSAGES_PER_DAY"`
+	MaxSpendPerDay                   *int     `json:"MAX_SPEND_PER_DAY"`
 	IdleRotationTimeout              string   `json:"IDLE_ROTATION_TIMEOUT"`
 	SafeMode                         bool     `json:"SAFE_MODE"`
 	HybridMode                       bool     `json:"HYBRID_MODE"`
@@ -196,6 +208,7 @@ type rawConfig struct {
 	FallbackModels                   string   `json:"FALLBACK_MODEL"`
 	AdoptCLISession                  bool     `json:"ADOPT_CLI_SESSION"`
 	WaitingRoomChain                 bool     `json:"WAITING_ROOM_CHAIN"`
+	EgressProbeEnabled               bool     `json:"EGRESS_PROBE_ENABLED"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -208,6 +221,7 @@ func defaultRawConfig() rawConfig {
 		RegistryRefresh:                  "6h",
 		CostMode:                         "free", // free-tier mode; omission routes requests as PAID and fresh free accounts get 402 "Out of credits" (upstream check: cost_mode !== 'free' → billing)
 		MaxMessagesPerDay:                nil,
+		MaxSpendPerDay:                   nil,   // 0 = unlimited advisory spend ceiling (never enforced)
 		IdleRotationTimeout:              "",    // "" = disabled (unset → SAFE_MODE preset may fill)
 		SafeMode:                         true,  // anti-ban presets on by default; set SAFE_MODE=false to disable
 		HybridMode:                       false, // relay client tokens AND serve the pool (off by default)
@@ -227,6 +241,7 @@ func defaultRawConfig() rawConfig {
 		SessionReAdmitLead:               "60s",       // #99: pre-emptive re-admit lead
 		SessionProbeCacheTTL:             "15s",       // #60: admission probe cache TTL
 		FallbackAfter:                    "10000",     // #100: queue-wait fallback threshold (ms)
+		EgressProbeEnabled:               false,       // anti-ban (#123): periodic cloudflare.com probes are opt-in; only the one-shot startup probe runs by default
 	}
 }
 
@@ -358,6 +373,7 @@ func Load(configPath string) (Config, error) {
 	overrideString(&raw.LogFile, "LOG_FILE")
 	overrideString(&raw.LogLevel, "LOG_LEVEL")
 	overrideInt(&raw.MaxMessagesPerDay, "MAX_MESSAGES_PER_DAY")
+	overrideInt(&raw.MaxSpendPerDay, "MAX_SPEND_PER_DAY")
 	overrideString(&raw.IdleRotationTimeout, "IDLE_ROTATION_TIMEOUT")
 	overrideBool(&raw.SafeMode, "SAFE_MODE")
 	overrideBool(&raw.HybridMode, "HYBRID_MODE")
@@ -383,6 +399,7 @@ func Load(configPath string) (Config, error) {
 	overrideString(&raw.FallbackModels, "FALLBACK_MODEL")
 	overrideBool(&raw.AdoptCLISession, "ADOPT_CLI_SESSION")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
+	overrideBool(&raw.EgressProbeEnabled, "EGRESS_PROBE_ENABLED")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
@@ -502,6 +519,16 @@ func Load(configPath string) (Config, error) {
 		maxMessagesPerDay = *raw.MaxMessagesPerDay
 	}
 
+	// MAX_SPEND_PER_DAY (issue #122): advisory per-token Pacific-day spend
+	// ceiling in ledger units, default 0 (unlimited). Deliberately NOT
+	// enforced — the upstream $ ceilings are server-side and the proxy
+	// cannot know the account's restricted cohort; surfaced as
+	// SpendLimit/SpendPct on /healthz.
+	maxSpendPerDay := int64(0)
+	if raw.MaxSpendPerDay != nil {
+		maxSpendPerDay = int64(*raw.MaxSpendPerDay)
+	}
+
 	// TRANSIENT_RETRIES: nil defaults to 1 (one additional attempt after a
 	// transient transport failure); an explicit 0 disables retries.
 	transientRetries := 1
@@ -565,6 +592,7 @@ func Load(configPath string) (Config, error) {
 		LogFile:                          strings.TrimSpace(raw.LogFile),
 		LogLevel:                         strings.TrimSpace(raw.LogLevel),
 		MaxMessagesPerDay:                maxMessagesPerDay,
+		MaxSpendPerDay:                   maxSpendPerDay,
 		IdleRotationTimeout:              idleRotationTimeout,
 		SafeMode:                         raw.SafeMode,
 		HybridMode:                       raw.HybridMode,
@@ -589,6 +617,7 @@ func Load(configPath string) (Config, error) {
 		FallbackModels:                   fallbackModels,
 		AdoptCLISession:                  raw.AdoptCLISession,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
+		EgressProbeEnabled:               raw.EgressProbeEnabled,
 		EnvFile:                          envFileUsed,
 	}
 
@@ -715,6 +744,8 @@ func (c Config) Validate() error {
 		return errors.New(`COST_MODE must be "free" or unset -- any other value (e.g. a typo) routes requests as PAID and fresh free accounts get 402 "Out of credits"`)
 	case c.MaxMessagesPerDay < 0:
 		return errors.New("MAX_MESSAGES_PER_DAY cannot be negative")
+	case c.MaxSpendPerDay < 0:
+		return errors.New("MAX_SPEND_PER_DAY cannot be negative")
 	}
 
 	if c.WebhookURL != "" {
@@ -875,6 +906,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.LogFile, get, "LOG_FILE")
 	overrideStringFrom(&raw.LogLevel, get, "LOG_LEVEL")
 	overrideIntFrom(&raw.MaxMessagesPerDay, get, "MAX_MESSAGES_PER_DAY")
+	overrideIntFrom(&raw.MaxSpendPerDay, get, "MAX_SPEND_PER_DAY")
 	overrideStringFrom(&raw.IdleRotationTimeout, get, "IDLE_ROTATION_TIMEOUT")
 	// The remaining keys mirror the real-environment override set in Load.
 	// AUTO_DISCOVER_TOKEN is intentionally env-only (it controls the .env
@@ -902,6 +934,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.FallbackModels, get, "FALLBACK_MODEL")
 	overrideBoolFrom(&raw.AdoptCLISession, get, "ADOPT_CLI_SESSION")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
+	overrideBoolFrom(&raw.EgressProbeEnabled, get, "EGRESS_PROBE_ENABLED")
 	return nil
 }
 

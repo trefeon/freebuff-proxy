@@ -1011,8 +1011,9 @@ func TestPollTransportErrorKeepsCachedState(t *testing.T) {
 }
 
 // TestEndSessionSwallowsSessionInvalid verifies EndSession returns nil when
-// the upstream DELETE fails with a 400 session_superseded (ErrSessionInvalid
-// — the slot is already gone, nothing to do).
+// the upstream DELETE fails with a 400 session_superseded (ErrSessionInvalid,
+// and ErrSessionSuperseded since #119 — the slot is already gone, nothing to
+// do).
 func TestEndSessionSwallowsSessionInvalid(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -1351,8 +1352,13 @@ func TestModelLockedFallbackInstance(t *testing.T) {
 	if len(deleteInstanceIDs) != 1 {
 		t.Fatalf("EndSession calls = %d, want 1", len(deleteInstanceIDs))
 	}
-	if deleteInstanceIDs[0] != "locked-inst-123" {
-		t.Errorf("EndSession instanceID = %q, want locked-inst-123", deleteInstanceIDs[0])
+	// #120: the DELETE is Authorization-only and user-keyed — the CLI never
+	// sends x-freebuff-instance-id on DELETE (callFreebuffSession sets the
+	// instance header only on GET; reference/freebuff/cli/src/utils/
+	// freebuff-session-api.ts). The old locked slot is still released: the
+	// upstream resolves the session from the Bearer token.
+	if deleteInstanceIDs[0] != "" {
+		t.Errorf("EndSession x-freebuff-instance-id = %q, want empty (Authorization-only DELETE)", deleteInstanceIDs[0])
 	}
 }
 

@@ -2211,6 +2211,24 @@ func (s *Server) chatAttempt(
 			if attempts > 1 {
 				return nil, nil, err
 			}
+		case errors.Is(err, upstream.ErrSessionSuperseded):
+			// 409 session_superseded chat gate: another process owns the
+			// account row (FREEBUFF_GATE_CODES endsTheSession:true). The CLI
+			// stops polling and never auto-rejoins — an automatic takeover
+			// would ping-pong with the live second client. Invalidate the
+			// dead row so the NEXT request re-joins, but surface the refusal
+			// as TERMINAL: no auto-POST (#119).
+			release()
+			invalidateSession(lease)
+			return nil, nil, err
+		case errors.Is(err, upstream.ErrCredits):
+			// 402: the CLI throws immediately and 402 is not in its
+			// retryable set (reference/freebuff packages/agent-runtime/src/
+			// run-agent-step.ts:1344 and sdk/src/error-utils.ts:16). A blind
+			// second chat POST after "out of credits" is a pacing pattern
+			// the CLI never exhibits (#117).
+			release()
+			return nil, nil, err
 		case errors.Is(err, upstream.ErrSessionInvalid):
 			release()
 			invalidateSession(lease)
@@ -2243,9 +2261,13 @@ func (s *Server) chatAttempt(
 			return nil, nil, err
 		case errors.Is(err, upstream.ErrIpCapped):
 			// ip_capped is admission-only (too many distinct users on the
-			// egress IP), NOT a quota reset: cool the token only until the
-			// body's retryAfterMs — never the Pacific-midnight lock — and
-			// never invalidate the session (existing sessions keep running).
+			// egress IP), NOT a quota reset: cool the token until the
+			// body's retryAfterMs (+jitter) — never the Pacific-midnight
+			// lock on first refusals — and never invalidate the session
+			// (existing sessions keep running). #118 bounds the re-admission
+			// loop: after maxIpCappedReAdmitsPerDay refusals in one Pacific
+			// day the token is locked until the next reset (see
+			// runs.CooldownIpCapped).
 			var ice *upstream.IpCappedError
 			if errors.As(err, &ice) {
 				cooldownIpCapped(lease, ice)
@@ -2590,9 +2612,21 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			"Messages24h":          snap.Messages24h,
 			"DailyLimit":           snap.DailyLimit,
 			"UsagePct":             snap.UsagePct,
-			"RiskLevel":            snap.RiskLevel,
-			"tier":                 snap.TierAccess,
-			"country":              snap.CountryCode,
+			// Spend ledger (issue #87/#122): Pacific-day/week/month buckets
+			// plus the advisory MAX_SPEND_PER_DAY ceiling (SpendLimit/
+			// SpendPct, informational — the upstream $ ceilings are
+			// server-enforced) and the spend_limited refusal counter.
+			"Spend24h":      snap.Spend24h,
+			"SpendDay":      snap.SpendDay,
+			"SpendWeek":     snap.SpendWeek,
+			"SpendMonth":    snap.SpendMonth,
+			"SpendDayStart": snap.SpendDayStart,
+			"SpendLimit":    snap.SpendLimit,
+			"SpendPct":      snap.SpendPct,
+			"SpendLimited":  snap.SpendLimited,
+			"RiskLevel":     snap.RiskLevel,
+			"tier":          snap.TierAccess,
+			"country":       snap.CountryCode,
 		}
 		if len(snap.QuotaByModel) > 0 {
 			quota := make(map[string]any, len(snap.QuotaByModel))
@@ -2842,6 +2876,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 
 	var wr *session.WaitingRoomError
 	var uwr *upstream.WaitingRoomError
+	var uwrr *upstream.WaitingRoomRequiredError
 	var ue *upstream.UpstreamError
 	var rle *upstream.RateLimitError
 	var ice *upstream.IpCappedError
@@ -2899,6 +2934,14 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &uwr):
 		status, code = http.StatusServiceUnavailable, "waiting_room_queued"
 		message, retryAfter = uwr.Error(), uwr.RetryAfter
+	case errors.As(err, &uwrr):
+		// 428 waiting_room_required (FREEBUFF_GATE_CODES
+		// endsTheSession:true): the session row is ENDED upstream and the
+		// account must walk the reference pre-session flow before the next
+		// create. Terminal for this request — 503 + Retry-After, never the
+		// generic 502 (#116).
+		status, code = http.StatusServiceUnavailable, "waiting_room_required"
+		message, retryAfter = uwrr.Error(), uwrr.RetryAfter
 	case errors.As(err, &cde):
 		// #105 (server half): the client's capacity-deferred retry budget
 		// (TRANSIENT_RETRIES) is exhausted, so the free tier's transient
@@ -2941,6 +2984,12 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		message = err.Error()
 	case errors.Is(err, upstream.ErrWaitingRoom):
 		status, code = http.StatusServiceUnavailable, "waiting_room_queued"
+		message = err.Error()
+	case errors.Is(err, upstream.ErrSessionSuperseded):
+		// 409 session_superseded chat gate: another process owns the
+		// account row — terminal for the client (#119). The next request
+		// re-joins via a fresh admission; no auto-POST here.
+		status, code = http.StatusConflict, "session_superseded"
 		message = err.Error()
 	case errors.As(err, &cbe):
 		status, code = http.StatusForbidden, "country_blocked"

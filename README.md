@@ -260,6 +260,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `IDLE_ROTATION_TIMEOUT` | `0` | Finish runs after this idle period (`0` = disabled; `SAFE_MODE` sets 30m when unset) |
 | `SAFE_MODE` | `true` | Apply anti-ban presets (see below; set `false` to disable) |
 | `REQUEST_JITTER` | `0s` | Random delay range `[0, REQUEST_JITTER)` before upstream calls (`SAFE_MODE` sets 2s when unset) |
+| `EGRESS_PROBE_ENABLED` | `false` | Keep the periodic egress probe loop running (GET `cloudflare.com/cdn-cgi/trace` on a jittered interval through the same utls stealth dialer as API traffic). Off by default: the official CLI never talks to `cloudflare.com`, so a clockwork probe from your IP is a machine signature — the one-shot startup probe and `-doctor` still run regardless |
 | `CLI_VERSION` | `0.10.7` | Upstream CLI version string used in the request envelope |
 | `MODEL_ALIASES` | `""` | Map aliases to real model IDs, e.g. `gpt-4o:deepseek/deepseek-v4-pro`. When unset, built-in aliases apply: `deepseek-chat` → `deepseek/deepseek-v4-flash`, `gpt-4o` → `deepseek/deepseek-v4-pro`, `claude-3-5-sonnet` → `anthropic/claude-fable-5`. An explicit value (even empty) suppresses all defaults |
 | `TRANSIENT_RETRIES` | `1` | Max additional attempts after a transient transport failure; `0` disables |

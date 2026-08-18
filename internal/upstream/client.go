@@ -46,9 +46,20 @@ import (
 // Typed error sentinels. Callers use errors.Is against these; the concrete
 // error values wrap an UpstreamError where applicable.
 var (
-	// ErrSessionInvalid: the free session is stale/superseded/expired or a
-	// waiting room / update is required. Refresh the session and retry once.
+	// ErrSessionInvalid: the free session is stale/expired, or a waiting
+	// room / update is required. Refresh the session and retry once.
+	// (session_superseded is its own terminal sentinel — see below.)
 	ErrSessionInvalid = errors.New("upstream session invalid")
+	// ErrSessionSuperseded: 409 session_superseded chat gate — another
+	// process (or a later admission) owns the account row. TERMINAL: the
+	// CLI stops polling and never auto-rejoins, because an automatic
+	// takeover would ping-pong with the live second client
+	// (reference/freebuff common/src/types/freebuff-session.ts
+	// FREEBUFF_GATE_CODES {status:409, endsTheSession:true}; cli
+	// src/hooks/helpers/send-message.ts markFreebuffSessionSuperseded).
+	// Distinct from ErrSessionInvalid so chatAttempt invalidates the dead
+	// row but does NOT auto-POST a takeover (issue #119).
+	ErrSessionSuperseded = errors.New("upstream session superseded")
 	// ErrRunInvalid: the agent run is gone. Rotate the run and retry once.
 	ErrRunInvalid = errors.New("upstream run invalid")
 	// ErrAuthRejected: 401 — the token is rejected. Cool the token down.
@@ -98,11 +109,14 @@ var (
 	ErrSessionLimitReached = errors.New("upstream session limit reached")
 	// ErrWaitingRoomRequired: 428 waiting_room_required — the account must
 	// walk the reference pre-session flow (request_ad_chain + get_streak)
-	// before the next session create (issue #94). Retryable with Retry-After
-	// honored, NO token cooldown, and deliberately DISTINCT from
-	// ErrSessionInvalid: the cached session row is not stale, so the
-	// session must NOT be invalidated/refreshed (reference
-	// freebuff2api-optimized codebuff.py:1048-1074).
+	// before the next session create (issue #94). Since #116 it is
+	// SESSION-ENDING: FREEBUFF_GATE_CODES marks waiting_room_required
+	// endsTheSession:true (reference/freebuff common/src/types/
+	// freebuff-session.ts), so the concrete WaitingRoomRequiredError also
+	// unwraps to ErrSessionInvalid — chatAttempt invalidates the ended row
+	// and reacquires once. The sentinel is kept so the pool's
+	// WAITING_ROOM_CHAIN gate still fires before the next create; the
+	// Retry-After is honored with no token cooldown.
 	ErrWaitingRoomRequired = errors.New("upstream waiting room required")
 	// ErrModelIPLimited: the egress IP cannot serve the requested model
 	// (session_model_mismatch + "limited" marker, or the limited_ip session
@@ -137,8 +151,12 @@ func (e *WaitingRoomError) Unwrap() error { return ErrWaitingRoom }
 
 // WaitingRoomRequiredError is the concrete value behind
 // ErrWaitingRoomRequired (issue #94): a 428 waiting_room_required refusal.
-// It is retryable (RetryAfter honored) and carries no cooldown; callers
-// surface it as 503 + Retry-After.
+// Since #116 it is SESSION-ENDING: it unwraps to BOTH ErrWaitingRoomRequired
+// (kept so the pool's WAITING_ROOM_CHAIN gate fires before the next create)
+// and ErrSessionInvalid (FREEBUFF_GATE_CODES endsTheSession:true — the
+// refused session row is ended upstream, so chatAttempt invalidates it and
+// reacquires once). RetryAfter is honored; writeError surfaces it as
+// 503 + Retry-After.
 type WaitingRoomRequiredError struct {
 	RetryAfter time.Duration
 	Detail     string
@@ -155,7 +173,9 @@ func (e *WaitingRoomRequiredError) Error() string {
 	return msg
 }
 
-func (e *WaitingRoomRequiredError) Unwrap() error { return ErrWaitingRoomRequired }
+func (e *WaitingRoomRequiredError) Unwrap() []error {
+	return []error{ErrWaitingRoomRequired, ErrSessionInvalid}
+}
 
 // UpstreamError is a non-recoverable upstream failure surfaced verbatim.
 type UpstreamError struct {
@@ -499,7 +519,7 @@ type Client struct {
 	sessionCallTimeout time.Duration
 	requestJitter      time.Duration
 	costMode           string
-	userID             string // optional x-freebuff-acting-user-id (USER_ID; CLI parity)
+	userID             string // optional x-freebuff-acting-user-id (USER_ID; server-to-server header — the CLI never sends it; setting it is a ban risk)
 	debugDump          bool
 
 	// transientRetriesLimit is TRANSIENT_RETRIES: the maximum number of
@@ -771,9 +791,16 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 		// (reference/freebuff model-provider.ts:146-152); the model and
 		// instance id ride only in the body metadata (injectEnvelope).
 		if c.userID != "" {
-			// The official CLI sends the acting user id on every chat call and
-			// the free-mode gate expects it
-			// (reference/proxy-freebuff/server.js:131-134).
+			// x-freebuff-acting-user-id is a TRUSTED SERVER-TO-SERVER
+			// header: only the Codebuff API may honor it when the request
+			// authenticates as the Freebuff Web service account — the
+			// official CLI NEVER sends it in normal use (#126,
+			// reference/freebuff/common/src/constants/freebuff-models.ts
+			// FREEBUFF_ACTING_USER_HEADER:1180-1181). Enabling USER_ID
+			// impersonates that service identity on every chat call, a
+			// divergence the anti-ban docs flag as a BAN RISK. Default
+			// behavior (USER_ID unset) omits the header and is the
+			// CLI-parity shape.
 			req.Header.Set("x-freebuff-acting-user-id", c.userID)
 		}
 		resp, _, err := c.do(req, 0)
@@ -817,14 +844,20 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 	}
 }
 
-// CreateSession POSTs /api/v1/freebuff/session with an empty object.
+// CreateSession POSTs /api/v1/freebuff/session (no body, no Content-Type).
 func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 	return c.CreateSessionForModel(ctx, "")
 }
 
-// CreateSessionForModel POSTs /api/v1/freebuff/session with the requested model header.
+// CreateSessionForModel POSTs /api/v1/freebuff/session with the requested
+// model header. Mirrors the official CLI exactly: the session POST carries
+// NO body and NO Content-Type — only Authorization (+ x-freebuff-model on
+// create) — see callFreebuffSession
+// (reference/freebuff/cli/src/utils/freebuff-session-api.ts:105-119) and
+// the fetch helper's "Content-Type iff body present" rule
+// (reference/freebuff/packages/agent-runtime/src/codebuff-api.ts).
 func (c *Client) CreateSessionForModel(ctx context.Context, model string) (*SessionState, error) {
-	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", []byte("{}"))
+	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -906,13 +939,17 @@ func (c *Client) ProbeAccount(ctx context.Context) (*SessionState, error) {
 	return state, nil
 }
 
-// EndSession DELETE /api/v1/freebuff/session; 404 is tolerated.
+// EndSession DELETEs /api/v1/freebuff/session; 404 is tolerated. The
+// DELETE is Authorization-only and user-keyed — NO x-freebuff-instance-id,
+// exactly like the CLI (callFreebuffSession sets the instance header only
+// on GET; #120, reference/freebuff/cli/src/utils/freebuff-session-api.ts).
 func (c *Client) EndSession(ctx context.Context, instanceID string) error {
 	req, err := c.newRequest(ctx, http.MethodDelete, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("x-freebuff-instance-id", instanceID)
+	// instanceID is deliberately not sent: the upstream resolves the
+	// session from the Bearer token, not the instance (CLI parity).
 
 	resp, cancel, err := c.do(req, c.sessionCallTimeout)
 	if err != nil {
@@ -1270,7 +1307,14 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 		// User-Agent instead (see authLoginRequest).
 		req.Header.Del("Authorization")
 	}
-	req.Header.Set("Content-Type", "application/json")
+	// Content-Type is set only when a body exists: the CLI's session POST
+	// is bodyless and must not carry a Content-Type, and its fetch helper
+	// sets Content-Type iff a body is present (#120,
+	// reference/freebuff/cli/src/utils/freebuff-session-api.ts:105-119 and
+	// packages/agent-runtime/src/codebuff-api.ts:344-345).
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	// The official CLI sends the pinned llm-providers ai-sdk UA on chat and
 	// NO browser headers on any API path (bare Bun fetch) (#108/#109 fix
 	// option (a)): the utls ClientHello impersonation stays, the browser
@@ -1945,15 +1989,15 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 		return &WaitingRoomError{RetryAfter: retryAfter, Detail: truncate(body, 200)}
 	case containsAny(lower, "waiting_room_required"):
-		// 428 waiting_room_required (issue #94): the account must walk the
+		// 428 waiting_room_required (FREEBUFF_GATE_CODES {status:428,
+		// endsTheSession:true}, issue #116): the account must walk the
 		// reference pre-session ad-chain + streak flow before the next
-		// session create. Own retryable signal (Retry-After honored, no
-		// cooldown) — deliberately NOT ErrSessionInvalid: the session row is
-		// fine, so nothing must be invalidated (reference
-		// freebuff2api-optimized codebuff.py:1048-1074). The body marker is
-		// the discriminator (upstream can attach it to 428/429 alike); the
-		// Client.classify wrapper records the flag so the pool can fire the
-		// gated WAITING_ROOM_CHAIN before the next create.
+		// session create (issue #94). SESSION-ENDING: the concrete
+		// WaitingRoomRequiredError unwraps to ErrSessionInvalid as well as
+		// ErrWaitingRoomRequired, so chatAttempt invalidates the ended row
+		// and reacquires once, while the pool's WAITING_ROOM_CHAIN gate
+		// (flag below) still fires before the next create. Retry-After
+		// honored, no token cooldown.
 		return &WaitingRoomRequiredError{RetryAfter: retryAfter, Detail: truncate(body, 200)}
 	case containsAny(lower, "session_model_mismatch") && containsAny(lower, "limited"):
 		// The egress IP cannot serve the requested model. The session row is
@@ -1962,7 +2006,15 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// session slot. The server marks the refusal and the pool registry
 		// cools the (egress, model) pairing instead.
 		return &LimitedIpError{RetryAfter: retryAfter, Body: truncate(body, 200)}
-	case containsAny(lower, "freebuff_update_required", "session_superseded",
+	case containsAny(lower, "session_superseded"):
+		// 409 session_superseded chat gate: another process owns the
+		// account row (FREEBUFF_GATE_CODES endsTheSession:true). TERMINAL —
+		// the CLI stops polling and never auto-rejoins
+		// (markFreebuffSessionSuperseded), so this is NOT ErrSessionInvalid:
+		// chatAttempt invalidates the dead row but must not auto-POST a
+		// takeover (issue #119).
+		return fmt.Errorf("%w: %s%s", ErrSessionSuperseded, truncate(body, 200), retryDetail(retryAfter))
+	case containsAny(lower, "freebuff_update_required",
 		"session_expired", "session_model_mismatch", "model_locked"):
 		return fmt.Errorf("%w: %s%s", ErrSessionInvalid, truncate(body, 200), retryDetail(retryAfter))
 	case status == http.StatusBadRequest && containsAny(lower, "runid not found", "runid not running"):

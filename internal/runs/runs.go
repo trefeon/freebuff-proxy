@@ -16,6 +16,7 @@ package runs
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -31,6 +32,21 @@ import (
 // DefaultCooldown is the token cooldown applied on upstream auth rejection
 // (PRD §5.3: "401 triggers 30-min token cooldown").
 const DefaultCooldown = 30 * time.Minute
+
+// maxIpCappedReAdmitsPerDay caps how many times one token may re-admit
+// (and be refused ip_capped again) per Pacific day before it is locked
+// until the next Pacific midnight. The CLI treats ip_capped as
+// terminal-until-reset — it never loops an automatic re-admission — so the
+// proxy mirrors that with this bounded budget instead of pacing an endless
+// POST loop (issue #118). Test-shrinkable like the pool's unfit TTL
+// (internal/pool/unfit.go modelUnfitTTL).
+var maxIpCappedReAdmitsPerDay = 3
+
+// ipCappedCooldownJitter is the ±fraction of retryAfterMs applied to the
+// ip_capped re-admission window so concurrent tokens do not re-admit in
+// lockstep (mirrors the CLI's 30s±20% poll jitter; reference/freebuff
+// cli/src/hooks/use-freebuff-session.ts).
+const ipCappedCooldownJitter = 0.2
 
 // countryBlockCooldown is the token cooldown applied when upstream reports a
 // region block (country_blocked): long enough to stop the request hammer
@@ -205,6 +221,17 @@ type RunManager struct {
 	// ip_capped + Retry-After instead of a generic cooldown 502.
 	ipCapped      *upstream.IpCappedError
 	ipCappedUntil time.Time
+	// ipCappedReAdmits counts how many times this token has been refused
+	// ip_capped during the current Pacific day (issue #118): after
+	// maxIpCappedReAdmitsPerDay refusals the token is locked until the
+	// next Pacific midnight instead of re-admitting in a pacing loop.
+	// Guarded by mu.
+	ipCappedReAdmits int
+	// ipCappedDayReset is the Pacific midnight that ends the day
+	// ipCappedReAdmits was counted in (upstream.NextPacificMidnight at the
+	// first refusal that day); a new midnight resets the budget. Guarded
+	// by mu.
+	ipCappedDayReset time.Time
 	// totalRequests is the cumulative count of Acquire leases handed out.
 	// It is kept separate from the per-run counters because rotated runs
 	// that get FINISHed leave the active+draining sets and would otherwise
@@ -621,6 +648,8 @@ func (m *RunManager) Cooldown(d time.Duration) {
 	m.banUntil = time.Time{}
 	m.countryUntil = time.Time{}
 	m.ipCappedUntil = time.Time{}
+	m.ipCappedReAdmits = 0
+	m.ipCappedDayReset = time.Time{}
 	m.mu.Unlock()
 }
 
@@ -636,6 +665,8 @@ func (m *RunManager) ClearCooldowns() {
 	m.countryUntil = time.Time{}
 	m.ipCapped = nil
 	m.ipCappedUntil = time.Time{}
+	m.ipCappedReAdmits = 0
+	m.ipCappedDayReset = time.Time{}
 	m.mu.Unlock()
 }
 
@@ -670,25 +701,63 @@ func (m *RunManager) CooldownRateLimit(rle *upstream.RateLimitError) {
 
 // CooldownIpCapped applies an ip_capped cooldown bounded to the body's
 // retryAfterMs ONLY — never the Pacific-midnight quota lock (ip_capped is
-// admission-only, not tied to a quota reset). Remembered so Acquires keep
-// surfacing 429 ip_capped + Retry-After during the short window instead of
+// admission-only, not tied to a quota reset). The window honors the FULL
+// retryAfterMs plus the CLI's ±20% poll jitter (#118). The CLI treats
+// ip_capped as terminal-until-reset — it never loops an automatic
+// re-admission — so the token's re-admission budget is capped at
+// maxIpCappedReAdmitsPerDay per Pacific day: once exhausted the token stays
+// locked (remembered 429 ip_capped + Retry-After reflecting the remaining
+// window) until the next Pacific midnight. Remembered so Acquires keep
+// surfacing 429 ip_capped + Retry-After during the window instead of
 // re-hitting upstream (mirrors CooldownRateLimit). Errors with
 // RetryAfter <= 0 are ignored.
 func (m *RunManager) CooldownIpCapped(ice *upstream.IpCappedError) {
-	if ice == nil {
+	if ice == nil || ice.RetryAfter <= 0 {
 		return
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if ice.RetryAfter <= 0 {
-		return
+	now := time.Now()
+	reset := upstream.NextPacificMidnight()
+	if m.ipCappedDayReset.IsZero() || !m.ipCappedDayReset.Equal(reset) {
+		// New Pacific day (or first refusal): fresh re-admission budget.
+		m.ipCappedReAdmits = 0
+		m.ipCappedDayReset = reset
 	}
-	m.ipCapped = ice
-	m.ipCappedUntil = time.Now().Add(ice.RetryAfter)
-	m.cooldownUntil = m.ipCappedUntil
+	m.ipCappedReAdmits++
 	m.rateLimit = nil
 	m.ban = nil
 	m.countryBlock = nil
+	if m.ipCappedReAdmits >= maxIpCappedReAdmitsPerDay {
+		// Budget exhausted: terminal until the next Pacific reset. Surface
+		// the REMAINING window as Retry-After so downstream 429s are honest
+		// about the lock instead of promising a re-admit that will not
+		// happen today.
+		terminal := *ice
+		terminal.RetryAfter = time.Until(reset)
+		m.ipCapped = &terminal
+		m.ipCappedUntil = reset
+		m.cooldownUntil = reset
+		return
+	}
+	m.ipCapped = ice
+	m.ipCappedUntil = now.Add(ice.RetryAfter).Add(ipCappedJitter(ice.RetryAfter))
+	m.cooldownUntil = m.ipCappedUntil
+}
+
+// ipCappedJitter returns a one-sided jitter of up to
+// ipCappedCooldownJitter (20%) of base, crypto/rand-seeded so concurrent
+// tokens never re-admit in lockstep (mirrors the CLI's 30s±20% poll
+// jitter; reference/freebuff cli/src/hooks/use-freebuff-session.ts).
+func ipCappedJitter(base time.Duration) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	var b [8]byte
+	_, _ = cryptoRand.Read(b[:])
+	u := binary.BigEndian.Uint64(b[:])
+	extra := int64(u % uint64(float64(base)*ipCappedCooldownJitter))
+	return time.Duration(extra)
 }
 
 // IpCappedError returns the remembered ip_capped error while its short

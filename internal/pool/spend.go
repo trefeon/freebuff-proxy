@@ -1,16 +1,34 @@
 package pool
 
 // Local per-token spend ledger (issue #87): an in-memory rolling 24h token
-// spend window plus UTC day/week/month buckets with rollover, mirroring the
-// reference account quota bookkeeping (reference/freebuff-reverse
-// internal/accounts/record.go QuotaUsed/QuotaPeriodStart and
-// internal/quota/quota.go BucketStart/NeedsRollover). Updated from chat
-// usage (pool.RecordSpend, fed by the server's parsed usage blocks) and
+// spend window plus Pacific day/week/month buckets with rollover (issue
+// #122: all period boundaries are America/Los_Angeles wall-clock — 00:00
+// Pacific, Monday 00:00 Pacific, 1st 00:00 Pacific — resolving to
+// 07:00/08:00 UTC by DST, matching the CLI's getZonedDayBounds /
+// getZonedWeekBounds, reference/freebuff/common/src/util/zoned-time.ts:78-92,
+// and the upstream wire periods pacific_day / pacific_week). Updated from
+// chat usage (pool.RecordSpend, fed by the server's parsed usage blocks) and
 // surfaced next to Messages24h in the healthz token snapshot.
 
 import (
+	"sync"
 	"time"
 )
+
+// pacificLoc returns the cached America/Los_Angeles location, or nil when
+// the IANA tzdata database is unavailable. time.LoadLocation consults
+// ZONEINFO, the system zoneinfo, $GOROOT/lib/time/zoneinfo.zip, and the
+// time/tzdata import in that order (go/src/time/zoneinfo.go LoadLocation);
+// a stripped single-binary deployment with none of those gets nil and the
+// callers fall back to bucketStartFallback, mirroring
+// upstream.pacificMidnightFallback.
+var pacificLoc = sync.OnceValue(func() *time.Location {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		return nil
+	}
+	return loc
+})
 
 // spendEntry is one recorded spend amount at a point in time (rolling 24h
 // window).
@@ -23,14 +41,20 @@ type spendEntry struct {
 type spendLedger struct {
 	// rolling is the 24h window: amounts with timestamps, pruned on access.
 	rolling []spendEntry
-	// UTC day/week/month buckets with their period start (unix); roll over
-	// per BucketStart/NeedsRollover semantics.
+	// Pacific day/week/month buckets with their period start (unix); roll
+	// over per BucketStart/NeedsRollover semantics (issue #122: boundaries
+	// are America/Los_Angeles wall-clock, DST-correct).
 	dayUsed    int64
 	dayStart   int64
 	weekUsed   int64
 	weekStart  int64
 	monthUsed  int64
 	monthStart int64
+	// spendLimited counts upstream spend_limited refusals observed for this
+	// token since process start (issue #122): the server-side $ ceiling is
+	// authoritative (the proxy cannot know the account's restricted cohort),
+	// so this is an event counter, not a gate.
+	spendLimited int
 }
 
 func newSpendLedger() *spendLedger { return &spendLedger{} }
@@ -65,40 +89,97 @@ func rollBucket(used, start int64, period string, now time.Time, tokens int64) (
 	return used + tokens, start
 }
 
-// bucketStart is the UTC start of the period containing now (mirrors
-// reference quota.BucketStart: day = UTC midnight, week = UTC Monday,
-// month = UTC 1st).
+// bucketStart is the start of the period containing now in Pacific
+// wall-clock (America/Los_Angeles): day = 00:00 Pacific, week = Monday
+// 00:00 Pacific, month = 1st 00:00 Pacific. All resolve to 07:00 UTC during
+// PDT and 08:00 UTC during PST, mirroring the CLI's getZonedDayBounds /
+// getZonedWeekBounds (reference/freebuff/common/src/util/zoned-time.ts:78-92,
+// weekStartsOn = Monday) and the upstream wire periods pacific_day /
+// pacific_week with resetTimeZone America/Los_Angeles. Month has no CLI
+// equivalent and uses the Pacific calendar month for consistency. time.Date
+// interprets the wall clock in the location and resolves DST transitions via
+// the zone rules (go/src/time/time.go Date), so no fixed UTC offset is used.
 func bucketStart(now time.Time, period string) int64 {
+	loc := pacificLoc()
+	if loc == nil {
+		return bucketStartFallback(now, period)
+	}
+	n := now.In(loc)
+	switch period {
+	case "week":
+		days := (int(n.Weekday()) + 6) % 7 // Monday=0 … Sunday=6
+		return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, loc).
+			AddDate(0, 0, -days).UTC().Unix()
+	case "month":
+		return time.Date(n.Year(), n.Month(), 1, 0, 0, 0, 0, loc).UTC().Unix()
+	default: // day
+		return time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, loc).UTC().Unix()
+	}
+}
+
+// bucketStartFallback approximates bucketStart without the IANA tzdata
+// database: America/Los_Angeles is UTC-7 during PDT (roughly March-
+// November) and UTC-8 during PST (roughly November-March). The month range
+// is the documented approximation; the exact DST transition dates require
+// tzdata (mirrors upstream.pacificMidnightFallback). The "start after now"
+// guard keeps the result ≤ now, as bucketStart guarantees.
+func bucketStartFallback(now time.Time, period string) int64 {
 	u := now.UTC()
+	hour := 7 // PDT
+	if u.Month() < time.March || u.Month() > time.November {
+		hour = 8 // PST: December, January, February
+	}
 	switch period {
 	case "week":
 		weekday := int(u.Weekday())
 		if weekday == 0 {
 			weekday = 7
 		}
-		return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC).
-			AddDate(0, 0, -(weekday - 1)).Unix()
+		start := time.Date(u.Year(), u.Month(), u.Day(), hour, 0, 0, 0, time.UTC).
+			AddDate(0, 0, -(weekday - 1))
+		if start.After(u) {
+			start = start.AddDate(0, 0, -7)
+		}
+		return start.Unix()
 	case "month":
-		return time.Date(u.Year(), u.Month(), 1, 0, 0, 0, 0, time.UTC).Unix()
+		start := time.Date(u.Year(), u.Month(), 1, hour, 0, 0, 0, time.UTC)
+		if start.After(u) {
+			start = start.AddDate(0, -1, 0)
+		}
+		return start.Unix()
 	default: // day
-		return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC).Unix()
+		start := time.Date(u.Year(), u.Month(), u.Day(), hour, 0, 0, 0, time.UTC)
+		if start.After(u) {
+			start = start.AddDate(0, 0, -1)
+		}
+		return start.Unix()
 	}
 }
 
 // needsRollover reports whether a bucket whose window started at start has
-// closed by now (mirrors reference quota.NeedsRollover).
+// closed by now. The window ends at the next Pacific-wall-clock period
+// boundary: midnight+1 day, Monday+7 days, 1st+1 month — calendar arithmetic
+// via AddDate, which shifts the UTC instant across DST transitions exactly
+// like the CLI's getZonedDayBounds / getZonedWeekBounds
+// (reference/freebuff/common/src/util/zoned-time.ts:78-92; AddDate
+// normalizes like Date, go/src/time/time.go). Without tzdata the fallback
+// buckets are fixed-hour (07:00/08:00 UTC), so 24h windows are exact there.
 func needsRollover(start int64, period string, now time.Time) bool {
 	if start == 0 {
 		return true
 	}
+	loc := pacificLoc()
 	end := time.Unix(start, 0).UTC()
+	if loc != nil {
+		end = end.In(loc)
+	}
 	switch period {
 	case "week":
-		end = end.Add(7 * 24 * time.Hour)
+		end = end.AddDate(0, 0, 7)
 	case "month":
 		end = end.AddDate(0, 1, 0)
 	default:
-		end = end.Add(24 * time.Hour)
+		end = end.AddDate(0, 0, 1)
 	}
 	return !now.Before(end)
 }
@@ -171,13 +252,14 @@ func (p *Pool) bridgeRecordSpend(entry *bridgeEntry, tokens int64) {
 
 // spendView is one ledger's snapshot for healthz (issue #87).
 type spendView struct {
-	Rolling24h int64
-	Day        int64
-	DayStart   time.Time
-	Week       int64
-	WeekStart  time.Time
-	Month      int64
-	MonthStart time.Time
+	Rolling24h   int64
+	Day          int64
+	DayStart     time.Time
+	Week         int64
+	WeekStart    time.Time
+	Month        int64
+	MonthStart   time.Time
+	SpendLimited int // upstream spend_limited refusals since process start (#122)
 }
 
 // spendSnapshot returns the fixed-token ledger view (index path).
@@ -211,14 +293,33 @@ func ledgerView(l *spendLedger) spendView {
 	}
 	now := time.Now()
 	return spendView{
-		Rolling24h: l.rolling24h(now),
-		Day:        l.dayUsed,
-		DayStart:   unixToTime(l.dayStart),
-		Week:       l.weekUsed,
-		WeekStart:  unixToTime(l.weekStart),
-		Month:      l.monthUsed,
-		MonthStart: unixToTime(l.monthStart),
+		Rolling24h:   l.rolling24h(now),
+		Day:          l.dayUsed,
+		DayStart:     unixToTime(l.dayStart),
+		Week:         l.weekUsed,
+		WeekStart:    unixToTime(l.weekStart),
+		Month:        l.monthUsed,
+		MonthStart:   unixToTime(l.monthStart),
+		SpendLimited: l.spendLimited,
 	}
+}
+
+// recordSpendLimited marks one upstream spend_limited refusal on the
+// fixed-token ledger (issue #122). Caller holds Pool.spendMu.
+func (p *Pool) recordSpendLimited(token int) {
+	if token < 0 || token >= len(p.spendPerToken) {
+		return
+	}
+	p.spendPerToken[token].spendLimited++
+}
+
+// bridgeRecordSpendLimited marks one upstream spend_limited refusal on a
+// bridge entry's ledger (issue #122). Caller holds Pool.bridgeMu.
+func (p *Pool) bridgeRecordSpendLimited(entry *bridgeEntry) {
+	if entry == nil {
+		return
+	}
+	entry.spend.spendLimited++
 }
 
 func unixToTime(sec int64) time.Time {

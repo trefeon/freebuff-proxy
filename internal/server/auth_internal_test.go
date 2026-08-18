@@ -474,3 +474,43 @@ func TestWriteErrorModelIPLimited(t *testing.T) {
 		t.Errorf("Retry-After with zero RetryAfter = %q, want empty", got)
 	}
 }
+
+// TestWriteErrorWaitingRoomRequired pins #116: a 428 waiting_room_required
+// (FREEBUFF_GATE_CODES endsTheSession:true) must surface 503 with code
+// waiting_room_required + Retry-After — never the generic 502 default.
+func TestWriteErrorWaitingRoomRequired(t *testing.T) {
+	err := &upstream.WaitingRoomRequiredError{RetryAfter: 45 * time.Second, Detail: `{"error":"waiting_room_required"}`}
+	status, body := errorResponse(t, err)
+	if status != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", status)
+	}
+	if body.Error.Code != "waiting_room_required" {
+		t.Errorf("code = %q, want waiting_room_required (not upstream_unavailable)", body.Error.Code)
+	}
+	if !strings.Contains(body.Error.Message, "retry after 45s") {
+		t.Errorf("message = %q, want the Retry-After detail", body.Error.Message)
+	}
+
+	// Retry-After header is emitted from the error's window.
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	s.writeError(w, r, err)
+	if got := w.Header().Get("Retry-After"); got != "45" {
+		t.Errorf("Retry-After = %q, want 45", got)
+	}
+}
+
+// TestWriteErrorSessionSuperseded pins #119: a 409 session_superseded chat
+// gate is terminal and surfaces 409 with code session_superseded (never the
+// session-invalid 502).
+func TestWriteErrorSessionSuperseded(t *testing.T) {
+	err := fmt.Errorf("%w: session_superseded (Retry-After 0s)", upstream.ErrSessionSuperseded)
+	status, body := errorResponse(t, err)
+	if status != http.StatusConflict {
+		t.Errorf("status = %d, want 409", status)
+	}
+	if body.Error.Code != "session_superseded" {
+		t.Errorf("code = %q, want session_superseded", body.Error.Code)
+	}
+}

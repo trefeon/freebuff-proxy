@@ -540,13 +540,15 @@ func TestChatCountryBlockCooldown(t *testing.T) {
 }
 
 // TestBridgeChatSessionInvalidBoundedRetry pins the bridge-path recovery
-// budget: a session_superseded chat error recreates the session once and
+// budget: a session-expired chat error recreates the session once and
 // retries, then fails with 502 — never an unbounded recreate loop.
+// (session_superseded is terminal since #119 — see
+// TestBridgeChatSessionSupersededTerminal.)
 func TestBridgeChatSessionInvalidBoundedRetry(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mock.ChatStatus = http.StatusBadRequest
-	mock.ChatErrorBody = `{"error":{"message":"session_superseded"}}`
+	mock.ChatErrorBody = `{"error":{"message":"session_expired"}}`
 	ts, _ := newBridgeTestServer(t, mock)
 
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA),
@@ -562,6 +564,32 @@ func TestBridgeChatSessionInvalidBoundedRetry(t *testing.T) {
 	}
 	if got := mock.SessionCreates; got != 2 {
 		t.Errorf("upstream session creates = %d, want exactly 2 (session recreated once)", got)
+	}
+}
+
+// TestBridgeChatSessionSupersededTerminal pins #119 on the bridge path: a
+// 409 session_superseded chat gate is terminal — exactly one upstream chat
+// call and no session recreate, surfaced as 409 session_superseded.
+func TestBridgeChatSessionSupersededTerminal(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatStatus = http.StatusConflict
+	mock.ChatErrorBody = `{"error":{"message":"session_superseded"}}`
+	ts, _ := newBridgeTestServer(t, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA),
+		map[string]string{"Authorization": "Bearer client-tok-ss"})
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", resp.StatusCode, data)
+	}
+	if !strings.Contains(string(data), "session_superseded") {
+		t.Errorf("body missing session_superseded code: %s", data)
+	}
+	if got := len(mock.RecordedChatHeaders); got != 1 {
+		t.Errorf("upstream chat attempts = %d, want 1 (no auto-POST)", got)
+	}
+	if got := mock.SessionCreates; got != 1 {
+		t.Errorf("upstream session creates = %d, want exactly 1 (initial admission only)", got)
 	}
 }
 

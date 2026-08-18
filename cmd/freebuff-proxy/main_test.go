@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"freebuff-proxy/internal/config"
 	"freebuff-proxy/internal/egress"
 )
 
@@ -163,14 +164,40 @@ func TestEgressCacheTTL(t *testing.T) {
 
 // TestEgressPaths pins the probe-path construction (the cmd package's
 // highest-value pure function): the direct connection is the only outbound
-// route (proxy routes were removed — the upstream hard-blocks proxy egress).
+// route (proxy routes were removed — the upstream hard-blocks proxy egress),
+// and the utls stealth dialer rides along when TLS_FINGERPRINT is
+// configured so the probe never presents Go's default TLS fingerprint to
+// the Cloudflare edge (issue #123).
 func TestEgressPaths(t *testing.T) {
-	paths := egressPaths()
+	paths := egressPaths(config.Config{})
 	if len(paths) != 1 {
 		t.Fatalf("paths = %d, want 1 (direct only)", len(paths))
 	}
 	if paths[0].Key != "direct" {
 		t.Errorf("paths[0].Key = %q, want direct", paths[0].Key)
+	}
+	if paths[0].Dialer == nil {
+		t.Error("paths[0].Dialer is nil, want the direct dialer")
+	}
+	if paths[0].DialTLS != nil {
+		t.Error("paths[0].DialTLS set without a TLS_FINGERPRINT, want nil (plain Go TLS)")
+	}
+
+	// With a fingerprint, the path carries the utls stealth dialer.
+	paths = egressPaths(config.Config{TLSFingerprint: "chrome126"})
+	if paths[0].DialTLS == nil {
+		t.Error("paths[0].DialTLS nil with TLS_FINGERPRINT=chrome126, want the stealth dialer")
+	}
+
+	// auto is a valid profile name too (SafeMode's default).
+	if paths = egressPaths(config.Config{TLSFingerprint: "auto"}); paths[0].DialTLS == nil {
+		t.Error("paths[0].DialTLS nil with TLS_FINGERPRINT=auto, want the stealth dialer")
+	}
+
+	// An unknown fingerprint is not a panic: it falls back to plain TLS.
+	paths = egressPaths(config.Config{TLSFingerprint: "nope"})
+	if paths[0].DialTLS != nil {
+		t.Error("paths[0].DialTLS set for unknown fingerprint, want nil fallback")
 	}
 }
 

@@ -76,6 +76,19 @@ func newTestServerCfg(t *testing.T, apiKeys []string, mut func(*config.Config), 
 	return ts, p
 }
 
+// fallbackModelCount returns how many models the registry fallback table maps
+// — the count /v1/models and /healthz report in tests whose server never
+// refreshes the registry (newTestServerCfg only LoadFallbacks). Derived from
+// a fresh registry rather than a hardcoded number so the assertions follow
+// fallbackAgents changes automatically (e.g. issue #121 pruned five retired
+// rows: 15 → 10).
+func fallbackModelCount(t *testing.T) int {
+	t.Helper()
+	reg := registry.New(nil, nil)
+	reg.LoadFallback()
+	return reg.ModelCount()
+}
+
 func chatBody(model string) []byte {
 	return []byte(`{"model":"` + model + `","messages":[{"role":"user","content":"ping"}],"stream":true}`)
 }
@@ -424,8 +437,10 @@ func TestChatSessionInvalidBoundedRetry(t *testing.T) {
 	// Every chat returns a session-invalid error. Without a retry budget the
 	// recovery loop re-creates the session and re-chats forever, hanging the
 	// client; the budget must cap it at one retry (2 chat attempts total).
+	// session_expired is used (NOT session_superseded — that is terminal
+	// since #119, see TestChatSessionSupersededTerminal).
 	mock.ChatStatus = http.StatusBadRequest
-	mock.ChatErrorBody = `{"error":{"message":"session_superseded"}}`
+	mock.ChatErrorBody = `{"error":{"message":"session_expired"}}`
 	ts, _ := newTestServer(t, nil, mock)
 
 	// A client timeout makes a regression (unbounded loop) fail fast instead
@@ -449,6 +464,91 @@ func TestChatSessionInvalidBoundedRetry(t *testing.T) {
 	}
 	if got := mock.SessionCreates; got != 2 {
 		t.Errorf("upstream session creates = %d, want exactly 2 (bounded retry)", got)
+	}
+}
+
+// TestChatSessionSupersededTerminal pins #119: the 409 session_superseded
+// chat gate is TERMINAL — the CLI stops polling and never auto-rejoins
+// (another process owns the account row). chatAttempt must invalidate the
+// dead row but NOT auto-POST a takeover: exactly one upstream chat call and
+// exactly one admission (no recreate), surfaced as 409 session_superseded.
+func TestChatSessionSupersededTerminal(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatStatus = http.StatusConflict
+	mock.ChatErrorBody = `{"error":{"message":"session_superseded"}}`
+	ts, _ := newTestServer(t, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", resp.StatusCode, data)
+	}
+	if !strings.Contains(string(data), "session_superseded") {
+		t.Errorf("body missing session_superseded code: %s", data)
+	}
+	if got := len(mock.RecordedChatHeaders); got != 1 {
+		t.Errorf("upstream chat attempts = %d, want 1 (no auto-POST)", got)
+	}
+	if got := mock.SessionCreates; got != 1 {
+		t.Errorf("upstream session creates = %d, want exactly 1 (initial admission only, no reacquire)", got)
+	}
+}
+
+// TestChatCreditsNotRetried pins #117: 402 must NOT be retried by
+// chatAttempt — the CLI throws immediately and 402 is outside its
+// retryable set. The mock must see exactly one chat call, and the client
+// sees 402 out_of_credits.
+func TestChatCreditsNotRetried(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var chatCalls atomic.Int32
+	mock.ChatHandler = func(w http.ResponseWriter, r *http.Request) {
+		chatCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = io.WriteString(w, `{"error":"out of credits"}`)
+	}
+	ts, _ := newTestServer(t, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402: %s", resp.StatusCode, data)
+	}
+	if !strings.Contains(string(data), "out_of_credits") {
+		t.Errorf("body = %s, want out_of_credits code", data)
+	}
+	if got := chatCalls.Load(); got != 1 {
+		t.Errorf("upstream chat calls = %d, want 1 (402 must not be retried)", got)
+	}
+}
+
+// TestChatWaitingRoomRequiredSessionEnding pins #116 end-to-end: a 428
+// waiting_room_required (FREEBUFF_GATE_CODES endsTheSession:true) is
+// SESSION-ENDING — chatAttempt invalidates the ended row and reacquires
+// once (2 chat attempts, 2 admissions), then surfaces 503
+// waiting_room_required + Retry-After, never the generic 502.
+func TestChatWaitingRoomRequiredSessionEnding(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatStatus = http.StatusTooEarly // 428
+	mock.ChatErrorBody = `{"error":{"message":"waiting_room_required"}}`
+	ts, _ := newTestServer(t, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503: %s", resp.StatusCode, data)
+	}
+	if !strings.Contains(string(data), "waiting_room_required") {
+		t.Errorf("body missing waiting_room_required code: %s", data)
+	}
+	if strings.Contains(string(data), "upstream_unavailable") {
+		t.Errorf("body is the generic 502 shape, want 503 waiting_room_required: %s", data)
+	}
+	if got := len(mock.RecordedChatHeaders); got != 2 {
+		t.Errorf("upstream chat attempts = %d, want exactly 2 (session-ending retry once)", got)
+	}
+	if got := mock.SessionCreates; got != 2 {
+		t.Errorf("upstream session creates = %d, want exactly 2 (invalidate + reacquire once)", got)
 	}
 }
 
@@ -610,8 +710,8 @@ func TestModelsEndpoint(t *testing.T) {
 	if out.Object != "list" {
 		t.Errorf("object = %q, want list", out.Object)
 	}
-	if len(out.Data) < 15 {
-		t.Errorf("models = %d, want >= 15", len(out.Data))
+	if len(out.Data) < fallbackModelCount(t) {
+		t.Errorf("models = %d, want >= %d", len(out.Data), fallbackModelCount(t))
 	}
 	for i, m := range out.Data {
 		if m.ID == "" || m.Object != "model" || m.OwnedBy == "" {
@@ -656,8 +756,8 @@ func TestHealthz(t *testing.T) {
 	if out.UptimeSeconds < 0 {
 		t.Errorf("uptime_seconds = %v, want >= 0", out.UptimeSeconds)
 	}
-	if out.Models < 15 {
-		t.Errorf("models = %d, want >= 15", out.Models)
+	if out.Models < fallbackModelCount(t) {
+		t.Errorf("models = %d, want >= %d", out.Models, fallbackModelCount(t))
 	}
 	if len(out.Tokens) != 2 {
 		t.Errorf("tokens = %d, want 2", len(out.Tokens))
@@ -1768,10 +1868,12 @@ func TestMetricsTransientRetryCounters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first upstream call (agent-runs START during lease acquisition)
-	// fails once at the transport level; TRANSIENT_RETRIES replays it.
-	client.SetTransport(&flakyFirstRT{base: http.DefaultTransport})
-
+	// #120: the session POST is bodyless (no GetBody), so a transport-level
+	// failure on it is NOT replayable by the transient retry (mirrors the
+	// CLI's bare bodyless fetch). Pre-admit the session on the healthy
+	// transport, then arm the flaky transport so its first victim is the
+	// agent-runs START during lease acquisition — a replayable request,
+	// which is what this test exercises.
 	sess := session.NewManager(client)
 	reg := registry.New(cfg, nil)
 	reg.LoadFallback()
@@ -1782,6 +1884,11 @@ func TestMetricsTransientRetryCounters(t *testing.T) {
 	srv := server.New(cfg, p, reg, nil, nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
+
+	if _, err := sess.EnsureSessionForModel(context.Background(), modelA); err != nil {
+		t.Fatal(err)
+	}
+	client.SetTransport(&flakyFirstRT{base: http.DefaultTransport})
 
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
 	if resp.StatusCode != http.StatusOK {

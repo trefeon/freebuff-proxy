@@ -856,7 +856,11 @@ func (m *Manager) EndSession(ctx context.Context) error {
 		return nil
 	}
 	slog.Debug("session ended", "instance_id", instanceID)
-	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) {
+	// session_invalid and session_superseded both mean "the slot is already
+	// gone / not ours" — nothing to do (#119 split superseded into its own
+	// terminal sentinel, so both must be swallowed here).
+	if err := m.client.EndSession(ctx, instanceID); err != nil &&
+		!errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
 	return nil
@@ -896,13 +900,14 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	// Release the upstream slot directly (not EndSession): EndSession's CAS
-	// commit(nil) would remove the store entry we just flushed, and the
-	// DELETE is keyed on the user, not the instance (reference/freebuff
-	// session wire: DELETE = Bearer only; the client still sends the
-	// instance header today — P2 #18 backlog). The cached state is kept
-	// in-memory so the store entry stays; the process is exiting.
+	// commit(nil) would remove the store entry we just flushed. The DELETE
+	// is keyed on the user, not the instance — Authorization-only, no
+	// x-freebuff-instance-id (reference/freebuff session wire: DELETE =
+	// Bearer only; fixed in #120). The cached state is kept in-memory so
+	// the store entry stays; the process is exiting.
 	slog.Debug("session ended on shutdown", "instance_id", shortInstance(instanceID))
-	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) {
+	if err := m.client.EndSession(ctx, instanceID); err != nil &&
+		!errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
 	return nil

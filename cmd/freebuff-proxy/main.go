@@ -240,12 +240,23 @@ func main() {
 	// Egress probing: report the country/IP the direct outbound path appears
 	// to come from (ban-avoidance diagnostics; the upstream hard-blocks
 	// proxy/VPN egress, so the direct route is the only outbound path).
-	// Results are cached and refreshed every 10 minutes; failures are
-	// logged and cached with Err set (fail-open).
+	// The official CLI never talks to cloudflare.com, so by default only ONE
+	// probe runs at startup (fills the cache + risk-engine geo feed) — the
+	// periodic loop is opt-in via EGRESS_PROBE_ENABLED (issue #123). When
+	// enabled, the loop jitters its interval and routes through the same
+	// utls stealth dialer as API traffic so no Go-default TLS fingerprint
+	// ever reaches the Cloudflare edge.
 	egressCache := egress.NewCache()
-	if paths := egressPaths(); len(paths) > 0 {
-		go egress.RunLoop(ctx, logger, egressCache, paths, egress.ProbeTimeout, egress.DefaultTTL)
-		logger.Info("egress probes started", "paths", len(paths))
+	if paths := egressPaths(cfg); len(paths) > 0 {
+		if cfg.EgressProbeEnabled {
+			go egress.RunLoop(ctx, logger, egressCache, paths, egress.ProbeTimeout, egress.DefaultTTL)
+			logger.Info("egress probes started (periodic, jittered)", "paths", len(paths))
+		} else {
+			// One-shot startup probe: fills the region readout and the risk
+			// engine's geo feed without the 10-minute clockwork signature.
+			go egress.ProbeOnce(ctx, logger, egressCache, paths, egress.ProbeTimeout)
+			logger.Info("egress probe scheduled once at startup", "paths", len(paths))
+		}
 	}
 
 	// Issue #62: the dashboard login wizard drives the same headless OAuth
@@ -453,10 +464,18 @@ func ignoredExeAdjacentEnv(cwd, exePath string) string {
 
 // egressPaths returns the outbound probe paths: the direct connection only
 // (proxy routes were removed — the upstream hard-blocks proxy/VPN egress,
-// so any proxied path is pure ban risk). The risk engine's geo feed and the
-// doctor's "Egress region" row read results back from the shared cache.
-func egressPaths() []egress.Path {
-	return []egress.Path{{Key: "direct", Dialer: egress.DirectDialer(egress.ProbeTimeout)}}
+// so any proxied path is pure ban risk). When TLS_FINGERPRINT is
+// configured, the path also carries the same utls stealth dialer used for
+// API traffic, so even a probe request never presents Go's default TLS
+// fingerprint to the Cloudflare edge (issue #123). The risk engine's geo
+// feed and the doctor's "Egress region" row read results back from the
+// shared cache.
+func egressPaths(cfg config.Config) []egress.Path {
+	p := egress.Path{Key: "direct", Dialer: egress.DirectDialer(egress.ProbeTimeout)}
+	if dialTLS := egress.StealthDialer(cfg.TLSFingerprint); dialTLS != nil {
+		p.DialTLS = dialTLS
+	}
+	return []egress.Path{p}
 }
 
 // refreshLoop refreshes the registry immediately, then every interval.
