@@ -436,3 +436,41 @@ func TestQuotaSummaryTierAndGlmPromo(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteErrorModelIPLimited pins the Issue #74 P2 writeError mapping:
+// *upstream.LimitedIpError → 409, code model_ip_limited, Retry-After = ceil
+// seconds of lie.RetryAfter (only when > 0 — the body window is surfaced but
+// never sets the unfit registry TTL).
+func TestWriteErrorModelIPLimited(t *testing.T) {
+	err := &upstream.LimitedIpError{
+		RetryAfter: 5 * time.Minute,
+		Body:       `{"status":"session_model_mismatch","message":"model z-ai/glm-5.2 is limited on this IP"}`,
+	}
+	status, body := errorResponse(t, err)
+	if status != http.StatusConflict {
+		t.Errorf("status = %d, want 409", status)
+	}
+	if body.Error.Code != "model_ip_limited" {
+		t.Errorf("code = %q, want model_ip_limited", body.Error.Code)
+	}
+	if !strings.Contains(body.Error.Message, "model limited on this egress IP") {
+		t.Errorf("message = %q, want limited-egress phrasing", body.Error.Message)
+	}
+
+	// Retry-After header: ceil seconds of RetryAfter, only when > 0.
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	s.writeError(w, r, err)
+	if got := w.Header().Get("Retry-After"); got != "300" {
+		t.Errorf("Retry-After = %q, want 300", got)
+	}
+
+	// A zero RetryAfter must not emit the header.
+	w2 := httptest.NewRecorder()
+	r2 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	s.writeError(w2, r2, &upstream.LimitedIpError{Body: "no window"})
+	if got := w2.Header().Get("Retry-After"); got != "" {
+		t.Errorf("Retry-After with zero RetryAfter = %q, want empty", got)
+	}
+}

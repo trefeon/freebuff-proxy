@@ -2155,6 +2155,41 @@ func TestClassifyErrorMatrix(t *testing.T) {
 		}
 	})
 
+	t.Run("session_model_mismatch limited on egress IP", func(t *testing.T) {
+		cases := []struct {
+			name      string
+			body      string
+			hdr       http.Header
+			wantRetry time.Duration
+		}{
+			{
+				name: "limited marker",
+				body: `{"status":"session_model_mismatch","message":"model kimi/kimi-k2-0725 is limited on this IP"}`,
+			},
+			{
+				name:      "retry-after header honored",
+				body:      `{"status":"session_model_mismatch","message":"model kimi/kimi-k2-0725 is limited on this IP"}`,
+				hdr:       http.Header{"Retry-After": {"120"}},
+				wantRetry: 120 * time.Second,
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := classifyError(409, tc.body, tc.hdr)
+				var lie *LimitedIpError
+				if !errors.As(err, &lie) {
+					t.Fatalf("err = %v, want *LimitedIpError", err)
+				}
+				if !errors.Is(err, ErrModelIPLimited) {
+					t.Errorf("errors.Is(ErrModelIPLimited) = false, got %v", err)
+				}
+				if tc.wantRetry > 0 && lie.RetryAfter != tc.wantRetry {
+					t.Errorf("RetryAfter = %s, want %s", lie.RetryAfter, tc.wantRetry)
+				}
+			})
+		}
+	})
+
 	t.Run("500 with rate_limited body", func(t *testing.T) {
 		// Pin current behavior: the rate_limited body marker wins even on a
 		// 500, producing a RateLimitError.

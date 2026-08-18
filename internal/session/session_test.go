@@ -61,6 +61,29 @@ func TestCreateActive(t *testing.T) {
 	}
 }
 
+func TestStatusErrorModelIPLimited(t *testing.T) {
+	limited := &upstream.SessionState{Message: "model kimi/kimi-k2-0725 is limited on this IP", RetryAfterMs: 30000}
+	for _, status := range []string{"session_model_mismatch", "limited_ip"} {
+		err := statusError(status, limited)
+		var lie *upstream.LimitedIpError
+		if !errors.As(err, &lie) {
+			t.Fatalf("statusError(%q) = %v, want *upstream.LimitedIpError", status, err)
+		}
+		if !errors.Is(err, upstream.ErrModelIPLimited) {
+			t.Errorf("errors.Is(upstream.ErrModelIPLimited) = false, got %v", err)
+		}
+		if lie.RetryAfter != 30*time.Second {
+			t.Errorf("RetryAfter = %s, want 30s", lie.RetryAfter)
+		}
+	}
+
+	// Non-limited messages keep today's exact unknown-status error text.
+	err := statusError("session_model_mismatch", &upstream.SessionState{Message: "session model mismatch"})
+	if err == nil || err.Error() != `session: unknown upstream status "session_model_mismatch"` {
+		t.Errorf("non-limited statusError = %v, want unknown-status error", err)
+	}
+}
+
 func TestWaitingRoomThenActive(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()

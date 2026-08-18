@@ -1875,6 +1875,30 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 		// requests fall back to the pool.
 		bridge = tok != ""
 	}
+	// Issue #74 P2: refuse new requests fast when (egress, model) is marked
+	// unfit — the direct egress cannot serve this model for ~5 min. The
+	// pooled path only: bridge clients relay their own token (the client's
+	// own account may serve the model on this egress and their session
+	// slots are theirs to spend), so the registry never gates them.
+	// MarkModelUnfit always stores a LimitedIpError, so lie is non-nil in
+	// practice; the bare sentinel keeps the refusal deterministic if it
+	// ever is nil.
+	if !bridge {
+		if until, lie := s.pool.ModelUnfit(model); !until.IsZero() && time.Now().Before(until) {
+			if lie != nil {
+				lie.RetryAfter = time.Until(until)
+			}
+			phases.Since(phasetiming.TotalMS, start)
+			s.logger.Info(kind+" request refused", "model", model, "reason", "model_limited_on_egress", "until", until.Format(time.RFC3339))
+			var refuseErr = upstream.ErrModelIPLimited
+			if lie != nil {
+				refuseErr = lie
+			}
+			s.traceChat(nil, model, time.Since(start).Milliseconds(), "error", "model_ip_limited", phases.All())
+			s.writeError(w, r, refuseErr)
+			return
+		}
+	}
 	// Acquire is timed per call; on the retry-once path the last acquire
 	// wins (that is the lease-producing one, matching the pool's
 	// per-attempt session/run phases).
@@ -2057,6 +2081,8 @@ func chatErrClass(err error) string {
 		return "banned"
 	case *upstream.IpCappedError:
 		return "ip_capped"
+	case *upstream.LimitedIpError:
+		return "model_ip_limited"
 	case *upstream.SessionLimitError:
 		return "session_limit_reached"
 	case *upstream.WaitingRoomError, *session.WaitingRoomError:
@@ -2159,11 +2185,32 @@ func (s *Server) chatAttempt(
 	for {
 		up, err = chat(ctx, lease, opts, normalized)
 		if err == nil {
+			// Issue #74 P2: a successful chat is egress-level proof the
+			// model is servable again — drop any (egress, model) unfit mark.
+			s.pool.ClearModelUnfit(effectiveModel)
 			released = true // Disarm deferred release: ownership transferred to caller
 			return up, lease, nil
 		}
 		attempts++
 		switch {
+		case errors.Is(err, upstream.ErrModelIPLimited):
+			// Issue #74 P2: the egress IP is limited for the requested
+			// model. Mark (egress, model) unfit for ~5 min so new requests
+			// refuse fast instead of re-admitting against a known-limited
+			// gate (each admission burns a daily session slot). Retry once
+			// through a fresh acquire — a different token (full-tier
+			// account) may still serve the model. The session is bound to
+			// its admitted model and is NOT invalidated.
+			var lie *upstream.LimitedIpError
+			if errors.As(err, &lie) {
+				s.pool.MarkModelUnfit(effectiveModel, lie)
+			} else {
+				s.pool.MarkModelUnfit(effectiveModel, nil)
+			}
+			release()
+			if attempts > 1 {
+				return nil, nil, err
+			}
 		case errors.Is(err, upstream.ErrSessionInvalid):
 			release()
 			invalidateSession(lease)
@@ -2799,6 +2846,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	var rle *upstream.RateLimitError
 	var ice *upstream.IpCappedError
 	var sle *upstream.SessionLimitError
+	var lie *upstream.LimitedIpError
 	var be *upstream.BanError
 	var cbe *upstream.CountryBlockedError
 	var ce *upstream.CreditsError
@@ -2834,6 +2882,16 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		message = sle.Body
 		if message == "" {
 			message = "session limit reached"
+		}
+	case errors.As(err, &lie):
+		// Issue #74 P2: the egress IP cannot serve the requested model.
+		// 409 (not a quota lock): a different egress or a full-tier token
+		// may still serve the model. The body's retryAfterMs is surfaced
+		// as Retry-After but does not set the unfit window.
+		status, code = http.StatusConflict, "model_ip_limited"
+		message, retryAfter = lie.Error(), lie.RetryAfter
+		if retryAfter < 0 {
+			retryAfter = 0
 		}
 	case errors.As(err, &wr):
 		status, code = http.StatusServiceUnavailable, "waiting_room_queued"

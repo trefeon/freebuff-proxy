@@ -9,9 +9,10 @@
 //     that token, try the next.
 //   - session waiting room → remember the best position, try the next token;
 //     when every token fails, the pool surfaces the highest-precedence
-//     non-empty error bucket (ban > country-blocked > rate-limit >
-//     waiting-room > daily cap) instead of a generic 502 — a queued token
-//     surfaces 503 + Retry-After as soon as no higher bucket is populated.
+//     non-empty error bucket (ban > country-blocked > model-IP-limited >
+//     rate-limit > waiting-room > daily cap) instead of a generic 502 — a
+//     queued token surfaces 503 + Retry-After as soon as no higher bucket
+//     is populated.
 //   - run-invalid / session-invalid recoveries are NOT handled here: the
 //     caller (server) retries once via a fresh Acquire after invalidating.
 //   - anything else → next token; all failed → combined error (only when no
@@ -249,6 +250,16 @@ type Pool struct {
 	bridge      map[string]*bridgeEntry
 	bridgeOrder []string
 
+	// unfit is the per-(egress, model) unfit registry (issue #74 P2): models
+	// refused upstream with limited_ip on this egress are marked unfit for
+	// modelUnfitTTL so new requests are refused fast (409 model_ip_limited)
+	// and re-admission does not burn a daily session slot. The server guards
+	// NEW requests against it; Acquire deliberately does NOT consult it (the
+	// chat recovery loop re-acquires through the plain acquire closure and
+	// must reach a different token in mixed-tier pools). Guarded by unfitMu.
+	unfitMu sync.Mutex
+	unfit   map[unfitKey]unfitEntry
+
 	// store persists session state across restarts (SESSION_PERSIST); nil
 	// disables. Injected by the caller (main) via SetSessionStore so there
 	// is exactly one store shared by pooled and bridge entries.
@@ -300,7 +311,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 		return nil, fmt.Errorf("pool: %d sessions for %d tokens", len(sessions), len(cfg.AuthTokens))
 	}
 
-	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry)}
+	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry)}
 	p.cfg.Store(cfg)
 	p.msgsPerToken = make([][]time.Time, len(cfg.AuthTokens))
 	p.spendPerToken = make([]*spendLedger, len(cfg.AuthTokens))
@@ -557,6 +568,7 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 	var ipCapped []*upstream.IpCappedError
 	var banned []*upstream.BanError
 	var countryBlocked []*upstream.CountryBlockedError
+	var modelLimited []*upstream.LimitedIpError
 	var dailyLimited []*upstream.RateLimitError
 
 	for _, idx := range order {
@@ -665,6 +677,18 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 				tok.runs.CooldownCountryBlocked(cbe)
 				countryBlocked = append(countryBlocked, cbe)
 			}
+			if lie := asLimitedIp(err); lie != nil {
+				// Issue #74 P2: the egress IP cannot serve this model
+				// (limited_ip). The session row is fine — it stays bound to
+				// its admitted model — so nothing is invalidated or cooled
+				// per-token: the (egress, model) pair is marked unfit so
+				// new requests are refused fast instead of re-admitting and
+				// burning a daily session slot on every token.
+				p.MarkModelUnfit(model, lie)
+				modelLimited = append(modelLimited, lie)
+				errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+				continue
+			}
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
 			continue
 		}
@@ -728,11 +752,11 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 
 	// Failover precedence (PRD §6 error matrix): when buckets are mixed the
 	// highest-precedence non-empty bucket wins — ban > country-blocked >
-	// rate-limit > ip-capped > waiting-room > daily cap. Each bucket
-	// contributes its best error (first ban, longest rate window, first
-	// ip_capped, lowest queue position, earliest daily reset). Only when
-	// every bucket is empty — all tokens failed with errors outside the
-	// matrix — is the generic error surfaced.
+	// model-IP-limited > rate-limit > ip-capped > waiting-room > daily cap.
+	// Each bucket contributes its best error (first ban, longest rate
+	// window, first ip_capped, lowest queue position, earliest daily
+	// reset). Only when every bucket is empty — all tokens failed with
+	// errors outside the matrix — is the generic error surfaced.
 	// Issue #85: quota-capped tokens were excluded in acquireOrder (never
 	// attempted); their rate-limit reasons land here so a fully-capped pool
 	// surfaces a real 429 with the earliest window reset instead of a
@@ -743,6 +767,14 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 	}
 	if len(countryBlocked) > 0 {
 		return nil, countryBlocked[0]
+	}
+	if len(modelLimited) > 0 {
+		// Egress-model gate dominates per-token windows (issue #74 P2):
+		// every token shares the one egress, so no token can serve the
+		// model within the unfit window — retrying any token is pointless.
+		// Surface the refusal (409 model_ip_limited) and let the server's
+		// new-request guard fast-refuse until the window lapses.
+		return nil, modelLimited[0]
 	}
 	if len(rateLimited) > 0 {
 		// Pool exhausted (issue #48): every token failed and the highest-
@@ -2471,6 +2503,15 @@ func asCountryBlocked(err error) *upstream.CountryBlockedError {
 	var cbe *upstream.CountryBlockedError
 	if errors.As(err, &cbe) {
 		return cbe
+	}
+	return nil
+}
+
+// asLimitedIp extracts a LimitedIpError from err (nil when absent).
+func asLimitedIp(err error) *upstream.LimitedIpError {
+	var lie *upstream.LimitedIpError
+	if errors.As(err, &lie) {
+		return lie
 	}
 	return nil
 }

@@ -571,6 +571,18 @@ func statusError(status string, st *upstream.SessionState) error {
 			RetryAfter:       retryAfter,
 			Body:             st.Message,
 		}
+	case "session_model_mismatch", "limited_ip":
+		// The egress IP cannot serve the requested model. The session row is
+		// fine (bound to its admitted model) — not session-invalid, so it
+		// must never be invalidated/refreshed (re-admitting burns a daily
+		// session slot). Non-limited messages keep today's exact error text.
+		if strings.Contains(strings.ToLower(st.Message), "limited") {
+			return &upstream.LimitedIpError{
+				RetryAfter: time.Duration(st.RetryAfterMs) * time.Millisecond,
+				Body:       st.Message,
+			}
+		}
+		return fmt.Errorf("session: unknown upstream status %q", status)
 	}
 	return nil
 }
@@ -685,7 +697,7 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string) error {
 			m.commit(nil)
 			m.mu.Unlock()
 			slog.Debug("session recreated", "reason", status, "instance_id", st.InstanceID)
-		case "banned", "country_blocked", "rate_limited", "ip_capped", "spend_limited":
+		case "banned", "country_blocked", "rate_limited", "ip_capped", "spend_limited", "session_model_mismatch", "limited_ip":
 			return statusError(status, st)
 		case "model_locked":
 			// Previous session is locked to a different model.

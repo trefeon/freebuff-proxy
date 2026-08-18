@@ -3,6 +3,7 @@ package convert
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -2129,5 +2130,32 @@ func BenchmarkNormalizeToolSchema(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		budget := maxSchemaNodes
 		_ = normalizeToolSchemaCached(params, &budget)
+	}
+}
+
+// capHint guards allocation-size hints against int overflow; a wrapped hint
+// panics Go's slice runtime (makeslice: cap out of range) and corrupts map
+// preallocation. Overflowing inputs must fall back to 0 (no hint) so the
+// container grows dynamically. CodeQL: "size computation for allocation may
+// overflow".
+func TestCapHint(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b int
+		want int
+	}{
+		{"zero", 0, 0, 0},
+		{"normal", 3, 5, 8},
+		{"slice cap", 4, 1, 5},
+		{"at max", math.MaxInt, 0, math.MaxInt},
+		{"overflow drops hint", math.MaxInt, 1, 0},
+		{"overflow drops hint both", 1 << 20, math.MaxInt, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := capHint(tc.a, tc.b); got != tc.want {
+				t.Fatalf("capHint(%d, %d) = %d, want %d", tc.a, tc.b, got, tc.want)
+			}
+		})
 	}
 }

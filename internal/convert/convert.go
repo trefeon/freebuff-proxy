@@ -37,6 +37,21 @@ const maxSchemaDepth = 12
 // maxSchemaDepth (12x memory amplification). Tests may shrink it.
 var maxSchemaNodes = 100_000
 
+// capHint returns a+b for use as a make() size hint, or 0 when the sum would
+// overflow int. An unguarded len(a)+len(b) hint can wrap negative and panic
+// the runtime (makeslice: "cap out of range" / "len out of range"; makemap
+// clamps negative hints but a wrapped positive is still wrong). On overflow
+// we drop the hint entirely and let the container grow dynamically - the
+// hint is pure preallocation optimization, never correctness. CodeQL:
+// "size computation for allocation may overflow" (go/allocation-size-overflow,
+// convert.go:432,754,905,1006).
+func capHint(a, b int) int {
+	if a > math.MaxInt-b {
+		return 0
+	}
+	return a + b
+}
+
 // upstreamKeys is the whitelist of chat-completions body keys forwarded to
 // the upstream, plus messages/model which are always kept. Ported from
 // freebuff-api-kiprana's _UPSTREAM_CHAT_KEYS. Note "stream" is NOT
@@ -420,7 +435,7 @@ func compressMessages(messages []any) ([]any, int) {
 	}
 
 	// Pass 2: rebuild, replacing the dropped span with one marker message.
-	out := make([]any, 0, n-dropped+1)
+	out := make([]any, 0, capHint(n-dropped, 1))
 	for i := 0; i < n; i++ {
 		if i < keepStart {
 			m, ok := messages[i].(map[string]any)
@@ -742,7 +757,7 @@ func mergeDefinitions(parent, local map[string]any) map[string]any {
 	if local == nil {
 		return parent
 	}
-	merged := make(map[string]any, len(parent)+len(local))
+	merged := make(map[string]any, capHint(len(parent), len(local)))
 	for k, v := range parent {
 		merged[k] = v
 	}
@@ -893,7 +908,7 @@ func withoutRef(node map[string]any) map[string]any {
 // mergeMaps combines base with override; override wins on key collision
 // (JS object spread semantics).
 func mergeMaps(base, override map[string]any) map[string]any {
-	out := make(map[string]any, len(base)+len(override))
+	out := make(map[string]any, capHint(len(base), len(override)))
 	for k, v := range base {
 		out[k] = v
 	}
@@ -994,7 +1009,7 @@ func simplifyNullableCombinator(schema map[string]any, key string) map[string]an
 		delete(schema, key)
 	case len(filtered) == 1:
 		if single, isMap := filtered[0].(map[string]any); isMap {
-			merged := make(map[string]any, len(schema)+len(single))
+			merged := make(map[string]any, capHint(len(schema), len(single)))
 			for k, v := range schema {
 				if k != key {
 					merged[k] = v

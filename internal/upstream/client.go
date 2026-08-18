@@ -104,6 +104,13 @@ var (
 	// session must NOT be invalidated/refreshed (reference
 	// freebuff2api-optimized codebuff.py:1048-1074).
 	ErrWaitingRoomRequired = errors.New("upstream waiting room required")
+	// ErrModelIPLimited: the egress IP cannot serve the requested model
+	// (session_model_mismatch + "limited" marker, or the limited_ip session
+	// status). The session row is fine — it stays bound to its admitted
+	// model — but the request must be retried on a different (egress,
+	// model) pairing, so the session must NOT be invalidated/refreshed
+	// (that would burn a daily session slot re-admitting).
+	ErrModelIPLimited = errors.New("upstream: model limited on egress IP")
 )
 
 // WaitingRoomError is the concrete value behind ErrWaitingRoom; callers
@@ -306,6 +313,31 @@ func (e *IpCappedError) Error() string {
 }
 
 func (e *IpCappedError) Unwrap() error { return ErrIpCapped }
+
+// LimitedIpError is the concrete value behind ErrModelIPLimited: the egress
+// IP cannot serve the requested model (chat-level session_model_mismatch
+// with a "limited" marker, or the limited_ip session status). The session
+// row itself is fine — it stays bound to its admitted model — so this must
+// never invalidate the session (re-admitting burns a daily session slot).
+// RetryAfter comes from the Retry-After header (chat path) or the body's
+// retryAfterMs (admission path); it is surfaced to the client but does not
+// set the registry window. Unwrap makes errors.Is(err, ErrModelIPLimited)
+// work.
+type LimitedIpError struct {
+	Model      string
+	RetryAfter time.Duration
+	Body       string // truncated upstream body
+}
+
+func (e *LimitedIpError) Error() string {
+	msg := "model limited on this egress IP"
+	if e.Body != "" {
+		msg += ": " + e.Body
+	}
+	return msg
+}
+
+func (e *LimitedIpError) Unwrap() error { return ErrModelIPLimited }
 
 // SessionLimitError is a 409 session_limit_reached response: the ACCOUNT is
 // over its concurrent-tab budget, but this session's row is fine
@@ -1923,6 +1955,13 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// Client.classify wrapper records the flag so the pool can fire the
 		// gated WAITING_ROOM_CHAIN before the next create.
 		return &WaitingRoomRequiredError{RetryAfter: retryAfter, Detail: truncate(body, 200)}
+	case containsAny(lower, "session_model_mismatch") && containsAny(lower, "limited"):
+		// The egress IP cannot serve the requested model. The session row is
+		// fine — it stays bound to its admitted model — so this is NOT
+		// session-invalid: invalidating would re-admit and burn a daily
+		// session slot. The server marks the refusal and the pool registry
+		// cools the (egress, model) pairing instead.
+		return &LimitedIpError{RetryAfter: retryAfter, Body: truncate(body, 200)}
 	case containsAny(lower, "freebuff_update_required", "session_superseded",
 		"session_expired", "session_model_mismatch", "model_locked"):
 		return fmt.Errorf("%w: %s%s", ErrSessionInvalid, truncate(body, 200), retryDetail(retryAfter))
