@@ -1826,6 +1826,16 @@ func TestEffortsForModel(t *testing.T) {
 	if got := effortsForModel("meta/muse-spark-1.2-contributor"); !reflect.DeepEqual(got, []string{"minimal", "low", "medium", "high", "xhigh"}) {
 		t.Errorf("muse efforts = %v", got)
 	}
+	// Provisioned -max variants share their base model's ladder.
+	if got := effortsForModel("deepseek/deepseek-v4-flash-max"); !reflect.DeepEqual(got, []string{"low", "high", "max"}) {
+		t.Errorf("flash-max efforts = %v", got)
+	}
+	if got := effortsForModel("deepseek/deepseek-v4-pro-max"); !reflect.DeepEqual(got, []string{"low", "high", "max"}) {
+		t.Errorf("pro-max efforts = %v", got)
+	}
+	if got := effortsForModel("openai/gpt-5.6-luna-max"); !reflect.DeepEqual(got, []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Errorf("luna-max efforts = %v", got)
+	}
 	// Unlisted models get the full ladder (no clamping).
 	if got := effortsForModel("minimax/minimax-m3"); !reflect.DeepEqual(got, reasoningLadder[:]) {
 		t.Errorf("unlisted efforts = %v, want full ladder", got)
@@ -1877,6 +1887,16 @@ func TestNormalizeRequestEffortClamp(t *testing.T) {
 	// never down to low.
 	if got := effortFor("deepseek/deepseek-v4-flash", "medium"); got != "high" {
 		t.Errorf("deepseek-v4-flash medium = %q, want high", got)
+	}
+	// -max variants clamp like their base models.
+	if got := effortFor("deepseek/deepseek-v4-pro-max", "medium"); got != "high" {
+		t.Errorf("deepseek-v4-pro-max medium = %q, want high", got)
+	}
+	if got := effortFor("deepseek/deepseek-v4-pro-max", "xhigh"); got != "high" {
+		t.Errorf("deepseek-v4-pro-max xhigh = %q, want high", got)
+	}
+	if got := effortFor("openai/gpt-5.6-luna-max", "xhigh"); got != "xhigh" {
+		t.Errorf("gpt-5.6-luna-max xhigh = %q, want xhigh", got)
 	}
 	// Unlisted models pass every rung through.
 	if got := effortFor("minimax/minimax-m3", "ultra"); got != "ultra" {

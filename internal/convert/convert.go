@@ -157,16 +157,23 @@ const defaultReasoningEffort = "high"
 // expose [low, high, max] (Pro gained low on 08/13; medium intentionally
 // absent — rewritten to high, see normalizeReasoning), gpt-5.6-luna
 // EFFORTS_THROUGH_MAX low..max (xhigh included), muse-spark
-// EFFORTS_THROUGH_XHIGH minimal..xhigh. Models absent from the table get the
-// full ladder (no clamping). The table is refreshable at runtime via
-// SetModelEffortLookup.
+// EFFORTS_THROUGH_XHIGH minimal..xhigh. The provisioned -max variants
+// (deepseek-v4-flash-max, deepseek-v4-pro-max, gpt-5.6-luna-max) mirror
+// their base model's ladder — same lanes, higher ceiling tier. Models
+// absent from the table get the full ladder (no clamping): kimi/glm are
+// deliberately absent (CrofAI ignores reasoning_effort) and gemini rows
+// are absent (helper models, no upstream restriction). The table is
+// refreshable at runtime via SetModelEffortLookup.
 var modelReasoningEfforts = map[string][]string{
 	"deepseek/deepseek-v4-flash":      {"low", "high", "max"},
 	"deepseek/deepseek-v4-pro":        {"low", "high", "max"},
+	"deepseek/deepseek-v4-flash-max":  {"low", "high", "max"},
+	"deepseek/deepseek-v4-pro-max":    {"low", "high", "max"},
 	"mimo/mimo-v2.5":                  {"high"},
 	"mimo/mimo-v2.5-pro":              {"high"},
 	"anthropic/claude-fable-5":        {"low", "medium", "high", "xhigh", "max"},
 	"openai/gpt-5.6-luna":             {"low", "medium", "high", "xhigh", "max"},
+	"openai/gpt-5.6-luna-max":         {"low", "medium", "high", "xhigh", "max"},
 	"meta/muse-spark-1.2-contributor": {"minimal", "low", "medium", "high", "xhigh"},
 }
 
