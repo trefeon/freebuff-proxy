@@ -98,7 +98,7 @@ Sources: `freebuff-models.ts` (rows), `free-agents.ts` (roots),
 `provider-routes.ts` (routes/pricing), `gemini.ts` (helpers),
 `model-config.ts` (paid/deltas), proxy `internal/registry/registry_test.go:39-56`
 (15-row `expectedFallback`), `internal/config/config.go:353-361`
-(`defaultFallbackModels`), `internal/convert/convert.go:163-170`
+(`defaultFallbackModels`), `internal/convert/convert.go:172-180`
 (`modelReasoningEfforts`).
 
 ---
@@ -138,7 +138,8 @@ client model ─► 1.ResolveModel ─► 2.modelAllowed ─► 3.AgentForModel 
 4. **Effort clamp** — `convert.normalizeReasoning` (`convert.go:317-357`): effort
    from `reasoning_effort` field, else the model suffix; DeepSeek `medium → high`
    (341-346); else clamp DOWN to the model's rungs (`modelReasoningEfforts`
-   163-170 — 7 entries; absent → full ladder `reasoningLadder` 156-157);
+   `convert.go:172-180` — 9 entries; absent → full ladder `reasoningLadder`
+   156-157);
    `reasoning.enabled=false` / thinking disabled suppresses entirely. Strict
    reasoning models (`mimo`, `deepseek-v4`, `kimi` — `isStrictReasoningModel`
    278-281) get `reasoning_content:""` on tool-call assistant messages
@@ -184,9 +185,9 @@ region_limited` (3349-3387). `MODELS_ALLOW` prunes via strict `modelListed`
 - DeepSeek `medium` is intentionally absent and rewritten to `high`
   (`resolveFreebuffReasoningEffort`, freebuff-models.ts:1946-1952) — proxy
   mirrors at convert.go:341-346.
-- Proxy table (`modelReasoningEfforts`, 7 rows): flash/pro `[low,high,max]`,
-  mimo + mimo-pro `[high]`, fable `[low..max]`, luna `[low..max]`,
-  muse `[minimal..xhigh]`.
+- Proxy table (`modelReasoningEfforts`, 9 rows, `convert.go:172-180`):
+  deepseek flash/pro + `-max` variants `[low,high,max]`, mimo `[high]`,
+  fable/luna/luna-max `[low..max]`, muse `[minimal..xhigh]`.
 
 ---
 
@@ -213,11 +214,13 @@ region_limited` (3349-3387). `MODELS_ALLOW` prunes via strict `modelListed`
 
 ## 7. Gaps & recommendations (findings, not fixes)
 
-**G1 — effort table covers 7 of 15.** `modelReasoningEfforts` lacks the 3 `-max`
-variants, kimi, glm, and all 3 gemini rows → they pass the full ladder
-unclamped. Harmless where upstream ignores the field (glm, kimi) but gemini and
-the `-max` rows get no down-clamp. `SetModelEffortLookup` exists for runtime
-refresh — a registry-driven lookup would close this.
+**G1 — effort table covers 9 of 15.** `modelReasoningEfforts`
+(`convert.go:172-180`) covers the deepseek 4 bases + their `-max` variants,
+mimo, fable, luna/luna-max, and muse. Still absent: kimi-k3-eco, glm-5.2, and
+the 3 gemini rows — kimi/glm deliberately (CrofAI ignores `reasoning_effort`),
+gemini helper models (no upstream restriction), so all 5 pass the full ladder
+unclamped. `SetModelEffortLookup` remains available as optional hardening
+(registry-driven lookup), but the `-max` rows no longer need it.
 
 **G2 — `isDeepSeekModel` misses `-max` variants.** `strings.HasSuffix(model,
 "deepseek-v4-flash")` fails on `deepseek/deepseek-v4-flash-max`, so the `-max`
