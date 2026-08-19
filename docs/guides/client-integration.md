@@ -169,8 +169,10 @@ For multi-account management or multi-user API routing:
 
 FreeBuff assigns access tiers at the Cloudflare edge based on TCP source IP GeoIP (not HTTP headers):
 
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. All models available. 5 concurrent sessions per model.
-- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries. All model requests coerced to `mimo/mimo-v2.5` server-side. 3 concurrent sessions per model.
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. All models available. **4 premium sessions/day** (level ladder up to 7).
+- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries. All model requests coerced to `mimo/mimo-v2.5` server-side. **3 limited sessions/day** (level ladder up to 7).
+
+Per-day session capacity is the `rateLimitsByModel.limit` entitlement (premium 4 / limited 3 base, trust-level ladder up to 7) — a **Pacific-day quota**, not a concurrency number. The CLI (and therefore the proxy) holds **one session per account at a time**: concurrent sessions are a Freebuff Desktop multi-tab feature (1 premium-bucket session, up to 3 unlimited-bucket tabs; limited tier = one tab total — `reference/freebuff/common/src/constants/freebuff-models.ts:1215-1218`), and the CLI never sends the multi-session header that enables them.
 
 Check your tier: the `/healthz` response includes access tier info when the last session admission carried it. The dashboard Overview page also shows it.
 

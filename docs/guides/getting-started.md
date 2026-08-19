@@ -50,8 +50,8 @@ Using this proxy conflicts with Codebuff's terms of service. Upstream abuse dete
 
 FreeBuff assigns an access tier at the Cloudflare edge based on your TCP source IP's GeoIP location:
 
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all models including `deepseek/deepseek-v4-flash`. 5 concurrent sessions per model, 6 sessions/day per model.
-- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries (e.g. `countryCode: ID` → `countryBlockReason: "country_not_allowed"`). All model requests coerced to `mimo/mimo-v2.5`. 3 concurrent sessions per model, 6 sessions/day per model.
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all models including `deepseek/deepseek-v4-flash`. **4 premium sessions/day** (level ladder up to **7**). The CLI holds **one session at a time** — concurrent sessions are a Desktop multi-tab feature, not CLI.
+- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries (e.g. `countryCode: ID` → `countryBlockReason: "country_not_allowed"`). All model requests coerced to `mimo/mimo-v2.5`. **3 limited sessions/day** (level ladder up to **7**); MiMo V25 is the only limited-tier model in 0.0.150.
 
 ### Workarounds for limited-tier IPs
 
@@ -62,7 +62,9 @@ Route traffic through a residential connection in a Tier-1 country. If you have 
 Set `HTTP_PROXY=http://user:pass@proxy:port` in your `.env`. The proxy auto-applies uTLS fingerprinting and header sanitization through it. Use a residential proxy service (not datacenter). The IP must resolve to a Tier-1 country with a residential ASN.
 
 **Option C — Multi-token pooling (no VPN needed):**
-Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,token3,token4,token5` in `.env` with 4-5 accounts. Each gets 6 sessions/day on `mimo/mimo-v2.5`, giving you 15-30 usable sessions per day.
+Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,token3,token4,token5` in `.env` with 4-5 accounts. Each gets 3 sessions/day on `mimo/mimo-v2.5` (base; the 0.0.150 trust-level ladder can raise a token up to 7/day), giving you ~12-15 usable sessions per day.
+
+See the [FreeBuff CLI internals — quota & trust model](freebuff-cli-internals.md) for the full 0.0.150 quota ladder.
 
 **Do NOT use any of these — they trigger the restricted cohort or an outright ban:**
 - Commercial VPN (NordVPN, ExpressVPN, Surfshark, etc.)

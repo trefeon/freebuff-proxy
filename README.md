@@ -67,7 +67,7 @@ If you are a beginner, you don't need to write code or compile anything:
 | Keep the pool **draining one key at a time** | **Don't hammer many tokens from one public IP** (`ip_capped`) |
 
 
-**Access Tiers.** FreeBuff determines your access tier via Cloudflare TCP-layer GeoIP (not HTTP headers — spoofing is impossible). A residential IP in a Tier-1 country (US, UK, DE, JP, CA, etc.) gets `accessTier: "full"` with all models available. Non-Tier-1 country IPs get `accessTier: "limited"` and all model requests are coerced server-side to `mimo/mimo-v2.5`. VPN/datacenter IPs are flagged via MaxMind/Spur ASN detection (`ipPrivacySignals: ["vpn"]`) and placed in a restricted cohort ($0.50/day ceiling). Workarounds for limited-tier users: route through a Tailscale/WireGuard exit node in a Tier-1 country, set `HTTP_PROXY` to a residential proxy, or pool 4-5 tokens for 15-30 sessions/day. See [Getting Started](docs/guides/getting-started.md) for details.
+**Access Tiers.** FreeBuff determines your access tier via Cloudflare TCP-layer GeoIP (not HTTP headers — spoofing is impossible). A residential IP in a Tier-1 country (US, UK, DE, JP, CA, etc.) gets `accessTier: "full"` with all models available. Non-Tier-1 country IPs get `accessTier: "limited"` and all model requests are coerced server-side to `mimo/mimo-v2.5`. VPN/datacenter IPs are flagged via MaxMind/Spur ASN detection (`ipPrivacySignals: ["vpn"]`) and placed in a restricted cohort ($0.50/day ceiling). Workarounds for limited-tier users: route through a Tailscale/WireGuard exit node in a Tier-1 country, set `HTTP_PROXY` to a residential proxy, or pool 4-5 tokens for ~12-15 sessions/day (3/day base each; the 0.0.150 trust-level ladder can raise a token up to 7/day). See [Getting Started](docs/guides/getting-started.md) for details.
 Full detail in [Key Hygiene & Ban Avoidance](#key-hygiene--ban-avoidance).
 
 For a guided walkthrough, read [Getting Started](docs/guides/getting-started.md) (5 minutes).
@@ -94,6 +94,7 @@ For a guided walkthrough, read [Getting Started](docs/guides/getting-started.md)
 - **Token Pooling & Bridge Mode**: Hot-session-first pooling with round-robin start and failover across `AUTH_TOKENS`, or zero-storage relay when clients bring their own token. See [Key Concepts](#key-concepts).
 - **Token Auto-Discovery**: With empty `AUTH_TOKENS`, credentials are read from the official CLI login files (`~/.config/manicode/credentials.json`, `~/.config/codebuff/credentials.json`). Disable with `AUTO_DISCOVER_TOKEN=false`.
 - **TLS Stealth**: browser TLS fingerprinting via uTLS (Chrome, Firefox, Safari, Edge) plus sanitized request headers so upstream traffic reads as a browser client.
+- **CLI Impersonation**: egress presents as the official FreeBuff CLI — `Freebuff-CLI/0.0.150` ads-API User-Agent with a **Chrome/124 body UA** (the shipped 0.0.150 binary's truth), `ai-sdk/openai-compatible/1.0.0/codebuff` chat UA, and your real device timezone/locale.
 - **Subagent-Ready Concurrency**: Single-flight session refresh prevents race conditions during high-volume tool-calling loops.
 - **Safe Mode**: On by default: anti-ban presets (TLS stealth, header sanitization, jitter, idle rotation).
 - **Operational Tooling**: `-doctor` diagnostics (config, port, DNS/TLS, registry; zero-cost per-token validity probes run by default), `-test-token` (zero-cost probe on the first token, prints live quota, exit 0/1 for installers and scripts), `-setup` interactive client configuration, and a SHA-256-verified `-update` self-updater.
@@ -338,8 +339,9 @@ opt out). It enables essential anti-ban protections and presets:
   answers in `<1ms`, and routers fail over. `503` with `waiting_room` is the queued-waiting-room
   signal (also transient). Only `403` with `banned` / `country_blocked`
   means the account itself is gone: stop using it and move to a fresh established account.
-- **For ~24h of continuous coding, budget 4-5 keys.** Each FreeBuff account has a concurrent
-  session quota (up to 5 concurrent sessions on premium tier, 3 on limited tier).
+- **For ~24h of continuous coding, budget 4-5 keys.** Each FreeBuff account has a daily session
+  quota (premium 4/day, limited 3/day, trust-level ladder up to 7) and the CLI holds **one session
+  at a time** (concurrent sessions are a Desktop multi-tab feature, not CLI).
   One key ≈ one day of moderate use. Configure `AUTH_TOKENS` with multiple tokens to pool session
   headroom across tokens and let the proxy drain them one at a time.
 - **Register accounts with real email addresses** (e.g. Gmail). Disposable / temp-mail
