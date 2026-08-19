@@ -77,6 +77,9 @@ The proxy listens on port `3457`. The Base URL in 9router depends on where 9rout
 
 ## 🤖 Recommended Models to Add
 
+> Full per-model translation reference (wire ids, effort ladders, agent roots,
+> capacity gates, and known gaps): [Model Translation Layer](model-translation-layer.md).
+
 In the 9router provider node, you can add any of these models from the proxy catalog:
 
 | Model ID in 9router | Description | Access Tier |
