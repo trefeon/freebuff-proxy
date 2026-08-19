@@ -1566,6 +1566,10 @@ func (c *Client) do(req *http.Request, timeout time.Duration) (*http.Response, c
 	}
 }
 
+// BaseURL returns the upstream base URL this client dials (used by the pool
+// to build probe clients with the same upstream the pooled tokens use).
+func (c *Client) BaseURL() string { return c.baseURL }
+
 // currentStealthProfile returns the active stealth profile (nil = plain Go
 // transport). Guarded by profileMu: the retry loop swaps the pinned profile
 // to rotate the fingerprint, so readers must take the lock.

@@ -1257,6 +1257,12 @@ func (s *Server) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
 // AUTH_TOKENS list to .env (mirrors handleTokenAdd's mutation + persistence
 // sequence, without the dashboard fragment render).
 func (s *Server) addTokenPersist(ctx context.Context, token string) (int, error) {
+	// Tier gate (mirrors handleTokenAdd): a banned/country-blocked token
+	// minted from a datacenter IP must never enter the pool — it would fail
+	// every request with 403 and amplify the ban (issue #140).
+	if _, err := s.probeTokenGate(ctx, token); err != nil {
+		return 0, fmt.Errorf("token rejected by probe: %w", err)
+	}
 	cfg := s.cfg.Load()
 	existing := cfg.AuthTokens
 	if len(existing) > 0 {
@@ -1429,6 +1435,39 @@ func (s *Server) syncTokensAfterMutation(tokens []string) error {
 	return nil
 }
 
+// probeTokenGate validates a token BEFORE it enters the pool (dashboard Add
+// Token + login wizard). The zero-cost GET session probe is authoritative
+// for account health: a banned or country-blocked account would otherwise be
+// added and then fail every chat call with 403 — the exact incident that
+// banned the account (repeated 403s → demotion → ban, issue #140). The
+// probe claims no session slot and burns no daily allowance.
+//
+// Returns the session state when the token is usable (any non-terminal
+// status: active/queued/disabled/idle), or a wrapped error when the account
+// is dead (ErrBanned / ErrCountryBlocked / ErrAuthRejected / ErrRateLimited
+// / ErrNoActiveSession is NOT fatal — a token with no active session is
+// still valid and will admit on first use).
+func (s *Server) probeTokenGate(ctx context.Context, token string) (*upstream.SessionState, error) {
+	state, err := s.pool.ProbeNewToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, upstream.ErrNoActiveSession) {
+			// No active session is fine: the pool will create one on first
+			// use. Treat as usable.
+			return state, nil
+		}
+		return nil, err
+	}
+	if state != nil {
+		switch state.Status {
+		case "banned":
+			return nil, fmt.Errorf("token is banned upstream (status banned): %w", upstream.ErrBanned)
+		case "country_blocked":
+			return nil, fmt.Errorf("token is country-blocked upstream: %w", upstream.ErrCountryBlocked)
+		}
+	}
+	return state, nil
+}
+
 // handleTokenAdd adds a token to the live pool and persists it (dashboard
 // "Add token"). Rolls the pool back if persistence fails.
 func (s *Server) handleTokenAdd(w http.ResponseWriter, r *http.Request) {
@@ -1470,6 +1509,18 @@ func (s *Server) handleTokenAdd(w http.ResponseWriter, r *http.Request) {
 	if len(cfg.AuthTokens) != s.pool.TokenCount() {
 		s.dash.RenderConfigResult(w, r, false, "AUTH_TOKENS in .env differs from the live pool — reconcile in the Config editor or restart.")
 		return
+	}
+	// Tier gate: reject dead accounts before they enter the pool. The probe
+	// is zero-cost (no session slot claimed); a banned/country-blocked/
+	// auth-rejected token is refused with a clear message instead of being
+	// added and failing every request with 403 (the ban amplifier).
+	state, err := s.probeTokenGate(r.Context(), req.Token)
+	if err != nil {
+		s.dash.RenderConfigResult(w, r, false, "Token rejected by probe: "+err.Error())
+		return
+	}
+	if state != nil && state.AccessTier != "" {
+		s.logger.Info("dashboard token probed", "remote", remoteHost(r), "tier", state.AccessTier, "status", state.Status)
 	}
 	idx, err := s.pool.AddToken(req.Token)
 	if err != nil {

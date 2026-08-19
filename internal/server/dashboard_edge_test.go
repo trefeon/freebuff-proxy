@@ -385,6 +385,75 @@ func TestDashboardTokenAddEnvOverrideFails(t *testing.T) {
 	}
 }
 
+// TestDashboardTokenAddRejectsBanned is the tier-gate regression: adding a
+// banned token via the dashboard must be refused BEFORE it enters the pool —
+// a dead account would otherwise fail every chat call with 403 and amplify
+// the ban (issue #140). The zero-cost probe is authoritative.
+func TestDashboardTokenAddRejectsBanned(t *testing.T) {
+	t.Chdir(t.TempDir())
+	mock := testutil.NewMock()
+	mock.Ban = true // every session route 403 {"status":"banned"}
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, mock)
+	cookie := authedCookie(t, ts)
+
+	start := p.TokenCount()
+	resp := postJSON(t, ts.URL, cookie, "/admin/tokens/add", `{"token":"cb_banned"}`)
+	body := bodyOf(t, resp)
+	if !strings.Contains(body, "banned") {
+		t.Fatalf("add response = %q, want banned-rejection message", body)
+	}
+	if got := p.TokenCount(); got != start {
+		t.Errorf("pool TokenCount = %d, want %d (banned token must not enter the pool)", got, start)
+	}
+}
+
+// TestDashboardTokenAddAcceptsHealthy pins the tier-gate happy path: a
+// healthy token (probe returns active) is added and persisted normally.
+func TestDashboardTokenAddAcceptsHealthy(t *testing.T) {
+	t.Chdir(t.TempDir())
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, testutil.NewMock())
+	cookie := authedCookie(t, ts)
+
+	start := p.TokenCount()
+	resp := postJSON(t, ts.URL, cookie, "/admin/tokens/add", `{"token":"cb_healthy"}`)
+	body := bodyOf(t, resp)
+	if !strings.Contains(body, "Token added at index") {
+		t.Fatalf("add response = %q, want success", body)
+	}
+	if got := p.TokenCount(); got != start+1 {
+		t.Errorf("pool TokenCount = %d, want %d (healthy token added)", got, start+1)
+	}
+}
+
+// TestDashboardTokenAddProbeErrNoActiveSession pins that a token with no
+// active session (probe 404/ended) is still accepted: the pool admits on
+// first use.
+func TestDashboardTokenAddProbeErrNoActiveSession(t *testing.T) {
+	t.Chdir(t.TempDir())
+	mock := testutil.NewMock()
+	// A probe that returns "ended" (no active session) — the token is valid
+	// but idle.
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.Header.Get("x-freebuff-instance-id") == "" {
+			writeRawJSON(w, 200, `{"status":"ended"}`)
+			return
+		}
+		writeRawJSON(w, 200, `{"status":"active","instanceId":"inst-1"}`)
+	}
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, mock)
+	cookie := authedCookie(t, ts)
+
+	start := p.TokenCount()
+	resp := postJSON(t, ts.URL, cookie, "/admin/tokens/add", `{"token":"cb_idle"}`)
+	body := bodyOf(t, resp)
+	if !strings.Contains(body, "Token added at index") {
+		t.Fatalf("add response = %q, want success (idle token is valid)", body)
+	}
+	if got := p.TokenCount(); got != start+1 {
+		t.Errorf("pool TokenCount = %d, want %d (idle token added)", got, start+1)
+	}
+}
+
 // TestDashboardModeSwitchPersistFailure pins the persist-failure branch: when
 // .env cannot be written (here: .env is a directory), the switch reports the
 // failure and neither the pool nor the config is drained.
