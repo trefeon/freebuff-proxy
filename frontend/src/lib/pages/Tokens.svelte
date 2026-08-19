@@ -1,5 +1,6 @@
 <script>
-  import { Key, Unlock, Zap, Plus, Trash2, Layers, Network, Server } from '@lucide/svelte';
+  import { onDestroy } from 'svelte';
+  import { Key, Unlock, Zap, Plus, Trash2, Layers, Network, Server, Sparkles, RefreshCw, ExternalLink } from '@lucide/svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import Alert from '../components/Alert.svelte';
@@ -18,6 +19,67 @@
   let clientKeyMessage = $state('');
   let clientKeyOK = $state(true);
   let generatingKey = $state(false);
+
+  // OAuth wizard state (moved from Setup page: token generation belongs
+  // next to the pool it feeds)
+  let oauthStarting = $state(false);
+  let oauthStatus = $state(null);
+  let oauthTimer = $state(null);
+
+  async function startOAuthLogin() {
+    oauthStarting = true;
+    oauthStatus = { message: 'Starting headless login flow...', type: 'info' };
+
+    try {
+      const res = await fetch('/admin/login/start', { method: 'POST' });
+      const result = await res.json();
+
+      if (result.fingerprint && result.login_url) {
+        oauthStatus = {
+          loginUrl: result.login_url,
+          fingerprint: result.fingerprint,
+          message: 'Open this URL in your browser to sign in:',
+          type: 'pending'
+        };
+
+        clearInterval(oauthTimer);
+        oauthTimer = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/admin/login/status?fingerprint=${encodeURIComponent(result.fingerprint)}`);
+            const pollData = await pollRes.json();
+
+            if (pollData.status === 'completed') {
+              clearInterval(oauthTimer);
+              oauthStatus = {
+                message: `✓ Token #${pollData.token_index} added to pool and saved to .env.`,
+                type: 'success'
+              };
+              oauthStarting = false;
+              fetchData();
+            } else if (pollData.status === 'error') {
+              clearInterval(oauthTimer);
+              oauthStatus = {
+                message: `Login failed: ${pollData.message || 'unknown error'}`,
+                type: 'error'
+              };
+              oauthStarting = false;
+            }
+          } catch {
+            // keep polling
+          }
+        }, 3000);
+      } else {
+        oauthStatus = {
+          message: result.message || 'Failed to start login wizard.',
+          type: 'error'
+        };
+        oauthStarting = false;
+      }
+    } catch (e) {
+      oauthStatus = { message: `Network error: ${e.message}`, type: 'error' };
+      oauthStarting = false;
+    }
+  }
 
   async function fetchData() {
     try {
@@ -121,6 +183,10 @@
   }
 
   usePolling(fetchData, 30000);
+
+  onDestroy(() => {
+    clearInterval(oauthTimer);
+  });
 
   function modeVariant(d) {
     if (d?.in_bridge) return 'blue';
@@ -266,6 +332,52 @@
         </span>
       {/if}
     </div>
+  </div>
+
+  <!-- Headless OAuth Token Generator -->
+  <div class="fp-card p-5 space-y-3 border-[var(--fp-amber)]/30">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <Sparkles size={18} class="text-[var(--fp-amber)]" />
+        <h2 class="text-base font-semibold text-white">Headless OAuth Token Generator</h2>
+      </div>
+    </div>
+    <p class="text-xs text-[var(--fp-muted)]">
+      Generate FreeBuff credentials directly in your browser without installing the Codebuff CLI. The token is automatically verified, added to the live pool, and saved to <code class="text-[var(--fp-amber)] font-mono">.env</code>.
+    </p>
+
+    <button
+      onclick={startOAuthLogin}
+      disabled={oauthStarting}
+      class="fp-btn-primary"
+    >
+      {#if oauthStarting}
+        <RefreshCw size={14} class="animate-spin" />
+        <span>Authorizing...</span>
+      {:else}
+        <Sparkles size={14} />
+        <span>Generate Token via Browser Login</span>
+      {/if}
+    </button>
+
+    {#if oauthStatus}
+      <div class="mt-3 p-4 rounded-lg fp-inset text-xs font-mono space-y-2">
+        <p class="text-white">{oauthStatus.message}</p>
+        {#if oauthStatus.loginUrl}
+          <div class="flex items-center gap-2">
+            <a
+              href={oauthStatus.loginUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="px-3 py-1.5 rounded bg-[var(--fp-amber)]/10 border border-[var(--fp-amber)]/30 text-[var(--fp-amber)] hover:underline flex items-center gap-1.5"
+            >
+              <span>{oauthStatus.loginUrl}</span>
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- Client API Key Card -->
