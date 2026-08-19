@@ -40,21 +40,21 @@
         <Lock size={24} />
       </div>
       <h1 class="text-2xl font-bold text-white tracking-tight">freebuff-proxy</h1>
-      <p class="text-xs text-[var(--fp-muted)]">Sign in with the <code class="text-[var(--fp-amber)] font-mono">ADMIN_TOKEN</code> configured for this proxy</p>
+      <p class="text-xs text-[var(--fp-muted)]">Sign in to manage your proxy</p>
     </div>
 
     <Alert variant="error" message={errorMsg} dismissable={false} />
 
     <form onsubmit={handleLogin} class="space-y-4">
       <div>
-        <label for="admin-token" class="block text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-2">Admin Token</label>
+        <label for="admin-token" class="block text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-2">Password</label>
         <input
           id="admin-token"
           type="password"
           bind:value={token}
           required
           autocomplete="current-password"
-          placeholder="Enter ADMIN_TOKEN..."
+          placeholder="Enter password..."
           class="fp-input fp-input-mono"
         />
       </div>
