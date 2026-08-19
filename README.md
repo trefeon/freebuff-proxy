@@ -407,6 +407,7 @@ See [Dashboard Guide](docs/guides/dashboard.md) for access, Docker caveats, and 
 - [9router Integration](docs/guides/9router-integration.md): router dashboard setup in bridge mode
 - [Dashboard Guide](docs/guides/dashboard.md): the admin web UI: access, pages, Docker caveats, hardening
 - [Manual Testing](docs/guides/testing.md): verify the proxy on Linux or Windows by hand, step by step
+- [Version Stability & Ban Findings](docs/guides/version-stability-and-ban-findings.md): **read before upgrading** — why v0.11.2 bridge is the proven-stable deployment and how `PREFER_MAX_MODELS` on newer versions caused instant account bans
 
 ---
 
