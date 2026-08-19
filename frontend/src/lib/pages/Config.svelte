@@ -9,6 +9,8 @@
   import Alert from '../components/Alert.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import { fetchAPI } from '../utils/api.js';
+  import { generateRandomApiKey, generateRandomAdminToken } from '../utils/format.js';
+  import { copyToClipboard } from '../utils/clipboard.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -244,13 +246,34 @@
     }
   }
 
-  function applyPreset(preset) {
-    preset.apply();
+  function showToast(message) {
     if (presetToastTimeout) clearTimeout(presetToastTimeout);
-    presetToast = `Applied preset: ${preset.label}`;
+    presetToast = message;
     presetToastTimeout = setTimeout(() => {
       presetToast = null;
     }, 3500);
+  }
+
+  function applyPreset(preset) {
+    preset.apply();
+    showToast(`Applied preset: ${preset.label}`);
+  }
+
+  function handleGenerateApiKey() {
+    const newKey = generateRandomApiKey();
+    const currentVal = getEnvValue('API_KEYS');
+    const hasExisting = currentVal && currentVal !== 'empty' && currentVal !== 'unset' && currentVal.trim() !== '';
+    const updatedVal = hasExisting ? `${currentVal.trim()},${newKey}` : newKey;
+    setEnvValue('API_KEYS', updatedVal);
+    copyToClipboard(newKey);
+    showToast(`Generated & copied API Key: ${newKey}`);
+  }
+
+  function handleGenerateAdminToken() {
+    const newToken = generateRandomAdminToken();
+    setEnvValue('ADMIN_TOKEN', newToken);
+    copyToClipboard(newToken);
+    showToast(`Generated & copied Admin Token: ${newToken}`);
   }
 
   // Helper to read current value of a key from envContent or fallback to effective
@@ -618,6 +641,29 @@
                 </button>
               {/each}
             </div>
+          </div>
+        {/if}
+        {#if selectedSettingKey === 'API_KEYS'}
+          <div class="pt-1">
+            <button
+              type="button"
+              onclick={handleGenerateApiKey}
+              class="fp-btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            >
+              <Zap size={13} />
+              <span>⚡ Generate Random API Key</span>
+            </button>
+          </div>
+        {:else if selectedSettingKey === 'ADMIN_TOKEN'}
+          <div class="pt-1">
+            <button
+              type="button"
+              onclick={handleGenerateAdminToken}
+              class="fp-btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            >
+              <Zap size={13} />
+              <span>⚡ Generate Random Admin Token</span>
+            </button>
           </div>
         {/if}
       </div>

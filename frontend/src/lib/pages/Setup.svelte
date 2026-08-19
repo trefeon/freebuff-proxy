@@ -7,6 +7,7 @@
   import Alert from '../components/Alert.svelte';
   import { fetchAPI, postAPI } from '../utils/api.js';
   import { copyToClipboard } from '../utils/clipboard.js';
+  import { generateRandomApiKey } from '../utils/format.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -14,6 +15,7 @@
   let copiedIdx = $state(null);
   let copiedModel = $state('');
 
+  let customApiKey = $state('not-needed');
   // Diagnostic state
   let diagRunning = $state(false);
   let diagChecks = $state(null);
@@ -156,11 +158,11 @@
         <!-- API Key -->
         <button
           type="button"
-          onclick={() => copySnippet('not-needed', 'apikey')}
+          onclick={() => copySnippet(customApiKey, 'apikey')}
           class="flex flex-col items-start gap-1 p-3.5 rounded-lg fp-inset hover:border-[var(--fp-amber)]/40 transition-all text-left group"
         >
           <span class="text-[10px] uppercase font-semibold text-[var(--fp-dim)] tracking-wider">API Key</span>
-          <span class="font-mono text-sm text-[var(--fp-amber)] group-hover:text-[var(--fp-amber-hover)] transition-colors truncate w-full">not-needed</span>
+          <span class="font-mono text-sm text-[var(--fp-amber)] group-hover:text-[var(--fp-amber-hover)] transition-colors truncate w-full">{customApiKey}</span>
           <span class="text-[10px] text-[var(--fp-dim)] flex items-center gap-1 mt-1">
             {#if copiedIdx === 'apikey'}
               <Check size={10} class="text-[var(--fp-teal)]" /> <span class="text-[var(--fp-teal)]">Copied</span>
@@ -189,6 +191,47 @@
     </div>
   {/if}
 
+  <!-- API Key Customizer Bar -->
+  <div class="fp-card p-5 space-y-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h2 class="text-base font-semibold text-white">API Key Customizer</h2>
+        <p class="text-xs text-[var(--fp-muted)] mt-0.5">Customize or generate client API keys to automatically update all integration snippets below</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onclick={() => {
+            const key = generateRandomApiKey();
+            customApiKey = key;
+            copyToClipboard(key);
+          }}
+          class="fp-btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+        >
+          <Zap size={13} />
+          <span>⚡ Generate Key</span>
+        </button>
+        <button
+          type="button"
+          onclick={() => customApiKey = 'not-needed'}
+          disabled={customApiKey === 'not-needed'}
+          class="fp-btn-secondary text-xs py-1.5 px-3"
+        >
+          Reset to "not-needed"
+        </button>
+      </div>
+    </div>
+    <div class="relative">
+      <input
+        type="text"
+        bind:value={customApiKey}
+        placeholder="Enter client API key or leave as not-needed..."
+        spellcheck="false"
+        class="fp-input fp-input-mono text-xs py-2 px-3 focus-visible:ring-2 focus-visible:ring-[var(--fp-amber)]"
+      />
+    </div>
+  </div>
+
   <!-- Tool-Specific Snippets -->
   {#if data}
     <div class="fp-card p-5 space-y-4">
@@ -204,33 +247,52 @@
         <div class="fp-inset p-4 flex flex-col justify-between">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-bold text-white">OpenCode</h3>
-            <CopyButton text={`"freebuff": {"type": "openai", "options": {"baseURL": "${data.base_url}", "apiKey": "not-needed"}}`} variant="labeled" />
+            <CopyButton text={`"freebuff": {"type": "openai", "options": {"baseURL": "${data.base_url}", "apiKey": "${customApiKey}"}}`} variant="labeled" />
           </div>
-          <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">"freebuff": &#123;"type": "openai", "options": &#123;"baseURL": "{data.base_url}", "apiKey": "not-needed"&#125;&#125;</pre>
+          <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">"freebuff": &#123;"type": "openai", "options": &#123;"baseURL": "{data.base_url}", "apiKey": "{customApiKey}"&#125;&#125;</pre>
+        </div>
+
+        <!-- Claude Code / Anthropic -->
+        <div class="fp-inset p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold text-white">Claude Code / Anthropic</h3>
+            <CopyButton text={`export ANTHROPIC_BASE_URL="${data.base_url}"\nexport ANTHROPIC_API_KEY="${customApiKey}"`} variant="labeled" />
+          </div>
+          <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">export ANTHROPIC_BASE_URL="{data.base_url}"
+export ANTHROPIC_API_KEY="{customApiKey}"</pre>
+        </div>
+
+        <!-- omp -->
+        <div class="fp-inset p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold text-white">omp</h3>
+            <CopyButton text={`"freebuff": {"baseUrl": "${data.base_url}", "api": "openai-completions", "apiKey": "${customApiKey}"}`} variant="labeled" />
+          </div>
+          <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">"freebuff": &#123;"baseUrl": "{data.base_url}", "api": "openai-completions", "apiKey": "{customApiKey}"&#125;</pre>
         </div>
 
         <!-- Continue / Cline -->
         <div class="fp-inset p-4 flex flex-col justify-between">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-bold text-white">Continue / Cline</h3>
-            <CopyButton text={`models:\n  - title: "FreeBuff"\n    provider: "openai"\n    model: "${data.model}"\n    apiBase: "${data.base_url}"\n    apiKey: "not-needed"`} variant="labeled" />
+            <CopyButton text={`models:\n  - title: "FreeBuff"\n    provider: "openai"\n    model: "${data.model}"\n    apiBase: "${data.base_url}"\n    apiKey: "${customApiKey}"`} variant="labeled" />
           </div>
           <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">models:
   - title: "FreeBuff"
     provider: "openai"
     model: "{data.model}"
     apiBase: "{data.base_url}"
-    apiKey: "not-needed"</pre>
+    apiKey: "{customApiKey}"</pre>
         </div>
 
         <!-- aider -->
         <div class="fp-inset p-4 flex flex-col justify-between">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-bold text-white">aider</h3>
-            <CopyButton text={`openai-api-base: ${data.base_url}\nopenai-api-key: not-needed\nmodel: ${data.model}`} variant="labeled" />
+            <CopyButton text={`openai-api-base: ${data.base_url}\nopenai-api-key: ${customApiKey}\nmodel: ${data.model}`} variant="labeled" />
           </div>
           <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">openai-api-base: {data.base_url}
-openai-api-key: not-needed
+openai-api-key: {customApiKey}
 model: {data.model}</pre>
         </div>
 
@@ -238,23 +300,24 @@ model: {data.model}</pre>
         <div class="fp-inset p-4 flex flex-col justify-between">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-bold text-white">9router</h3>
-            <CopyButton text={`Name: freebuff\nPrefix: freebuff\nAPI type: Chat Completions\nBase URL: ${data.base_url}\nModel ID: ${data.model}`} variant="labeled" />
+            <CopyButton text={`Name: freebuff\nPrefix: freebuff\nAPI type: Chat Completions\nBase URL: ${data.base_url}\nAPI Key: ${customApiKey}\nModel ID: ${data.model}`} variant="labeled" />
           </div>
           <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">Name: freebuff
 Prefix: freebuff
 API type: Chat Completions
 Base URL: {data.base_url}
+API Key: {customApiKey}
 Model ID: {data.model}</pre>
         </div>
 
         <!-- cURL -->
-        <div class="fp-inset p-4 flex flex-col justify-between md:col-span-2">
+        <div class="fp-inset p-4 flex flex-col justify-between md:col-span-2 lg:col-span-3">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-bold text-white">cURL Command</h3>
-            <CopyButton text={`curl -N ${data.base_url}/chat/completions -H "Authorization: Bearer <token-or-key>" -H "Content-Type: application/json" -d '{"model":"${data.model}","messages":[{"role":"user","content":"hi"}],"stream":true}'`} variant="labeled" />
+            <CopyButton text={`curl -N ${data.base_url}/chat/completions -H "Authorization: Bearer ${customApiKey}" -H "Content-Type: application/json" -d '{"model":"${data.model}","messages":[{"role":"user","content":"hi"}],"stream":true}'`} variant="labeled" />
           </div>
           <pre class="bg-[var(--fp-bg)] p-2.5 rounded-lg text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap border border-[var(--fp-border)]">curl -N {data.base_url}/chat/completions \
-  -H "Authorization: Bearer &lt;token-or-key&gt;" \
+  -H "Authorization: Bearer {customApiKey}" \
   -H "Content-Type: application/json" \
   -d '&#123;"model":"{data.model}","messages":[&#123;"role":"user","content":"hi"&#125;],"stream":true&#125;'</pre>
         </div>

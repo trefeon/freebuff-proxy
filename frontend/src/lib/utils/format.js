@@ -55,3 +55,25 @@ export function parseLogFields(fields) {
       return { key: k, value: v.join('=') };
     });
 }
+
+/**
+ * Generate a random client API key with sk-fb- prefix.
+ * @returns {string}
+ */
+export function generateRandomApiKey() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `sk-fb-${hex}`;
+}
+
+/**
+ * Generate a random admin token with fb-adm- prefix.
+ * @returns {string}
+ */
+export function generateRandomAdminToken() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `fb-adm-${hex}`;
+}
