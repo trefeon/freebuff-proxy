@@ -5,7 +5,7 @@
   import Alert from '../components/Alert.svelte';
   import { fetchAPI, postAPI } from '../utils/api.js';
   import { usePolling } from '../utils/polling.js';
-  import { formatLocalDate } from '../utils/format.js';
+  import { formatLocalDate, generateRandomApiKey } from '../utils/format.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -15,6 +15,9 @@
   let actionMessage = $state('');
   let actionOK = $state(true);
   let actionPending = $state(false);
+  let clientKeyMessage = $state('');
+  let clientKeyOK = $state(true);
+  let generatingKey = $state(false);
 
   async function fetchData() {
     try {
@@ -26,6 +29,44 @@
       loading = false;
     }
   }
+
+  // Generate a fresh client API key (sk-fb-...) and append it to API_KEYS in
+  // .env — the same generator as the Config studio, moved here where the
+  // token pool lives so the omp credential is created next to the upstream
+  // tokens that back it.
+  async function generateClientKey() {
+    if (generatingKey) return;
+    generatingKey = true;
+    clientKeyMessage = '';
+    try {
+      const newKey = generateRandomApiKey();
+      const cfgRes = await fetchAPI('/admin/api/config');
+      const envContent = cfgRes?.env || '';
+      const regex = /^\s*API_KEYS=(.*)$/m;
+      const match = envContent.match(regex);
+      const existing = match ? match[1].trim() : '';
+      const updated = existing ? `${existing},${newKey}` : newKey;
+      const save = await fetch('/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ content: envContent.replace(regex, `API_KEYS=${updated}`) }),
+      });
+      const result = await save.json();
+      clientKeyOK = save.ok && result.ok;
+      clientKeyMessage = clientKeyOK
+        ? `Generated & saved client API key: ${newKey}`
+        : (result.message || 'Failed to save client API key');
+      if (clientKeyOK) {
+        try { await navigator.clipboard.writeText(newKey); } catch { /* clipboard unavailable */ }
+      }
+    } catch (e) {
+      clientKeyOK = false;
+      clientKeyMessage = e.message || 'Network error generating client key';
+    } finally {
+      generatingKey = false;
+    }
+  }
+
 
   async function addToken(e) {
     e.preventDefault();
@@ -225,6 +266,23 @@
         </span>
       {/if}
     </div>
+  </div>
+
+  <!-- Client API Key Card -->
+  <div class="fp-card p-5 border-[var(--fp-teal)]/30">
+    <h2 class="text-base font-semibold text-white mb-1">Client API Key</h2>
+    <p class="text-xs text-[var(--fp-muted)] mb-3">Generate a <code class="font-mono text-[var(--fp-teal)]">sk-fb-...</code> credential for clients (<code class="font-mono">omp</code>, curl) to authenticate against this proxy. Appended to <code class="font-mono text-[var(--fp-teal)]">API_KEYS</code> in <code class="font-mono">.env</code>.</p>
+    {#if clientKeyMessage}
+      <Alert variant={clientKeyOK ? 'success' : 'error'} message={clientKeyMessage} dismissable={false} />
+    {/if}
+    <button
+      onclick={generateClientKey}
+      disabled={generatingKey}
+      class="fp-btn-primary bg-[var(--fp-teal)] border-[var(--fp-teal)] text-[#0A0F18]"
+    >
+      <Key size={16} />
+      <span>{generatingKey ? 'Generating...' : 'Generate Client API Key'}</span>
+    </button>
   </div>
 
   <!-- Add Token Card -->
