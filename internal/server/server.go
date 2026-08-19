@@ -209,12 +209,16 @@ func (s *Server) Handler() http.Handler {
 	// read-only status and stay open when ADMIN_TOKEN is unset (legacy).
 	// Config (read + write) and logs expose secrets and are gated further:
 	// with ADMIN_TOKEN unset they require a loopback client.
+	// GET /admin/login serves the SPA login page (client-side form, posts to
+	// the JSON API below); with ADMIN_TOKEN unset it redirects straight to
+	// the dashboard (handleAdminLogin's first branch). POST /admin/login is
+	// the JSON token-check API.
 	mux.HandleFunc("GET /admin/login", s.handleAdminLogin)
 	// POST /admin/login consumes the per-IP login-attempt budget, so it must
 	// carry the same CSRF gate as the other mutating admin routes: without it
 	// a malicious page could fire cross-origin POSTs with wrong tokens and
 	// lock the victim out of the dashboard (5 fails → 1-minute lockout,
-	// repeatable). GET stays unwrapped — it just renders the login page.
+	// repeatable).
 	mux.HandleFunc("POST /admin/login", s.adminCSRF(http.HandlerFunc(s.handleAdminLogin)))
 	// Admin dashboard API routes (JSON)
 	mux.Handle("GET /admin/api/overview", s.dashboardAuth(s.dash.APIHandler("overview")))
@@ -759,12 +763,22 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 	}
 }
 
-// handleAdminLogin renders the login page and processes the token form:
-// constant-time ADMIN_TOKEN comparison, per-IP rate limiting, and a signed
-// session cookie on success. With ADMIN_TOKEN unset it redirects straight to
-// the dashboard.
+// handleAdminLogin serves the SPA login page on GET and processes the token
+// form on POST: constant-time ADMIN_TOKEN comparison, per-IP rate limiting,
+// and a signed session cookie on success. With ADMIN_TOKEN unset GET
+// redirects straight to the dashboard.
 func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Load()
+	if r.Method != http.MethodPost {
+		// GET/HEAD: render the SPA login page. The Svelte form posts to this
+		// same route; with ADMIN_TOKEN unset there is nothing to log in to.
+		if cfg.AdminToken == "" {
+			http.Redirect(w, r, "/admin", http.StatusFound)
+			return
+		}
+		s.dash.ServeSPA(w, r)
+		return
+	}
 	if cfg.AdminToken == "" {
 		http.Redirect(w, r, "/admin", http.StatusFound)
 		return

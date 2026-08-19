@@ -8,6 +8,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -902,5 +903,27 @@ func TestDashboardLoginGETWhenUnset(t *testing.T) {
 	}
 	if loc := resp.Header.Get("Location"); loc != "/admin" {
 		t.Errorf("redirect location = %q, want /admin", loc)
+	}
+}
+
+// TestDashboardLoginGETWithToken serves the SPA login page (HTML), not a JSON
+// error body: the Svelte form must be reachable without a session cookie.
+func TestDashboardLoginGETWithToken(t *testing.T) {
+	ts := dashboardServer(t, "secret", nil)
+	resp := get(t, ts.URL+"/admin/login", "")
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login GET status = %d, want 200", resp.StatusCode)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/html") {
+		t.Errorf("login GET Content-Type = %q, want text/html (SPA page)", ct)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "<div id=\"app\">") {
+		t.Errorf("login GET body does not look like the SPA index (missing #app mount)")
 	}
 }
