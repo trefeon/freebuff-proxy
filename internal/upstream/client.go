@@ -1454,7 +1454,18 @@ func (c *Client) do(req *http.Request, timeout time.Duration) (*http.Response, c
 	ctx := req.Context()
 	start := time.Now()
 	var cancel context.CancelFunc
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline && timeout > 0 {
+	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
+		// The caller already bound the request. The control-call timeout is
+		// still honored as an upper bound when it is the TIGHTER of the two:
+		// a long caller deadline (e.g. a 15m request timeout) must not
+		// silently defeat SessionCallTimeout on session/run control calls.
+		if timeout > 0 {
+			if remaining := time.Until(deadline); timeout < remaining {
+				ctx, cancel = context.WithTimeout(ctx, timeout)
+				req = req.WithContext(ctx)
+			}
+		}
+	} else if timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		req = req.WithContext(ctx)
 	}

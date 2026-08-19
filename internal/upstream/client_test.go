@@ -733,11 +733,13 @@ func TestFinishRunErrorTruncation(t *testing.T) {
 func TestControlCallTimeout(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	// Hang the session create; the 50ms control timeout must win.
-	mock.SessionCreateDelay = 2 * time.Second
+	// Hang the session create; the 50ms control timeout must win even when
+	// the caller passes a much longer deadline (the control timeout is the
+	// tighter bound and must never be defeated by the caller's context).
+	mock.SessionCreateDelay = 10 * time.Second
 
 	client, _ := New("tok", testConfig(mock.URL(), func(c *config.Config) { c.SessionCallTimeout = 50 * time.Millisecond }))
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_, err := client.CreateSession(ctx)
@@ -2046,7 +2048,7 @@ func TestDoBackoffCancelAndDeadline(t *testing.T) {
 		}
 	})
 
-	t.Run("pre-existing deadline skips timeout", func(t *testing.T) {
+	t.Run("pre-existing deadline keeps control timeout when tighter", func(t *testing.T) {
 		client, _ := newRetryClient(t, "", 0, "")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 		defer cancel()
@@ -2059,8 +2061,31 @@ func TestDoBackoffCancelAndDeadline(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = resp.Body.Close() }()
+		// The 30s control timeout is tighter than the caller's 1h deadline,
+		// so it must be applied (cancel non-nil) — a long caller deadline
+		// must not silently defeat SessionCallTimeout on control calls.
+		if cfn == nil {
+			t.Error("control timeout not applied despite being tighter than the caller deadline (cancel must be non-nil)")
+		}
+	})
+
+	t.Run("pre-existing deadline skips looser timeout", func(t *testing.T) {
+		client, _ := newRetryClient(t, "", 0, "")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		req, err := client.newRequest(ctx, http.MethodPost, "/api/v1/chat/completions", []byte(`{"model":"m"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The control timeout (1h) is LOOSER than the caller deadline; it
+		// must not override the tighter caller bound.
+		resp, cfn, err := client.do(req, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
 		if cfn != nil {
-			t.Error("timeout applied despite a pre-existing deadline (cancel must be nil)")
+			t.Error("looser timeout applied over a tighter caller deadline (cancel must be nil)")
 		}
 	})
 
