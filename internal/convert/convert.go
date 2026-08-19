@@ -96,7 +96,8 @@ func randHex(n int) string {
 }
 
 // ExtractReasoningEffort extracts the requested thinking/reasoning effort from
-// OpenAI reasoning_effort, Codex/Anthropic reasoning.effort, or thinking flags.
+// OpenAI reasoning_effort, Codex/Anthropic reasoning.effort, thinking flags,
+// or model name suffixes (e.g. "model(high)" or "model:max").
 func ExtractReasoningEffort(payload map[string]any) string {
 	if payload == nil {
 		return ""
@@ -112,6 +113,24 @@ func ExtractReasoningEffort(payload map[string]any) string {
 	if tObj, ok := payload["thinking"].(map[string]any); ok {
 		if v, ok := tObj["type"].(string); ok {
 			return strings.ToLower(strings.TrimSpace(v))
+		}
+	}
+	if m, ok := payload["model"].(string); ok && m != "" {
+		m = strings.TrimSpace(m)
+		if strings.HasSuffix(m, ")") {
+			if idx := strings.LastIndex(m, "("); idx > 0 {
+				tag := strings.ToLower(strings.TrimSpace(m[idx+1 : len(m)-1]))
+				switch tag {
+				case "max", "high", "medium", "low", "minimal", "xhigh", "ultra":
+					return tag
+				}
+			}
+		} else if idx := strings.LastIndex(m, ":"); idx > 0 {
+			tag := strings.ToLower(strings.TrimSpace(m[idx+1:]))
+			switch tag {
+			case "max", "high", "medium", "low", "minimal", "xhigh", "ultra":
+				return tag
+			}
 		}
 	}
 	return ""

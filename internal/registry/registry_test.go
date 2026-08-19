@@ -834,3 +834,87 @@ func TestRefreshLogsSuccess(t *testing.T) {
 		t.Errorf("refresh log models = %s, want %d", logs, r.ModelCount())
 	}
 }
+
+func TestResolveModelPreferMaxAndSuffixes(t *testing.T) {
+	t.Run("suffix stripping with PreferMaxModels=false", func(t *testing.T) {
+		cfg := &config.Config{
+			PreferMaxModels: false,
+		}
+		r := New(cfg, nil)
+
+		cases := []struct {
+			input string
+			want  string
+		}{
+			{"deepseek-v4-pro(high)", "deepseek-v4-pro"},
+			{"deepseek-v4-pro(medium)", "deepseek-v4-pro"},
+			{"deepseek-v4-pro(low)", "deepseek-v4-pro"},
+			{"deepseek-v4-pro:high", "deepseek-v4-pro"},
+			{" deepseek-v4-pro(high) ", "deepseek-v4-pro"},
+			{"deepseek-v4-pro(max)", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek-v4-pro:max", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-pro(max)", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-flash(max)", "deepseek/deepseek-v4-flash-max"},
+			{"openai/gpt-5.6-luna(max)", "openai/gpt-5.6-luna-max"},
+			{"gpt-4o(max)", "deepseek/deepseek-v4-pro-max"},
+			{"gpt-4o:max", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek-chat(max)", "deepseek/deepseek-v4-flash-max"},
+			{"deepseek-reasoner(max)", "deepseek/deepseek-v4-pro-max"},
+			{"gpt-5.6-luna(max)", "openai/gpt-5.6-luna-max"},
+			{"minimax/minimax-m3(high)", "minimax/minimax-m3"},
+			{"minimax/minimax-m3(max)", "minimax/minimax-m3"},
+		}
+
+		for _, tc := range cases {
+			if got := r.ResolveModel(tc.input); got != tc.want {
+				t.Errorf("ResolveModel(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		}
+	})
+
+	t.Run("PreferMaxModels=true", func(t *testing.T) {
+		cfg := &config.Config{
+			PreferMaxModels: true,
+		}
+		r := New(cfg, nil)
+
+		cases := []struct {
+			input string
+			want  string
+		}{
+			{"deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-flash-max"},
+			{"openai/gpt-5.6-luna", "openai/gpt-5.6-luna-max"},
+			{"deepseek-v4-pro", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek-v4-flash", "deepseek/deepseek-v4-flash-max"},
+			{"gpt-5.6-luna", "openai/gpt-5.6-luna-max"},
+			{"gpt-4o", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek-chat", "deepseek/deepseek-v4-flash-max"},
+			{"deepseek-reasoner", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-pro(high)", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-pro:high", "deepseek/deepseek-v4-pro-max"},
+			{"deepseek/deepseek-v4-pro-max", "deepseek/deepseek-v4-pro-max"},
+			{"minimax/minimax-m3", "minimax/minimax-m3"},
+			{"unknown", "unknown"},
+		}
+
+		for _, tc := range cases {
+			if got := r.ResolveModel(tc.input); got != tc.want {
+				t.Errorf("ResolveModel(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		}
+	})
+
+	t.Run("AgentForModel with max resolution", func(t *testing.T) {
+		r := New(&config.Config{PreferMaxModels: true}, nil)
+		r.LoadFallback()
+
+		agent, err := r.AgentForModel("deepseek-v4-pro")
+		if err != nil {
+			t.Fatalf("AgentForModel(deepseek-v4-pro) err = %v", err)
+		}
+		if agent != "base2-free-deepseek-pro-max" {
+			t.Errorf("AgentForModel(deepseek-v4-pro) = %q, want base2-free-deepseek-pro-max", agent)
+		}
+	})
+}

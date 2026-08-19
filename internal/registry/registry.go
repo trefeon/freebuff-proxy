@@ -310,17 +310,64 @@ func (r *Registry) LoadFallback() {
 }
 
 // ResolveModel resolves an alias (e.g. "gpt-4o") to its real model ID if mapped
-// in cfg.ModelAliases, or returns model unchanged.
+// in cfg.ModelAliases, strips reasoning effort / max suffixes (e.g. "(max)",
+// "(high)", ":max"), and maps models to their -max extended context variants
+// when requested by suffix or when cfg.PreferMaxModels is enabled.
 func (r *Registry) ResolveModel(model string) string {
-	if r == nil {
-		return model
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
 	}
-	cfg := r.cfg.Load()
-	if cfg != nil && len(cfg.ModelAliases) > 0 {
-		if realModel, ok := cfg.ModelAliases[model]; ok && realModel != "" {
-			return realModel
+
+	isMax := false
+	if strings.HasSuffix(model, ")") {
+		if idx := strings.LastIndex(model, "("); idx > 0 {
+			tag := strings.ToLower(strings.TrimSpace(model[idx+1 : len(model)-1]))
+			switch tag {
+			case "max":
+				isMax = true
+				model = strings.TrimSpace(model[:idx])
+			case "high", "medium", "low", "minimal", "xhigh", "ultra":
+				model = strings.TrimSpace(model[:idx])
+			}
+		}
+	} else if idx := strings.LastIndex(model, ":"); idx > 0 {
+		tag := strings.ToLower(strings.TrimSpace(model[idx+1:]))
+		switch tag {
+		case "max":
+			isMax = true
+			model = strings.TrimSpace(model[:idx])
+		case "high", "medium", "low", "minimal", "xhigh", "ultra":
+			model = strings.TrimSpace(model[:idx])
 		}
 	}
+
+	var cfg *config.Config
+	if r != nil {
+		cfg = r.cfg.Load()
+	}
+	if cfg != nil && len(cfg.ModelAliases) > 0 {
+		if realModel, ok := cfg.ModelAliases[model]; ok && realModel != "" {
+			model = realModel
+		}
+	}
+
+	preferMax := isMax
+	if cfg != nil && cfg.PreferMaxModels {
+		preferMax = true
+	}
+
+	if preferMax {
+		switch model {
+		case "deepseek/deepseek-v4-pro", "deepseek-v4-pro", "gpt-4o", "deepseek-reasoner":
+			return "deepseek/deepseek-v4-pro-max"
+		case "deepseek/deepseek-v4-flash", "deepseek-v4-flash", "deepseek-chat":
+			return "deepseek/deepseek-v4-flash-max"
+		case "openai/gpt-5.6-luna", "gpt-5.6-luna":
+			return "openai/gpt-5.6-luna-max"
+		}
+	}
+
 	return model
 }
 

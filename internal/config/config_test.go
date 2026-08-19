@@ -28,6 +28,7 @@ var envKeys = []string{
 	"SESSION_CREATE_MAX_PARALLEL_GLOBAL", "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
 	"RUN_FINISH_QUEUE_SIZE", "RUN_FINISH_INLINE_TIMEOUT", "RUNS_DRAIN_QUEUE_CAP", "RUNS_DRAIN_TTL",
 	"WEBHOOK_URL", "FALLBACK_AFTER_MS", "FALLBACK_MODEL", "ADOPT_CLI_SESSION", "WAITING_ROOM_CHAIN",
+	"PREFER_MAX_MODELS",
 }
 
 // TestMain strips ambient freebuff-proxy config env vars for the whole test
@@ -2159,6 +2160,74 @@ func TestActingUserID(t *testing.T) {
 		}
 		if cfg.ActingUserID != "user-json-legacy" {
 			t.Errorf("ActingUserID = %q, want user-json-legacy (legacy USER_ID JSON key)", cfg.ActingUserID)
+		}
+	})
+}
+
+func TestPreferMaxModels(t *testing.T) {
+	t.Run("default false", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.PreferMaxModels {
+			t.Error("PreferMaxModels default = true, want false")
+		}
+	})
+	t.Run("env true variants", func(t *testing.T) {
+		for _, val := range []string{"true", "1", "yes", "on", "TRUE"} {
+			clearEnv(t)
+			t.Setenv("AUTH_TOKENS", "tok-1")
+			t.Setenv("PREFER_MAX_MODELS", val)
+			cfg, err := Load("")
+			if err != nil {
+				t.Fatalf("Load with PREFER_MAX_MODELS=%q: %v", val, err)
+			}
+			if !cfg.PreferMaxModels {
+				t.Errorf("PreferMaxModels with env %q = false, want true", val)
+			}
+		}
+	})
+	t.Run("env false variants", func(t *testing.T) {
+		for _, val := range []string{"false", "0", "no", "off", "FALSE"} {
+			clearEnv(t)
+			t.Setenv("AUTH_TOKENS", "tok-1")
+			t.Setenv("PREFER_MAX_MODELS", val)
+			cfg, err := Load("")
+			if err != nil {
+				t.Fatalf("Load with PREFER_MAX_MODELS=%q: %v", val, err)
+			}
+			if cfg.PreferMaxModels {
+				t.Errorf("PreferMaxModels with env %q = true, want false", val)
+			}
+		}
+	})
+	t.Run("dotenv override", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok-1\nPREFER_MAX_MODELS=true\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.PreferMaxModels {
+			t.Error("PreferMaxModels from .env = false, want true")
+		}
+	})
+	t.Run("JSON config", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile("cfg.json", []byte(`{"AUTH_TOKENS":["tok-1"],"PREFER_MAX_MODELS":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load("cfg.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.PreferMaxModels {
+			t.Error("PreferMaxModels from JSON = false, want true")
 		}
 	})
 }

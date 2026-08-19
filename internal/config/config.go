@@ -141,6 +141,9 @@ type Config struct {
 	// RATE_LIMIT_BURST default 0 (defaults to 2 * RateLimitPerIP).
 	RateLimitPerIP float64
 	RateLimitBurst int
+	// PreferMaxModels maps standard model IDs to their -max extended context
+	// variants (PREFER_MAX_MODELS).
+	PreferMaxModels bool
 	// EnvFile is the .env path actually loaded ("" when none existed).
 	// Resolved via ResolveEnvFile (issue #39): ./.env in the working
 	// directory wins; otherwise the platform config dir is tried.
@@ -228,6 +231,7 @@ type rawConfig struct {
 	WaitingRoomChain                 bool     `json:"WAITING_ROOM_CHAIN"`
 	RateLimitPerIP                   *float64 `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int     `json:"RATE_LIMIT_BURST"`
+	PreferMaxModels                  bool     `json:"PREFER_MAX_MODELS"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -428,6 +432,7 @@ func Load(configPath string) (Config, error) {
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
+	overrideBool(&raw.PreferMaxModels, "PREFER_MAX_MODELS")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
@@ -680,6 +685,7 @@ func Load(configPath string) (Config, error) {
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
 		RateLimitBurst:                   rateLimitBurst,
+		PreferMaxModels:                  raw.PreferMaxModels,
 		EnvFile:                          envFileUsed,
 	}
 
@@ -1016,6 +1022,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
+	overrideBoolFrom(&raw.PreferMaxModels, get, "PREFER_MAX_MODELS")
 	return nil
 }
 

@@ -956,8 +956,62 @@ func TestExtractReasoningEffort(t *testing.T) {
 			payload: map[string]any{"model": "deepseek-v4-flash"},
 			want:    "",
 		},
+		{
+			name:    "model suffix parenthesized max",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro(max)"},
+			want:    "max",
+		},
+		{
+			name:    "model suffix parenthesized high",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro(high)"},
+			want:    "high",
+		},
+		{
+			name:    "model suffix parenthesized medium",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro(medium)"},
+			want:    "medium",
+		},
+		{
+			name:    "model suffix parenthesized low",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro(low)"},
+			want:    "low",
+		},
+		{
+			name:    "model suffix parenthesized minimal",
+			payload: map[string]any{"model": "meta/muse-spark(minimal)"},
+			want:    "minimal",
+		},
+		{
+			name:    "model suffix parenthesized ultra",
+			payload: map[string]any{"model": "openai/gpt-5.6-luna(ultra)"},
+			want:    "ultra",
+		},
+		{
+			name:    "model suffix parenthesized xhigh uppercase",
+			payload: map[string]any{"model": "openai/gpt-5.6-luna(XHIGH)"},
+			want:    "xhigh",
+		},
+		{
+			name:    "model suffix colon max",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro:max"},
+			want:    "max",
+		},
+		{
+			name:    "model suffix colon high",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro:high"},
+			want:    "high",
+		},
+		{
+			name:    "explicit reasoning_effort overrides model suffix",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro(max)", "reasoning_effort": "low"},
+			want:    "low",
+		},
+		{
+			name:    "explicit nested reasoning.effort overrides model suffix",
+			payload: map[string]any{"model": "deepseek/deepseek-v4-pro:max", "reasoning": map[string]any{"effort": "medium"}},
+			want:    "medium",
+		},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ExtractReasoningEffort(tc.payload); got != tc.want {
