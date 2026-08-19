@@ -1085,6 +1085,167 @@ func TestModelsHideUnavailable(t *testing.T) {
 	}
 }
 
+// TestModelsAllowList verifies MODELS_ALLOW prunes /v1/models to exactly the
+// allowlisted ids so picker clients never auto-select a model that 404s.
+func TestModelsAllowList(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash", modelA}
+	}, mock)
+
+	resp, data := doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("models is not JSON: %v: %s", err, data)
+	}
+	seen := map[string]bool{}
+	for _, m := range out.Data {
+		if m.ID != "deepseek/deepseek-v4-flash" && m.ID != modelA {
+			t.Errorf("model %q listed outside MODELS_ALLOW", m.ID)
+		}
+		seen[m.ID] = true
+	}
+	if !seen["deepseek/deepseek-v4-flash"] || !seen[modelA] {
+		t.Errorf("allowlisted models missing from /v1/models: %v", seen)
+	}
+	if len(out.Data) != 2 {
+		t.Errorf("model count = %d, want 2 (allowlisted only)", len(out.Data))
+	}
+}
+
+// TestModelsAllowRejectsChat pins the chat 404: a request whose resolved
+// model is outside MODELS_ALLOW is rejected before any upstream call.
+func TestModelsAllowRejectsChat(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash"}
+	}, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("chat status = %d, want 404: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("error body is not JSON: %v: %s", err, data)
+	}
+	if out.Error.Code != "model_not_found" {
+		t.Errorf("error.code = %q, want model_not_found", out.Error.Code)
+	}
+	if !strings.Contains(out.Error.Message, "MODELS_ALLOW") {
+		t.Errorf("error.message = %q, want a mention of MODELS_ALLOW", out.Error.Message)
+	}
+	if len(mock.RecordedChatHeaders) != 0 {
+		t.Error("upstream chat recorded for a rejected model, want none")
+	}
+}
+
+// TestModelsAllowResolvedAlias pins the allowlist contract: it compares
+// against the RESOLVED model id (after registry alias resolution), so a
+// client alias that resolves outside the list is rejected too.
+func TestModelsAllowResolvedAlias(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.ModelAliases = map[string]string{"glm-alias": modelA}
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash"}
+	}, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("glm-alias"), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("chat (alias) status = %d, want 404: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("error body is not JSON: %v: %s", err, data)
+	}
+	if out.Error.Code != "model_not_found" {
+		t.Errorf("error.code = %q, want model_not_found", out.Error.Code)
+	}
+	if len(mock.RecordedChatHeaders) != 0 {
+		t.Error("upstream chat recorded for a rejected alias, want none")
+	}
+}
+
+// TestModelsAllowMaxUpgrade pins the PREFER_MAX_MODELS interaction: the
+// allowlist sees the -max UPGRADED id, so a base-model client request is
+// allowed only when the upgraded variant is listed.
+func TestModelsAllowMaxUpgrade(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = testutil.SSEEvent(chunk("chatcmpl-max", 1, `"choices":[{"index":0,"delta":{"content":"ping"},"finish_reason":"stop"}]`))
+	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.PreferMaxModels = true
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-pro-max"}
+	}, mock)
+
+	// A base client id upgrades to the allowlisted -max variant → served.
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat (max-upgraded) status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	// A model outside the list stays rejected.
+	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("chat (disallowed) status = %d, want 404: %s", resp.StatusCode, data)
+	}
+}
+
+// TestModelsAllowEmptyIsOpen verifies an empty allowlist keeps current
+// behavior: every model is served and listed.
+func TestModelsAllowEmptyIsOpen(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = testutil.SSEEvent(chunk("chatcmpl-open", 1, `"choices":[{"index":0,"delta":{"content":"ping"},"finish_reason":"stop"}]`))
+	ts, _ := newTestServer(t, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("models is not JSON: %v: %s", err, data)
+	}
+	if len(out.Data) < 2 {
+		t.Fatalf("model count = %d, want full catalog (no allowlist)", len(out.Data))
+	}
+	var hasModelA, hasFlash bool
+	for _, m := range out.Data {
+		hasModelA = hasModelA || m.ID == modelA
+		hasFlash = hasFlash || m.ID == "deepseek/deepseek-v4-flash"
+	}
+	if !hasModelA || !hasFlash {
+		t.Errorf("full catalog missing models: modelA=%v flash=%v", hasModelA, hasFlash)
+	}
+}
+
 // TestSmokeDefaultsToFallbackModel verifies the smoke test with no explicit
 // model probes the guaranteed fallback (deepseek-v4-flash), not the
 // alphabetical-first catalog model (anthropic/claude-fable-5, a gated offer).

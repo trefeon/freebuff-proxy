@@ -1859,6 +1859,7 @@ func effectiveConfigKV(cfg *config.Config) map[string]string {
 		"SAFE_MODE":                             strconv.FormatBool(cfg.SafeMode),
 		"HYBRID_MODE":                           strconv.FormatBool(cfg.HybridMode),
 		"MODELS_HIDE_UNAVAILABLE":               strconv.FormatBool(cfg.ModelsHideUnavailable),
+		"MODELS_ALLOW":                          strings.Join(cfg.ModelsAllow, ","),
 		"CORS_ALLOWED_ORIGIN":                   cfg.CORSAllowedOrigin,
 		"REQUEST_JITTER":                        cfg.RequestJitter.String(),
 		"CLI_VERSION":                           cfg.CLIVersion,
@@ -2061,6 +2062,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	model := s.reg.ResolveModel(rawModel)
+	if !s.modelAllowed(model) {
+		// MODELS_ALLOW: the resolved model (alias + -max upgrade applied)
+		// is outside the operator allowlist — reject like an unknown model.
+		s.writeJSONError(w, http.StatusNotFound,
+			"model not allowed by MODELS_ALLOW", "invalid_request_error", "model_not_found", 0)
+		return
+	}
 	stream := false
 	if v, ok := raw["stream"].(bool); ok {
 		stream = v
@@ -3111,6 +3119,22 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 
 // --- models / healthz ---
 
+// modelAllowed reports whether a model may be served. An empty MODELS_ALLOW
+// allowlist imposes no restriction; otherwise the RESOLVED model id (after
+// registry alias resolution and -max upgrades) must be listed exactly.
+func (s *Server) modelAllowed(model string) bool {
+	allow := s.cfg.Load().ModelsAllow
+	if len(allow) == 0 {
+		return true
+	}
+	for _, id := range allow {
+		if id == model {
+			return true
+		}
+	}
+	return false
+}
+
 // handleModels serves the OpenAI model-list shape with the registry's
 // current models; created is pinned to server start so every entry matches.
 // Each row carries an advisory availability annotation derived from the pool
@@ -3134,6 +3158,11 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			// MODELS_HIDE_UNAVAILABLE=true: prune region/tier/quota-locked
 			// models so picker clients never auto-select one. Off by default
 			// because a stale signal could hide a working model.
+			continue
+		}
+		if !s.modelAllowed(id) {
+			// MODELS_ALLOW: prune ids outside the operator allowlist so
+			// picker clients never auto-select a model that would 404.
 			continue
 		}
 		data = append(data, map[string]any{

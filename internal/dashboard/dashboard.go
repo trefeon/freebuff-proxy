@@ -824,6 +824,7 @@ func (d *Dashboard) configData() configData {
 		{Key: "REQUEST_JITTER", Value: cfg.RequestJitter.String()},
 		{Key: "CLI_VERSION", Value: cfg.CLIVersion},
 		{Key: "MODEL_ALIASES", Value: fmt.Sprintf("%d alias(es)", len(cfg.ModelAliases)), Secret: true},
+		{Key: "MODELS_ALLOW", Value: strings.Join(cfg.ModelsAllow, ",")},
 		{Key: "TRANSIENT_RETRIES", Value: strconv.Itoa(cfg.TransientRetries)},
 	}
 	return cd
@@ -861,6 +862,7 @@ const defaultEnvTemplate = `# freebuff-proxy configuration (.env)
 #REQUEST_JITTER=0s
 #CLI_VERSION=0.10.7
 #MODEL_ALIASES=
+#MODELS_ALLOW=
 #TRANSIENT_RETRIES=1
 `
 

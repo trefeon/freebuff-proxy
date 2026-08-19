@@ -57,19 +57,26 @@ type Config struct {
 	// LogRingSize is the bounded in-memory log ring capacity behind the
 	// dashboard log viewer (LOG_RING_SIZE; default 500, validated 50..5000).
 	LogRingSize           int
-	MaxMessagesPerDay     int               // 0 = unlimited: per-token cap on successful chats per 24h
-	MaxSpendPerDay        int64             // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $0.50 restricted, compose by minimum, server-enforced) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
-	IdleRotationTimeout   time.Duration     // 0 = disabled: pause rotation/refresh after this idle period
-	SafeMode              bool              // true = apply recommended anti-ban safe defaults
-	HybridMode            bool              // true = relay client tokens like bridge AND serve token-less requests from the pool
-	ModelsHideUnavailable bool              // true = /v1/models prunes models marked unavailable (region/tier/quota)
-	CORSAllowedOrigin     string            // Access-Control-Allow-Origin for /v1/* responses (CORS_ALLOWED_ORIGIN; default "*")
-	RequestJitter         time.Duration     // random delay range [0, RequestJitter) before upstream chat calls
-	CLIVersion            string            // upstream CLI version string (default: 0.10.7)
-	ModelAliases          map[string]string // map model alias -> real model ID (#25)
-	TransientRetries      int               // max additional attempts after a transient transport failure (0 = disabled; default 1)
-	SessionPersist        bool              // true = persist session state to disk so restart resumes unexpired sessions (SESSION_PERSIST)
-	SessionStateFile      string            // path to the session state file (SESSION_STATE_FILE; default .freebuff-session-state.json)
+	MaxMessagesPerDay     int           // 0 = unlimited: per-token cap on successful chats per 24h
+	MaxSpendPerDay        int64         // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $0.50 restricted, compose by minimum, server-enforced) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
+	IdleRotationTimeout   time.Duration // 0 = disabled: pause rotation/refresh after this idle period
+	SafeMode              bool          // true = apply recommended anti-ban safe defaults
+	HybridMode            bool          // true = relay client tokens like bridge AND serve token-less requests from the pool
+	ModelsHideUnavailable bool          // true = /v1/models prunes models marked unavailable (region/tier/quota)
+	// ModelsAllow is the operator-set model allowlist (MODELS_ALLOW,
+	// comma-separated). When non-empty, /v1/models lists only the allowed
+	// ids and chat/messages/responses requests whose RESOLVED model (after
+	// registry alias resolution and -max upgrades) is not listed are
+	// rejected with 404 model_not_found ("model not allowed by
+	// MODELS_ALLOW"). Empty = no restriction.
+	ModelsAllow       []string
+	CORSAllowedOrigin string            // Access-Control-Allow-Origin for /v1/* responses (CORS_ALLOWED_ORIGIN; default "*")
+	RequestJitter     time.Duration     // random delay range [0, RequestJitter) before upstream chat calls
+	CLIVersion        string            // upstream CLI version string (default: 0.10.7)
+	ModelAliases      map[string]string // map model alias -> real model ID (#25)
+	TransientRetries  int               // max additional attempts after a transient transport failure (0 = disabled; default 1)
+	SessionPersist    bool              // true = persist session state to disk so restart resumes unexpired sessions (SESSION_PERSIST)
+	SessionStateFile  string            // path to the session state file (SESSION_STATE_FILE; default .freebuff-session-state.json)
 	// SessionCreateMaxParallelGlobal / SessionCreateMaxParallelPerModel cap
 	// concurrent in-flight session admissions (issue #86): the pool's create
 	// gate returns 503 when a cap is hit instead of hammering upstream.
@@ -206,46 +213,69 @@ type rawConfig struct {
 	ActingUserID       string   `json:"ACTING_USER_ID"`
 	// LegacyActingUserID is the pre-rename JSON key (USER_ID) — merged at
 	// the end of Load when no ACTING_USER_ID source set a value (#126).
-	LegacyActingUserID               string   `json:"USER_ID"`
-	TLSFingerprint                   string   `json:"TLS_FINGERPRINT"`
-	RegistryRefresh                  string   `json:"REGISTRY_REFRESH"`
-	DebugDump                        bool     `json:"DEBUG_DUMP"`
-	LogFile                          string   `json:"LOG_FILE"`
-	LogLevel                         string   `json:"LOG_LEVEL"`
-	LogFormat                        string   `json:"LOG_FORMAT"`
-	LogAccess                        bool     `json:"LOG_ACCESS"`
-	LogRingSize                      *int     `json:"LOG_RING_SIZE"`
-	MaxMessagesPerDay                *int     `json:"MAX_MESSAGES_PER_DAY"`
-	MaxSpendPerDay                   *int     `json:"MAX_SPEND_PER_DAY"`
-	IdleRotationTimeout              string   `json:"IDLE_ROTATION_TIMEOUT"`
-	SafeMode                         bool     `json:"SAFE_MODE"`
-	HybridMode                       bool     `json:"HYBRID_MODE"`
-	ModelsHideUnavailable            bool     `json:"MODELS_HIDE_UNAVAILABLE"`
-	CORSAllowedOrigin                string   `json:"CORS_ALLOWED_ORIGIN"`
-	RequestJitter                    string   `json:"REQUEST_JITTER"`
-	CLIVersion                       string   `json:"CLI_VERSION"`
-	ModelAliases                     string   `json:"MODEL_ALIASES"`
-	TransientRetries                 *int     `json:"TRANSIENT_RETRIES"`
-	SessionPersist                   bool     `json:"SESSION_PERSIST"`
-	SessionStateFile                 string   `json:"SESSION_STATE_FILE"`
-	HTTP2Upstream                    bool     `json:"HTTP2_UPSTREAM"`
-	SessionCreateMaxParallelGlobal   *int     `json:"SESSION_CREATE_MAX_PARALLEL_GLOBAL"`
-	SessionCreateMaxParallelPerModel *int     `json:"SESSION_CREATE_MAX_PARALLEL_PER_MODEL"`
-	RunFinishQueueSize               *int     `json:"RUN_FINISH_QUEUE_SIZE"`
-	RunFinishInlineTimeout           string   `json:"RUN_FINISH_INLINE_TIMEOUT"`
-	RunsDrainQueueCap                *int     `json:"RUNS_DRAIN_QUEUE_CAP"`
-	RunsDrainTTL                     string   `json:"RUNS_DRAIN_TTL"`
-	SessionReAdmitLead               string   `json:"SESSION_RE_ADMIT_LEAD"`
-	SessionProbeCacheTTL             string   `json:"SESSION_PROBE_CACHE_TTL"`
-	WebhookURL                       string   `json:"WEBHOOK_URL"`
-	FallbackAfter                    string   `json:"FALLBACK_AFTER_MS"`
-	FallbackModels                   string   `json:"FALLBACK_MODEL"`
-	AdoptCLISession                  bool     `json:"ADOPT_CLI_SESSION"`
-	WaitingRoomChain                 bool     `json:"WAITING_ROOM_CHAIN"`
-	RateLimitPerIP                   *float64 `json:"RATE_LIMIT_PER_IP"`
-	RateLimitBurst                   *int     `json:"RATE_LIMIT_BURST"`
-	PreferMaxModels                  bool     `json:"PREFER_MAX_MODELS"`
-	AccessTier                       string   `json:"ACCESS_TIER"`
+	LegacyActingUserID               string          `json:"USER_ID"`
+	TLSFingerprint                   string          `json:"TLS_FINGERPRINT"`
+	RegistryRefresh                  string          `json:"REGISTRY_REFRESH"`
+	DebugDump                        bool            `json:"DEBUG_DUMP"`
+	LogFile                          string          `json:"LOG_FILE"`
+	LogLevel                         string          `json:"LOG_LEVEL"`
+	LogFormat                        string          `json:"LOG_FORMAT"`
+	LogAccess                        bool            `json:"LOG_ACCESS"`
+	LogRingSize                      *int            `json:"LOG_RING_SIZE"`
+	MaxMessagesPerDay                *int            `json:"MAX_MESSAGES_PER_DAY"`
+	MaxSpendPerDay                   *int            `json:"MAX_SPEND_PER_DAY"`
+	IdleRotationTimeout              string          `json:"IDLE_ROTATION_TIMEOUT"`
+	SafeMode                         bool            `json:"SAFE_MODE"`
+	HybridMode                       bool            `json:"HYBRID_MODE"`
+	ModelsHideUnavailable            bool            `json:"MODELS_HIDE_UNAVAILABLE"`
+	ModelsAllow                      modelsAllowList `json:"MODELS_ALLOW"`
+	CORSAllowedOrigin                string          `json:"CORS_ALLOWED_ORIGIN"`
+	RequestJitter                    string          `json:"REQUEST_JITTER"`
+	CLIVersion                       string          `json:"CLI_VERSION"`
+	ModelAliases                     string          `json:"MODEL_ALIASES"`
+	TransientRetries                 *int            `json:"TRANSIENT_RETRIES"`
+	SessionPersist                   bool            `json:"SESSION_PERSIST"`
+	SessionStateFile                 string          `json:"SESSION_STATE_FILE"`
+	HTTP2Upstream                    bool            `json:"HTTP2_UPSTREAM"`
+	SessionCreateMaxParallelGlobal   *int            `json:"SESSION_CREATE_MAX_PARALLEL_GLOBAL"`
+	SessionCreateMaxParallelPerModel *int            `json:"SESSION_CREATE_MAX_PARALLEL_PER_MODEL"`
+	RunFinishQueueSize               *int            `json:"RUN_FINISH_QUEUE_SIZE"`
+	RunFinishInlineTimeout           string          `json:"RUN_FINISH_INLINE_TIMEOUT"`
+	RunsDrainQueueCap                *int            `json:"RUNS_DRAIN_QUEUE_CAP"`
+	RunsDrainTTL                     string          `json:"RUNS_DRAIN_TTL"`
+	SessionReAdmitLead               string          `json:"SESSION_RE_ADMIT_LEAD"`
+	SessionProbeCacheTTL             string          `json:"SESSION_PROBE_CACHE_TTL"`
+	WebhookURL                       string          `json:"WEBHOOK_URL"`
+	FallbackAfter                    string          `json:"FALLBACK_AFTER_MS"`
+	FallbackModels                   string          `json:"FALLBACK_MODEL"`
+	AdoptCLISession                  bool            `json:"ADOPT_CLI_SESSION"`
+	WaitingRoomChain                 bool            `json:"WAITING_ROOM_CHAIN"`
+	RateLimitPerIP                   *float64        `json:"RATE_LIMIT_PER_IP"`
+	RateLimitBurst                   *int            `json:"RATE_LIMIT_BURST"`
+	PreferMaxModels                  bool            `json:"PREFER_MAX_MODELS"`
+	AccessTier                       string          `json:"ACCESS_TIER"`
+}
+
+// modelsAllowList is the raw MODELS_ALLOW value. The README documents list
+// values as comma-separated in env and arrays in JSON, but operators write
+// JSON configs by hand — accepting a plain comma-separated string here too
+// avoids a hard parse error for the most natural single-value form. Both
+// shapes are normalized to a comma-separated string; Config.ModelsAllow
+// parses it with splitList in Load.
+type modelsAllowList string
+
+func (m *modelsAllowList) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*m = modelsAllowList(s)
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return fmt.Errorf("MODELS_ALLOW must be a comma-separated string or an array of strings, got: %s", data)
+	}
+	*m = modelsAllowList(strings.Join(arr, ","))
+	return nil
 }
 
 func defaultRawConfig() rawConfig {
@@ -423,6 +453,7 @@ func Load(configPath string) (Config, error) {
 	overrideBool(&raw.SafeMode, "SAFE_MODE")
 	overrideBool(&raw.HybridMode, "HYBRID_MODE")
 	overrideBool(&raw.ModelsHideUnavailable, "MODELS_HIDE_UNAVAILABLE")
+	overrideString((*string)(&raw.ModelsAllow), "MODELS_ALLOW")
 	overrideString(&raw.CORSAllowedOrigin, "CORS_ALLOWED_ORIGIN")
 	overrideString(&raw.RequestJitter, "REQUEST_JITTER")
 	overrideString(&raw.CLIVersion, "CLI_VERSION")
@@ -678,6 +709,7 @@ func Load(configPath string) (Config, error) {
 		SafeMode:                         raw.SafeMode,
 		HybridMode:                       raw.HybridMode,
 		ModelsHideUnavailable:            raw.ModelsHideUnavailable,
+		ModelsAllow:                      splitList(string(raw.ModelsAllow)),
 		CORSAllowedOrigin:                strings.TrimSpace(raw.CORSAllowedOrigin),
 		RequestJitter:                    requestJitter,
 		CLIVersion:                       strings.TrimSpace(raw.CLIVersion),
@@ -1017,6 +1049,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideBoolFrom(&raw.SafeMode, get, "SAFE_MODE")
 	overrideBoolFrom(&raw.HybridMode, get, "HYBRID_MODE")
 	overrideBoolFrom(&raw.ModelsHideUnavailable, get, "MODELS_HIDE_UNAVAILABLE")
+	overrideStringFrom((*string)(&raw.ModelsAllow), get, "MODELS_ALLOW")
 	overrideStringFrom(&raw.RequestJitter, get, "REQUEST_JITTER")
 	overrideStringFrom(&raw.CLIVersion, get, "CLI_VERSION")
 	overrideStringFrom(&raw.ModelAliases, get, "MODEL_ALIASES")

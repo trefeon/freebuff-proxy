@@ -20,7 +20,7 @@ var envKeys = []string{
 	"REQUEST_TIMEOUT", "SESSION_CALL_TIMEOUT", "API_KEYS", "COST_MODE", "ACTING_USER_ID", "USER_ID",
 	"TLS_FINGERPRINT", "REGISTRY_REFRESH", "DEBUG_DUMP", "LOG_FILE", "LOG_LEVEL", "LOG_FORMAT", "LOG_ACCESS", "LOG_RING_SIZE",
 	"MAX_MESSAGES_PER_DAY", "IDLE_ROTATION_TIMEOUT", "SAFE_MODE", "HYBRID_MODE",
-	"MODELS_HIDE_UNAVAILABLE", "CORS_ALLOWED_ORIGIN", "REQUEST_JITTER", "CLI_VERSION", "MODEL_ALIASES",
+	"MODELS_HIDE_UNAVAILABLE", "MODELS_ALLOW", "CORS_ALLOWED_ORIGIN", "REQUEST_JITTER", "CLI_VERSION", "MODEL_ALIASES",
 	"AUTO_DISCOVER_TOKEN", "TRANSIENT_RETRIES", "ADMIN_TOKEN",
 	"SESSION_PERSIST", "SESSION_STATE_FILE",
 	"HTTP2_UPSTREAM",
@@ -864,6 +864,130 @@ func TestDotenvEnvWins(t *testing.T) {
 	if cfg.ListenAddr != ":1111" {
 		t.Errorf("ListenAddr = %q, want :1111 (from .env, env does not set it)", cfg.ListenAddr)
 	}
+}
+
+// TestModelsAllowParsing verifies MODELS_ALLOW loads from env (single, multi,
+// whitespace, empty), JSON (array and comma-separated string), and .env,
+// landing in Config.ModelsAllow as an exact-id []string (drops empties).
+func TestModelsAllowParsing(t *testing.T) {
+	t.Run("env single", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		t.Setenv("MODELS_ALLOW", "deepseek/deepseek-v4-flash")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"deepseek/deepseek-v4-flash"}; !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("env multi whitespace", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		t.Setenv("MODELS_ALLOW", " deepseek/deepseek-v4-flash , z-ai/glm-5.2 , ,mimo/mimo-v2.5 ")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"deepseek/deepseek-v4-flash", "z-ai/glm-5.2", "mimo/mimo-v2.5"}
+		if !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("empty is no restriction", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		t.Setenv("MODELS_ALLOW", "  , ")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cfg.ModelsAllow) != 0 {
+			t.Errorf("ModelsAllow = %v, want empty (no restriction)", cfg.ModelsAllow)
+		}
+	})
+	t.Run("JSON array", func(t *testing.T) {
+		clearEnv(t)
+		path := filepath.Join(t.TempDir(), "config.json")
+		json := `{
+			"AUTH_TOKENS": ["tok-1"],
+			"MODELS_ALLOW": ["deepseek/deepseek-v4-flash", "z-ai/glm-5.2"]
+		}`
+		if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load (JSON array): %v", err)
+		}
+		want := []string{"deepseek/deepseek-v4-flash", "z-ai/glm-5.2"}
+		if !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("JSON string", func(t *testing.T) {
+		clearEnv(t)
+		path := filepath.Join(t.TempDir(), "config.json")
+		json := `{
+			"AUTH_TOKENS": ["tok-1"],
+			"MODELS_ALLOW": "deepseek/deepseek-v4-flash, z-ai/glm-5.2"
+		}`
+		if err := os.WriteFile(path, []byte(json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load (JSON string): %v", err)
+		}
+		want := []string{"deepseek/deepseek-v4-flash", "z-ai/glm-5.2"}
+		if !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("env overrides JSON", func(t *testing.T) {
+		clearEnv(t)
+		path := filepath.Join(t.TempDir(), "config.json")
+		if err := os.WriteFile(path, []byte(`{"AUTH_TOKENS":["tok-1"],"MODELS_ALLOW":["from-json"]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("MODELS_ALLOW", "from-env")
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if want := []string{"from-env"}; !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v (env beats JSON)", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("dotenv", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok-1\nMODELS_ALLOW=deepseek/deepseek-v4-flash, mimo/mimo-v2.5\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatalf("Load (.env): %v", err)
+		}
+		want := []string{"deepseek/deepseek-v4-flash", "mimo/mimo-v2.5"}
+		if !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v (from .env)", cfg.ModelsAllow, want)
+		}
+	})
+	t.Run("dotenv env wins", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok-1\nMODELS_ALLOW=from-dotenv\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("MODELS_ALLOW", "from-env")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if want := []string{"from-env"}; !equalStrings(cfg.ModelsAllow, want) {
+			t.Errorf("ModelsAllow = %v, want %v (env beats .env)", cfg.ModelsAllow, want)
+		}
+	})
 }
 
 // TestModelsHideUnavailableEnv verifies MODELS_HIDE_UNAVAILABLE loads from
@@ -1836,6 +1960,7 @@ func TestDotenvFullKeySet(t *testing.T) {
 		"REQUEST_JITTER=5s",
 		"CLI_VERSION=9.9.9",
 		"MODEL_ALIASES=gpt-4o:deepseek/deepseek-v4-flash,glm:z-ai/glm-5.2",
+		"MODELS_ALLOW=deepseek/deepseek-v4-flash,z-ai/glm-5.2",
 		"TRANSIENT_RETRIES=2",
 		"MAX_SPEND_PER_DAY=500",
 	}, "\n")
@@ -1864,6 +1989,9 @@ func TestDotenvFullKeySet(t *testing.T) {
 	}
 	if cfg.TransientRetries != 2 {
 		t.Errorf("TransientRetries = %d, want 2 (from .env)", cfg.TransientRetries)
+	}
+	if want := []string{"deepseek/deepseek-v4-flash", "z-ai/glm-5.2"}; !equalStrings(cfg.ModelsAllow, want) {
+		t.Errorf("ModelsAllow = %v, want %v (from .env)", cfg.ModelsAllow, want)
 	}
 	if cfg.MaxSpendPerDay != 500 {
 		t.Errorf("MaxSpendPerDay = %d, want 500 (from .env)", cfg.MaxSpendPerDay)
