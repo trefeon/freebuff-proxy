@@ -248,7 +248,7 @@ func anthropicMessagesToOpenAI(raw map[string]any) []any {
 		role, _ := msg["role"].(string)
 		switch role {
 		case "assistant":
-			messages = append(messages, anthropicAssistantToOpenAI(msg))
+			messages = append(messages, anthropicAssistantToOpenAI(msg)...)
 		case "user":
 			messages = append(messages, anthropicUserToOpenAI(msg)...)
 		case "system":
@@ -384,6 +384,8 @@ func anthropicAssistantToOpenAI(msg map[string]any) []any {
 	out := map[string]any{"role": "assistant"}
 	if len(textParts) > 0 {
 		out["content"] = normalizeOpenAIContent(textParts)
+	} else if len(toolCalls) > 0 {
+		out["content"] = nil
 	} else {
 		out["content"] = ""
 	}
@@ -686,7 +688,6 @@ type anthropicToolState struct {
 	blockClosed bool
 }
 
-// anthropicStreamState tracks the Anthropic event stream being rebuilt.
 type anthropicStreamState struct {
 	messageID       string
 	model           string
@@ -701,6 +702,11 @@ type anthropicStreamState struct {
 	finishReason    string
 	sawToolCall     bool
 	usage           map[string]any
+
+	thinkingParts []string
+	textParts     []string
+	toolIDs       []string
+	toolIDsSeen   map[string]bool
 }
 
 // relayAnthropicStream translates the upstream chat SSE stream into
@@ -827,6 +833,7 @@ func (s *Server) accumulateAnthropicChunk(send func(map[string]any), st *anthrop
 	}
 	// Reasoning deltas → thinking block.
 	if reasoning, ok := firstStringOf(delta, "reasoning_content", "reasoning", "reasoning_text", "thinking"); ok && reasoning != "" {
+		st.thinkingParts = append(st.thinkingParts, reasoning)
 		st.ensureThinking(send)
 		send(map[string]any{
 			"type":  "content_block_delta",
@@ -836,6 +843,7 @@ func (s *Server) accumulateAnthropicChunk(send func(map[string]any), st *anthrop
 	}
 	// Content deltas → text block (closes an open thinking block).
 	if content, ok := delta["content"].(string); ok && content != "" {
+		st.textParts = append(st.textParts, content)
 		st.ensureText(send)
 		send(map[string]any{
 			"type":  "content_block_delta",
@@ -859,6 +867,17 @@ func (s *Server) accumulateAnthropicChunk(send func(map[string]any), st *anthrop
 			ts := st.toolState(upIdx)
 			if id, ok := tc["id"].(string); ok && id != "" {
 				ts.id = id
+				if !st.toolIDsSeen[id] {
+					if st.toolIDsSeen == nil {
+						st.toolIDsSeen = make(map[string]bool)
+					}
+					st.toolIDsSeen[id] = true
+					st.toolIDs = append(st.toolIDs, id)
+					if sID := sanitizeToolID(id); sID != id && !st.toolIDsSeen[sID] {
+						st.toolIDsSeen[sID] = true
+						st.toolIDs = append(st.toolIDs, sID)
+					}
+				}
 			}
 			fn, _ := tc["function"].(map[string]any)
 			if fn == nil {
@@ -915,6 +934,14 @@ func (s *Server) finalizeAnthropicStream(send func(map[string]any), st *anthropi
 		"usage": usagePayload,
 	})
 	send(map[string]any{"type": "message_stop"})
+
+	if s.reasoningCache != nil && len(st.thinkingParts) > 0 {
+		thinking := strings.Join(st.thinkingParts, "")
+		if thinking != "" {
+			content := strings.Join(st.textParts, "")
+			s.reasoningCache.Put(st.toolIDs, content, "", thinking, "", st.model)
+		}
+	}
 }
 
 // ensureThinking opens the thinking content block on first reasoning delta.
@@ -1131,11 +1158,72 @@ func (s *Server) relayAnthropicJSON(ctx context.Context, w http.ResponseWriter, 
 			"failed to decode upstream stream: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
 		return
 	}
-	out, err := json.Marshal(anthropicMessageFromCompletion(completion, requestedModel))
+	msgObj := anthropicMessageFromCompletion(completion, requestedModel)
+	out, err := json.Marshal(msgObj)
 	if err != nil {
 		s.writeJSONError(w, http.StatusBadGateway,
 			"failed to build response: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
 		return
+	}
+	if s.reasoningCache != nil {
+		var reasoningStr string
+		var toolIDs []string
+		var contentStr string
+		var toolCallsJSON string
+		model, _ := msgObj["model"].(string)
+
+		if choices, ok := completion["choices"].([]any); ok && len(choices) > 0 {
+			if choice, ok := choices[0].(map[string]any); ok {
+				if msg, ok := choice["message"].(map[string]any); ok {
+					if rc, ok := msg["reasoning_content"].(string); ok && rc != "" {
+						reasoningStr = rc
+					} else if r, ok := msg["reasoning"].(string); ok && r != "" {
+						reasoningStr = r
+					}
+					if c, ok := msg["content"].(string); ok {
+						contentStr = c
+					}
+					if tcs, ok := msg["tool_calls"].([]any); ok && len(tcs) > 0 {
+						for _, raw := range tcs {
+							if tc, ok := raw.(map[string]any); ok {
+								if id, ok := tc["id"].(string); ok && id != "" {
+									toolIDs = append(toolIDs, id)
+									if sID := sanitizeToolID(id); sID != id && sID != "" {
+										toolIDs = append(toolIDs, sID)
+									}
+								}
+							}
+						}
+						if b, err := json.Marshal(tcs); err == nil {
+							toolCallsJSON = string(b)
+						}
+					}
+				}
+			}
+		}
+
+		if reasoningStr == "" || len(toolIDs) == 0 {
+			if contentBlocks, ok := msgObj["content"].([]any); ok {
+				for _, block := range contentBlocks {
+					if bm, ok := block.(map[string]any); ok {
+						bType, _ := bm["type"].(string)
+						if bType == "thinking" && reasoningStr == "" {
+							reasoningStr, _ = bm["thinking"].(string)
+						} else if bType == "tool_use" {
+							if id, ok := bm["id"].(string); ok && id != "" {
+								toolIDs = append(toolIDs, id)
+							}
+						} else if bType == "text" && contentStr == "" {
+							contentStr, _ = bm["text"].(string)
+						}
+					}
+				}
+			}
+		}
+
+		if reasoningStr != "" && len(toolIDs) > 0 {
+			s.reasoningCache.Put(toolIDs, contentStr, toolCallsJSON, reasoningStr, "", model)
+		}
 	}
 	if usage, ok := completion["usage"].(map[string]any); ok {
 		stats.usageTokens = usageTotalTokens(usage) // #122 spend ledger

@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -2269,5 +2270,452 @@ func TestAccumulatorXMLToolCallFinish(t *testing.T) {
 	fn := calls[0].(map[string]any)["function"].(map[string]any)
 	if fn["name"] != "bash" {
 		t.Errorf("fn name = %v, want 'bash'", fn["name"])
+	}
+}
+
+func TestNormalizeRequest_AssistantToolCallContentNull(t *testing.T) {
+	t.Run("empty string content with tool_calls becomes null", func(t *testing.T) {
+		body := map[string]any{
+			"model": "gpt-4o",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_1",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "get_weather",
+								"arguments": `{"city":"Tokyo"}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		if !bytes.Contains(out, []byte(`"content":null`)) {
+			t.Fatalf("expected output to contain '\"content\":null', got: %s", string(out))
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["content"] != nil {
+			t.Errorf("msg.content = %v, want nil", msg["content"])
+		}
+	})
+
+	t.Run("nil content with tool_calls remains null", func(t *testing.T) {
+		body := map[string]any{
+			"model": "gpt-4o",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": nil,
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_2",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "calc",
+								"arguments": `{}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		if !bytes.Contains(out, []byte(`"content":null`)) {
+			t.Fatalf("expected output to contain '\"content\":null', got: %s", string(out))
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["content"] != nil {
+			t.Errorf("msg.content = %v, want nil", msg["content"])
+		}
+	})
+
+	t.Run("non-empty content with tool_calls is preserved", func(t *testing.T) {
+		body := map[string]any{
+			"model": "gpt-4o",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "calling tool now",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_3",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "calc",
+								"arguments": `{}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["content"] != "calling tool now" {
+			t.Errorf("msg.content = %v, want 'calling tool now'", msg["content"])
+		}
+	})
+
+	t.Run("empty content without tool_calls remains empty string", func(t *testing.T) {
+		body := map[string]any{
+			"model": "gpt-4o",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "",
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["content"] != "" {
+			t.Errorf("msg.content = %v, want empty string", msg["content"])
+		}
+	})
+}
+
+func TestNormalizeRequest_LeakedThinkTagExtraction(t *testing.T) {
+	t.Run("leaked think tag extracted to reasoning_content with tool_calls", func(t *testing.T) {
+		body := map[string]any{
+			"model": "mimo/mimo-v2.5",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "<think>foo</think>",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_1",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "bash",
+								"arguments": `{"command":"ls"}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["reasoning_content"] != "foo" {
+			t.Errorf("reasoning_content = %v, want 'foo'", msg["reasoning_content"])
+		}
+		if msg["content"] != nil {
+			t.Errorf("content = %v, want nil", msg["content"])
+		}
+	})
+
+	t.Run("leaked think tag extracted leaving remaining content", func(t *testing.T) {
+		body := map[string]any{
+			"model": "mimo/mimo-v2.5",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "<think>planning steps</think>Here is my plan",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_2",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "bash",
+								"arguments": `{"command":"pwd"}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["reasoning_content"] != "planning steps" {
+			t.Errorf("reasoning_content = %v, want 'planning steps'", msg["reasoning_content"])
+		}
+		if msg["content"] != "Here is my plan" {
+			t.Errorf("content = %v, want 'Here is my plan'", msg["content"])
+		}
+	})
+
+	t.Run("other think tags variants", func(t *testing.T) {
+		for tag, raw := range map[string]string{
+			"thinking":       "<thinking>reason A</thinking>",
+			"reasoning":      "<reasoning>reason B</reasoning>",
+			"antml:thinking": "<antml:thinking>reason C</antml:thinking>",
+		} {
+			body := map[string]any{
+				"model": "gpt-4o",
+				"messages": []any{
+					map[string]any{
+						"role":    "assistant",
+						"content": raw,
+					},
+				},
+			}
+			out, err := NormalizeRequest(mustJSON(t, body), "")
+			if err != nil {
+				t.Fatalf("NormalizeRequest (%s): %v", tag, err)
+			}
+			got := decode(t, out)
+			msgs := got["messages"].([]any)
+			msg := msgs[0].(map[string]any)
+			if msg["reasoning_content"] == "" {
+				t.Errorf("tag %s: expected reasoning_content to be extracted, got empty", tag)
+			}
+		}
+	})
+}
+
+func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
+	defer SetReasoningLookup(nil)
+
+	SetReasoningLookup(func(toolID string, content, toolCallsJSON string) (string, string, bool) {
+		if toolID == "call_abc123" {
+			return "restored reasoning for call_abc123", "sig_123", true
+		}
+		if strings.Contains(toolCallsJSON, "fallback_tool") {
+			return "restored reasoning via json", "sig_json", true
+		}
+		return "", "", false
+	})
+
+	t.Run("restores reasoning_content by tool call id", func(t *testing.T) {
+		body := map[string]any{
+			"model": "mimo/mimo-v2.5",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "call_abc123",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "bash",
+								"arguments": `{"command":"whoami"}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["reasoning_content"] != "restored reasoning for call_abc123" {
+			t.Errorf("reasoning_content = %v, want 'restored reasoning for call_abc123'", msg["reasoning_content"])
+		}
+		if msg["content"] != nil {
+			t.Errorf("content = %v, want nil", msg["content"])
+		}
+	})
+
+	t.Run("restores reasoning_content by toolCalls JSON fallback", func(t *testing.T) {
+		body := map[string]any{
+			"model": "mimo/mimo-v2.5",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "unknown_id",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "fallback_tool",
+								"arguments": `{}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		if msg["reasoning_content"] != "restored reasoning via json" {
+			t.Errorf("reasoning_content = %v, want 'restored reasoning via json'", msg["reasoning_content"])
+		}
+	})
+
+	t.Run("strict reasoning model sets empty reasoning_content when lookup misses", func(t *testing.T) {
+		body := map[string]any{
+			"model": "mimo/mimo-v2.5",
+			"messages": []any{
+				map[string]any{
+					"role":    "assistant",
+					"content": "",
+					"tool_calls": []any{
+						map[string]any{
+							"id":   "not_cached_id",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "other_tool",
+								"arguments": `{}`,
+							},
+						},
+					},
+				},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		got := decode(t, out)
+		msgs := got["messages"].([]any)
+		msg := msgs[0].(map[string]any)
+		rc, ok := msg["reasoning_content"].(string)
+		if !ok || rc != "" {
+			t.Errorf("reasoning_content = %v (ok=%v), want empty string \"\"", msg["reasoning_content"], ok)
+		}
+	})
+}
+
+func TestNormalizeRequest_MiMoReasoningLadder(t *testing.T) {
+	for _, model := range []string{"mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"} {
+		for _, reqEffort := range []string{"low", "medium", "high", "max"} {
+			body := map[string]any{
+				"model":            model,
+				"reasoning_effort": reqEffort,
+				"messages": []any{
+					map[string]any{"role": "user", "content": "hi"},
+				},
+			}
+			out, err := NormalizeRequest(mustJSON(t, body), "")
+			if err != nil {
+				t.Fatalf("NormalizeRequest(%s, %s): %v", model, reqEffort, err)
+			}
+			got := decode(t, out)
+			if got["reasoning_effort"] != "high" {
+				t.Errorf("model %s with requested effort %s got %v, want 'high'", model, reqEffort, got["reasoning_effort"])
+			}
+		}
+	}
+
+	for _, eff := range []string{"low", "medium", "high", "xhigh", "max"} {
+		body := map[string]any{
+			"model":            "anthropic/claude-fable-5",
+			"reasoning_effort": eff,
+			"messages": []any{
+				map[string]any{"role": "user", "content": "hi"},
+			},
+		}
+		out, err := NormalizeRequest(mustJSON(t, body), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest(claude-fable-5, %s): %v", eff, err)
+		}
+		got := decode(t, out)
+		if got["reasoning_effort"] != eff {
+			t.Errorf("model anthropic/claude-fable-5 with requested effort %s got %v, want %s", eff, got["reasoning_effort"], eff)
+		}
+	}
+}
+
+func TestAccumulator_ToolCallInsideThinkTagFallback(t *testing.T) {
+	a := NewAccumulator()
+	chunk := `{"choices":[{"index":0,"delta":{"content":"","reasoning_content":"Thinking about what to do...\n<tool_call>\n<function=bash>\n<parameter=command>ls -la</parameter>\n</function>\n</tool_call>"}}]}`
+	if err := a.Add([]byte(chunk)); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	raw := a.Finish()
+	out := decode(t, raw)
+	choice := out["choices"].([]any)[0].(map[string]any)
+	if choice["finish_reason"] != "tool_calls" {
+		t.Errorf("finish_reason = %v, want 'tool_calls'", choice["finish_reason"])
+	}
+	msg := choice["message"].(map[string]any)
+	if msg["content"] != nil {
+		t.Errorf("content = %v, want nil", msg["content"])
+	}
+	if !bytes.Contains(raw, []byte(`"content":null`)) {
+		t.Errorf("raw JSON expected '\"content\":null', got: %s", string(raw))
+	}
+	rc, _ := msg["reasoning_content"].(string)
+	if strings.Contains(rc, "<tool_call>") || strings.Contains(rc, "</tool_call>") {
+		t.Errorf("reasoning_content still contains tool_call tags: %q", rc)
+	}
+	if !strings.Contains(rc, "Thinking about what to do...") {
+		t.Errorf("reasoning_content missing thought prefix: %q", rc)
+	}
+	calls, ok := msg["tool_calls"].([]any)
+	if !ok || len(calls) != 1 {
+		t.Fatalf("tool_calls = %v, want 1 tool call", msg["tool_calls"])
+	}
+	fn := calls[0].(map[string]any)["function"].(map[string]any)
+	if fn["name"] != "bash" {
+		t.Errorf("fn name = %v, want 'bash'", fn["name"])
+	}
+	if fn["arguments"] != `{"command":"ls -la"}` {
+		t.Errorf("fn arguments = %v, want '{\"command\":\"ls -la\"}'", fn["arguments"])
+	}
+}
+
+func TestAccumulator_AssistantToolCallContentNull(t *testing.T) {
+	a := NewAccumulator()
+	chunks := []string{
+		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_99","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"main.go\"}"}}]}}]}`,
+		`{"choices":[{"index":0,"delta":{"content":""}}]}`,
+		`{"choices":[{"index":0,"finish_reason":"tool_calls"}]}`,
+	}
+	for _, chunk := range chunks {
+		if err := a.Add([]byte(chunk)); err != nil {
+			t.Fatalf("Add: %v", err)
+		}
+	}
+	raw := a.Finish()
+	if !bytes.Contains(raw, []byte(`"content":null`)) {
+		t.Fatalf("expected output to contain '\"content\":null', got: %s", string(raw))
+	}
+	out := decode(t, raw)
+	choice := out["choices"].([]any)[0].(map[string]any)
+	msg := choice["message"].(map[string]any)
+	if msg["content"] != nil {
+		t.Errorf("msg.content = %v, want nil", msg["content"])
+	}
+	calls := msg["tool_calls"].([]any)
+	if len(calls) != 1 {
+		t.Fatalf("len(tool_calls) = %d, want 1", len(calls))
 	}
 }

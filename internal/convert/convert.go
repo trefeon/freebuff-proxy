@@ -144,8 +144,27 @@ const defaultReasoningEffort = "high"
 var modelReasoningEfforts = map[string][]string{
 	"deepseek/deepseek-v4-flash":      {"low", "high", "max"},
 	"deepseek/deepseek-v4-pro":        {"low", "high", "max"},
+	"mimo/mimo-v2.5":                  {"high"},
+	"mimo/mimo-v2.5-pro":              {"high"},
+	"anthropic/claude-fable-5":        {"low", "medium", "high", "xhigh", "max"},
 	"openai/gpt-5.6-luna":             {"low", "medium", "high", "xhigh", "max"},
 	"meta/muse-spark-1.2-contributor": {"minimal", "low", "medium", "high", "xhigh"},
+}
+
+// ReasoningLookupFn looks up cached reasoning content by tool ID or by content + toolCalls JSON.
+type ReasoningLookupFn func(toolID string, content, toolCallsJSON string) (reasoning, signature string, ok bool)
+
+var globalReasoningLookup atomic.Pointer[ReasoningLookupFn]
+
+// SetReasoningLookup installs a global reasoning lookup hook used to restore
+// missing reasoning_content on assistant messages in multi-turn requests.
+// Passing nil clears the hook.
+func SetReasoningLookup(fn ReasoningLookupFn) {
+	if fn == nil {
+		globalReasoningLookup.Store(nil)
+		return
+	}
+	globalReasoningLookup.Store(&fn)
 }
 
 // modelEffortLookup, when set, overrides modelReasoningEfforts for the model
@@ -233,6 +252,36 @@ func clampReasoningEffort(requested string, allowed []string, fallback string) s
 // model ids.
 func isDeepSeekModel(model string) bool {
 	return strings.HasSuffix(model, "deepseek-v4-flash") || strings.HasSuffix(model, "deepseek-v4-pro")
+}
+
+// isStrictReasoningModel reports whether the model requires an explicit reasoning_content
+// field on assistant messages with tool calls (e.g. MiMo, DeepSeek-V4, Kimi).
+func isStrictReasoningModel(model string) bool {
+	m := strings.ToLower(model)
+	return strings.Contains(m, "mimo") || strings.Contains(m, "deepseek-v4") || strings.Contains(m, "kimi")
+}
+
+var leakedThinkTagsRe = regexp.MustCompile(`(?is)<think>(.*?)</think>|<thinking>(.*?)</thinking>|<reasoning>(.*?)</reasoning>|<antml:thinking>(.*?)</antml:thinking>`)
+
+// extractLeakedThinkTags parses leaked reasoning tags (<think>, <thinking>,
+// <reasoning>, <antml:thinking>) from text content. It returns the concatenated
+// reasoning string and the cleaned content with tags stripped.
+func extractLeakedThinkTags(content string) (string, string) {
+	matches := leakedThinkTagsRe.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return "", content
+	}
+	var reasoningParts []string
+	for _, match := range matches {
+		for _, part := range match[1:] {
+			if part != "" {
+				reasoningParts = append(reasoningParts, part)
+				break
+			}
+		}
+	}
+	cleaned := leakedThinkTagsRe.ReplaceAllString(content, "")
+	return strings.Join(reasoningParts, "\n"), strings.TrimSpace(cleaned)
 }
 
 // normalizeReasoning rewrites the outbound reasoning_effort for the target
@@ -326,7 +375,8 @@ func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
 		out["model"] = modelOverride
 	}
 	normalizeReasoning(payload, out)
-	normalizeRoles(out)
+	model, _ := out["model"].(string)
+	normalizeMessages(out, model)
 	// Optional prompt compression (#58): drops middle non-tool turns and caps
 	// long content, env-gated (COMPRESS_PROMPT=true), never touching tool
 	// calls/results or the current message.
@@ -346,8 +396,10 @@ func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// normalizeRoles rewrites message role "developer" to "system" in place.
-func normalizeRoles(payload map[string]any) {
+// normalizeMessages rewrites message role "developer" to "system" in place,
+// extracts leaked think tags from assistant messages, restores missing reasoning_content
+// via globalReasoningLookup, and ensures content: null on assistant tool calls.
+func normalizeMessages(payload map[string]any, model string) {
 	msgs, _ := payload["messages"].([]any)
 	for _, m := range msgs {
 		msg, ok := m.(map[string]any)
@@ -357,7 +409,106 @@ func normalizeRoles(payload map[string]any) {
 		if role, _ := msg["role"].(string); role == "developer" {
 			msg["role"] = "system"
 		}
+		role, _ := msg["role"].(string)
+		if role != "assistant" {
+			continue
+		}
+
+		// Check for non-empty tool_calls
+		var hasToolCalls bool
+		var tcSlice []any
+		if tcs, ok := msg["tool_calls"].([]any); ok && len(tcs) > 0 {
+			hasToolCalls = true
+			tcSlice = tcs
+		} else if tcs, ok := msg["tool_calls"].([]map[string]any); ok && len(tcs) > 0 {
+			hasToolCalls = true
+			for _, tc := range tcs {
+				tcSlice = append(tcSlice, tc)
+			}
+		}
+
+		if hasToolCalls {
+			// If content is "" (empty string) or nil, set msg["content"] = nil (explicit JSON null)
+			cVal, hasContent := msg["content"]
+			if !hasContent || cVal == nil || cVal == "" {
+				msg["content"] = nil
+			}
+
+			// If reasoning_content is missing or ""
+			rc, _ := msg["reasoning_content"].(string)
+			if rc == "" {
+				// 1. If content has string, check extractLeakedThinkTags
+				if cStr, ok := cVal.(string); ok && cStr != "" {
+					reasoning, cleaned := extractLeakedThinkTags(cStr)
+					if reasoning != "" {
+						msg["reasoning_content"] = reasoning
+						rc = reasoning
+						if cleaned == "" {
+							msg["content"] = nil
+						} else {
+							msg["content"] = cleaned
+						}
+					}
+				}
+
+				// 2. If still missing, check globalReasoningLookup if set
+				if rc == "" {
+					if fnPtr := globalReasoningLookup.Load(); fnPtr != nil && *fnPtr != nil {
+						fn := *fnPtr
+						// Look up by each tool call id
+						for _, item := range tcSlice {
+							if tcMap, ok := item.(map[string]any); ok {
+								if id, _ := tcMap["id"].(string); id != "" {
+									if r, _, ok := fn(id, "", ""); ok && r != "" {
+										rc = r
+										msg["reasoning_content"] = r
+										break
+									}
+								}
+							}
+						}
+						// If still not found, look up by content + toolCalls JSON
+						if rc == "" {
+							cStr := ""
+							if s, ok := msg["content"].(string); ok {
+								cStr = s
+							}
+							var tcJSON string
+							if b, err := json.Marshal(msg["tool_calls"]); err == nil {
+								tcJSON = string(b)
+							}
+							if r, _, ok := fn("", cStr, tcJSON); ok && r != "" {
+								rc = r
+								msg["reasoning_content"] = r
+							}
+						}
+					}
+				}
+
+				// 3. If still missing and isStrictReasoningModel(model), set msg["reasoning_content"] = ""
+				if rc == "" && isStrictReasoningModel(model) {
+					msg["reasoning_content"] = ""
+				}
+			}
+		} else {
+			// No tool calls: still extract leaked think tags if reasoning_content is missing
+			rc, _ := msg["reasoning_content"].(string)
+			if rc == "" {
+				if cStr, ok := msg["content"].(string); ok && cStr != "" {
+					reasoning, cleaned := extractLeakedThinkTags(cStr)
+					if reasoning != "" {
+						msg["reasoning_content"] = reasoning
+						msg["content"] = cleaned
+					}
+				}
+			}
+		}
 	}
+}
+
+// normalizeRoles rewrites message role "developer" to "system" in place.
+func normalizeRoles(payload map[string]any) {
+	normalizeMessages(payload, "")
 }
 
 // ---------------------------------------------------------------------------
@@ -1678,6 +1829,7 @@ var (
 	fencedToolCallRe   = regexp.MustCompile("(?s)```(?:json|tool_?call)?\\s*\\n?(\\{\\s*\"(?:name|function)\"\\s*:\\s*.*?\\})\\s*\\n?```")
 	xmlFunctionHeadRe  = regexp.MustCompile(`(?i)<function[=\s]+["']?([^>"\s]+)["']?>`)
 	xmlParamRe         = regexp.MustCompile(`(?s)<parameter[=\s]+["']?([^>"\s]+)["']?>(.*?)</parameter>|<param[=\s]+["']?([^>"\s]+)["']?>(.*?)</param>`)
+	danglingToolTagsRe = regexp.MustCompile(`(?i)</?(?:tool_call|function_call|function|parameter|param|\|?tool[_\-]?call[_\-]?(?:start|end)\|?)(?:[=\s][^>]*)?>`)
 )
 
 // extractXMLToolCalls parses text-based tool calls (Hermes/Qwen/MiMo XML format)
@@ -1827,17 +1979,29 @@ func (a *Accumulator) Finish() []byte {
 		var extracted []*toolCall
 		content, extracted = extractXMLToolCalls(content)
 		if len(extracted) == 0 && len(a.reasoningParts) > 0 {
-			// Fallback: model might have emitted tool_call inside reasoning_content (smallcode finding)
+			// Fallback: model might have emitted tool_call inside reasoning_content (smallcode finding / Tau2 fix)
 			reasoningFull := strings.Join(a.reasoningParts, "")
-			_, extracted = extractXMLToolCalls(reasoningFull)
+			var cleanedReasoning string
+			cleanedReasoning, extracted = extractXMLToolCalls(reasoningFull)
+			if len(extracted) > 0 {
+				a.reasoningParts = []string{cleanedReasoning}
+			}
 		}
 		for idx, tc := range extracted {
 			a.toolCalls[idx] = tc
 		}
 	}
+	// Scrub dangling tool XML tags from content
+	content = danglingToolTagsRe.ReplaceAllString(content, "")
+	content = strings.TrimSpace(content)
+
+	var msgContent any = content
+	if len(a.toolCalls) > 0 && content == "" {
+		msgContent = nil
+	}
 	msg := map[string]any{
 		"role":    "assistant",
-		"content": content,
+		"content": msgContent,
 	}
 	if len(a.toolCalls) > 0 {
 		keys := make([]int, 0, len(a.toolCalls))

@@ -49,6 +49,7 @@ import (
 	"freebuff-proxy/internal/phasetiming"
 	"freebuff-proxy/internal/pool"
 	"freebuff-proxy/internal/ratelimit"
+	"freebuff-proxy/internal/reasoningcache"
 	"freebuff-proxy/internal/registry"
 	"freebuff-proxy/internal/runs"
 	"freebuff-proxy/internal/session"
@@ -108,6 +109,8 @@ type Server struct {
 	// the authToken lands (then AddToken + persist).
 	loginMu    sync.Mutex
 	loginFlows map[string]*loginFlow
+	// reasoningCache caches reasoning content and signatures for tool calls across turns.
+	reasoningCache *reasoningcache.Cache
 	// rateLimiter caps client request rates per source IP (issue #137).
 	rateLimiter *ratelimit.Limiter
 	// rateLimitRejections tracks total client requests rejected by local rate limiter.
@@ -180,6 +183,10 @@ func New(cfg *config.Config, p *pool.Pool, reg *registry.Registry, logger *slog.
 	}
 	s.dash = dashboard.New(func() *config.Config { return s.cfg.Load() }, p, reg, logger, logs, dashOpts...)
 	s.adminAuth = newAdminAuth()
+	s.reasoningCache = reasoningcache.New(10000, 2*time.Hour)
+	convert.SetReasoningLookup(func(toolID string, content, toolCallsJSON string) (string, string, bool) {
+		return s.reasoningCache.Get(toolID, content, toolCallsJSON)
+	})
 	return s
 }
 
@@ -2862,6 +2869,12 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 
 	relayed := time.Now()
 	first := true
+	var reasoningParts []string
+	var contentParts []string
+	var streamModel string
+	toolIDsMap := make(map[string]bool)
+	var toolIDs []string
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -2880,12 +2893,14 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 					_, _ = w.Write(convert.DONE)
 					flusher.Flush()
 				}
+				s.ingestStreamReasoning(streamModel, reasoningParts, contentParts, toolIDs)
 				return
 			}
 			if lc.done {
 				// Clean end of stream (EOF is not a scanner error).
 				_, _ = w.Write(convert.DONE)
 				flusher.Flush()
+				s.ingestStreamReasoning(streamModel, reasoningParts, contentParts, toolIDs)
 				return
 			}
 			clean, drop := convert.SanitizeChunk(lc.line)
@@ -2910,6 +2925,46 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 					stats.usageTokens = usageTotalTokens(u.Usage)
 				}
 			}
+			if bytes.Contains(clean, []byte(`"choices"`)) {
+				var chunk struct {
+					Model   string `json:"model"`
+					Choices []struct {
+						Delta struct {
+							Content          *string `json:"content"`
+							ReasoningContent *string `json:"reasoning_content"`
+							Reasoning        *string `json:"reasoning"`
+							Thinking         *string `json:"thinking"`
+							ToolCalls        []struct {
+								ID string `json:"id"`
+							} `json:"tool_calls"`
+						} `json:"delta"`
+					} `json:"choices"`
+				}
+				if json.Unmarshal(clean, &chunk) == nil {
+					if chunk.Model != "" {
+						streamModel = chunk.Model
+					}
+					if len(chunk.Choices) > 0 {
+						delta := chunk.Choices[0].Delta
+						if delta.ReasoningContent != nil && *delta.ReasoningContent != "" {
+							reasoningParts = append(reasoningParts, *delta.ReasoningContent)
+						} else if delta.Reasoning != nil && *delta.Reasoning != "" {
+							reasoningParts = append(reasoningParts, *delta.Reasoning)
+						} else if delta.Thinking != nil && *delta.Thinking != "" {
+							reasoningParts = append(reasoningParts, *delta.Thinking)
+						}
+						if delta.Content != nil && *delta.Content != "" {
+							contentParts = append(contentParts, *delta.Content)
+						}
+						for _, tc := range delta.ToolCalls {
+							if tc.ID != "" && !toolIDsMap[tc.ID] {
+								toolIDsMap[tc.ID] = true
+								toolIDs = append(toolIDs, tc.ID)
+							}
+						}
+					}
+				}
+			}
 			if first {
 				first = false
 				phasetiming.FromContext(ctx).Since(phasetiming.UpstreamTTFBMS, chatStart)
@@ -2925,6 +2980,18 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			flusher.Flush()
 		}
 	}
+}
+
+func (s *Server) ingestStreamReasoning(model string, reasoningParts, contentParts, toolIDs []string) {
+	if s.reasoningCache == nil || len(reasoningParts) == 0 {
+		return
+	}
+	rc := strings.Join(reasoningParts, "")
+	if rc == "" {
+		return
+	}
+	cStr := strings.Join(contentParts, "")
+	s.reasoningCache.Put(toolIDs, cStr, "", rc, "", model)
 }
 
 // relayJSON drains the upstream SSE stream through the accumulator and
@@ -2968,6 +3035,42 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 	if json.Unmarshal(out, &usageObj) == nil && usageObj.Usage != nil {
 		stats.usageTokens = usageTotalTokens(usageObj.Usage)
 	}
+
+	if s.reasoningCache != nil {
+		var comp map[string]any
+		if json.Unmarshal(out, &comp) == nil {
+			model, _ := comp["model"].(string)
+			if choices, ok := comp["choices"].([]any); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]any); ok {
+					if msg, ok := choice["message"].(map[string]any); ok {
+						rc, _ := msg["reasoning_content"].(string)
+						if rc == "" {
+							rc, _ = msg["reasoning"].(string)
+						}
+						if rc != "" {
+							var toolIDs []string
+							var tcJSON string
+							if tcs, ok := msg["tool_calls"].([]any); ok && len(tcs) > 0 {
+								for _, raw := range tcs {
+									if tc, ok := raw.(map[string]any); ok {
+										if id, ok := tc["id"].(string); ok && id != "" {
+											toolIDs = append(toolIDs, id)
+										}
+									}
+								}
+								if b, err := json.Marshal(tcs); err == nil {
+									tcJSON = string(b)
+								}
+							}
+							cStr, _ := msg["content"].(string)
+							s.reasoningCache.Put(toolIDs, cStr, tcJSON, rc, "", model)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(out)

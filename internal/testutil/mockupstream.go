@@ -678,3 +678,20 @@ func (m *MockUpstream) SessionProbesSnapshot() int {
 	defer m.mu.Unlock()
 	return m.SessionProbes
 }
+
+// LastChatBody returns the most recently recorded chat request body, or "".
+func (m *MockUpstream) LastChatBody() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.RecordedChatBodies) == 0 {
+		return ""
+	}
+	return m.RecordedChatBodies[len(m.RecordedChatBodies)-1]
+}
+
+// RecordedChatBodiesSnapshot returns a locked copy of the recorded chat bodies.
+func (m *MockUpstream) RecordedChatBodiesSnapshot() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.RecordedChatBodies...)
+}

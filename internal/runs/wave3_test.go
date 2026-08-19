@@ -395,7 +395,7 @@ func TestRunPersistenceAdoptAndFinish(t *testing.T) {
 		t.Fatalf("run not persisted after START (got %+v)", pr)
 	}
 	mgr1.Release(run)
-
+	mgr1.Shutdown(context.Background())
 	// Second process (restart) on the same store: Acquire must ADOPT the
 	// persisted run without a new START.
 	mgr2, _ := newTestManagerOpts(t, mock, Options{RotationInterval: time.Hour, Store: store})
