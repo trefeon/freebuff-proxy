@@ -45,6 +45,10 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# ── git worktrees + SDD scratch ──
+.worktrees/
+.superpowers/
+
 # ── misc ──
 node_modules/
 *.tmp
