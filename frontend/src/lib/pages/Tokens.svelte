@@ -103,7 +103,7 @@
     try {
       const newKey = generateRandomApiKey();
       const cfgRes = await fetchAPI('/admin/api/config');
-      const envContent = cfgRes?.env || '';
+      const envContent = cfgRes?.env_content || '';
       const regex = /^\s*API_KEYS=(.*)$/m;
       const match = envContent.match(regex);
       const existing = match ? match[1].trim() : '';
