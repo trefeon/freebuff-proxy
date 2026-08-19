@@ -525,11 +525,6 @@ func normalizeMessages(payload map[string]any, model string) {
 	}
 }
 
-// normalizeRoles rewrites message role "developer" to "system" in place.
-func normalizeRoles(payload map[string]any) {
-	normalizeMessages(payload, "")
-}
-
 // ---------------------------------------------------------------------------
 // Optional prompt & context compression (issue #58).
 //

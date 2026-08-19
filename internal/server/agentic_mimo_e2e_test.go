@@ -1260,7 +1260,8 @@ func TestAgenticMiMoE2E(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 
-			if turnCount == 1 {
+			switch turnCount {
+			case 1:
 				stream := buildSSEChunk("chatcmpl-b1", mimoModelID, map[string]any{
 					"role":              "assistant",
 					"reasoning_content": reasoning1,
@@ -1281,7 +1282,7 @@ func TestAgenticMiMoE2E(t *testing.T) {
 					buildSSEChunk("chatcmpl-b1", mimoModelID, map[string]any{}, "tool_calls") +
 					"data: [DONE]\n\n"
 				_, _ = io.WriteString(w, stream)
-			} else if turnCount == 2 {
+			case 2:
 				// Verify restored reasoning and content: null
 				msgs := upReq["messages"].([]any)
 				asstMsgs := findMessagesByRole(msgs, "assistant")
