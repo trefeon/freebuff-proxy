@@ -123,6 +123,11 @@ func TestDefaultFallbackModels(t *testing.T) {
 	if cfg.FallbackModels["deepseek/deepseek-v4-pro"] != "deepseek/deepseek-v4-flash" {
 		t.Error("deepseek-v4-pro must fall back to deepseek-v4-flash")
 	}
+	// Muse spark's capacity gate is a queue (Convex, 60 RPM/team); its
+	// upstream fallback target is deepseek-v4-pro (MUSE_SPARK_FALLBACK_MODEL_ID).
+	if got := cfg.FallbackModels["meta/muse-spark-1.2-contributor"]; got != "deepseek/deepseek-v4-pro" {
+		t.Errorf("muse-spark must fall back to deepseek-v4-pro, got %q", got)
+	}
 }
 
 func TestFallbackModelsExplicitSuppressesDefaults(t *testing.T) {

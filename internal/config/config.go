@@ -125,9 +125,13 @@ type Config struct {
 	// FALLBACK_MODEL=model1=fallback1,model2=fallback2). Defaults (applied
 	// only when FALLBACK_MODEL is unset): the premium free-catalog rows
 	// (deepseek-v4-pro, gpt-5.6-luna, minimax-m3, claude-fable-5,
-	// glm-5.2) → deepseek/deepseek-v4-flash, mirroring the CLI's hero flip
-	// to the unlimited flash model once the premium daily pool runs out
-	// (reference freebuff-models.ts getRecommendedFreebuffModelId).
+	// glm-5.2) → deepseek/deepseek-v4-flash. The proxy path fires only
+	// when the pool surfaces a waiting-room/queue delay ≥ FallbackAfter
+	// for the requested model (issue #100) — 429 quota exhaustion NEVER
+	// falls back (anti-ban invariant §10). The premium→flash targets
+	// mirror the CLI's getRecommendedFreebuffModelId hero pick; the
+	// muse→deepseek-v4-pro target mirrors the upstream
+	// MUSE_SPARK_FALLBACK_MODEL_ID.
 	FallbackModels map[string]string
 	// AdoptCLISession, when enabled (ADOPT_CLI_SESSION=false default),
 	// makes the proxy behave like the official CLI for a single account:
@@ -343,20 +347,19 @@ var defaultModelAliases = map[string]string{
 
 // defaultFallbackModels returns the FALLBACK_MODEL defaults (issue #100):
 // the premium free-catalog rows fall back to the always-available flash
-// model once their queue wait passes FALLBACK_AFTER_MS — the proxy-side
-// mirror of the CLI hero flip to the unlimited flash model when the premium
-// daily pool runs out (reference freebuff-models.ts
-// getRecommendedFreebuffModelId). Capacity-gated rows (e.g.
-// meta/muse-spark-*) are not in the free catalog, so operators extend via
-// FALLBACK_MODEL themselves; the reference MUSE_SPARK_FALLBACK_MODEL_ID
-// pattern (→ deepseek-v4-pro) is documented in the README.
+// model once their queue wait passes FALLBACK_AFTER_MS — mirrors the CLI
+// hero pick once the premium daily pool runs out (reference
+// getRecommendedFreebuffModelId); muse targets deepseek-v4-pro per
+// MUSE_SPARK_FALLBACK_MODEL_ID. Trigger is queue-wait ≥ FALLBACK_AFTER_MS
+// only — never 429s.
 func defaultFallbackModels() map[string]string {
 	return map[string]string{
-		"deepseek/deepseek-v4-pro": "deepseek/deepseek-v4-flash",
-		"openai/gpt-5.6-luna":      "deepseek/deepseek-v4-flash",
-		"minimax/minimax-m3":       "deepseek/deepseek-v4-flash",
-		"anthropic/claude-fable-5": "deepseek/deepseek-v4-flash",
-		"z-ai/glm-5.2":             "deepseek/deepseek-v4-flash",
+		"deepseek/deepseek-v4-pro":        "deepseek/deepseek-v4-flash",
+		"openai/gpt-5.6-luna":             "deepseek/deepseek-v4-flash",
+		"minimax/minimax-m3":              "deepseek/deepseek-v4-flash",
+		"anthropic/claude-fable-5":        "deepseek/deepseek-v4-flash",
+		"z-ai/glm-5.2":                    "deepseek/deepseek-v4-flash",
+		"meta/muse-spark-1.2-contributor": "deepseek/deepseek-v4-pro",
 	}
 }
 
