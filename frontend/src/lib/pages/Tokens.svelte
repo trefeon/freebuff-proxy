@@ -19,6 +19,8 @@
   let clientKeyMessage = $state('');
   let clientKeyOK = $state(true);
   let generatingKey = $state(false);
+  let apiKeys = $state([]);
+  let copiedKeyIdx = $state(null);
 
   // OAuth wizard state (moved from Setup page: token generation belongs
   // next to the pool it feeds)
@@ -84,6 +86,17 @@
   async function fetchData() {
     try {
       data = await fetchAPI('/admin/api/tokens');
+      // Load the existing client API keys so the card can offer them for
+      // one-click copy when setting up another client.
+      try {
+        const cfgRes = await fetchAPI('/admin/api/config');
+        const envContent = cfgRes?.env_content || '';
+        const m = envContent.match(/^\s*API_KEYS=(.*)$/m);
+        const val = m ? m[1].trim() : '';
+        apiKeys = val ? val.split(',').map(s => s.trim()).filter(Boolean) : [];
+      } catch {
+        apiKeys = [];
+      }
       error = '';
     } catch (e) {
       error = e.message || 'Failed to fetch tokens';
@@ -120,6 +133,7 @@
         : (result.message || 'Failed to save client API key');
       if (clientKeyOK) {
         try { await navigator.clipboard.writeText(newKey); } catch { /* clipboard unavailable */ }
+        fetchData();
       }
     } catch (e) {
       clientKeyOK = false;
@@ -129,6 +143,16 @@
     }
   }
 
+
+  async function copyKey(idx) {
+    const key = apiKeys[idx];
+    if (!key) return;
+    try {
+      await navigator.clipboard.writeText(key);
+      copiedKeyIdx = idx;
+      setTimeout(() => { if (copiedKeyIdx === idx) copiedKeyIdx = null; }, 1800);
+    } catch { /* clipboard unavailable */ }
+  }
 
   async function addToken(e) {
     e.preventDefault();
@@ -384,6 +408,26 @@
   <div class="fp-card p-5 border-[var(--fp-teal)]/30">
     <h2 class="text-base font-semibold text-white mb-1">Client API Key</h2>
     <p class="text-xs text-[var(--fp-muted)] mb-3">Generate a <code class="font-mono text-[var(--fp-teal)]">sk-fb-...</code> credential for clients (<code class="font-mono">omp</code>, curl) to authenticate against this proxy. Appended to <code class="font-mono text-[var(--fp-teal)]">API_KEYS</code> in <code class="font-mono">.env</code>.</p>
+
+    {#if apiKeys.length > 0}
+      <div class="space-y-2 mb-3">
+        <p class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)] font-semibold">Existing keys — click to copy for another client</p>
+        {#each apiKeys as key, idx}
+          <button
+            type="button"
+            onclick={() => copyKey(idx)}
+            title="Click to copy"
+            class="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg fp-inset text-left font-mono text-xs hover:border-[var(--fp-teal)]/40 transition-all focus-visible:ring-2 focus-visible:ring-[var(--fp-teal)]"
+          >
+            <span class="truncate text-[var(--fp-teal)]">{key}</span>
+            <span class="shrink-0 text-[var(--fp-muted)]">
+              {copiedKeyIdx === idx ? '✓ copied' : 'copy'}
+            </span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
     {#if clientKeyMessage}
       <Alert variant={clientKeyOK ? 'success' : 'error'} message={clientKeyMessage} dismissable={false} />
     {/if}
