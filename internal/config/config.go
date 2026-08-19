@@ -144,6 +144,19 @@ type Config struct {
 	// PreferMaxModels maps standard model IDs to their -max extended context
 	// variants (PREFER_MAX_MODELS).
 	PreferMaxModels bool
+	// AccessTier is the account access tier the proxy assumes for -max model
+	// upgrades (ACCESS_TIER, or learned at runtime from the upstream session
+	// probe/admission response's accessTier field): "full" (default when
+	// empty) or "limited". A limited tier may only reach -max variants that
+	// are explicitly in registry.LimitedTierModels — none today — so the
+	// registry keeps the base model instead of tripping upstream 403
+	// free_mode_invalid_agent_model (the -max agent roots require full
+	// access). Empty = unknown = treated as full.
+	AccessTier string
+	// AccessTierExplicit records that AccessTier came from a configured
+	// source (ACCESS_TIER env/.env/JSON), so runtime session-probe
+	// observations never override the operator's explicit choice.
+	AccessTierExplicit bool
 	// EnvFile is the .env path actually loaded ("" when none existed).
 	// Resolved via ResolveEnvFile (issue #39): ./.env in the working
 	// directory wins; otherwise the platform config dir is tried.
@@ -232,6 +245,7 @@ type rawConfig struct {
 	RateLimitPerIP                   *float64 `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int     `json:"RATE_LIMIT_BURST"`
 	PreferMaxModels                  bool     `json:"PREFER_MAX_MODELS"`
+	AccessTier                       string   `json:"ACCESS_TIER"`
 }
 
 func defaultRawConfig() rawConfig {
@@ -433,6 +447,7 @@ func Load(configPath string) (Config, error) {
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
 	overrideBool(&raw.PreferMaxModels, "PREFER_MAX_MODELS")
+	overrideString(&raw.AccessTier, "ACCESS_TIER")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
@@ -686,6 +701,8 @@ func Load(configPath string) (Config, error) {
 		RateLimitPerIP:                   rateLimitPerIP,
 		RateLimitBurst:                   rateLimitBurst,
 		PreferMaxModels:                  raw.PreferMaxModels,
+		AccessTier:                       strings.TrimSpace(raw.AccessTier),
+		AccessTierExplicit:               strings.TrimSpace(raw.AccessTier) != "",
 		EnvFile:                          envFileUsed,
 	}
 
@@ -1023,6 +1040,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
 	overrideBoolFrom(&raw.PreferMaxModels, get, "PREFER_MAX_MODELS")
+	overrideStringFrom(&raw.AccessTier, get, "ACCESS_TIER")
 	return nil
 }
 

@@ -416,15 +416,29 @@ func (m *MockUpstream) handleProbe(w http.ResponseWriter) {
 	m.mu.Lock()
 	instanceID := m.InstanceID
 	limits := m.RateLimitsByModel
+	tier, countryCode, countryBlockReason := m.AccessTier, m.CountryCode, m.CountryBlockReason
 	m.mu.Unlock()
 	if len(limits) == 0 {
 		limits = defaultProbeQuota
 	}
-	writeJSON(w, 200, map[string]any{
+	body := map[string]any{
 		"status":            "active",
 		"instanceId":        instanceID,
 		"rateLimitsByModel": limits,
-	})
+	}
+	// The real probe (x-freebuff-include-unused-rate-limits) carries the
+	// account tier/region state too; mirror that so probe tests can assert
+	// accessTier capture without a custom SessionHandler.
+	if tier != "" {
+		body["accessTier"] = tier
+	}
+	if countryCode != "" {
+		body["countryCode"] = countryCode
+	}
+	if countryBlockReason != "" {
+		body["countryBlockReason"] = countryBlockReason
+	}
+	writeJSON(w, 200, body)
 }
 
 func (m *MockUpstream) handleAgentRuns(w http.ResponseWriter, r *http.Request) {

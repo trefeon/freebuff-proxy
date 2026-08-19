@@ -28,7 +28,7 @@ var envKeys = []string{
 	"SESSION_CREATE_MAX_PARALLEL_GLOBAL", "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
 	"RUN_FINISH_QUEUE_SIZE", "RUN_FINISH_INLINE_TIMEOUT", "RUNS_DRAIN_QUEUE_CAP", "RUNS_DRAIN_TTL",
 	"WEBHOOK_URL", "FALLBACK_AFTER_MS", "FALLBACK_MODEL", "ADOPT_CLI_SESSION", "WAITING_ROOM_CHAIN",
-	"PREFER_MAX_MODELS",
+	"PREFER_MAX_MODELS", "ACCESS_TIER",
 }
 
 // TestMain strips ambient freebuff-proxy config env vars for the whole test
@@ -2228,6 +2228,97 @@ func TestPreferMaxModels(t *testing.T) {
 		}
 		if !cfg.PreferMaxModels {
 			t.Error("PreferMaxModels from JSON = false, want true")
+		}
+	})
+}
+
+// TestAccessTier verifies ACCESS_TIER resolves from the environment, the
+// .env file, and the JSON config (optional key; empty default = unknown =
+// full). AccessTierExplicit records that a configured source set the value,
+// so runtime session-probe observations never override the operator choice.
+func TestAccessTier(t *testing.T) {
+	t.Run("default empty", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "" {
+			t.Errorf("AccessTier default = %q, want empty (unknown = full)", cfg.AccessTier)
+		}
+		if cfg.AccessTierExplicit {
+			t.Error("AccessTierExplicit default = true, want false")
+		}
+	})
+	t.Run("env", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		t.Setenv("ACCESS_TIER", "limited")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "limited" {
+			t.Errorf("AccessTier = %q, want limited (env)", cfg.AccessTier)
+		}
+		if !cfg.AccessTierExplicit {
+			t.Error("AccessTierExplicit = false, want true (env set the value)")
+		}
+	})
+	t.Run("env whitespace trimmed", func(t *testing.T) {
+		clearEnv(t)
+		t.Setenv("AUTH_TOKENS", "tok-1")
+		t.Setenv("ACCESS_TIER", "  limited  ")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "limited" {
+			t.Errorf("AccessTier = %q, want limited (trimmed)", cfg.AccessTier)
+		}
+	})
+	t.Run("dotenv", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok-1\nACCESS_TIER=limited\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "limited" {
+			t.Errorf("AccessTier from .env = %q, want limited", cfg.AccessTier)
+		}
+	})
+	t.Run("JSON config", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile("cfg.json", []byte(`{"AUTH_TOKENS":["tok-1"],"ACCESS_TIER":"limited"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load("cfg.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "limited" {
+			t.Errorf("AccessTier from JSON = %q, want limited", cfg.AccessTier)
+		}
+		if !cfg.AccessTierExplicit {
+			t.Error("AccessTierExplicit = false with JSON ACCESS_TIER, want true")
+		}
+	})
+	t.Run("env beats dotenv", func(t *testing.T) {
+		clearEnv(t)
+		if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok-1\nACCESS_TIER=limited\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("ACCESS_TIER", "full")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AccessTier != "full" {
+			t.Errorf("AccessTier = %q, want full (env beats .env)", cfg.AccessTier)
 		}
 	})
 }

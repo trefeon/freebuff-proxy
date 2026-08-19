@@ -67,9 +67,45 @@ const maxFetchBytes = 2 << 20
 // accounts (egress region demotion, privacy-signal demotion). DeepSeek Flash
 // was disabled for limited tier on 2026-08-18 due to upstream provider price
 // increases (mimo-v2.5 remains active for limited tier).
-// Used to annotate /v1/models availability per token tier.
+// Used to annotate /v1/models availability per token tier and to gate -max
+// upgrades for limited-tier tokens (no -max variant is in the set today, so
+// limited accounts always keep the base model).
 var LimitedTierModels = map[string]bool{
 	"mimo/mimo-v2.5": true,
+}
+
+// maxVariants maps each base model id to its -max extended-context variant
+// (PREFER_MAX_MODELS). Both the provider-qualified id
+// ("deepseek/deepseek-v4-pro") and the bare id ("deepseek-v4-pro") are
+// accepted; the returned variant is always provider-qualified.
+var maxVariants = map[string]string{
+	"deepseek/deepseek-v4-pro":   "deepseek/deepseek-v4-pro-max",
+	"deepseek-v4-pro":            "deepseek/deepseek-v4-pro-max",
+	"deepseek/deepseek-v4-flash": "deepseek/deepseek-v4-flash-max",
+	"deepseek-v4-flash":          "deepseek/deepseek-v4-flash-max",
+	"openai/gpt-5.6-luna":        "openai/gpt-5.6-luna-max",
+	"gpt-5.6-luna":               "openai/gpt-5.6-luna-max",
+}
+
+// legacyMaxVariants covers stock client model names that reach ResolveModel
+// when MODEL_ALIASES is explicitly configured without them (the default
+// aliases resolve gpt-4o → deepseek-v4-pro and deepseek-chat →
+// deepseek-v4-flash first; deepseek-reasoner has no alias at all). They keep
+// the historic PREFER_MAX_MODELS behavior through the same routed/tier
+// gates as MaxVariantOf.
+var legacyMaxVariants = map[string]string{
+	"gpt-4o":            "deepseek/deepseek-v4-pro-max",
+	"deepseek-reasoner": "deepseek/deepseek-v4-pro-max",
+	"deepseek-chat":     "deepseek/deepseek-v4-flash-max",
+}
+
+// MaxVariantOf returns the -max extended-context variant for base model,
+// or ("", false) when the model has no -max variant. Accepts both the
+// provider-qualified id ("deepseek/deepseek-v4-pro") and the bare id
+// ("deepseek-v4-pro"); the returned variant is always provider-qualified.
+func MaxVariantOf(model string) (string, bool) {
+	v, ok := maxVariants[model]
+	return v, ok
 }
 
 // fallbackAgents is the hardcoded model→agent fallback used when the sources
@@ -312,7 +348,13 @@ func (r *Registry) LoadFallback() {
 // ResolveModel resolves an alias (e.g. "gpt-4o") to its real model ID if mapped
 // in cfg.ModelAliases, strips reasoning effort / max suffixes (e.g. "(max)",
 // "(high)", ":max"), and maps models to their -max extended context variants
-// when requested by suffix or when cfg.PreferMaxModels is enabled.
+// when requested by suffix or when cfg.PreferMaxModels is enabled. A -max
+// upgrade applies ONLY when the upgraded variant is actually routed by the
+// live registry (a phantom variant would trip upstream 403
+// free_mode_invalid_agent_model) and the config's access tier may serve it:
+// a limited tier (ACCESS_TIER or learned from the session probe) is never
+// upgraded to a variant outside LimitedTierModels. When the upgrade is not
+// applicable the base model is kept.
 func (r *Registry) ResolveModel(model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
@@ -358,17 +400,62 @@ func (r *Registry) ResolveModel(model string) string {
 	}
 
 	if preferMax {
-		switch model {
-		case "deepseek/deepseek-v4-pro", "deepseek-v4-pro", "gpt-4o", "deepseek-reasoner":
-			return "deepseek/deepseek-v4-pro-max"
-		case "deepseek/deepseek-v4-flash", "deepseek-v4-flash", "deepseek-chat":
-			return "deepseek/deepseek-v4-flash-max"
-		case "openai/gpt-5.6-luna", "gpt-5.6-luna":
-			return "openai/gpt-5.6-luna-max"
+		if upgraded, ok := MaxVariantOf(model); ok {
+			if maxUpgradeAllowed(r, cfg, upgraded) {
+				return upgraded
+			}
+			return model
+		}
+		// Stock client names the default aliases already resolved (or that
+		// have none): keep the historic upgrade path through the same gates.
+		if upgraded, ok := legacyMaxVariants[model]; ok {
+			if maxUpgradeAllowed(r, cfg, upgraded) {
+				return upgraded
+			}
+			return model
 		}
 	}
 
 	return model
+}
+
+// maxUpgradeAllowed reports whether an upgrade to the given -max variant is
+// safe for the registry's current route table and the config's access tier:
+// the variant must be routed by the live registry (modelToAgent), and a
+// 'limited' tier may only reach variants explicitly in LimitedTierModels
+// (none today — the -max agent roots require full access upstream, so a
+// limited token would trip 403 free_mode_invalid_agent_model). cfg may be
+// nil (no config stored); r may be nil (no route table — treated as routed
+// for compatibility with a bare registry).
+func maxUpgradeAllowed(r *Registry, cfg *config.Config, upgraded string) bool {
+	if r != nil && !r.IsModelRouted(upgraded) {
+		return false
+	}
+	if cfg != nil && strings.EqualFold(cfg.AccessTier, "limited") {
+		return LimitedTierModels[upgraded]
+	}
+	return true
+}
+
+// IsModelRouted reports whether the registry currently routes model: true
+// when AgentForModel would succeed after alias resolution. ResolveModel uses
+// it to refuse -max upgrades whose agent root is missing from the live
+// mapping (an unrouted variant surfaces via /v1/models and trips upstream
+// 403 free_mode_invalid_agent_model).
+func (r *Registry) IsModelRouted(model string) bool {
+	if r == nil {
+		return false
+	}
+	model = strings.TrimSpace(model)
+	if cfg := r.cfg.Load(); cfg != nil && len(cfg.ModelAliases) > 0 {
+		if realModel, ok := cfg.ModelAliases[model]; ok && realModel != "" {
+			model = realModel
+		}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.modelToAgent[model]
+	return ok
 }
 
 // AgentForModel returns the agent id that serves model (after resolving aliases),

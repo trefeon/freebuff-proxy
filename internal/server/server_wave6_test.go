@@ -309,3 +309,92 @@ func newServerOpts(t *testing.T, mock *testutil.MockUpstream, mut func(*config.C
 	srv := New(cfg, p, reg, nil, nil, "", serverOpts...)
 	return srv
 }
+
+// --- PREFER_MAX_MODELS limited-tier gating ---------------------------------
+
+// TestChatLearnsAccessTier verifies the session admission's accessTier is
+// folded into the runtime config (server + registry copies) so ResolveModel
+// gates -max upgrades for limited tokens on the NEXT request. A chat that
+// reports upstream tier "limited" flips the registry's resolution: the same
+// model that upgraded before the fold stays on its base afterwards.
+func TestChatLearnsAccessTier(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+	mock.CountryCode = "US"
+	mock.ChatBody = testutil.SSEEvent(testChunk("chatcmpl-tier1", 1, `"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]`))
+	srv := newServerCfg(t, mock, func(c *config.Config) { c.PreferMaxModels = true })
+
+	// Before the fold the tier is unknown, so a routed -max variant
+	// upgrades (the registry copy has not seen the tier yet).
+	if got := srv.reg.ResolveModel("deepseek/deepseek-v4-pro"); got != "deepseek/deepseek-v4-pro-max" {
+		t.Fatalf("pre-fold ResolveModel(deepseek-v4-pro) = %q, want -max (unknown tier upgrades)", got)
+	}
+
+	body := `{"model":"` + testModelA + `","prompt":"hi","stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	cur := srv.cfg.Load()
+	if cur.AccessTier != "limited" {
+		t.Errorf("runtime AccessTier = %q, want limited (folded from admission)", cur.AccessTier)
+	}
+	if cur.AccessTierExplicit {
+		t.Error("AccessTierExplicit = true after probe fold, want false (runtime-learned)")
+	}
+	// The registry copy received the fold: the same model that upgraded
+	// before the fold now keeps its base model for a limited tier.
+	if got := srv.reg.ResolveModel("deepseek/deepseek-v4-pro"); got != "deepseek/deepseek-v4-pro" {
+		t.Errorf("post-fold ResolveModel(deepseek-v4-pro) = %q, want base (limited tier gates -max)", got)
+	}
+}
+
+// TestChatAccessTierExplicitWins verifies an operator-set ACCESS_TIER is
+// never clobbered by a probe observation: the fold skips when
+// AccessTierExplicit is set.
+func TestChatAccessTierExplicitWins(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "full" // the probe would say full...
+	mock.ChatBody = testutil.SSEEvent(testChunk("chatcmpl-tier2", 1, `"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]`))
+	// ...but the operator pinned limited for the deployment.
+	srv := newServerCfg(t, mock, func(c *config.Config) { c.AccessTier = "limited"; c.AccessTierExplicit = true })
+
+	body := `{"model":"` + testModelA + `","prompt":"hi","stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if got := srv.cfg.Load().AccessTier; got != "limited" {
+		t.Errorf("runtime AccessTier = %q, want limited (explicit config wins over probe)", got)
+	}
+}
+
+// TestChatAccessTierEmptyIgnored verifies an admission that reports no tier
+// leaves the runtime config untouched (unknown tier keeps the current value).
+func TestChatAccessTierEmptyIgnored(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = testutil.SSEEvent(testChunk("chatcmpl-tier3", 1, `"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]`))
+	srv := newServer(t, mock, nil)
+
+	body := `{"model":"` + testModelA + `","prompt":"hi","stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if got := srv.cfg.Load().AccessTier; got != "" {
+		t.Errorf("runtime AccessTier = %q, want empty (no tier reported, nothing folded)", got)
+	}
+}

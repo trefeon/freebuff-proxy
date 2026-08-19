@@ -392,6 +392,7 @@ func TestProbeAccount(t *testing.T) {
 	t.Run("200 with quota", func(t *testing.T) {
 		mock := testutil.NewMock()
 		defer mock.Close()
+		mock.AccessTier = "full"
 
 		client, err := New("tok", testConfig(mock.URL(), nil))
 		if err != nil {
@@ -403,6 +404,9 @@ func TestProbeAccount(t *testing.T) {
 		}
 		if st.Status != "active" || st.InstanceID != "inst-abc-123" {
 			t.Fatalf("probe state = %+v", st)
+		}
+		if st.AccessTier != "full" {
+			t.Errorf("probe AccessTier = %q, want full (captured from response JSON)", st.AccessTier)
 		}
 		q, ok := st.RateLimitsByModel["deepseek/deepseek-v4-flash"]
 		if !ok {

@@ -926,6 +926,10 @@ func (s *Server) handleTokenTest(w http.ResponseWriter, r *http.Request) {
 		msg += " (" + q + ")"
 	}
 	msg += "."
+	// The probe is the pooled equivalent of a session admission: fold the
+	// observed accessTier into the runtime config for ResolveModel's -max
+	// upgrade gate (PREFER_MAX_MODELS limited-tier gating).
+	s.rememberAccessTier(state.AccessTier)
 	s.logger.Info("dashboard token probe ok", "token", id)
 	s.dash.RenderConfigResult(w, r, true, msg)
 }
@@ -2265,6 +2269,12 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 		s.writeError(w, r, err, model, lease)
 		return
 	}
+	// PREFER_MAX_MODELS limited-tier gating: the admission just reported
+	// the token's accessTier; fold it into the runtime config so the next
+	// request's ResolveModel gates -max upgrades for limited tokens (and
+	// full tokens keep upgrading). First request for a token still resolves
+	// with the previously-known (or env-set) tier.
+	s.rememberAccessTier(lease.TierAccess)
 	defer func() { _ = up.Close() }()
 	// Issue #53: when the downstream client disconnects mid-stream, abandon
 	// the lease instead of a plain release — the run is FINISHed through the
@@ -2322,6 +2332,29 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	ms := time.Since(start).Milliseconds()
 	s.logger.Info(kind+" done", chatDoneAttrs(reqID, model, lease.AgentID, stream, ms, stats.chunks, stats.bytes, reasoningEffort)...)
 	s.traceChat(lease, model, ms, "ok", "", phases.All(), st)
+}
+
+// rememberAccessTier folds an upstream session-probe/admission-observed
+// accessTier ("full"/"limited") into the runtime config — s.cfg plus the
+// registry and pool copies, mirroring the reload triple-store — so
+// ResolveModel's -max upgrade gate consults it on the next request. A probe
+// observation never overrides an operator-set ACCESS_TIER
+// (AccessTierExplicit); empty tiers are ignored (unknown tier keeps the
+// current value, so a fresh config still treats empty as full).
+func (s *Server) rememberAccessTier(tier string) {
+	tier = strings.TrimSpace(tier)
+	if tier == "" {
+		return
+	}
+	cur := s.cfg.Load()
+	if cur.AccessTier == tier || cur.AccessTierExplicit {
+		return
+	}
+	next := *cur
+	next.AccessTier = tier
+	s.cfg.Store(&next)
+	s.reg.SetConfig(&next)
+	s.pool.SetConfig(&next)
 }
 
 // traceChat records a structured "chat trace" entry for the dashboard
