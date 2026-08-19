@@ -3419,7 +3419,7 @@ func TestChatSendsActingUserID(t *testing.T) {
 }
 
 // TestWaitingRoomChainWireFidelity verifies #124: the pre-session ad chain
-// matches the CLI wire shape — header UA Freebuff-CLI/0.0.149 (never the
+// matches the CLI wire shape — header UA Freebuff-CLI/0.0.150 (never the
 // old 2.0.42 login UA), body userAgent = the Chrome-124 browser UA,
 // device carries the host IANA timezone/locale, messages stays [] with no
 // sessionId (fresh waiting-room), and the streak GET inherits newRequest's

@@ -630,8 +630,8 @@ const cliUserAgent = "ai-sdk/openai-compatible/1.0.0/codebuff"
 // freebuffCliUA is the ads-API request User-Agent, mirroring the installed
 // official CLI binary the proxy emulates (reference
 // cli/src/hooks/use-gravity-ad.ts getCliAdRequestUserAgent:
-// "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; 0.0.149 = the vendored binary).
-const freebuffCliUA = "Freebuff-CLI/0.0.149"
+// "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; 0.0.150 = the vendored binary).
+const freebuffCliUA = "Freebuff-CLI/0.0.150"
 
 // adUserAgents maps runtime.GOOS to the browser-like Chrome-124 UA sent to
 // ad providers for targeting/fraud screening (#124). The CLI ships one entry
