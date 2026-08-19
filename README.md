@@ -281,7 +281,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `RUNS_DRAIN_QUEUE_CAP` | `64` | Draining-runs list cap; older entries are force-dropped (FINISH is best-effort) |
 | `RUNS_DRAIN_TTL` | `10m` | Draining-runs TTL eviction window |
 | `HTTP2_UPSTREAM` | `true` | Negotiate HTTP/2 with the upstream so the ALPN matches real browsers; `false` forces HTTP/1.1 |
-| `FALLBACK_MODEL` | `""` | Model to use once the requested premium model's queue wait passes `FALLBACK_AFTER_MS` |
+| `FALLBACK_MODEL` | `""` | Map `model1=fallback1,model2=fallback2` to re-route a request to the fallback model when its queue wait passes `FALLBACK_AFTER_MS` (queue-wait only — never on 429 quota exhaustion). When unset, built-in defaults apply: the premium rows → `deepseek/deepseek-v4-flash`, `meta/muse-spark-1.2-contributor` → `deepseek/deepseek-v4-pro` |
 | `FALLBACK_AFTER_MS` | `10000` | Queue-wait threshold (ms) before falling back to `FALLBACK_MODEL` |
 | `CORS_ALLOWED_ORIGIN` | `*` | `Access-Control-Allow-Origin` for `/v1/*` responses |
 | `ADOPT_CLI_SESSION` | `false` | Adopt the upstream CLI's active session instead of creating a new one |
