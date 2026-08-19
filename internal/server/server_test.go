@@ -1186,8 +1186,9 @@ func TestModelsAllowResolvedAlias(t *testing.T) {
 }
 
 // TestModelsAllowMaxUpgrade pins the PREFER_MAX_MODELS interaction: the
-// allowlist sees the -max UPGRADED id, so a base-model client request is
-// allowed only when the upgraded variant is listed.
+// allowlist accepts both the -max UPGRADED id directly AND a base-model id
+// whose -max variant is the resolved target (auto-upgrade + base-only
+// allowlist coexist), while anything outside the list stays rejected.
 func TestModelsAllowMaxUpgrade(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -1200,12 +1201,33 @@ func TestModelsAllowMaxUpgrade(t *testing.T) {
 	// A base client id upgrades to the allowlisted -max variant → served.
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("chat (max-upgraded) status = %d, want 200: %s", resp.StatusCode, data)
+		t.Fatalf("chat (max-upgraded, max listed) status = %d, want 200: %s", resp.StatusCode, data)
 	}
 	// A model outside the list stays rejected.
 	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("chat (disallowed) status = %d, want 404: %s", resp.StatusCode, data)
+	}
+
+	// Base-only allowlist + auto-upgrade: the resolved -max id is accepted
+	// through the allowlisted base id, so clients may keep requesting the
+	// base id while the proxy serves the extended-context variant.
+	mock2 := testutil.NewMock()
+	defer mock2.Close()
+	mock2.ChatBody = testutil.SSEEvent(chunk("chatcmpl-max2", 1, `"choices":[{"index":0,"delta":{"content":"ping"},"finish_reason":"stop"}]`))
+	ts2, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.PreferMaxModels = true
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-pro"}
+	}, mock2)
+
+	resp, data = doJSON(t, http.MethodPost, ts2.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat (base allowlist + upgrade) status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	// The -max id is also accepted when derived from an allowlisted base.
+	resp, data = doJSON(t, http.MethodPost, ts2.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro-max"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat (direct -max id of allowed base) status = %d, want 200: %s", resp.StatusCode, data)
 	}
 }
 

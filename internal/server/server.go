@@ -3121,15 +3121,25 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 
 // modelAllowed reports whether a model may be served. An empty MODELS_ALLOW
 // allowlist imposes no restriction; otherwise the RESOLVED model id (after
-// registry alias resolution and -max upgrades) must be listed exactly.
+// registry alias resolution and -max upgrades) must be listed exactly — OR,
+// when PREFER_MAX_MODELS is enabled, the resolved id may be the -max variant
+// of an allowlisted base model. Base-only allowlists (e.g.
+// "deepseek/deepseek-v4-flash") therefore keep working with auto-upgrade on:
+// clients see and request the base id, the proxy upgrades it server-side.
 func (s *Server) modelAllowed(model string) bool {
-	allow := s.cfg.Load().ModelsAllow
+	cfg := s.cfg.Load()
+	allow := cfg.ModelsAllow
 	if len(allow) == 0 {
 		return true
 	}
 	for _, id := range allow {
 		if id == model {
 			return true
+		}
+		if cfg.PreferMaxModels {
+			if upgraded, ok := registry.MaxVariantOf(id); ok && upgraded == model {
+				return true
+			}
 		}
 	}
 	return false
