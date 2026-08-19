@@ -170,7 +170,6 @@ var modelReasoningEfforts = map[string][]string{
 	"deepseek/deepseek-v4-flash-max":  {"low", "high", "max"},
 	"deepseek/deepseek-v4-pro-max":    {"low", "high", "max"},
 	"mimo/mimo-v2.5":                  {"high"},
-	"mimo/mimo-v2.5-pro":              {"high"},
 	"anthropic/claude-fable-5":        {"low", "medium", "high", "xhigh", "max"},
 	"openai/gpt-5.6-luna":             {"low", "medium", "high", "xhigh", "max"},
 	"openai/gpt-5.6-luna-max":         {"low", "medium", "high", "xhigh", "max"},

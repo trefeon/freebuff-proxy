@@ -1840,6 +1840,11 @@ func TestEffortsForModel(t *testing.T) {
 	if got := effortsForModel("minimax/minimax-m3"); !reflect.DeepEqual(got, reasoningLadder[:]) {
 		t.Errorf("unlisted efforts = %v, want full ladder", got)
 	}
+	// mimo-v2.5-pro was removed from free mode 2026-08-04 (paid-only in
+	// model-config.ts) — it must NOT pretend to be a free-catalog row.
+	if got := effortsForModel("mimo/mimo-v2.5-pro"); !reflect.DeepEqual(got, reasoningLadder[:]) {
+		t.Errorf("mimo-v2.5-pro efforts = %v, want full ladder (removed model)", got)
+	}
 
 	// Runtime override (registry data when present), nil → hardcoded table.
 	SetModelEffortLookup(func(model string) []string {
@@ -2703,7 +2708,7 @@ func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
 }
 
 func TestNormalizeRequest_MiMoReasoningLadder(t *testing.T) {
-	for _, model := range []string{"mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"} {
+	for _, model := range []string{"mimo/mimo-v2.5"} {
 		for _, reqEffort := range []string{"low", "medium", "high", "max"} {
 			body := map[string]any{
 				"model":            model,
