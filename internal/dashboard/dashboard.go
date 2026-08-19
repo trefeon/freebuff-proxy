@@ -806,7 +806,7 @@ func (d *Dashboard) configData() configData {
 		{Key: "LISTEN_ADDR", Value: cfg.ListenAddr},
 		{Key: "UPSTREAM_BASE_URL", Value: cfg.UpstreamBaseURL},
 		{Key: "AUTH_TOKENS", Value: fmt.Sprintf("%d token(s)", len(cfg.AuthTokens)), Secret: true},
-		{Key: "API_KEYS", Value: fmt.Sprintf("%d key(s)", len(cfg.APIKeys)), Secret: true},
+		{Key: "API_KEYS", Value: strings.Join(cfg.APIKeys, ","), Secret: true},
 		{Key: "ADMIN_TOKEN", Value: boolWord(cfg.AdminToken != ""), Secret: true},
 		{Key: "ROTATION_INTERVAL", Value: cfg.RotationInterval.String()},
 		{Key: "REQUEST_TIMEOUT", Value: cfg.RequestTimeout.String()},

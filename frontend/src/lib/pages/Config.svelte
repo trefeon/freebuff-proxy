@@ -584,9 +584,19 @@
                         {/each}
                       </div>
                     {:else if kv.secret}
-                      <span class="px-2 py-0.5 rounded fp-inset text-[var(--fp-muted)] font-mono text-[11px]">
+                      <span class="px-2 py-0.5 rounded fp-inset text-[var(--fp-muted)] font-mono text-[11px] max-w-[220px] truncate block">
                         {kv.value}
                       </span>
+                      {#if kv.value && kv.value !== 'set' && kv.value !== 'unset' && kv.value !== 'yes' && kv.value !== 'no'}
+                        <button
+                          type="button"
+                          title="Copy value"
+                          onclick={(e) => { e.stopPropagation(); copyToClipboard(kv.value); }}
+                          class="px-1.5 py-0.5 rounded text-[10px] font-mono fp-inset text-[var(--fp-teal)] hover:text-white transition-all focus-visible:ring-1 focus-visible:ring-[var(--fp-teal)]"
+                        >
+                          copy
+                        </button>
+                      {/if}
                     {:else}
                       <span class="text-xs font-mono font-bold text-[var(--fp-teal)] tabular-nums">
                         {curVal || kv.value || '—'}
