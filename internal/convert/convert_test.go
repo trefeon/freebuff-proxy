@@ -1646,6 +1646,17 @@ func TestNormalizeRequestCacheControlInjection(t *testing.T) {
 		}
 	})
 
+	t.Run("on for deepseek -max variant", func(t *testing.T) {
+		t.Setenv("CACHE_CONTROL_INJECTION", "")
+		out, err := NormalizeRequest(mustJSON(t, mkBody("deepseek/deepseek-v4-pro-max")), "")
+		if err != nil {
+			t.Fatalf("NormalizeRequest: %v", err)
+		}
+		if !hasHints(out) {
+			t.Error("deepseek -max request without cache_control hints")
+		}
+	})
+
 	t.Run("disabled via env", func(t *testing.T) {
 		t.Setenv("CACHE_CONTROL_INJECTION", "false")
 		out, err := NormalizeRequest(mustJSON(t, mkBody("deepseek/deepseek-v4-flash")), "")
@@ -1689,6 +1700,10 @@ func TestDeepSeekPlainReasoningEffort(t *testing.T) {
 		{"pro medium rewrites to high", "deepseek/deepseek-v4-pro", "medium", "high"},
 		{"pro max stays max", "deepseek/deepseek-v4-pro", "max", "max"},
 		{"bare model id tolerated", "deepseek-v4-flash", "max", "max"},
+		{"flash-max medium rewrites to high", "deepseek/deepseek-v4-flash-max", "medium", "high"},
+		{"flash-max max stays max", "deepseek/deepseek-v4-flash-max", "max", "max"},
+		{"pro-max medium rewrites to high", "deepseek/deepseek-v4-pro-max", "medium", "high"},
+		{"pro-max high stays high", "deepseek/deepseek-v4-pro-max", "high", "high"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

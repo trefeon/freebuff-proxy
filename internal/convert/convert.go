@@ -268,9 +268,14 @@ func clampReasoningEffort(requested string, allowed []string, fallback string) s
 // isDeepSeekModel reports whether the route is one of the DeepSeek V4 models.
 // DeepSeek routes accept prompt-cache hints (#84) and rewrite requested
 // "medium" to "high" (#112). Tolerates both the registry's full ids and bare
-// model ids.
+// model ids, and the provisioned `-max` variants (which upstream routes to the
+// same DeepSeek lanes).
 func isDeepSeekModel(model string) bool {
-	return strings.HasSuffix(model, "deepseek-v4-flash") || strings.HasSuffix(model, "deepseek-v4-pro")
+	m := strings.ToLower(model)
+	return strings.HasSuffix(m, "deepseek-v4-flash") ||
+		strings.HasSuffix(m, "deepseek-v4-pro") ||
+		strings.HasSuffix(m, "deepseek-v4-flash-max") ||
+		strings.HasSuffix(m, "deepseek-v4-pro-max")
 }
 
 // isStrictReasoningModel reports whether the model requires an explicit reasoning_content
