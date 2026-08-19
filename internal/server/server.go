@@ -34,6 +34,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1396,13 +1397,30 @@ func updateAuthTokensEnv(tokens []string) ([]byte, error) {
 
 // syncTokensAfterMutation updates .env + reloads config after a pool token
 // mutation, so the change survives a restart and cfg reflects the new list.
+// It fails (without touching the pool) when the reload does NOT land the
+// requested tokens: a higher-precedence source — a real environment
+// AUTH_TOKENS (docker-compose env_file injects every .env line into the
+// container environment, which then overrides the file) or a -config JSON
+// file — would otherwise leave cfg/pool/.env permanently divergent while
+// the UI keeps claiming the token was persisted.
 func (s *Server) syncTokensAfterMutation(tokens []string) error {
+	// Snapshot the .env before writing so a reload-verification failure can
+	// restore it byte-exact (mirrors handleModeSwitch's persist → verify →
+	// rollback). Otherwise the failed add leaves AUTH_TOKENS=<new> in .env
+	// while the live pool holds the old list — the very divergence the
+	// caller is trying to avoid.
+	old, oldErr := os.ReadFile(".env")
 	if _, err := updateAuthTokensEnv(tokens); err != nil {
 		return fmt.Errorf("persist AUTH_TOKENS: %w", err)
 	}
 	newCfg, err := config.Load(s.configPath)
 	if err != nil {
+		restoreEnvFile(old, oldErr)
 		return fmt.Errorf("reload config: %w", err)
+	}
+	if !reflect.DeepEqual(newCfg.AuthTokens, tokens) {
+		restoreEnvFile(old, oldErr)
+		return fmt.Errorf("AUTH_TOKENS=%q overrides .env (environment or -config JSON) — the %d token(s) were persisted to .env but NOT activated; clear AUTH_TOKENS from the environment/config, or restart the container without env_file, then retry", strings.Join(newCfg.AuthTokens, ","), len(tokens))
 	}
 	s.cfg.Store(&newCfg)
 	s.reg.SetConfig(&newCfg)
@@ -1458,7 +1476,21 @@ func (s *Server) handleTokenAdd(w http.ResponseWriter, r *http.Request) {
 		s.dash.RenderConfigResult(w, r, false, err.Error())
 		return
 	}
-	tokens := append(append([]string{}, cfg.AuthTokens...), req.Token)
+	// Build the persist list from cfg (the fixed AUTH_TOKENS set) plus the
+	// new token, skipping any token already present: a duplicate add must
+	// not write `tok,cb,cb` to .env — splitList would collapse it on reload
+	// and the strict reload check would reject the add and roll back.
+	tokens := append([]string{}, cfg.AuthTokens...)
+	seen := false
+	for _, t := range tokens {
+		if t == req.Token {
+			seen = true
+			break
+		}
+	}
+	if !seen {
+		tokens = append(tokens, req.Token)
+	}
 	if err := s.syncTokensAfterMutation(tokens); err != nil {
 		_ = s.pool.RemoveLastToken()
 		s.logger.Warn("dashboard token add rolled back", "remote", remoteHost(r), "err", err)

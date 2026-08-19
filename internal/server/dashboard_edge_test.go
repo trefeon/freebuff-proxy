@@ -346,6 +346,45 @@ func TestDashboardModeSwitchBranchMatrix(t *testing.T) {
 	}
 }
 
+// TestDashboardTokenAddEnvOverrideFails is the regression for the compose
+// env_file bug: docker-compose injects every .env line into the container
+// environment, and config.Load lets the real environment override the file.
+// Adding a token via the dashboard then persists to .env but the reload sees
+// the env's stale AUTH_TOKENS= — the pool would hold the token while cfg
+// claims bridge mode. The add must fail loudly and roll the pool back, not
+// silently diverge.
+func TestDashboardTokenAddEnvOverrideFails(t *testing.T) {
+	t.Chdir(t.TempDir())
+	// The environment outranks .env in config.Load: a stale empty
+	// AUTH_TOKENS= env var (exactly what compose env_file injects) defeats
+	// any .env AUTH_TOKENS write.
+	t.Setenv("AUTH_TOKENS", "")
+	original := "SAFE_MODE=true\n"
+	if err := os.WriteFile(".env", []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, testutil.NewMock())
+	cookie := authedCookie(t, ts)
+
+	resp := postJSON(t, ts.URL, cookie, "/admin/tokens/add", `{"token":"cb_fresh"}`)
+	body := bodyOf(t, resp)
+	if !strings.Contains(body, "overrides .env") {
+		t.Fatalf("add response = %q, want env-override failure message", body)
+	}
+	// The pool must be rolled back — no token may linger while cfg claims
+	// bridge mode.
+	if got := p.TokenCount(); got != 1 {
+		t.Errorf("pool TokenCount = %d, want 1 (original mock token; add rolled back)", got)
+	}
+	got, err := os.ReadFile(".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Errorf(".env after failed add = %q, want byte-exact original %q (persist must roll back)", got, original)
+	}
+}
+
 // TestDashboardModeSwitchPersistFailure pins the persist-failure branch: when
 // .env cannot be written (here: .env is a directory), the switch reports the
 // failure and neither the pool nor the config is drained.
