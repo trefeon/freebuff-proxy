@@ -3145,6 +3145,24 @@ func (s *Server) modelAllowed(model string) bool {
 	return false
 }
 
+// modelListed is the strict listing filter for /v1/models: unlike
+// modelAllowed it does NOT expand base ids to their -max variants, so
+// PREFER_MAX_MODELS keeps the catalog surface exactly the MODELS_ALLOW list
+// (clients request the base id; the proxy serves the extended-context
+// variant invisibly).
+func (s *Server) modelListed(model string) bool {
+	allow := s.cfg.Load().ModelsAllow
+	if len(allow) == 0 {
+		return true
+	}
+	for _, id := range allow {
+		if id == model {
+			return true
+		}
+	}
+	return false
+}
+
 // handleModels serves the OpenAI model-list shape with the registry's
 // current models; created is pinned to server start so every entry matches.
 // Each row carries an advisory availability annotation derived from the pool
@@ -3170,9 +3188,11 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			// because a stale signal could hide a working model.
 			continue
 		}
-		if !s.modelAllowed(id) {
+		if !s.modelListed(id) {
 			// MODELS_ALLOW: prune ids outside the operator allowlist so
-			// picker clients never auto-select a model that would 404.
+			// picker clients never auto-select a model that would 404. Uses
+			// the strict list (base ids only), so PREFER_MAX_MODELS -max
+			// variants stay invisible on the catalog surface.
 			continue
 		}
 		data = append(data, map[string]any{

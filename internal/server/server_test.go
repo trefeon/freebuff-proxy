@@ -1229,6 +1229,34 @@ func TestModelsAllowMaxUpgrade(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("chat (direct -max id of allowed base) status = %d, want 200: %s", resp.StatusCode, data)
 	}
+
+	// /v1/models must NOT expand to the -max variant: the catalog surface
+	// stays exactly the MODELS_ALLOW base ids even with PREFER_MAX_MODELS on.
+	resp, data = doJSON(t, http.MethodGet, ts2.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("models is not JSON: %v: %s", err, data)
+	}
+	listed := map[string]bool{}
+	for _, m := range out.Data {
+		listed[m.ID] = true
+	}
+	if !listed["deepseek/deepseek-v4-pro"] {
+		t.Errorf("/v1/models missing allowlisted base id deepseek/deepseek-v4-pro: %v", listed)
+	}
+	if listed["deepseek/deepseek-v4-pro-max"] {
+		t.Errorf("/v1/models leaked -max variant under base-only MODELS_ALLOW: %v", listed)
+	}
+	if len(out.Data) != 1 {
+		t.Errorf("model count = %d, want 1 (base allowlist only, no -max expansion)", len(out.Data))
+	}
 }
 
 // TestModelsAllowEmptyIsOpen verifies an empty allowlist keeps current
