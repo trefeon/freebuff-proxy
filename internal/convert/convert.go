@@ -159,7 +159,7 @@ const defaultReasoningEffort = "high"
 // EFFORTS_THROUGH_MAX low..max (xhigh included), muse-spark
 // EFFORTS_THROUGH_XHIGH minimal..xhigh. The provisioned -max variants
 // (deepseek-v4-flash-max, deepseek-v4-pro-max, gpt-5.6-luna-max) mirror
-// their base model's ladder — same lanes, higher ceiling tier. Models
+// their base model's ladder — same lanes, higher provisioning tier. Models
 // absent from the table get the full ladder (no clamping): kimi/glm are
 // deliberately absent (CrofAI ignores reasoning_effort) and gemini rows
 // are absent (helper models, no upstream restriction). The table is

@@ -140,7 +140,7 @@ var fallbackAgents = []agentModels{
 	{agent: "base2-free-muse-spark", models: []string{"meta/muse-spark-1.2-contributor"}},
 	{agent: "base2-free-fable", models: []string{"anthropic/claude-fable-5"}},
 	{agent: "base2-free-cloud-planner", models: []string{"deepseek/deepseek-v4-flash"}},
-	{agent: "base2-free-cloud-planner-limited", models: []string{"deepseek/deepseek-v4-flash"}},
+	{agent: "base2-free-cloud-planner-limited", models: []string{"mimo/mimo-v2.5"}},
 	{agent: "file-picker", models: []string{"google/gemini-2.5-flash-lite"}},
 	{agent: "file-picker-max", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
 	{agent: "file-lister", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},

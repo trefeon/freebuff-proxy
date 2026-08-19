@@ -79,8 +79,8 @@ coverage (effort-table / fallback row) → special handling.
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `deepseek/deepseek-v4-flash` | DeepSeek V4 (CrofAI→official→RunInfra→Infron cascade, `provider-routes.ts:129-135`) | free, STANDARD unlimited; **full tier only** since 2026-08-18 | CLI | `[low,high,max]` (high) | 1M | `base2-free-deepseek-flash` | ✅ | target of 5 rows | Session `DefaultFallbackModel`; upstream `FALLBACK` id; probe/smoke default; gpt-4o-class alias `deepseek-chat` target |
 | 2 | `deepseek/deepseek-v4-pro` | DeepSeek V4 | premium, `PREMIUM_MODEL_IDS` (4/day Pacific) | CLI | `[low,high,max]` (high) | 1M | `base2-free-deepseek` | ✅ | → flash | Upstream `DEFAULT` id; gpt-4o alias target; muse fallback target |
-| 3 | `deepseek/deepseek-v4-flash-max` | DeepSeek V4 | provisioned (`-max`) | none | `[low,high,max]` | extended | `base2-free-deepseek-flash-max` | ❌ | — | **G2:** `isDeepSeekModel` misses it (HasSuffix) → no medium→high rewrite, no cache hints |
-| 4 | `deepseek/deepseek-v4-pro-max` | DeepSeek V4 | provisioned | none | `[low,high,max]` | extended | `base2-free-deepseek-pro-max` | ❌ | — | same G2 |
+| 3 | `deepseek/deepseek-v4-flash-max` | DeepSeek V4 | provisioned (`-max`) | none | `[low,high,max]` | extended | `base2-free-deepseek-flash-max` | ✅ | — | fixed (G2) |
+| 4 | `deepseek/deepseek-v4-pro-max` | DeepSeek V4 | provisioned | none | `[low,high,max]` | extended | `base2-free-deepseek-pro-max` | ✅ | — | fixed (G2) |
 | 5 | `mimo/mimo-v2.5` | MiMo (Xiaomi direct / OpenRouter lane) | free, **sole limited-tier model** (`LIMITED_FREEBUFF_MODEL_IDS`) | CLI | `[high]` only (adaptive thinking, no levels) | — | `base2-free-mimo` | ✅ | — | 0.0.150 binary registry **default**; limited-tier coercion target; `LimitedTierModels` proxy map |
 | 6 | `mimo/mimo-v2.5-pro` | MiMo | 0.0.150 registry delta (binary bundle only, `model-config.ts:77-79`) | none | `[high]` | — | ❌ unrouted | ❌ | — | Removed from free mode 2026-08-04 (guard test `freebuff-models.test.ts:81-84`); paid/BYOK only (`model-config.ts:77`). Proxy must NOT route it — 400 model_not_found is correct. Effort entry removed (G4). |
 | 7 | `anthropic/claude-fable-5` | Anthropic (limited-offer) | offer, 1/day global wave (`LIMITED_OFFER_MODEL_IDS`, `SESSION_LIMIT=1`), `dataUse: training` | none | `[low,medium,high,xhigh,max]` (high) | — | `base2-free-fable` | ✅ | → flash | Capacity-gated: reachable only while server advertises the offer; `claude-3-5-sonnet` alias target |
@@ -88,10 +88,10 @@ coverage (effort-table / fallback row) → special handling.
 | 9 | `google/gemini-2.5-flash-lite` | Gemini helper | **helper subagent** (`file-picker`) | none | full ladder (proxy) | — | `file-picker` | ❌ | — | Not a free-catalog coding row; listed by proxy deliberately |
 | 10 | `google/gemini-3.1-flash-lite` | Gemini helper | helper subagent (`file-picker-max`) | none | full ladder | — | `file-picker-max` | ❌ | — | legacy `-preview` id exists (`gemini.ts:8`) |
 | 11 | `google/gemini-3.5-flash-lite` | Gemini helper | helper subagent (`file-picker-max`) | none | full ladder | — | `file-picker-max` | ❌ | — | current Gemini helper id |
-| 12 | `meta/muse-spark-1.2-contributor` | Meta (contributor tier, $0.10/$0.002/$0.20) | premium, web-only; Convex queue 60 RPM/team; 10s → `deepseek-v4-pro` | none (web) | `[minimal,low,medium,high,xhigh]` (**xhigh**) | 1M | `base2-free-muse-spark` | ✅ | — (should be → pro, **G3**) | `reasoning_effort:'none'` = hard 400; `MUSE_SPARK_FALLBACK_MODEL_ID` (`freebuff-models.ts:387,405-408`) |
+| 12 | `meta/muse-spark-1.2-contributor` | Meta (contributor tier, $0.10/$0.002/$0.20) | premium, web-only; Convex queue 60 RPM/team; 10s → `deepseek-v4-pro` | none (web) | `[minimal,low,medium,high,xhigh]` (**xhigh**) | 1M | `base2-free-muse-spark` | ✅ | → deepseek-v4-pro (G3) | `reasoning_effort:'none'` = hard 400; `MUSE_SPARK_FALLBACK_MODEL_ID` (`freebuff-models.ts:387,405-408`) |
 | 13 | `minimax/minimax-m3` | MiniMax | premium, `PREMIUM_MODEL_IDS` | CLI | none (adaptive) | 524k | `base2-free-minimax-m3` | ❌ (fine — upstream omits) | → flash | no effort levels |
 | 14 | `openai/gpt-5.6-luna` | OpenAI via OpenRouter, **provider pinned `openai`**, `max_price` 0.5/3.0 | premium, `PREMIUM_MODEL_IDS` | CLI | `[low,medium,high,xhigh,max]` (high) | 1M (deliberate under-entry) | `base2-free-luna` | ✅ | → flash | OpenRouter slug — falls through to default OpenRouter route |
-| 15 | `openai/gpt-5.6-luna-max` | OpenAI via OpenRouter | provisioned (`-max`) | none | `[low..max]` | extended | `base2-free-luna-max` | ❌ | — | provisioned per-account |
+| 15 | `openai/gpt-5.6-luna-max` | OpenAI via OpenRouter | provisioned (`-max`) | none | `[low..max]` | extended | `base2-free-luna-max` | ✅ | — | provisioned per-account |
 | 16 | `z-ai/glm-5.2` | CrofAI (Fireworks-era wire prefix; native `glm-5.2`) | referral-gated (`GLM_V52_MODEL_IDS`), exactly-1h sessions; `glmPromo` free-tier promo | web | CrofAI ignores `reasoning_effort` | — | `base2-free-glm` | ❌ | → flash | `crof/glm-5.2` is **dead** (farming signal — never send); 0.0.150 `glmPromo` field |
 
 Sources: `freebuff-models.ts` (rows), `free-agents.ts` (roots),
@@ -212,52 +212,48 @@ region_limited` (3349-3387). `MODELS_ALLOW` prunes via strict `modelListed`
 
 ---
 
-## 7. Gaps & recommendations (findings, not fixes)
+## 7. Gaps & recommendations (status ledger)
 
-**G1 — effort table covers 9 of 15.** `modelReasoningEfforts`
-(`convert.go:172-180`) covers the deepseek 4 bases + their `-max` variants,
-mimo, fable, luna/luna-max, and muse. Still absent: kimi-k3-eco, glm-5.2, and
-the 3 gemini rows — kimi/glm deliberately (CrofAI ignores `reasoning_effort`),
-gemini helper models (no upstream restriction), so all 5 pass the full ladder
-unclamped. `SetModelEffortLookup` remains available as optional hardening
-(registry-driven lookup), but the `-max` rows no longer need it.
+**G1 — RESOLVED.** Effort table covers 9 of 15 (`modelReasoningEfforts`,
+`convert.go:172-180`): the deepseek 4 bases + their `-max` variants, mimo,
+fable, luna/luna-max, and muse. The other 6 — kimi-k3-eco and glm-5.2
+deliberately (CrofAI ignores `reasoning_effort`), minimax-m3 (no effort levels;
+upstream omits), and the 3 gemini rows (helper models, no upstream restriction)
+— pass the full ladder unclamped, which is correct (9 covered + 6 absent = 15).
+`SetModelEffortLookup` remains available as optional registry-driven hardening.
 
-**G2 — `isDeepSeekModel` misses `-max` variants.** `strings.HasSuffix(model,
-"deepseek-v4-flash")` fails on `deepseek/deepseek-v4-flash-max`, so the `-max`
-DeepSeek rows lose the `medium→high` rewrite and prompt-cache hints (#84). The
-convert tests pin the base ids only.
+**G2 — RESOLVED.** `isDeepSeekModel` (`convert.go:272-279`) now checks all four
+suffixes, so the `-max` DeepSeek rows get the `medium→high` rewrite and
+prompt-cache hints (#84) exactly like their bases.
 
-**G3 — `defaultFallbackModels` is stale and narrow.** 5 premium rows → flash, but
-(1) the upstream muse fallback target is `deepseek-v4-pro`
-(`MUSE_SPARK_FALLBACK_MODEL_ID`), not flash, and the proxy has no muse row at
-all; (2) kimi / gemini / `-max` rows have no row; (3) the `FALLBACK_MODEL` path
-only ever fires on waiting-room queue waits — **never on 429 quota exhaustion** —
-so operators expecting automatic failover on daily-quota are misreading the knob
-(429s cooldown the token and surface `rate_limited`). Document or extend.
+**G3 — RESOLVED.** `defaultFallbackModels` (`config.go:351-359`) now has the muse
+row → `deepseek-v4-pro` per `MUSE_SPARK_FALLBACK_MODEL_ID`. (The
+`FALLBACK_MODEL` path still only fires on waiting-room queue waits — never 429
+quota exhaustion — by design.)
 
-**G4 — `mimo/mimo-v2.5-pro` is a paid-only removal, not a gap.** Free mode
-removed it 2026-08-04 (guard test `freebuff-models.test.ts:81-84`); it is
-paid/BYOK only (`model-config.ts:77`). The proxy must NOT route it — 400
-`model_not_found` is correct. No fallback row or agent root: the 0.0.150
-registry delta is not a free-mode row.
+**G4 — RESOLVED.** `mimo/mimo-v2.5-pro` is a paid-only removal (2026-08-04), not
+a gap; the proxy's effort entry was removed and 400 `model_not_found` is the
+correct routing (documented in §3 row 6).
 
-**G5 — pinned mirror drift.** `base2-free-cloud-planner-limited` is pinned to
-flash in `testdata/upstream/free-agents.ts` while the reference tree moved the
-limited tier to `mimo/mimo-v2.5` (`freebuff-models.ts:1371-1376`); the parity
-test pins the stale shape. Re-sync snapshot on next catalog bump. (The proxy's
-`LimitedTierModels` already says mimo, so live behavior is correct.)
+**G5 — RESOLVED.** The pinned snapshot re-syncs the limited tier to mimo-only
+(`CLOUD_PLANNER_LIMITED_MODEL_ID = LIMITED_FREEBUFF_MODEL_ID` in
+`testdata/upstream/free-agents.ts`, `freebuff-models.ts:1371-1376`) and the Go
+fallback row `base2-free-cloud-planner-limited` now mirrors it
+(`registry.go:143`, `mimo/mimo-v2.5`).
 
-**G6 — gemini rows are helper models.** `google/gemini-*-flash-lite` belong to
-`GEMINI_HELPER_MODELS` subagents (file-listing/research), not the free coding
-catalog. Listing them in `/v1/models` is a deliberate proxy choice (so codebuff
-clients' file-picker subagents route through the proxy) — but 9router users
-should not default to them. Optionally gate them behind `MODELS_ALLOW`.
+**G6 — documented non-fix.** gemini rows are helper models.
+`google/gemini-*-flash-lite` belong to `GEMINI_HELPER_MODELS` subagents
+(file-listing/research), not the free coding catalog. Listing them in
+`/v1/models` is a deliberate proxy choice (so codebuff clients' file-picker
+subagents route through the proxy) — but 9router users should not default to
+them. Optionally gate them behind `MODELS_ALLOW`.
 
-**G7 — parser skips unquoted keys.** `basher` (unquoted TS key in the upstream
-mirror) is skipped by `parse.go` on both sides. Cosmetic today (no model id
-depends on it) but a future unquoted key carrying a model would silently drop.
-This is upstream-identical port parity (`parse.go:10-13` deliberately mirrors
-`registry.js` quirks) — do not 'fix'.
+**G7 — documented non-fix.** parser skips unquoted keys.
+`basher` (unquoted TS key in the upstream mirror) is skipped by `parse.go` on
+both sides. Cosmetic today (no model id depends on it) but a future unquoted
+key carrying a model would silently drop. This is upstream-identical port
+parity (`parse.go:10-13` deliberately mirrors `registry.js` quirks) — do not
+'fix'.
 
 ---
 
