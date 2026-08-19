@@ -100,9 +100,14 @@ type Lease struct {
 	Model             string // the model this lease's session/run is bound to (authoritative for opts.Model; may differ from the requested model after #100 fallback)
 	AgentID           string
 	Run               *runs.Run
-	SessionInstanceID string       // "" when the session is disabled
-	TierAccess        string       // upstream accessTier, "" when unknown
-	TierCountry       string       // upstream countryCode, "" when unknown
+	SessionInstanceID string // "" when the session is disabled
+	TierAccess        string // upstream accessTier, "" when unknown
+	TierCountry       string // upstream countryCode, "" when unknown
+	// ProvisionedModels is the set of model ids upstream provisioned for
+	// this token at admission (session snapshot QuotaByModel keys). Populated
+	// when the admission response carried rate limits; nil when unknown.
+	// Server uses it to gate -max upgrades (issue #140).
+	ProvisionedModels map[string]bool
 	Bridge            *bridgeEntry // nil for pooled (fixed-token) leases
 	// entry is the fixed-token entry backing this lease. Set by Acquire so
 	// LeaseRelease always releases through the right run manager: after a
@@ -453,6 +458,22 @@ func (p *Pool) AddToken(token string) (int, error) {
 	p.toks.Store(&next)
 	return idx, nil
 }
+
+// provisionedFromQuota derives the set of model ids upstream provisioned for
+// this token from a session snapshot's QuotaByModel map (key = model id).
+// Absent/empty map → nil (unknown, tier gate alone decides).
+func provisionedFromQuota(ss session.SessionSnapshot) map[string]bool {
+	if len(ss.QuotaByModel) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(ss.QuotaByModel))
+	for id := range ss.QuotaByModel {
+		out[id] = true
+	}
+	return out
+}
+
+// --- pool quota/snapshot ---
 
 // RemoveLastToken removes the highest-index fixed token (dashboard action).
 // Only the last index can be removed safely: removing a middle token would
@@ -806,8 +827,9 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		p.lastActive = time.Now()
 		p.idleFinished = false
 		p.lastActiveMu.Unlock()
+		provisioned := provisionedFromQuota(ss)
 		return &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			TierAccess: ss.TierAccess, TierCountry: ss.TierCountry, entry: tok, AcquiredAt: time.Now()}, nil
+			TierAccess: ss.TierAccess, TierCountry: ss.TierCountry, ProvisionedModels: provisioned, entry: tok, AcquiredAt: time.Now()}, nil
 	}
 
 	// Failover precedence (PRD §6 error matrix): when buckets are mixed the

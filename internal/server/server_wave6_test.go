@@ -354,6 +354,68 @@ func TestChatLearnsAccessTier(t *testing.T) {
 	}
 }
 
+// TestChatLearnsProvisionedModels is the regression for issue #140's ban
+// amplifier: a FULL-tier token whose upstream rate limits provision ONLY
+// base models (no -max entries) must not upgrade to -max — upstream
+// provisions -max roots per-account, so PREFER_MAX_MODELS would otherwise
+// fire 403 free_mode_invalid_agent_model on every request (the 403 storm
+// that demoted and banned accounts). The admission's QuotaByModel keys are
+// folded as the provisioned set and gate the next ResolveModel call.
+func TestChatLearnsProvisionedModels(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "full" // full tier — but NO -max in the quota map
+	mock.RateLimitsByModel = map[string]any{
+		"deepseek/deepseek-v4-pro": map[string]any{
+			"model": "deepseek/deepseek-v4-pro", "limit": 5, "recentCount": 0,
+			"period": "pacific_day", "resetTimeZone": "America/Los_Angeles",
+			"resetAt": "2026-08-20T07:00:00.000Z",
+		},
+		"deepseek/deepseek-v4-flash": map[string]any{
+			"model": "deepseek/deepseek-v4-flash", "limit": 999, "recentCount": 0,
+			"period": "pacific_day", "resetTimeZone": "America/Los_Angeles",
+			"resetAt": "2026-08-20T07:00:00.000Z",
+		},
+	}
+	mock.ChatBody = testutil.SSEEvent(testChunk("chatcmpl-provm", 1, `"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]`))
+	srv := newServerCfg(t, mock, func(c *config.Config) { c.PreferMaxModels = true })
+
+	// Before any admission the provisioned set is unknown, so the routed
+	// -max variant upgrades (historic behavior).
+	if got := srv.reg.ResolveModel("deepseek/deepseek-v4-pro"); got != "deepseek/deepseek-v4-pro-max" {
+		t.Fatalf("pre-admission ResolveModel(deepseek-v4-pro) = %q, want -max (unknown provisioned set)", got)
+	}
+
+	body := `{"model":"` + testModelA + `","prompt":"hi","stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	cur := srv.cfg.Load()
+	// The mock's quota covers the BASE models only — full tier plus a
+	// base-only provisioned set is exactly the incident shape.
+	if len(cur.ProvisionedModels) == 0 {
+		t.Fatal("ProvisionedModels not learned after admission")
+	}
+	if cur.ProvisionedModels["deepseek/deepseek-v4-flash-max"] {
+		t.Error("flash-max in provisioned set, want absent (base-only account)")
+	}
+	// The registry copy received the fold: the SAME model that upgraded
+	// before the admission now stays on its base — full tier alone no
+	// longer justifies the -max upgrade when the account was not
+	// provisioned for it.
+	if got := srv.reg.ResolveModel("deepseek/deepseek-v4-pro"); got != "deepseek/deepseek-v4-pro" {
+		t.Errorf("post-admission ResolveModel(deepseek-v4-pro) = %q, want base (provisioned set gates -max)", got)
+	}
+	if got := srv.reg.ResolveModel("deepseek/deepseek-v4-flash"); got != "deepseek/deepseek-v4-flash" {
+		t.Errorf("post-admission ResolveModel(deepseek-v4-flash) = %q, want base (flash-max not provisioned)", got)
+	}
+}
+
 // TestChatAccessTierExplicitWins verifies an operator-set ACCESS_TIER is
 // never clobbered by a probe observation: the fold skips when
 // AccessTierExplicit is set.

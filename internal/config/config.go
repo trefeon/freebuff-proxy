@@ -164,6 +164,17 @@ type Config struct {
 	// source (ACCESS_TIER env/.env/JSON), so runtime session-probe
 	// observations never override the operator's explicit choice.
 	AccessTierExplicit bool
+	// ProvisionedModels is the set of model ids upstream actually
+	// provisioned for the pooled token(s), learned from the session
+	// probe/admission response's rateLimitsByModel map (keys = model ids).
+	// The -max upgrade gate (registry.maxUpgradeAllowed) refuses variants
+	// absent from this set: upstream provisions -max roots "per-account"
+	// rather than for every full-tier token, so a full tier with only base
+	// models provisioned would otherwise trip 403 free_mode_invalid_
+	// agent_model on every upgraded request — the ban amplifier (issue
+	// #140). Empty = unknown = the tier gate alone decides (historic
+	// behavior). Never operator-set; JSON/env cannot populate it.
+	ProvisionedModels map[string]bool `json:"-"`
 	// EnvFile is the .env path actually loaded ("" when none existed).
 	// Resolved via ResolveEnvFile (issue #39): ./.env in the working
 	// directory wins; otherwise the platform config dir is tried.

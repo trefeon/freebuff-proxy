@@ -420,19 +420,33 @@ func (r *Registry) ResolveModel(model string) string {
 }
 
 // maxUpgradeAllowed reports whether an upgrade to the given -max variant is
-// safe for the registry's current route table and the config's access tier:
-// the variant must be routed by the live registry (modelToAgent), and a
-// 'limited' tier may only reach variants explicitly in LimitedTierModels
-// (none today — the -max agent roots require full access upstream, so a
-// limited token would trip 403 free_mode_invalid_agent_model). cfg may be
-// nil (no config stored); r may be nil (no route table — treated as routed
-// for compatibility with a bare registry).
+// safe for the registry's current route table, the config's access tier, and
+// the account's provisioned model set:
+//   - the variant must be routed by the live registry (modelToAgent);
+//   - a 'limited' tier may only reach variants explicitly in
+//     LimitedTierModels (none today — the -max agent roots require full
+//     access upstream, so a limited token would trip 403
+//     free_mode_invalid_agent_model);
+//   - when cfg.ProvisionedModels is non-empty (learned from the upstream
+//     session probe), the variant must be IN the provisioned set: upstream
+//     provisions -max roots per-account, so a full tier with only base
+//     models provisioned (the common case) must keep the base model
+//     instead of tripping 403 on every upgraded request (issue #140).
+//
+// cfg may be nil (no config stored); r may be nil (no route table — treated
+// as routed for compatibility with a bare registry).
 func maxUpgradeAllowed(r *Registry, cfg *config.Config, upgraded string) bool {
 	if r != nil && !r.IsModelRouted(upgraded) {
 		return false
 	}
-	if cfg != nil && strings.EqualFold(cfg.AccessTier, "limited") {
+	if cfg == nil {
+		return true
+	}
+	if strings.EqualFold(cfg.AccessTier, "limited") {
 		return LimitedTierModels[upgraded]
+	}
+	if len(cfg.ProvisionedModels) > 0 && !cfg.ProvisionedModels[upgraded] {
+		return false
 	}
 	return true
 }
