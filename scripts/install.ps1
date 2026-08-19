@@ -84,11 +84,13 @@ if ($creds) { $token = Get-AuthToken $creds }
 
 function Get-HeadlessToken {
   Write-Host "Requesting login URL for browser authentication..." -ForegroundColor Cyan
-  $bytes = New-Object byte[] 24
+  $bytes = New-Object byte[] 32
   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   $rng.GetBytes($bytes)
-  $hex = ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
-  $fingerprintId = "enhanced-$hex"
+  # CLI-parity base64url shape (43 chars) — same charset as the official
+  # CLI fingerprint.
+  $hash = ([Convert]::ToBase64String($bytes) -replace '\+', '-' -replace '/', '_' -replace '=', '')
+  $fingerprintId = "enhanced-$hash"
 
   $headers = @{
     "User-Agent" = $CliUserAgent

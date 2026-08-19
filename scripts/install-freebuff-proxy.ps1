@@ -85,13 +85,16 @@ function Get-HeadlessToken {
   Write-Host "Requesting login URL for browser authentication..." -ForegroundColor Cyan
   $bytes = New-Object byte[] 32
   [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-  $hash = [Convert]::ToBase64String($bytes) -replace '[+/=]', ''
-  $fingerprintId = "enhanced-$($hash.Substring(0, [Math]::Min(43, $hash.Length)))"
+  # CLI-parity base64url shape (43 chars) — same charset as the official
+  # CLI fingerprint; no substring truncation needed.
+  $hash = ([Convert]::ToBase64String($bytes) -replace '\+', '-' -replace '/', '_' -replace '=', '')
+  $fingerprintId = "enhanced-$hash"
+  $authHeaders = @{ "User-Agent" = "ai-sdk/openai-compatible/1.0.0/codebuff" }
 
   try {
     $codeBody = @{ fingerprintId = $fingerprintId } | ConvertTo-Json
     $codeResp = Invoke-RestMethod -Uri "https://www.codebuff.com/api/auth/cli/code" `
-      -Method POST -ContentType "application/json" -Body $codeBody
+      -Method POST -Headers $authHeaders -ContentType "application/json" -Body $codeBody
   } catch {
     Write-Host "Failed to get login URL: $_" -ForegroundColor Red
     return $null
@@ -115,11 +118,11 @@ function Get-HeadlessToken {
   Write-Host "Waiting for authentication in browser (timeout: 300s)..." -ForegroundColor Cyan
   $start = Get-Date
   while (((Get-Date) - $start).TotalSeconds -lt 300) {
-    Start-Sleep -Seconds 4
+    Start-Sleep -Seconds 5
     try {
       $query = "fingerprintId=$([Uri]::EscapeDataString($fingerprintId))&fingerprintHash=$([Uri]::EscapeDataString($fingerprintHash))&expiresAt=$([Uri]::EscapeDataString($expiresAt))"
       $statusUri = "https://www.codebuff.com/api/auth/cli/status?$query"
-      $statusResp = Invoke-RestMethod -Uri $statusUri -Method GET
+      $statusResp = Invoke-RestMethod -Uri $statusUri -Method GET -Headers $authHeaders
       if ($statusResp.user -and $statusResp.user.authToken) {
         Write-Host "Authentication successful! Token acquired." -ForegroundColor Green
         return [string]$statusResp.user.authToken

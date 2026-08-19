@@ -40,7 +40,9 @@ $ErrorActionPreference = "Stop"
 function Generate-FingerprintId {
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $hash = [Convert]::ToBase64String($bytes) -replace '[+/=]', ''
+    # CLI-parity base64url (43 chars) — same charset as the official CLI's
+    # calculateEnhancedFingerprint (SHA-256 base64url). Fresh per run by design.
+    $hash = ([Convert]::ToBase64String($bytes) -replace '\+', '-' -replace '/', '_' -replace '=', '')
     return "enhanced-$($hash.Substring(0, [Math]::Min(43, $hash.Length)))"
 }
 
@@ -112,10 +114,12 @@ $fingerprintId = Generate-FingerprintId
 Write-Host "Fingerprint: $fingerprintId" -ForegroundColor DarkGray
 
 Write-Host "Requesting login URL..." -ForegroundColor Cyan
+$codeHeaders = @{ "User-Agent" = "ai-sdk/openai-compatible/1.0.0/codebuff" }
 try {
     $codeBody = @{ fingerprintId = $fingerprintId } | ConvertTo-Json
     $codeResp = Invoke-RestMethod -Uri "$BaseUrl/api/auth/cli/code" `
         -Method POST `
+        -Headers $codeHeaders `
         -ContentType "application/json" `
         -Body $codeBody
 } catch {
@@ -176,7 +180,7 @@ while ($true) {
         $query = "fingerprintId=$([Uri]::EscapeDataString($fingerprintId))&fingerprintHash=$([Uri]::EscapeDataString($fingerprintHash))&expiresAt=$([Uri]::EscapeDataString($expiresAt))"
         $statusResp = Invoke-RestMethod -Uri "$BaseUrl/api/auth/cli/status?$query" `
             -Method GET `
-            -ContentType "application/json" `
+            -Headers $codeHeaders `
             -ErrorAction SilentlyContinue
     } catch {
         $statusCode = $_.Exception.Response.StatusCode.value__
@@ -205,6 +209,28 @@ Write-Host ""
 Write-Host "Login successful!" -ForegroundColor Green
 Write-Host "  Account: $userName ($userEmail)" -ForegroundColor Cyan
 Write-Host "  Token:   $authToken" -ForegroundColor White
+
+# --- 4.5 zero-cost post-auth verification (anti-ban) -------------------------
+# Probe /api/v1/freebuff/session WITHOUT x-freebuff-instance-id so no session
+# slot is claimed. Refuses banned accounts — a dead-token check here beats
+# discovering it in a chat after it burned pool cooldowns.
+try {
+    $probeResp = Invoke-RestMethod -Uri "$BaseUrl/api/v1/freebuff/session" `
+        -Method GET `
+        -Headers @{ "Authorization" = "Bearer $authToken"; "User-Agent" = "ai-sdk/openai-compatible/1.0.0/codebuff" } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop
+    $probeStatus = [string]$probeResp.status
+    $probeTier = [string]$probeResp.accessTier
+    $probeRisk = [string]$probeResp.currentRiskScore
+    if ($probeStatus -eq "banned") {
+        Write-Host "ABORT: this account is BANNED upstream. Refusing to save the token." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Account check: status=$probeStatus tier=$(if ($probeTier) { $probeTier } else { '?' }) risk=$(if ($probeRisk) { $probeRisk } else { '?' })" -ForegroundColor Cyan
+} catch {
+    Write-Host "Probe response unreadable; continuing without tier confirmation: $_" -ForegroundColor Yellow
+}
 
 # --- 5. save credentials locally (opt-in only with -Save) ---------------------
 if ($Save) {

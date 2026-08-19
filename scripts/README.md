@@ -39,10 +39,10 @@ The extracted release folder contains `freebuff-proxy` (Linux/macOS) or `freebuf
 
 `gen-token.sh` (Linux / macOS) and `gen-token.ps1` / `gen-token.cmd` (Windows) generate a FreeBuff auth token through a hardened headless OAuth flow:
 
-1. Mints a unique 48-hex hardware fingerprint (`enhanced-[a-f0-9]{48}`) and requests a login URL from FreeBuff backend.
+1. Mints a fresh CLI-parity fingerprint (`enhanced-<43-char base64url>`, same shape as the official CLI's SHA-256 base64url fingerprint) and requests a login URL from the FreeBuff backend.
 2. Auto-launches an isolated Private/Incognito browser window to prevent account linking.
-3. Jitter-polls the authentication status.
-4. Performs post-auth verification on `/api/v1/me` and `/api/v1/freebuff/session` to confirm account status and tier.
+3. Jitter-polls the authentication status every 5s (CLI parity).
+4. Runs a zero-cost post-auth probe on `/api/v1/freebuff/session` (no instance header, no session slot consumed) to confirm account status/tier/risk and **refuses to save a banned account**.
 5. Saves or appends the token to `.env`.
 
 ### Windows (PowerShell / CMD)

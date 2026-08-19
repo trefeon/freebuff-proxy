@@ -82,12 +82,19 @@ if [ "$MODE" = "interactive" ]; then
 fi
 
 # --- 1. generate fingerprint + request login URL -----------------------------
-FINGERPRINT_ID="enhanced-$(openssl rand -base64 32 | tr -d '+/=' | head -c 43)"
+# CLI-parity fingerprint: `enhanced-` + SHA-256-sized base64url payload (43
+# chars, same charset as the official CLI's calculateEnhancedFingerprint —
+# fingerprint.ts). Fresh per run so multiple accounts minted on one machine
+# do not share an identifier. Random-only: no hardware correlation, by design.
+FINGERPRINT_ID="enhanced-$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
 gray "Fingerprint: $FINGERPRINT_ID"
 
 c "Requesting login URL..."
+# CLI-parity UA (ai-sdk/openai-compatible/1.0.0/codebuff): the auth surface is
+# fingerprintable; a curl/PowerShell default UA reads as a third-party tool.
 CODE_RESP=$(curl -sS -X POST "$BASE_URL/api/auth/cli/code" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: ai-sdk/openai-compatible/1.0.0/codebuff" \
   -d "{\"fingerprintId\":\"$FINGERPRINT_ID\"}")
 
 LOGIN_URL=$(echo "$CODE_RESP" | jq -r '.loginUrl // empty')
@@ -155,6 +162,7 @@ while true; do
   sleep "$POLL_INTERVAL"
 
   STATUS_RESP=$(curl -sS -w "\n%{http_code}" \
+    -H "User-Agent: ai-sdk/openai-compatible/1.0.0/codebuff" \
     "$BASE_URL/api/auth/cli/status?fingerprintId=$ENCODED_FP&fingerprintHash=$ENCODED_HASH&expiresAt=$ENCODED_EXPIRES" 2>/dev/null || echo -e "\n000")
 
   HTTP_CODE=$(echo "$STATUS_RESP" | tail -1)
@@ -182,6 +190,29 @@ echo ""
 ok "Login successful!"
 c "  Account: $USER_NAME ($USER_EMAIL)"
 echo "  Token:   $AUTH_TOKEN"
+
+# --- 4.5 zero-cost post-auth verification (anti-ban) -------------------------
+# Probe /api/v1/freebuff/session WITHOUT x-freebuff-instance-id so no session
+# slot is claimed (matches the proxy's -test-token probe). Refuses to save a
+# banned/spend-limited account — a fresh token check here beats discovering a
+# dead token in a chat after it burned pool cooldowns.
+PROBE_RESP=$(curl -sS --max-time 15 \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "User-Agent: ai-sdk/openai-compatible/1.0.0/codebuff" \
+  "$BASE_URL/api/v1/freebuff/session" 2>/dev/null || true)
+PROBE_STATUS=$(echo "$PROBE_RESP" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+PROBE_TIER=$(echo "$PROBE_RESP" | jq -r '.accessTier // ""' 2>/dev/null || echo "")
+PROBE_RISK=$(echo "$PROBE_RESP" | jq -r '.currentRiskScore // ""' 2>/dev/null || echo "")
+if [ "$PROBE_STATUS" = "banned" ] || echo "$PROBE_RESP" | grep -qi 'banned'; then
+  err "ABORT: this account is BANNED upstream. Refusing to save the token."
+  exit 1
+fi
+if [ "$PROBE_STATUS" = "unknown" ] && [ -z "$PROBE_TIER" ]; then
+  warn "Probe response unreadable; continuing without tier confirmation:"
+  gray "  $(echo "$PROBE_RESP" | tr -d '\n' | head -c 160)"
+else
+  c "Account check: status=$PROBE_STATUS tier=${PROBE_TIER:-?} risk=${PROBE_RISK:-?}"
+fi
 
 # --- 5. save credentials locally (opt-in with --save) ------------------------
 if [ "$MODE" = "save" ]; then

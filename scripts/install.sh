@@ -249,7 +249,7 @@ urlencode() {
 obtain_headless_token() {
   [ "$NO_PROMPT" = "1" ] && { warn "Non-interactive mode: skipping browser login; AUTH_TOKENS stays empty."; return 1; }
   c "Requesting login URL for browser authentication..."
-  local fp="enhanced-$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  local fp="enhanced-$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
   local code_resp
   code_resp=$(curl -sS -X POST "https://www.codebuff.com/api/auth/cli/code" \
     -H "User-Agent: $CLI_UA" \
@@ -292,7 +292,7 @@ obtain_headless_token() {
       warn "Login timed out after 300s."
       return 1
     fi
-    sleep 4
+    sleep 5
     status_resp=$(curl -sS -H "User-Agent: $CLI_UA" "https://www.codebuff.com/api/auth/cli/status?fingerprintId=$enc_fp&fingerprintHash=$enc_hash&expiresAt=$enc_exp" 2>/dev/null || true)
     tok=$(echo "$status_resp" | sed -n 's/.*"authToken": *"\([^"]*\)".*/\1/p')
     if [ -n "$tok" ] && [ "${#tok}" -gt 12 ]; then
