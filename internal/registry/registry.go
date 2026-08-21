@@ -72,18 +72,28 @@ const maxFetchBytes = 2 << 20
 // mimo/mimo-v2.5 (FALLBACK_FREEBUFF_MODEL_ID), so a -max request would be
 // served by a different model while advertising a name it does not honor.
 var ServedModels = map[string]bool{
-	"deepseek/deepseek-v4-flash":      true,
-	"deepseek/deepseek-v4-pro":        true,
-	"mimo/mimo-v2.5":                  true,
-	"minimax/minimax-m3":              true,
-	"openai/gpt-5.6-luna":             true,
-	"z-ai/glm-5.2":                    true,
-	"anthropic/claude-fable-5":        true,
-	"crof/kimi-k3-eco":                true,
-	"meta/muse-spark-1.2-contributor": true,
-	"google/gemini-2.5-flash-lite":    true,
-	"google/gemini-3.1-flash-lite":    true,
-	"google/gemini-3.5-flash-lite":    true,
+	"deepseek/deepseek-v4-flash": true,
+	"deepseek/deepseek-v4-pro":   true,
+	"openai/gpt-5.6-luna":        true,
+	"z-ai/glm-5.2":               true,
+	"mimo/mimo-v2.5":             true,
+}
+
+// SupportedModelIDs is the canonical list of the 5 active models served by the gateway.
+var SupportedModelIDs = []string{
+	"deepseek/deepseek-v4-flash",
+	"deepseek/deepseek-v4-pro",
+	"openai/gpt-5.6-luna",
+	"z-ai/glm-5.2",
+	"mimo/mimo-v2.5",
+}
+
+// SupportedModelsHelpText is the formatted list of models for error messages (issue #189).
+const SupportedModelsHelpText = "deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro, openai/gpt-5.6-luna, z-ai/glm-5.2, mimo/mimo-v2.5"
+
+// IsServedModel reports whether model is in the 5 active served models.
+func IsServedModel(model string) bool {
+	return ServedModels[model]
 }
 
 // fallbackAgents is the hardcoded model→agent fallback used when the sources

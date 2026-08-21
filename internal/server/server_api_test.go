@@ -851,8 +851,8 @@ func TestMessagesCountTokensUnknownModel(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("error body not JSON: %v", err)
 	}
-	if out.Error.Type != "invalid_request_error" || out.Error.Code != "model_not_found" {
-		t.Errorf("type/code = %q/%q, want invalid_request_error/model_not_found", out.Error.Type, out.Error.Code)
+	if out.Error.Type != "invalid_request_error" {
+		t.Errorf("type = %q, want invalid_request_error", out.Error.Type)
 	}
 	if mock.Requests != 0 {
 		t.Errorf("upstream requests = %d, want 0", mock.Requests)

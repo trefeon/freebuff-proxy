@@ -130,10 +130,9 @@ type Config struct {
 	// FallbackModels maps a requested model to the model served instead
 	// when the queue wait reaches FallbackAfter (issue #100,
 	// only when FALLBACK_MODEL is unset): the daily premium free-catalog rows
-	// (deepseek-v4-pro, gpt-5.6-luna, minimax-m3, claude-fable-5)
-	// → deepseek/deepseek-v4-flash. Referral-gated models (z-ai/glm-5.2) are
-	// held out (issue #183) and gated via QUOTA_FALLBACK_MODELS. The proxy
-	// path fires only when the pool surfaces a waiting-room/queue delay ≥ FallbackAfter
+	// (deepseek-v4-pro, gpt-5.6-luna) → deepseek/deepseek-v4-flash.
+	// Referral-gated models (z-ai/glm-5.2) are handled via QUOTA_FALLBACK_MODELS.
+	// The proxy path fires only when the pool surfaces a waiting-room/queue delay ≥ FallbackAfter
 	// for the requested model (issue #100) — 429 quota exhaustion NEVER
 	// falls back (anti-ban invariant §10). The premium→flash targets
 	// mirror the CLI's getRecommendedFreebuffModelId hero pick; the
@@ -377,20 +376,13 @@ var defaultModelAliases = map[string]string{
 }
 
 // defaultFallbackModels returns the FALLBACK_MODEL defaults (issue #100):
-// the daily premium free-catalog rows fall back to the always-available flash
-// model once their queue wait passes FALLBACK_AFTER_MS — mirrors the CLI
-// hero pick once the premium daily pool runs out (reference
-// getRecommendedFreebuffModelId); muse targets deepseek-v4-pro per
-// MUSE_SPARK_FALLBACK_MODEL_ID. Referral-gated z-ai/glm-5.2 is held out (issue #183)
-// and handled via QUOTA_FALLBACK_MODELS. Trigger is queue-wait ≥ FALLBACK_AFTER_MS
-// only — never 429s.
+// the daily premium free-catalog rows (deepseek-v4-pro, gpt-5.6-luna) fall back
+// to the always-available flash model once their queue wait passes FALLBACK_AFTER_MS
+// (issue #189). Trigger is queue-wait ≥ FALLBACK_AFTER_MS only — never 429s.
 func defaultFallbackModels() map[string]string {
 	return map[string]string{
-		"deepseek/deepseek-v4-pro":        "deepseek/deepseek-v4-flash",
-		"openai/gpt-5.6-luna":             "deepseek/deepseek-v4-flash",
-		"minimax/minimax-m3":              "deepseek/deepseek-v4-flash",
-		"anthropic/claude-fable-5":        "deepseek/deepseek-v4-flash",
-		"meta/muse-spark-1.2-contributor": "deepseek/deepseek-v4-pro",
+		"deepseek/deepseek-v4-pro": "deepseek/deepseek-v4-flash",
+		"openai/gpt-5.6-luna":      "deepseek/deepseek-v4-flash",
 	}
 }
 

@@ -1174,7 +1174,7 @@ func TestDashboardConfigSaveAppliesModelAliases(t *testing.T) {
 	t.Cleanup(ts.Close)
 	cookie := authedCookie(t, ts)
 
-	resp := postConfig(t, ts.URL, cookie, "AUTH_TOKENS=tok-0\nMODEL_ALIASES=gpt-4o:"+modelB+"\n")
+	resp := postConfig(t, ts.URL, cookie, "AUTH_TOKENS=tok-0\nMODEL_ALIASES=gpt-4o:openai/gpt-5.6-luna\n")
 	body := bodyOf(t, resp)
 	if !strings.Contains(body, "Saved and reloaded") {
 		t.Fatalf("config save failed: %s", body)
@@ -1188,7 +1188,7 @@ func TestDashboardConfigSaveAppliesModelAliases(t *testing.T) {
 		t.Fatal("no chat requests recorded upstream")
 	}
 	last := mock.RecordedChatBodies[len(mock.RecordedChatBodies)-1]
-	if !strings.Contains(last, modelB) {
-		t.Errorf("upstream body = %s, want resolved model %s after config-save alias", last, modelB)
+	if !strings.Contains(last, "openai/gpt-5.6-luna") {
+		t.Errorf("upstream body = %s, want resolved model openai/gpt-5.6-luna after config-save alias", last)
 	}
 }

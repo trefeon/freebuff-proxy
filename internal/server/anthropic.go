@@ -80,10 +80,8 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	model := s.reg.ResolveModel(rawModel)
 	if !s.modelAllowed(model) {
-		// MODELS_ALLOW: the resolved model is outside the operator
-		// allowlist — reject like an unknown model.
-		s.writeAnthropicError(w, r, http.StatusNotFound,
-			"model not allowed by MODELS_ALLOW", "model_not_found", 0)
+		s.writeAnthropicError(w, r, http.StatusBadRequest,
+			ModelUnavailableMessage(rawModel), "invalid_request_error", 0)
 		return
 	}
 	stream := false

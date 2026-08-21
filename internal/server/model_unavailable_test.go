@@ -43,9 +43,9 @@ func TestModelUnavailableSkipMetric(t *testing.T) {
 		}
 		model := r.Header.Get("x-freebuff-model")
 		w.Header().Set("Content-Type", "application/json")
-		if model == modelB {
+		if model == "deepseek/deepseek-v4-pro" {
 			w.WriteHeader(http.StatusConflict)
-			_, _ = io.WriteString(w, `{"status":"model_unavailable","requestedModel":"`+modelB+`","availableHours":"9am ET-5pm PT every day"}`)
+			_, _ = io.WriteString(w, `{"status":"model_unavailable","requestedModel":"deepseek/deepseek-v4-pro","availableHours":"9am ET-5pm PT every day"}`)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -56,11 +56,11 @@ func TestModelUnavailableSkipMetric(t *testing.T) {
 	_, m0 := doJSON(t, http.MethodGet, ts.URL+"/metrics", nil, nil)
 	before := metricValue(t, string(m0), "freebuff_proxy_model_unavailable_skips_total")
 
-	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelB), nil)
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("first chat status = %d, want 200: %s", resp.StatusCode, data)
 	}
-	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelB), nil)
+	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("second chat status = %d, want 200: %s", resp.StatusCode, data)
 	}

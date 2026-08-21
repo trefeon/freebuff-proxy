@@ -85,10 +85,8 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !s.modelAllowed(model) {
-		// MODELS_ALLOW: the resolved/probed model is outside the operator
-		// allowlist — reject like an unknown model.
-		s.writeJSONError(w, http.StatusNotFound,
-			"model not allowed by MODELS_ALLOW", "invalid_request_error", "model_not_found", 0)
+		s.writeJSONError(w, http.StatusBadRequest,
+			ModelUnavailableMessage(rawModel), "invalid_request_error", "model_unavailable", 0)
 		return
 	}
 	stream := false

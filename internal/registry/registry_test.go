@@ -896,3 +896,50 @@ func TestResolveModelMaxUpgradeRemoved(t *testing.T) {
 		}
 	}
 }
+
+// TestStrictServedModelsFiveOnly pins issue #189: ServedModels strictly contains
+// ONLY the 5 operational FreeBuff models; all other 7 decommissioned/broken
+// models and -max variants are rejected by IsServedModel.
+func TestStrictServedModelsFiveOnly(t *testing.T) {
+	wantModels := []string{
+		"deepseek/deepseek-v4-flash",
+		"deepseek/deepseek-v4-pro",
+		"openai/gpt-5.6-luna",
+		"z-ai/glm-5.2",
+		"mimo/mimo-v2.5",
+	}
+	if len(ServedModels) != 5 {
+		t.Fatalf("len(ServedModels) = %d, want exactly 5", len(ServedModels))
+	}
+	for _, m := range wantModels {
+		if !ServedModels[m] {
+			t.Errorf("ServedModels missing %q", m)
+		}
+		if !IsServedModel(m) {
+			t.Errorf("IsServedModel(%q) = false, want true", m)
+		}
+	}
+
+	// 7 decommissioned models must be rejected:
+	decommissioned := []string{
+		"minimax/minimax-m3",
+		"google/gemini-2.5-flash-lite",
+		"google/gemini-3.1-flash-lite",
+		"google/gemini-3.5-flash-lite",
+		"anthropic/claude-fable-5",
+		"crof/kimi-k3-eco",
+		"meta/muse-spark-1.2-contributor",
+		"deepseek/deepseek-v4-pro-max",
+		"deepseek/deepseek-v4-flash-max",
+		"openai/gpt-5.6-luna-max",
+		"random/unsupported-model",
+	}
+	for _, m := range decommissioned {
+		if ServedModels[m] {
+			t.Errorf("ServedModels contains decommissioned model %q", m)
+		}
+		if IsServedModel(m) {
+			t.Errorf("IsServedModel(%q) = true, want false", m)
+		}
+	}
+}

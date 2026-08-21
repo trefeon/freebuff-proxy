@@ -58,7 +58,7 @@ func (s *Server) handleMessagesCountTokens(w http.ResponseWriter, r *http.Reques
 	model := s.reg.ResolveModel(rawModel)
 	if !s.modelAllowed(model) {
 		s.writeAnthropicError(w, r, http.StatusBadRequest,
-			"model not allowed by MODELS_ALLOW", "model_not_found", 0)
+			ModelUnavailableMessage(rawModel), "invalid_request_error", 0)
 		return
 	}
 	if s.tokenEstimator == nil {

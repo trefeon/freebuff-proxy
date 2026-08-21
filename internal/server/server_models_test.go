@@ -58,17 +58,18 @@ func TestUnknownModel(t *testing.T) {
 		name       string
 		body       string
 		wantStatus int
+		wantCode   string
 	}{
-		{"unknown_model", `{"model":"no/such-model","messages":[{"role":"user","content":"hi"}]}`, http.StatusNotFound},
-		{"missing_model", `{"messages":[{"role":"user","content":"hi"}]}`, http.StatusBadRequest},
+		{"unknown_model", `{"model":"no/such-model","messages":[{"role":"user","content":"hi"}]}`, http.StatusBadRequest, "model_unavailable"},
+		{"missing_model", `{"messages":[{"role":"user","content":"hi"}]}`, http.StatusBadRequest, "model_not_found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(tc.body), nil)
 			if resp.StatusCode != tc.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", resp.StatusCode, tc.wantStatus, data)
 			}
-			if !strings.Contains(string(data), "model_not_found") {
-				t.Errorf("body missing model_not_found: %s", data)
+			if !strings.Contains(string(data), tc.wantCode) {
+				t.Errorf("body missing %s: %s", tc.wantCode, data)
 			}
 		})
 	}
@@ -105,10 +106,9 @@ func TestModelsEndpoint(t *testing.T) {
 	if out.Object != "list" {
 		t.Errorf("object = %q, want list", out.Object)
 	}
-	// #121: the offline fallback pruned 5 dead model ids (laguna/ling/greg),
-	// 15 -> 10 rows (registry fallbackAgents, free-agents.ts-verified).
-	if len(out.Data) < 10 {
-		t.Errorf("models = %d, want >= 10", len(out.Data))
+	// Issue #189: strictly 5 operational models served.
+	if len(out.Data) != 5 {
+		t.Errorf("models = %d, want 5", len(out.Data))
 	}
 	for i, m := range out.Data {
 		if m.ID == "" || m.Object != "model" || m.OwnedBy == "" {
@@ -165,8 +165,8 @@ func TestMaxVariantsBlocked(t *testing.T) {
 		"openai/gpt-5.6-luna-max",
 	} {
 		resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(model), nil)
-		if resp.StatusCode != http.StatusNotFound {
-			t.Errorf("chat %s status = %d, want 404: %s", model, resp.StatusCode, data)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("chat %s status = %d, want 400: %s", model, resp.StatusCode, data)
 		}
 	}
 	if len(mock.RecordedChatHeaders) != 0 {
@@ -196,9 +196,9 @@ func TestHealthz(t *testing.T) {
 	if out.UptimeSeconds < 0 {
 		t.Errorf("uptime_seconds = %v, want >= 0", out.UptimeSeconds)
 	}
-	// #121: fallback registry 15 -> 10 rows after pruning dead model ids.
-	if out.Models < 10 {
-		t.Errorf("models = %d, want >= 10", out.Models)
+	// Issue #189: strictly 5 active models.
+	if out.Models != 5 {
+		t.Errorf("models = %d, want 5", out.Models)
 	}
 	if len(out.Tokens) != 2 {
 		t.Errorf("tokens = %d, want 2", len(out.Tokens))
@@ -384,7 +384,7 @@ func TestModelsAllowList(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
-		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash", modelB}
+		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"}
 	}, mock)
 
 	resp, data := doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
@@ -401,12 +401,12 @@ func TestModelsAllowList(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, m := range out.Data {
-		if m.ID != "deepseek/deepseek-v4-flash" && m.ID != modelB {
+		if m.ID != "deepseek/deepseek-v4-flash" && m.ID != "deepseek/deepseek-v4-pro" {
 			t.Errorf("model %q listed outside MODELS_ALLOW", m.ID)
 		}
 		seen[m.ID] = true
 	}
-	if !seen["deepseek/deepseek-v4-flash"] || !seen[modelB] {
+	if !seen["deepseek/deepseek-v4-flash"] || !seen["deepseek/deepseek-v4-pro"] {
 		t.Errorf("allowlisted models missing from /v1/models: %v", seen)
 	}
 	if len(out.Data) != 2 {
@@ -423,9 +423,9 @@ func TestModelsAllowRejectsChat(t *testing.T) {
 		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash"}
 	}, mock)
 
-	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelB), nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("chat status = %d, want 404: %s", resp.StatusCode, data)
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro"), nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("chat status = %d, want 400: %s", resp.StatusCode, data)
 	}
 	var out struct {
 		Error struct {
@@ -436,11 +436,11 @@ func TestModelsAllowRejectsChat(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("error body is not JSON: %v: %s", err, data)
 	}
-	if out.Error.Code != "model_not_found" {
-		t.Errorf("error.code = %q, want model_not_found", out.Error.Code)
+	if out.Error.Code != "model_unavailable" {
+		t.Errorf("error.code = %q, want model_unavailable", out.Error.Code)
 	}
-	if !strings.Contains(out.Error.Message, "MODELS_ALLOW") {
-		t.Errorf("error.message = %q, want a mention of MODELS_ALLOW", out.Error.Message)
+	if !strings.Contains(out.Error.Message, "Only the following 5 models are supported") {
+		t.Errorf("error.message = %q, want supported models notice", out.Error.Message)
 	}
 	if len(mock.RecordedChatHeaders) != 0 {
 		t.Error("upstream chat recorded for a rejected model, want none")
@@ -454,13 +454,13 @@ func TestModelsAllowResolvedAlias(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
-		c.ModelAliases = map[string]string{"fable-alias": modelB}
+		c.ModelAliases = map[string]string{"pro-alias": "deepseek/deepseek-v4-pro"}
 		c.ModelsAllow = []string{"deepseek/deepseek-v4-flash"}
 	}, mock)
 
-	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("fable-alias"), nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("chat (alias) status = %d, want 404: %s", resp.StatusCode, data)
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("pro-alias"), nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("chat (alias) status = %d, want 400: %s", resp.StatusCode, data)
 	}
 	var out struct {
 		Error struct {
@@ -470,8 +470,8 @@ func TestModelsAllowResolvedAlias(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("error body is not JSON: %v: %s", err, data)
 	}
-	if out.Error.Code != "model_not_found" {
-		t.Errorf("error.code = %q, want model_not_found", out.Error.Code)
+	if out.Error.Code != "model_unavailable" {
+		t.Errorf("error.code = %q, want model_unavailable", out.Error.Code)
 	}
 	if len(mock.RecordedChatHeaders) != 0 {
 		t.Error("upstream chat recorded for a rejected alias, want none")
@@ -497,13 +497,13 @@ func TestModelsAllowPassthrough(t *testing.T) {
 	}
 	// A -max id NOT in the allowlist stays rejected (no implicit expansion).
 	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("deepseek/deepseek-v4-pro-max"), nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("chat (unlisted -max) status = %d, want 404: %s", resp.StatusCode, data)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("chat (unlisted -max) status = %d, want 400: %s", resp.StatusCode, data)
 	}
 	// A model outside the list stays rejected.
 	resp, data = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("chat (disallowed) status = %d, want 404: %s", resp.StatusCode, data)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("chat (disallowed) status = %d, want 400: %s", resp.StatusCode, data)
 	}
 
 	// /v1/models lists exactly the allowlist, nothing else.
@@ -558,8 +558,8 @@ func TestModelsAllowEmptyIsOpen(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("models is not JSON: %v: %s", err, data)
 	}
-	if len(out.Data) < 2 {
-		t.Fatalf("model count = %d, want full catalog (no allowlist)", len(out.Data))
+	if len(out.Data) != 5 {
+		t.Errorf("model count = %d, want 5 (all operational models served)", len(out.Data))
 	}
 	var hasModelA, hasFlash bool
 	for _, m := range out.Data {
@@ -757,5 +757,126 @@ func TestMetricsTransientRetryCounters(t *testing.T) {
 	// and the fingerprint value line must not be emitted (only when > 0).
 	if strings.Contains(body, "freebuff_proxy_fingerprint_rotations_total{token=\"1\"}") {
 		t.Errorf("metrics emitted a fingerprint rotation value with no rotation: %s", body)
+	}
+}
+
+// TestStrictFiveModelsEnforced pins issue #189 end-to-end:
+//  1. GET /v1/models returns strictly the 5 operational models.
+//  2. Any request targeting a disabled model on OpenAI chat, Anthropic messages,
+//     or OpenAI responses returns immediate fast-fail with model_unavailable.
+//  3. /healthz reports models: 5.
+func TestStrictFiveModelsEnforced(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, _ := newTestServer(t, nil, mock)
+
+	// 1. /v1/models check
+	resp, data := doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /v1/models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal /v1/models: %v", err)
+	}
+	if len(out.Data) != 5 {
+		t.Fatalf("models count = %d, want exactly 5", len(out.Data))
+	}
+	wantSet := map[string]bool{
+		"deepseek/deepseek-v4-flash": true,
+		"deepseek/deepseek-v4-pro":   true,
+		"openai/gpt-5.6-luna":        true,
+		"z-ai/glm-5.2":               true,
+		"mimo/mimo-v2.5":             true,
+	}
+	for _, m := range out.Data {
+		if !wantSet[m.ID] {
+			t.Errorf("/v1/models listed unexpected model %q", m.ID)
+		}
+	}
+
+	disabledModels := []string{
+		"minimax/minimax-m3",
+		"google/gemini-2.5-flash-lite",
+		"google/gemini-3.1-flash-lite",
+		"google/gemini-3.5-flash-lite",
+		"anthropic/claude-fable-5",
+		"crof/kimi-k3-eco",
+		"meta/muse-spark-1.2-contributor",
+	}
+
+	for _, dm := range disabledModels {
+		// OpenAI chat completions -> 400 model_unavailable
+		body := `{"model":"` + dm + `","messages":[{"role":"user","content":"hi"}]}`
+		respChat, dataChat := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(body), nil)
+		if respChat.StatusCode != http.StatusBadRequest {
+			t.Errorf("chat %s status = %d, want 400: %s", dm, respChat.StatusCode, dataChat)
+		}
+		var errChat struct {
+			Error struct {
+				Message string `json:"message"`
+				Type    string `json:"type"`
+				Code    string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(dataChat, &errChat); err != nil {
+			t.Errorf("chat %s response not JSON: %v", dm, err)
+		}
+		if errChat.Error.Code != "model_unavailable" {
+			t.Errorf("chat %s error code = %q, want model_unavailable", dm, errChat.Error.Code)
+		}
+		if !strings.Contains(errChat.Error.Message, "Only the following 5 models are supported") {
+			t.Errorf("chat %s message = %q, want supported models notice", dm, errChat.Error.Message)
+		}
+
+		// Anthropic messages -> 400 invalid_request_error
+		respMsg, dataMsg := doJSON(t, http.MethodPost, ts.URL+"/v1/messages", []byte(body), map[string]string{
+			"anthropic-version": "2023-06-01",
+		})
+		if respMsg.StatusCode != http.StatusBadRequest {
+			t.Errorf("messages %s status = %d, want 400: %s", dm, respMsg.StatusCode, dataMsg)
+		}
+		var errAnthropic struct {
+			Type  string `json:"type"`
+			Error struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(dataMsg, &errAnthropic); err != nil {
+			t.Errorf("messages %s response not JSON: %v", dm, err)
+		}
+		if errAnthropic.Error.Type != "invalid_request_error" {
+			t.Errorf("messages %s error type = %q, want invalid_request_error", dm, errAnthropic.Error.Type)
+		}
+		if !strings.Contains(errAnthropic.Error.Message, "Only the following 5 models are supported") {
+			t.Errorf("messages %s message = %q, want supported models notice", dm, errAnthropic.Error.Message)
+		}
+
+		// OpenAI responses -> 400 model_unavailable
+		bodyResp := `{"model":"` + dm + `","input":"hi"}`
+		respResp, dataResp := doJSON(t, http.MethodPost, ts.URL+"/v1/responses", []byte(bodyResp), nil)
+		if respResp.StatusCode != http.StatusBadRequest {
+			t.Errorf("responses %s status = %d, want 400: %s", dm, respResp.StatusCode, dataResp)
+		}
+	}
+
+	// Health check
+	respH, dataH := doJSON(t, http.MethodGet, ts.URL+"/healthz", nil, nil)
+	if respH.StatusCode != http.StatusOK {
+		t.Fatalf("healthz status = %d, want 200", respH.StatusCode)
+	}
+	var health struct {
+		Models int `json:"models"`
+	}
+	if err := json.Unmarshal(dataH, &health); err != nil {
+		t.Fatalf("unmarshal healthz: %v", err)
+	}
+	if health.Models != 5 {
+		t.Errorf("health.Models = %d, want 5", health.Models)
 	}
 }
