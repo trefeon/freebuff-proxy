@@ -34,7 +34,7 @@ func (e *ScarceSessionError) Error() string {
 // model with more than scarceSwitchLead remaining — a request for a different
 // model must not evict or switch away from it.
 func scarceHeld(snap session.SessionSnapshot, requested string, scarce map[string]bool) bool {
-	if snap.Status != "active" || snap.Model == "" || snap.Model == requested {
+	if !snap.Usable() || snap.Model == "" || snap.MatchesModel(requested) {
 		return false
 	}
 	if !scarce[snap.Model] {
@@ -47,7 +47,7 @@ func scarceHeld(snap session.SessionSnapshot, requested string, scarce map[strin
 // model with any remaining lifetime (greater than 0). Used by bridge idle
 // eviction and shutdown teardown to keep the session alive.
 func scarceActive(snap session.SessionSnapshot, scarce map[string]bool) bool {
-	if snap.Status != "active" || snap.Model == "" {
+	if !snap.Usable() || snap.Model == "" {
 		return false
 	}
 	if !scarce[snap.Model] {
