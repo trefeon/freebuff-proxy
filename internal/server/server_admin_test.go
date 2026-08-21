@@ -357,7 +357,7 @@ func loginCookie(t *testing.T, ts *httptest.Server, token string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	cookies := resp.Cookies()
 	if len(cookies) != 1 {
 		t.Fatalf("login issued %d cookies, want 1", len(cookies))
@@ -379,7 +379,7 @@ func doDashboardPost(t *testing.T, url, cookie string) (*http.Response, string) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
