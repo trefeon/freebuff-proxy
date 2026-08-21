@@ -37,6 +37,32 @@ func (s *Server) handleTokenUnlock(w http.ResponseWriter, r *http.Request) {
 	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" unlocked — no cooldown or ban window remains.")
 }
 
+func (s *Server) handleTokenLock(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err == nil {
+		err = s.pool.LockToken(id)
+	}
+	if err != nil {
+		s.dash.RenderConfigResult(w, r, false, "Lock failed: "+err.Error())
+		return
+	}
+	s.logger.Info("dashboard token locked", "token", id)
+	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" locked — it will not be used for new requests.")
+}
+
+func (s *Server) handleTokenUnlockLock(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err == nil {
+		err = s.pool.UnlockLockToken(id)
+	}
+	if err != nil {
+		s.dash.RenderConfigResult(w, r, false, "Unlock failed: "+err.Error())
+		return
+	}
+	s.logger.Info("dashboard token unlocked (admin)", "token", id)
+	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" unlocked — it is available for requests again.")
+}
+
 func (s *Server) handleTokenFinish(w http.ResponseWriter, r *http.Request) {
 	id, err := tokenActionID(r)
 	if err == nil {

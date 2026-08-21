@@ -175,6 +175,9 @@ type TokenSnapshot struct {
 	// old slot and re-admits with the requested model. Surfaced per-token
 	// in /metrics as freebuff_proxy_model_locked_total.
 	ModelLocked map[string]map[string]int64
+	// Locked is set when the token has been administratively locked by the
+	// operator; Acquire never selects a locked token.
+	Locked bool `json:"locked"`
 }
 
 // Pool balances requests across the configured tokens.
@@ -303,6 +306,10 @@ type tokenEntry struct {
 	// (when the last inflight releases) and pruneRetired; the sync.Once
 	// prevents the race between these two callers from double-draining.
 	drained sync.Once
+
+	// locked is set by LockToken/UnlockLockToken to administratively
+	// exclude a token from Acquire without clearing its cooldown state.
+	locked atomic.Bool
 }
 
 // New builds the pool over the configured tokens. len(clients) and

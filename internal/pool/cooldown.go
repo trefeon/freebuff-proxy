@@ -154,3 +154,25 @@ func (p *Pool) UnlockToken(token int) error {
 	(*toks)[token].runs.ClearCooldowns()
 	return nil
 }
+
+// LockToken administratively excludes token from Acquire without clearing
+// its cooldown state (dashboard lock action).
+func (p *Pool) LockToken(token int) error {
+	toks := p.toks.Load()
+	if token < 0 || token >= len(*toks) {
+		return fmt.Errorf("pool: token %d out of range", token)
+	}
+	(*toks)[token].locked.Store(true)
+	return nil
+}
+
+// UnlockLockToken clears the administrative lock on token so Acquire can
+// use it again (dashboard unlock-lock action).
+func (p *Pool) UnlockLockToken(token int) error {
+	toks := p.toks.Load()
+	if token < 0 || token >= len(*toks) {
+		return fmt.Errorf("pool: token %d out of range", token)
+	}
+	(*toks)[token].locked.Store(false)
+	return nil
+}

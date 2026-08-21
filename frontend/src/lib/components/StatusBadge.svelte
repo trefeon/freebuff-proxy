@@ -13,6 +13,7 @@
     leased: 'good',
     active: 'good',
     cooldown: 'warn',
+    locked: 'warn',
     banned: 'bad',
     error: 'bad',
   };

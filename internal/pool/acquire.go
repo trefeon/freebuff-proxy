@@ -80,6 +80,10 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 			continue
 		}
 		tok := (*toks)[idx]
+		// Administratively locked tokens are never eligible for leasing.
+		if tok.locked.Load() {
+			continue
+		}
 		name := fmt.Sprintf("token-%d", idx+1)
 
 		if until := tok.runs.CooldownUntil(); time.Now().Before(until) {
@@ -540,6 +544,10 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 	// reasons — the caller does that in one place.
 	eligible := func(idx int) bool {
 		tok := (*toks)[idx]
+		// Administratively locked tokens are never eligible for leasing.
+		if tok.locked.Load() {
+			return false
+		}
 		// Quota-capped tokens are excluded from BOTH the hot set and the
 		// cold fallback: their rate-limit reasons ride back in quotaLimited,
 		// so the pool surfaces a real 429 when every token is capped.

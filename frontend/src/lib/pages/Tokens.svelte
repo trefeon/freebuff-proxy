@@ -3,6 +3,7 @@
   import {
     LogIn,
     Key,
+    Lock,
     Plus,
     Trash2,
     Unlock,
@@ -57,6 +58,7 @@
   );
 
   function statusFor(token) {
+    if (token.locked) return { label: 'locked', tone: 'warn' };
     if (token.cooldown_active) return { label: 'cooldown', tone: 'warn' };
     const s = token.session_status || '';
     if (s === 'active') return { label: 'leased', tone: 'good', pulse: true };
@@ -472,6 +474,27 @@
                       >
                         <Unlock size={13} />
                         <span>Clear</span>
+                      </Button>
+                    {/if}
+                    {#if token.locked}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={actionPending}
+                        onclick={() => triggerAction(`/admin/tokens/${idx}/unlock-lock`, {}, `Unlock token ${idx}?`)}
+                      >
+                        <Unlock size={13} />
+                        <span>Unlock</span>
+                      </Button>
+                    {:else}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={actionPending}
+                        onclick={() => triggerAction(`/admin/tokens/${idx}/lock`, {}, `Lock token ${idx}?`)}
+                      >
+                        <Lock size={13} />
+                        <span>Lock</span>
                       </Button>
                     {/if}
                     <Button

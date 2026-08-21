@@ -1042,3 +1042,67 @@ func TestDashboardLoginGETWithToken(t *testing.T) {
 		t.Errorf("login GET body does not look like the SPA index (missing #app mount)")
 	}
 }
+
+// --- token lock edges ---
+
+// TestDashboardTokenLockInvalidID pins the {id} parsing for lock: non-numeric
+// and negative ids are rejected with "Lock failed" before any pool call.
+func TestDashboardTokenLockInvalidID(t *testing.T) {
+	ts := dashboardServer(t, "secret", nil)
+	cookie := authedCookie(t, ts)
+
+	for _, id := range []string{"abc", "-1"} {
+		status, body := csrfPost(t, ts.URL, cookie, "/admin/tokens/"+id+"/lock", "", nil)
+		if status != http.StatusBadRequest {
+			t.Errorf("lock id=%s status = %d, want 400: %s", id, status, body)
+		}
+		if !strings.Contains(body, "Lock failed") {
+			t.Errorf("lock id=%s response missing 'Lock failed': %s", id, body)
+		}
+	}
+}
+
+// TestDashboardTokenLockOutOfRange pins the out-of-range guard: locking a
+// token index beyond the pool returns "Lock failed" without panicking.
+func TestDashboardTokenLockOutOfRange(t *testing.T) {
+	ts := dashboardServer(t, "secret", nil)
+	cookie := authedCookie(t, ts)
+
+	status, body := csrfPost(t, ts.URL, cookie, "/admin/tokens/99/lock", "", nil)
+	if status != http.StatusBadRequest {
+		t.Fatalf("lock out-of-range status = %d, want 400: %s", status, body)
+	}
+	if !strings.Contains(body, "Lock failed") {
+		t.Errorf("lock out-of-range response missing 'Lock failed': %s", body)
+	}
+}
+
+// TestDashboardTokenUnlockLockInvalidID pins unlock-lock with bad ids.
+func TestDashboardTokenUnlockLockInvalidID(t *testing.T) {
+	ts := dashboardServer(t, "secret", nil)
+	cookie := authedCookie(t, ts)
+
+	for _, id := range []string{"abc", "-1"} {
+		status, body := csrfPost(t, ts.URL, cookie, "/admin/tokens/"+id+"/unlock-lock", "", nil)
+		if status != http.StatusBadRequest {
+			t.Errorf("unlock-lock id=%s status = %d, want 400: %s", id, status, body)
+		}
+		if !strings.Contains(body, "Unlock failed") {
+			t.Errorf("unlock-lock id=%s response missing 'Unlock failed': %s", id, body)
+		}
+	}
+}
+
+// TestDashboardTokenUnlockLockOutOfRange pins unlock-lock out-of-range.
+func TestDashboardTokenUnlockLockOutOfRange(t *testing.T) {
+	ts := dashboardServer(t, "secret", nil)
+	cookie := authedCookie(t, ts)
+
+	status, body := csrfPost(t, ts.URL, cookie, "/admin/tokens/99/unlock-lock", "", nil)
+	if status != http.StatusBadRequest {
+		t.Fatalf("unlock-lock out-of-range status = %d, want 400: %s", status, body)
+	}
+	if !strings.Contains(body, "Unlock failed") {
+		t.Errorf("unlock-lock out-of-range response missing 'Unlock failed': %s", body)
+	}
+}

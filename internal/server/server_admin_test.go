@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -278,4 +279,110 @@ func TestBearerCaseInsensitiveVariants(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestTokenLockUnlock drives the lock/unlock lifecycle: locking a token
+// excludes it from Acquire (chat fails with no available tokens), and
+// unlocking restores availability.
+func TestTokenLockUnlock(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.AdminToken = "secret"
+	}, mock)
+
+	// Login to get a session cookie for dashboard endpoints.
+	cookie := loginCookie(t, ts, "secret")
+
+	// Sanity: chat works before lock.
+	resp, _ := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("pre-lock chat status = %d, want 200", resp.StatusCode)
+	}
+
+	// Lock token 0.
+	lockResp, lockBody := doDashboardPost(t, ts.URL+"/admin/tokens/0/lock", cookie)
+	if lockResp.StatusCode != http.StatusOK {
+		t.Fatalf("lock status = %d, want 200: %s", lockResp.StatusCode, lockBody)
+	}
+	if !strings.Contains(lockBody, "locked") {
+		t.Errorf("lock response missing 'locked': %s", lockBody)
+	}
+
+	// Verify snapshot reports locked.
+	snap := p.Snapshot()
+	if len(snap) == 0 || !snap[0].Locked {
+		t.Fatal("Snapshot().Locked = false after LockToken")
+	}
+
+	// Chat should fail: the only token is locked.
+	resp, _ = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("post-lock chat status = 200, want non-200")
+	}
+
+	// Unlock.
+	unlockResp, unlockBody := doDashboardPost(t, ts.URL+"/admin/tokens/0/unlock-lock", cookie)
+	if unlockResp.StatusCode != http.StatusOK {
+		t.Fatalf("unlock status = %d, want 200: %s", unlockResp.StatusCode, unlockBody)
+	}
+	if !strings.Contains(unlockBody, "unlocked") {
+		t.Errorf("unlock response missing 'unlocked': %s", unlockBody)
+	}
+
+	// Verify snapshot reports unlocked.
+	snap = p.Snapshot()
+	if len(snap) == 0 || snap[0].Locked {
+		t.Fatal("Snapshot().Locked = true after UnlockLockToken")
+	}
+
+	// Chat should succeed again.
+	resp, _ = doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("post-unlock chat status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// loginCookie logs into the dashboard and returns the session cookie string.
+func loginCookie(t *testing.T, ts *httptest.Server, token string) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/login", strings.NewReader("token="+token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("login issued %d cookies, want 1", len(cookies))
+	}
+	return cookies[0].Name + "=" + cookies[0].Value
+}
+
+// doDashboardPost issues a POST with the given cookie and returns status + body.
+func doDashboardPost(t *testing.T, url, cookie string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Cookie", cookie)
+	resp, err := (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp, string(data)
 }

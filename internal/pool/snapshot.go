@@ -101,6 +101,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Entitlement:             ss.Entitlement,
 			GlmPromo:                ss.GlmPromo,
 			Standing:                ss.Standing,
+			Locked:                  tok.locked.Load(),
 			TransientRetries:        tok.client.TransientRetries(),
 			FingerprintRotations:    tok.client.FingerprintRotations(),
 			RateLimitEvents:         tok.client.RateLimitEvents(),

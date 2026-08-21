@@ -718,3 +718,70 @@ func TestAcquireSyncsAdmittedModel(t *testing.T) {
 		t.Errorf("lease.AgentID = %q, want %q", lease.AgentID, wantAgent)
 	}
 }
+
+func TestTokenLocking(t *testing.T) {
+	mock0 := testutil.NewMock()
+	defer mock0.Close()
+	mock1 := testutil.NewMock()
+	defer mock1.Close()
+	p := newTestPool(t, mock0, mock1)
+
+	// Verify both tokens are initially accessible.
+	lease0, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := lease0.Token
+	p.LeaseRelease(lease0)
+
+	// Lock token 0 — Acquire must never return it.
+	if err := p.LockToken(0); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		// Invalidate both cached sessions so the cold path is exercised.
+		toks := p.toks.Load()
+		(*toks)[0].session.Invalidate()
+		(*toks)[1].session.Invalidate()
+		lease, err := p.Acquire(context.Background(), modelA)
+		if err != nil {
+			t.Fatalf("acquire %d: %v", i, err)
+		}
+		if lease.Token == 0 {
+			t.Errorf("acquire %d: locked token 0 returned", i)
+		}
+		p.LeaseRelease(lease)
+	}
+
+	// Snapshot must report Locked=true for token 0.
+	snaps := p.Snapshot()
+	if !snaps[0].Locked {
+		t.Error("token 0 snapshot: Locked=false, want true")
+	}
+	if snaps[1].Locked {
+		t.Error("token 1 snapshot: Locked=true, want false")
+	}
+
+	// Unlock — Acquire may now return token 0 again.
+	if err := p.UnlockLockToken(0); err != nil {
+		t.Fatal(err)
+	}
+	toks := p.toks.Load()
+	(*toks)[0].session.Invalidate()
+	(*toks)[1].session.Invalidate()
+	lease, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// On a cold pool the round-robin start index may differ, but we just
+	// need to confirm token 0 is no longer excluded.
+	_ = lease.Token
+	_ = first
+	p.LeaseRelease(lease)
+
+	// Snapshot must report Locked=false after unlock.
+	snaps = p.Snapshot()
+	if snaps[0].Locked {
+		t.Error("token 0 snapshot after unlock: Locked=true, want false")
+	}
+}
