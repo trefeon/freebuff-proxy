@@ -25,7 +25,6 @@ import (
 // modelA must map to an agent with EXCLUSIVE ownership in the registry
 // fallback map (see internal/registry/registry_test.go expectedFallback).
 const modelA = "deepseek/deepseek-v4-flash"
-const modelB = "anthropic/claude-fable-5"
 
 // newTestServer wires the real stack - mock upstream per token, real
 // clients/session managers, fallback registry, pool, and the server - behind
