@@ -58,6 +58,30 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 	// from the round-robin start (cold path), exactly like the historical
 	// linear failover. When no token is hot the order is unchanged.
 	order, quotaLimited := p.acquireOrder(toks, start, model)
+
+	// Issue #191: when an admission for this model is already in-flight on a
+	// different token, override the cold ordering so concurrent requests land
+	// on the same token and park on the existing single-flight refreshCh
+	// instead of creating a competing session.
+	p.admissionsMu.Lock()
+	admittingToken, isAdmitting := p.admissions[model]
+	if !isAdmitting {
+		// No leader yet — register this goroutine as the admission leader
+		// for this model so any concurrent cold request will follow us.
+		p.admissions[model] = 0 // placeholder; will be updated in the token loop
+	} else if admittingToken >= 0 {
+		// An existing admission is in progress on admittingToken — pin
+		// the cold ordering to that token so we park on its single-flight.
+		reordered := make([]int, 0, len(order))
+		reordered = append(reordered, admittingToken)
+		for _, idx := range order {
+			if idx != admittingToken {
+				reordered = append(reordered, idx)
+			}
+		}
+		order = reordered
+	}
+	p.admissionsMu.Unlock()
 	var errs []string
 	var waiting []*session.WaitingRoomError
 	var rateLimited []*upstream.RateLimitError
@@ -185,12 +209,21 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		// capacity the acquire waits (the caller's deadline surfaces as
 		// 503). The permit is held only for the admission call, never
 		// across the upstream chat.
+		p.admissionsMu.Lock()
+		if p.admissions == nil {
+			p.admissions = make(map[string]int)
+		}
+		// Update the pre-registered leader slot with the actual token index.
+		p.admissions[model] = idx
+		p.admissionsMu.Unlock()
+
 		permit, err := p.gate.acquire(ctx, model)
 		if err != nil {
-			// Context expired while waiting for a create slot: the caller's
-			// deadline surfaces as 503 (wait-or-503). The pass is aborted —
-			// the ctx is done, so trying further tokens would only repeat
-			// the same wait.
+			p.admissionsMu.Lock()
+			if p.admissions != nil && p.admissions[model] == idx {
+				delete(p.admissions, model)
+			}
+			p.admissionsMu.Unlock()
 			return nil, err
 		}
 		sessionStart := time.Now()
@@ -205,6 +238,11 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		}
 		instanceID, err := tok.session.EnsureSessionForModel(ctx, model)
 		permit.Release()
+		p.admissionsMu.Lock()
+		if p.admissions != nil && p.admissions[model] == idx {
+			delete(p.admissions, model)
+		}
+		p.admissionsMu.Unlock()
 		phasetiming.FromContext(ctx).Since(phasetiming.SessionRefreshMS, sessionStart)
 		if err != nil {
 			if errors.Is(err, upstream.ErrAuthRejected) {
@@ -419,6 +457,12 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		p.lastActive = time.Now()
 		p.idleFinished = false
 		p.lastActiveMu.Unlock()
+		p.lastTokenMu.Lock()
+		if p.lastTokenByModel == nil {
+			p.lastTokenByModel = make(map[string]int)
+		}
+		p.lastTokenByModel[effectiveModel] = idx
+		p.lastTokenMu.Unlock()
 		return &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
 			entry: tok, AcquiredAt: time.Now()}, nil
 	}
@@ -557,10 +601,18 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		return true
 	}
 
-	// Issue #155 & Model Stickiness: Token prioritization order:
-	// 1. Matching Hot: tokens with active session for the EXACT model (0 cost reuse).
-	// 2. Cold Tokens: tokens with no active session (fresh session, avoids 0.1 switch penalty).
-	// 3. Mismatched Hot: tokens with active session for a DIFFERENT model (switching costs 0.1 quota).
+	p.lastTokenMu.Lock()
+	lastUsedToken, hasLastUsed := p.lastTokenByModel[model]
+	p.lastTokenMu.Unlock()
+
+	p.admissionsMu.Lock()
+	admittingToken, isAdmitting := p.admissions[model]
+	p.admissionsMu.Unlock()
+
+	// Issue #155 & #191: Model Stickiness and Session Preservation:
+	// 1. Matching Hot: tokens with active/usable session (or in-flight admission) for the model.
+	// 2. Cold Tokens: tokens with no active session (fresh session, avoids switch penalty).
+	// 3. Mismatched Hot: tokens with active session for a DIFFERENT model.
 	var matchingHot []int
 	var coldTokens []int
 	var mismatchedHot []int
@@ -572,10 +624,11 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 		tok := (*toks)[idx]
 		snap := tok.session.Snapshot()
-		hasLive := snap.Status == "active" && !snap.ExpiresAt.IsZero() && snap.ExpiresAt.After(time.Now())
+		isAdm := isAdmitting && idx == admittingToken
+		hasLive := snap.Usable() || snap.Refreshing || isAdm
 
 		if hasLive {
-			if snap.Model == model {
+			if snap.MatchesModel(model) || isAdm {
 				matchingHot = append(matchingHot, idx)
 			} else {
 				mismatchedHot = append(mismatchedHot, idx)
@@ -585,18 +638,41 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 	}
 
-	// Sort matchingHot by smallest remaining quota first (issue #85).
+	// Sort matchingHot:
+	// 1. In-flight refreshing/admitting tokens rank first so concurrent requests park on single-flight refreshCh.
+	// 2. Known positive remaining quota: smallest remaining quota first (drain account closest to limit first).
+	// 3. Equal/unknown quota: prefer last-used token for this model (session stickiness for multi-turn chats).
+	// 4. Stable token index preference (lower index first) to avoid round-robin ping-pong across accounts.
 	sort.SliceStable(matchingHot, func(i, j int) bool {
 		a, b := matchingHot[i], matchingHot[j]
-		aKnown, aRem, _ := quotaRemaining((*toks)[a], model)
-		bKnown, bRem, _ := quotaRemaining((*toks)[b], model)
+		tokA, tokB := (*toks)[a], (*toks)[b]
+		snapA, snapB := tokA.session.Snapshot(), tokB.session.Snapshot()
+
+		isAdmA := snapA.Refreshing || (isAdmitting && a == admittingToken)
+		isAdmB := snapB.Refreshing || (isAdmitting && b == admittingToken)
+		if isAdmA != isAdmB {
+			return isAdmA
+		}
+
+		aKnown, aRem, _ := quotaRemaining(tokA, model)
+		bKnown, bRem, _ := quotaRemaining(tokB, model)
 		if aKnown != bKnown {
 			return aKnown
 		}
-		if aKnown {
+		if aKnown && aRem != bRem {
 			return aRem < bRem
 		}
-		return false
+
+		if hasLastUsed {
+			if a == lastUsedToken && b != lastUsedToken {
+				return true
+			}
+			if b == lastUsedToken && a != lastUsedToken {
+				return false
+			}
+		}
+
+		return a < b
 	})
 
 	order := make([]int, 0, len(*toks))

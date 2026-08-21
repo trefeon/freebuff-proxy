@@ -271,6 +271,18 @@ type Pool struct {
 	unfitMu sync.Mutex
 	unfit   map[unfitKey]unfitEntry
 
+	// lastTokenByModel tracks the token index last successfully acquired for
+	// each model (model stickiness / multi-turn session preservation).
+	// Guarded by lastTokenMu.
+	lastTokenMu      sync.Mutex
+	lastTokenByModel map[string]int
+
+	// admissions tracks in-flight session admissions per model across the pool
+	// (issue #191: prevents concurrent requests from creating duplicate sessions
+	// on different tokens for the same model). Guarded by admissionsMu.
+	admissionsMu sync.Mutex
+	admissions   map[string]int
+
 	// store persists session state across restarts (SESSION_PERSIST); nil
 	// disables. Injected by the caller (main) via SetSessionStore so there
 	// is exactly one store shared by pooled and bridge entries.
@@ -333,7 +345,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 		return nil, fmt.Errorf("pool: %d sessions for %d tokens", len(sessions), len(cfg.AuthTokens))
 	}
 
-	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4)}
+	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int)}
 	p.cfg.Store(cfg)
 	p.msgsPerToken = make([][]time.Time, len(cfg.AuthTokens))
 	p.spendPerToken = make([]*spendLedger, len(cfg.AuthTokens))

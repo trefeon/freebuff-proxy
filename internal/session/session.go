@@ -470,7 +470,9 @@ type SessionSnapshot struct {
 	Model         string
 	QueuePosition int
 	QueueDepth    int
-	// CountryCode is the admitted session's country ("" when absent).
+	// Refreshing reports whether a session admission or pre-emptive re-admit
+	// is currently in flight for this manager.
+	Refreshing         bool
 	CountryCode        string
 	CountryBlockReason string
 	// ActiveUsersForIP is the last known distinct-user count on the token's
@@ -532,6 +534,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			}
 		}
 		return SessionSnapshot{
+			Refreshing:   m.refreshing,
 			QuotaByModel: quota,
 			GlmPromo:     m.savedGlmPromo,
 		}
@@ -558,6 +561,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Model:              m.state.model,
 		QueuePosition:      m.state.position,
 		QueueDepth:         m.state.queueDepth,
+		Refreshing:         m.refreshing,
 		CountryCode:        m.state.countryCode,
 		CountryBlockReason: m.state.countryBlockReason,
 		ActiveUsersForIP:   m.state.activeUsersForIP,
@@ -569,6 +573,24 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		GlmPromo:           m.state.glmPromo,
 		Standing:           m.state.standing,
 	}
+}
+
+// Usable reports whether the session can serve a chat right now:
+// an active session until expiresAt-5s (the reference safety margin), or
+// any session that holds an instance id within its grace drain window.
+func (s SessionSnapshot) Usable() bool {
+	if s.InstanceID == "" {
+		return false
+	}
+	if s.Status == "active" && !s.ExpiresAt.IsZero() && time.Now().Before(s.ExpiresAt.Add(-expiryMargin)) {
+		return true
+	}
+	return !s.GracePeriodEndsAt.IsZero() && time.Now().Before(s.GracePeriodEndsAt)
+}
+
+// MatchesModel reports whether the session matches model (empty model matches any).
+func (s SessionSnapshot) MatchesModel(model string) bool {
+	return model == "" || s.Model == "" || s.Model == model
 }
 
 // HasGlmEntitlement reports whether the session snapshot holds an active
@@ -752,4 +774,17 @@ func (m *Manager) ClearQueued() bool {
 		return true
 	}
 	return false
+}
+
+// SetSessionStateForTest sets cached session state for tests across packages.
+func (m *Manager) SetSessionStateForTest(status, instanceID, model string, expiresAt, graceEndsAt time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.commit(&cachedState{
+		status:            status,
+		instanceID:        instanceID,
+		model:             model,
+		expiresAt:         expiresAt,
+		gracePeriodEndsAt: graceEndsAt,
+	})
 }
