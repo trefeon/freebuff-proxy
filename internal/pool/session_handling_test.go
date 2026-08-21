@@ -135,9 +135,10 @@ func TestAcquireConcurrentColdAdmissionSharesSingleFlight(t *testing.T) {
 				errors.Add(1)
 				return
 			}
-			if lease.Token == 0 {
+			switch lease.Token {
+			case 0:
 				token0Count.Add(1)
-			} else if lease.Token == 1 {
+			case 1:
 				token1Count.Add(1)
 			}
 			p.LeaseRelease(lease)
