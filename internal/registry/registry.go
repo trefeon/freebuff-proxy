@@ -126,6 +126,7 @@ var fallbackAgents = []agentModels{
 	{agent: "base2-free-deepseek-flash-max", models: []string{"deepseek/deepseek-v4-flash-max"}},
 	{agent: "base2-free-luna-max", models: []string{"openai/gpt-5.6-luna-max"}},
 	{agent: "base2-free-muse-spark", models: []string{"meta/muse-spark-1.2-contributor"}},
+	{agent: "base2-free-ox-alpha", models: []string{"stealth/ox-alpha"}},
 	{agent: "base2-free-fable", models: []string{"anthropic/claude-fable-5"}},
 	{agent: "base2-free-cloud-planner", models: []string{"deepseek/deepseek-v4-flash"}},
 	{agent: "base2-free-cloud-planner-limited", models: []string{"mimo/mimo-v2.5"}},
@@ -162,6 +163,7 @@ var fallbackRootByModel = map[string]string{
 	"crof/kimi-k3-eco":                "base2-free-kimi-k3-eco",
 	"anthropic/claude-fable-5":        "base2-free-fable",
 	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
+	"stealth/ox-alpha":                "base2-free-ox-alpha",
 }
 
 // ErrModelNotFound is returned by AgentForModel for models absent from the

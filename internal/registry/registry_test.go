@@ -51,6 +51,7 @@ var expectedFallback = map[string]string{
 	"openai/gpt-5.6-luna-max":         "base2-free-luna-max",
 	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
 	"anthropic/claude-fable-5":        "base2-free-fable",
+	"stealth/ox-alpha":                "base2-free-ox-alpha",
 	"google/gemini-2.5-flash-lite":    "file-picker",
 	"google/gemini-3.1-flash-lite":    "file-picker-max",
 	"google/gemini-3.5-flash-lite":    "file-picker-max",
