@@ -305,8 +305,9 @@ func TestBridgeStickiness_LastModelTracked(t *testing.T) {
 	if entry == nil {
 		t.Fatal("bridge entry not found")
 	}
-	if entry.lastModel != modelA {
-		t.Errorf("lastModel = %q, want %q", entry.lastModel, modelA)
+	got, _ := entry.lastModel.Load().(string)
+	if got != modelA {
+		t.Errorf("lastModel = %q, want %q", got, modelA)
 	}
 }
 

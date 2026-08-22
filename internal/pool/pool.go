@@ -111,8 +111,11 @@ type bridgeEntry struct {
 	admissionErr  error // result of leader's session creation
 
 	// lastModel tracks the last model successfully served by this entry
-	// for fast-path session reuse (model stickiness).
-	lastModel string
+	// for fast-path session reuse (model stickiness). Concurrent
+	// AcquireBridge waiters all pass through the post-admission path once
+	// the admission gate opens, so the write must be atomic (race
+	// detector: TestBridgeSingleFlight_ConcurrentRequestsShareSession).
+	lastModel atomic.Value // holds string
 }
 
 // TokenSnapshot is one token's healthz view.
