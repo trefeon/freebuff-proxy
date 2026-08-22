@@ -635,6 +635,31 @@ func TestOverviewPageCooldownCard(t *testing.T) {
 	}
 }
 
+// TestOverviewPageHasTokens pins the #200 regression: df7a16a dropped the
+// HasTokens assignment in overviewData, leaving has_tokens permanently
+// false — Overview rendered "No upstream tokens configured" while the
+// Tokens tab listed the same pool. With a pooled token present, both the
+// flag and the cards must be populated.
+func TestOverviewPageHasTokens(t *testing.T) {
+	ts, _ := pageServer(t, 1, "overview", nil, nil)
+	resp, err := http.Get(ts.URL + "/overview")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var data map[string]any
+	if err := json.Unmarshal(mustReadAll(t, resp), &data); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	tokens, _ := data["tokens"].([]any)
+	if len(tokens) == 0 {
+		t.Fatal("no tokens in response")
+	}
+	if data["has_tokens"] != true {
+		t.Errorf("has_tokens = %v with %d tokens, want true", data["has_tokens"], len(tokens))
+	}
+}
+
 // TestModelsPageAliases pins the alias table JSON.
 func TestModelsPageAliases(t *testing.T) {
 	ts, _ := pageServer(t, 1, "models", func(c *config.Config) {

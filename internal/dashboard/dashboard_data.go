@@ -792,6 +792,10 @@ func (d *Dashboard) overviewData() overviewData {
 	for _, t := range ps.Tokens {
 		od.Tokens = append(od.Tokens, cardFromSnapshot(t))
 	}
+	// Regression guard (#200): df7a16a dropped this line, leaving
+	// has_tokens permanently false so pooled operators saw "No upstream
+	// tokens configured" on Overview while the Tokens tab worked.
+	od.HasTokens = len(od.Tokens) > 0
 	// Bridge token cards (#187): live snapshots of bridge-mode entries.
 	if od.InBridge {
 		for _, snap := range d.pool.BridgeSnapshot() {
