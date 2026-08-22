@@ -12,7 +12,7 @@ import (
 
 // ModelUnavailableMessage formats the rejection error message for unserved/disabled models (issue #189).
 func ModelUnavailableMessage(rawModel string) string {
-	return fmt.Sprintf("Model '%s' is not available. Only the following 5 models are supported: %s", rawModel, registry.SupportedModelsHelpText)
+	return fmt.Sprintf("Model '%s' is not available. Only the following 6 models are supported: %s", rawModel, registry.SupportedModelsHelpText)
 }
 
 // probeModel returns the safest model to default a smoke test to: the

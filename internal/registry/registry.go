@@ -64,34 +64,40 @@ const fetchTimeout = 30 * time.Second
 const maxFetchBytes = 2 << 20
 
 // ServedModels is the hardcoded set of model ids this gateway serves (mirrors
-// the model set 9router's free-pool "smart_toy" component offers). Used as a
-// code-level gate so the proxy never serves or advertises a model the account
-// cannot use, regardless of MODELS_ALLOW configuration. The -max variants are
-// deliberately EXCLUDED (issue #153): upstream's session admission resolves
-// any id outside SUPPORTED_FREEBUFF_MODELS to the always-available fallback
-// mimo/mimo-v2.5 (FALLBACK_FREEBUFF_MODEL_ID), so a -max request would be
-// served by a different model while advertising a name it does not honor.
+// the model set 9router's free-pool "smart_toy" component offers, plus
+// openai/gpt-5.6-luna-es which upstream free-mode natively supports with
+// dedicated agents — issue #201). Used as a code-level gate so the proxy
+// never serves or advertises a model the account cannot use, regardless of
+// MODELS_ALLOW configuration. The -max variants are deliberately EXCLUDED
+// (issue #153): upstream's session admission resolves any id outside
+// SUPPORTED_FREEBUFF_MODELS to the always-available fallback mimo/mimo-v2.5
+// (FALLBACK_FREEBUFF_MODEL_ID), so a -max request would be served by a
+// different model while advertising a name it does not honor. luna-es has
+// its own pinned roots (base2/base3-free-luna-es), so the substitution
+// hazard does not apply.
 var ServedModels = map[string]bool{
 	"deepseek/deepseek-v4-flash": true,
 	"deepseek/deepseek-v4-pro":   true,
 	"openai/gpt-5.6-luna":        true,
+	"openai/gpt-5.6-luna-es":     true,
 	"z-ai/glm-5.2":               true,
 	"mimo/mimo-v2.5":             true,
 }
 
-// SupportedModelIDs is the canonical list of the 5 active models served by the gateway.
+// SupportedModelIDs is the canonical list of the 6 active models served by the gateway.
 var SupportedModelIDs = []string{
 	"deepseek/deepseek-v4-flash",
 	"deepseek/deepseek-v4-pro",
 	"openai/gpt-5.6-luna",
+	"openai/gpt-5.6-luna-es",
 	"z-ai/glm-5.2",
 	"mimo/mimo-v2.5",
 }
 
 // SupportedModelsHelpText is the formatted list of models for error messages (issue #189).
-const SupportedModelsHelpText = "deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro, openai/gpt-5.6-luna, z-ai/glm-5.2, mimo/mimo-v2.5"
+const SupportedModelsHelpText = "deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro, openai/gpt-5.6-luna, openai/gpt-5.6-luna-es, z-ai/glm-5.2, mimo/mimo-v2.5"
 
-// IsServedModel reports whether model is in the 5 active served models.
+// IsServedModel reports whether model is in the 6 active served models.
 func IsServedModel(model string) bool {
 	return ServedModels[model]
 }

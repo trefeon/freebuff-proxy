@@ -106,9 +106,9 @@ func TestModelsEndpoint(t *testing.T) {
 	if out.Object != "list" {
 		t.Errorf("object = %q, want list", out.Object)
 	}
-	// Issue #189: strictly 5 operational models served.
-	if len(out.Data) != 5 {
-		t.Errorf("models = %d, want 5", len(out.Data))
+	// Issue #189 (strict gate), extended to 6 by #201 (luna-es).
+	if len(out.Data) != 6 {
+		t.Errorf("models = %d, want 6", len(out.Data))
 	}
 	for i, m := range out.Data {
 		if m.ID == "" || m.Object != "model" || m.OwnedBy == "" {
@@ -196,9 +196,9 @@ func TestHealthz(t *testing.T) {
 	if out.UptimeSeconds < 0 {
 		t.Errorf("uptime_seconds = %v, want >= 0", out.UptimeSeconds)
 	}
-	// Issue #189: strictly 5 active models.
-	if out.Models != 5 {
-		t.Errorf("models = %d, want 5", out.Models)
+	// Issue #189 strict count, 6 since #201.
+	if out.Models != 6 {
+		t.Errorf("models = %d, want 6", out.Models)
 	}
 	if len(out.Tokens) != 2 {
 		t.Errorf("tokens = %d, want 2", len(out.Tokens))
@@ -439,7 +439,7 @@ func TestModelsAllowRejectsChat(t *testing.T) {
 	if out.Error.Code != "model_unavailable" {
 		t.Errorf("error.code = %q, want model_unavailable", out.Error.Code)
 	}
-	if !strings.Contains(out.Error.Message, "Only the following 5 models are supported") {
+	if !strings.Contains(out.Error.Message, "Only the following 6 models are supported") {
 		t.Errorf("error.message = %q, want supported models notice", out.Error.Message)
 	}
 	if len(mock.RecordedChatHeaders) != 0 {
@@ -558,8 +558,8 @@ func TestModelsAllowEmptyIsOpen(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("models is not JSON: %v: %s", err, data)
 	}
-	if len(out.Data) != 5 {
-		t.Errorf("model count = %d, want 5 (all operational models served)", len(out.Data))
+	if len(out.Data) != 6 {
+		t.Errorf("model count = %d, want 6 (all operational models served)", len(out.Data))
 	}
 	var hasModelA, hasFlash bool
 	for _, m := range out.Data {
@@ -784,8 +784,8 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("unmarshal /v1/models: %v", err)
 	}
-	if len(out.Data) != 5 {
-		t.Fatalf("models count = %d, want exactly 5", len(out.Data))
+	if len(out.Data) != 6 {
+		t.Fatalf("models count = %d, want exactly 6", len(out.Data))
 	}
 	wantSet := map[string]bool{
 		"deepseek/deepseek-v4-flash": true,
@@ -793,6 +793,7 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 		"openai/gpt-5.6-luna":        true,
 		"z-ai/glm-5.2":               true,
 		"mimo/mimo-v2.5":             true,
+		"openai/gpt-5.6-luna-es":     true,
 	}
 	for _, m := range out.Data {
 		if !wantSet[m.ID] {
@@ -830,7 +831,7 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 		if errChat.Error.Code != "model_unavailable" {
 			t.Errorf("chat %s error code = %q, want model_unavailable", dm, errChat.Error.Code)
 		}
-		if !strings.Contains(errChat.Error.Message, "Only the following 5 models are supported") {
+		if !strings.Contains(errChat.Error.Message, "Only the following 6 models are supported") {
 			t.Errorf("chat %s message = %q, want supported models notice", dm, errChat.Error.Message)
 		}
 
@@ -854,7 +855,7 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 		if errAnthropic.Error.Type != "invalid_request_error" {
 			t.Errorf("messages %s error type = %q, want invalid_request_error", dm, errAnthropic.Error.Type)
 		}
-		if !strings.Contains(errAnthropic.Error.Message, "Only the following 5 models are supported") {
+		if !strings.Contains(errAnthropic.Error.Message, "Only the following 6 models are supported") {
 			t.Errorf("messages %s message = %q, want supported models notice", dm, errAnthropic.Error.Message)
 		}
 
@@ -877,7 +878,7 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 	if err := json.Unmarshal(dataH, &health); err != nil {
 		t.Fatalf("unmarshal healthz: %v", err)
 	}
-	if health.Models != 5 {
-		t.Errorf("health.Models = %d, want 5", health.Models)
+	if health.Models != 6 {
+		t.Errorf("health.Models = %d, want 6", health.Models)
 	}
 }
