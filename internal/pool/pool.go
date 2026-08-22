@@ -194,6 +194,13 @@ type TokenSnapshot struct {
 	// Locked is set when the token has been administratively locked by the
 	// operator; Acquire never selects a locked token.
 	Locked bool `json:"locked"`
+	// BanType / BannedUntil surface the token's active upstream ban
+	// (issues #198/#199): BanType is "temporary" when the ban carries a
+	// resumes_at deadline (auto-lifts at BannedUntil) and "hard" when it
+	// does not (never self-heals; operator must appeal upstream). Both are
+	// zero values when no ban window is active.
+	BanType     string    `json:"ban_type,omitempty"`
+	BannedUntil time.Time `json:"banned_until,omitempty"`
 }
 
 // Pool balances requests across the configured tokens.

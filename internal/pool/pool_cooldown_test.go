@@ -621,3 +621,33 @@ func TestSessionPollSchedule(t *testing.T) {
 		}
 	})
 }
+
+// TestBanViewDerivation pins the #198/#199 snapshot ban view: the type is
+// read off BanError.ResumesAt (NOT the folded cooldown deadline, which
+// runs.CooldownBan sets to now+24h even for hard bans), a temporary ban
+// carries its resumes_at deadline, and expired/absent bans yield zero
+// values.
+func TestBanViewDerivation(t *testing.T) {
+	until := time.Now().Add(time.Hour)
+
+	banType, bannedUntil := banView(&upstream.BanError{Body: "banned", ResumesAt: until}, until.Add(24*time.Hour))
+	if banType != "temporary" || !bannedUntil.Equal(until) {
+		t.Errorf("temporary ban view = %q/%s, want temporary/%s", banType, bannedUntil, until)
+	}
+
+	banType, bannedUntil = banView(&upstream.BanError{Body: "banned"}, time.Now().Add(24*time.Hour))
+	if banType != "hard" || !bannedUntil.IsZero() {
+		t.Errorf("hard ban view = %q/%s, want hard/zero", banType, bannedUntil)
+	}
+
+	banType, bannedUntil = banView(nil, time.Time{})
+	if banType != "" || !bannedUntil.IsZero() {
+		t.Errorf("no-ban view = %q/%s, want empty/zero", banType, bannedUntil)
+	}
+
+	expired := time.Now().Add(-time.Minute)
+	banType, _ = banView(&upstream.BanError{Body: "banned", ResumesAt: expired}, expired)
+	if banType != "" {
+		t.Errorf("expired ban view = %q, want empty", banType)
+	}
+}

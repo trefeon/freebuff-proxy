@@ -208,3 +208,51 @@ func TestCardFromSnapshotStanding(t *testing.T) {
 		t.Errorf("standing fields populated without a block: %q/%v", card.StandingLevel, card.StandingScore)
 	}
 }
+
+// TestCardFromSnapshotBanAndLocked pins the #198/#199 ban mapping: an active
+// temporary ban lands ban_type + RFC3339 banned_until on the card, a hard
+// ban carries only the type, and Locked is copied through (previously
+// dropped, leaving pool-token lock state undefined in the UI). A snapshot
+// without ban/lock state yields zero-valued fields.
+func TestCardFromSnapshotBanAndLocked(t *testing.T) {
+	until := time.Date(2026, 8, 22, 18, 0, 0, 0, time.UTC)
+	card := cardFromSnapshot(pool.TokenSnapshot{
+		Token:       0,
+		RiskLevel:   "critical",
+		Locked:      true,
+		BanType:     "temporary",
+		BannedUntil: until,
+	})
+	if !card.Locked {
+		t.Error("Locked = false, want true")
+	}
+	if card.BanType != "temporary" {
+		t.Errorf("BanType = %q, want temporary", card.BanType)
+	}
+	if card.BannedUntil != until.Format(time.RFC3339) {
+		t.Errorf("BannedUntil = %q, want %q", card.BannedUntil, until.Format(time.RFC3339))
+	}
+
+	card = cardFromSnapshot(pool.TokenSnapshot{
+		Token:     1,
+		RiskLevel: "low",
+		BanType:   "hard",
+	})
+	if card.BanType != "hard" || card.BannedUntil != "" {
+		t.Errorf("hard ban card = %q/%q, want hard/empty", card.BanType, card.BannedUntil)
+	}
+
+	card = cardFromSnapshot(pool.TokenSnapshot{Token: 2, RiskLevel: "low"})
+	if card.Locked || card.BanType != "" || card.BannedUntil != "" {
+		t.Errorf("clean card = %v/%q/%q, want false/empty/empty", card.Locked, card.BanType, card.BannedUntil)
+	}
+
+	bc := bridgeCardFromSnapshot(pool.BridgeTokenSnapshot{
+		Key:         "abcd1234efgh",
+		BanType:     "temporary",
+		BannedUntil: until,
+	})
+	if bc.BanType != "temporary" || bc.BannedUntil != until.Format(time.RFC3339) {
+		t.Errorf("bridge card ban = %q/%q, want temporary/%s", bc.BanType, bc.BannedUntil, until.Format(time.RFC3339))
+	}
+}

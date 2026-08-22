@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"freebuff-proxy/internal/session"
+	"freebuff-proxy/internal/upstream"
 )
 
 // BridgeTokenSnapshot is a dashboard-ready view of one bridge entry (#187).
@@ -20,6 +21,27 @@ type BridgeTokenSnapshot struct {
 	QuotaByModel  map[string]session.QuotaSnapshot `json:"quota_by_model,omitempty"`
 	SpendDay      float64                          `json:"spend_day"`
 	SpendPct      int                              `json:"spend_pct"`
+	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
+	// (issues #198/#199): "temporary" (auto-lifts at BannedUntil) vs
+	// "hard" (never self-heals); zero values when no ban is active.
+	BanType     string    `json:"ban_type,omitempty"`
+	BannedUntil time.Time `json:"banned_until,omitempty"`
+}
+
+// banView derives the snapshot ban view from a remembered runs ban
+// (issues #198/#199). The ban is active while its folded cooldown window
+// still applies; the type must be read off BanError.ResumesAt — NOT the
+// effective BannedUntil — because runs.CooldownBan folds a hard ban (zero
+// ResumesAt) into a 24h safety window. Returns ""/zero when no ban is
+// active.
+func banView(ban *upstream.BanError, until time.Time) (string, time.Time) {
+	if ban == nil || (!until.IsZero() && !time.Now().Before(until)) {
+		return "", time.Time{}
+	}
+	if ban.ResumesAt.IsZero() {
+		return "hard", time.Time{}
+	}
+	return "temporary", ban.ResumesAt
 }
 
 // Snapshot returns the per-token healthz view.
@@ -95,6 +117,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 				spendPct = 100
 			}
 		}
+		// Active-ban view for healthz/dashboard consumers (issues #198/#199).
+		banType, bannedUntil := banView(rs.BanError, rs.BannedUntil)
 
 		out = append(out, TokenSnapshot{
 			Token:                   i,
@@ -133,6 +157,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			SpendLimit:              spendLimit,
 			SpendPct:                spendPct,
 			SpendLimited:            spend.SpendLimited,
+			BanType:                 banType,
+			BannedUntil:             bannedUntil,
 		})
 	}
 	return out

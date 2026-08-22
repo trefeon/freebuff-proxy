@@ -518,10 +518,17 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 		UsagePct:         t.UsagePct,
 		RiskLevel:        t.RiskLevel,
 		TransientRetries: t.TransientRetries,
+		Locked:           t.Locked,
 	}
 	if !t.CooldownUntil.IsZero() && time.Now().Before(t.CooldownUntil) {
 		card.CooldownActive = true
 		card.CooldownUntil = t.CooldownUntil.Format(time.RFC3339)
+	}
+	if t.BanType != "" {
+		card.BanType = t.BanType
+		if !t.BannedUntil.IsZero() {
+			card.BannedUntil = t.BannedUntil.Format(time.RFC3339)
+		}
 	}
 	if t.Standing != nil {
 		card.HasStanding = true
@@ -627,6 +634,9 @@ type tokenCard struct {
 	RiskLevel           string  `json:"risk_level"`
 	CooldownActive      bool    `json:"cooldown_active"`
 	CooldownUntil       string  `json:"cooldown_until"`
+	Locked              bool    `json:"locked"`
+	BanType             string  `json:"ban_type,omitempty"`
+	BannedUntil         string  `json:"banned_until,omitempty"`
 	TransientRetries    int64   `json:"transient_retries"`
 	HasStanding         bool    `json:"has_standing"`
 	StandingLevel       string  `json:"standing_level"`
@@ -648,6 +658,8 @@ type bridgeTokenCard struct {
 	SessionActive bool    `json:"session_active"`
 	SpendDay      float64 `json:"spend_day"`
 	SpendPct      int     `json:"spend_pct"`
+	BanType       string  `json:"ban_type,omitempty"`
+	BannedUntil   string  `json:"banned_until,omitempty"`
 }
 
 func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
@@ -656,6 +668,10 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		status = "locked"
 	} else if snap.CooldownUntil.After(time.Now()) {
 		status = "cooldown"
+	}
+	bannedUntil := ""
+	if !snap.BannedUntil.IsZero() && snap.BanType == "temporary" {
+		bannedUntil = snap.BannedUntil.Format(time.RFC3339)
 	}
 	return bridgeTokenCard{
 		Key:           shortKey(snap.Key),
@@ -668,6 +684,8 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		SessionActive: snap.SessionActive,
 		SpendDay:      snap.SpendDay,
 		SpendPct:      snap.SpendPct,
+		BanType:       snap.BanType,
+		BannedUntil:   bannedUntil,
 	}
 }
 

@@ -314,6 +314,7 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 				spendPct = 100
 			}
 		}
+		banType, bannedUntil := banView(eRuns.BanError, eRuns.BannedUntil)
 		snaps = append(snaps, BridgeTokenSnapshot{
 			Key:           ke.key,
 			LastUsed:      e.lastUsed,
@@ -326,6 +327,8 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			QuotaByModel:  quotaByModel,
 			SpendDay:      float64(spend.Day),
 			SpendPct:      spendPct,
+			BanType:       banType,
+			BannedUntil:   bannedUntil,
 		})
 	}
 	return snaps
