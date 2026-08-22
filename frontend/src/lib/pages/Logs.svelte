@@ -10,6 +10,7 @@
   import { fetchAPI } from '../api/client.js';
   import { usePolling } from '../utils/polling.js';
   import { formatTime, parseLogFields } from '../utils/format.js';
+  import { tr } from '../i18n.js';
 
   /** @type {any} */
   let data = $state(null);
@@ -44,8 +45,8 @@
       if (page > tp - 1) page = 0;
     } catch (e) {
       error = e.message
-        ? `Could not load log entries: ${e.message}`
-        : 'Could not load log entries.';
+        ? $tr('Could not load log entries: {reason}', { reason: e.message })
+        : $tr('Could not load log entries');
     } finally {
       loading = false;
       manualRefresh = false;
@@ -89,8 +90,8 @@
 
 <div class="space-y-6 page-enter">
   <PageHeader
-    title="Logs"
-    description="Structured entries from the in-memory ring buffer (200 max, newest first), filtered by level and message."
+    title={$tr('Logs')}
+    description={$tr('Structured entries from the in-memory ring buffer (200 max, newest first), filtered by level and message.')}
   >
     {#snippet actions()}
       <label for="log-level" class="sr-only">Log level</label>
@@ -100,11 +101,11 @@
         bind:value={filterLevel}
         onchange={handleFilterChange}
       >
-        <option value="">All levels</option>
-        <option value="debug">Debug</option>
-        <option value="info">Info</option>
-        <option value="warn">Warn</option>
-        <option value="error">Error</option>
+        <option value="">{$tr('All levels')}</option>
+        <option value="debug">{$tr('Debug')}</option>
+        <option value="info">{$tr('Info')}</option>
+        <option value="warn">{$tr('Warn')}</option>
+        <option value="error">{$tr('Error')}</option>
       </select>
 
       <label for="log-msg" class="sr-only">Filter by message</label>
@@ -114,31 +115,31 @@
         class="fp-input w-56"
         bind:value={filterMsg}
         oninput={handleFilterChange}
-        placeholder="Filter message…"
+        placeholder={$tr('Filter message…')}
       />
 
       <Button variant="ghost" size="sm" aria-pressed={autoPoll} onclick={() => (autoPoll = !autoPoll)}>
-        Auto {autoPoll ? 'on' : 'off'}
+        {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
       </Button>
 
       {#if hasActiveFilter}
         <Button variant="ghost" size="sm" onclick={clearFilters}>
-          Clear filters
+          {$tr('Clear filters')}
         </Button>
       {/if}
 
       <Button variant="secondary" size="sm" loading={manualRefresh} onclick={refresh} disabled={loading && !data}>
         <RefreshCw size={14} />
-        Refresh
+        {$tr('Refresh')}
       </Button>
     {/snippet}
   </PageHeader>
 
   {#if error}
-    <Alert tone="error" title="Could not load log entries">
+    <Alert tone="error" title={$tr('Could not load log entries')}>
       <p class="text-sm">{error}</p>
       <div class="mt-3">
-        <Button variant="secondary" size="sm" onclick={refresh}>Retry</Button>
+      <Button variant="secondary" size="sm" onclick={refresh}>{$tr('Retry')}</Button>
       </div>
     </Alert>
   {/if}
@@ -157,19 +158,19 @@
     </Card>
   {:else if data && !data.enabled}
     <EmptyState
-      title="Log ring disabled"
-      description="The server was started without an active logring handler, so no log entries are available."
+      title={$tr('Log ring disabled')}
+      description={$tr('The server was started without an active logring handler, so no log entries are available.')}
     />
   {:else if data && entries.length === 0}
     <EmptyState
-      title="No matching log entries"
+      title={$tr('No matching log entries')}
       description={hasActiveFilter
-        ? 'No log entries matched your level or message filter.'
-        : 'The log ring is empty — entries will appear here as the proxy logs activity.'}
+        ? $tr('No log entries matched your level or message filter.')
+        : $tr('The log ring is empty — entries will appear here as the proxy logs activity.')}
     >
       {#if hasActiveFilter}
         {#snippet action()}
-          <Button variant="secondary" size="sm" onclick={clearFilters}>Clear filters</Button>
+          <Button variant="secondary" size="sm" onclick={clearFilters}>{$tr('Clear filters')}</Button>
         {/snippet}
       {/if}
     </EmptyState>
@@ -220,10 +221,10 @@
               onclick={() => page--}
             >
               <ChevronLeft size={14} />
-              Prev
+              {$tr('Prev')}
             </Button>
             <span class="fp-num text-xs text-[var(--fp-muted)]">
-              Page {page + 1} / {totalPages}
+              {$tr('Page {current} / {total}', { current: page + 1, total: totalPages })}
             </span>
             <Button
               variant="secondary"
@@ -232,7 +233,7 @@
               disabled={page >= totalPages - 1}
               onclick={() => page++}
             >
-              Next
+              {$tr('Next')}
               <ChevronRight size={14} />
             </Button>
           </div>

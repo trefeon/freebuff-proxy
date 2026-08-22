@@ -23,6 +23,7 @@
   import { fetchAPI, postAPI } from '../api/client.js';
   import { usePolling } from '../utils/polling.js';
   import { formatLocalDate, generateRandomApiKey } from '../utils/format.js';
+  import { tr } from '../i18n.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -59,11 +60,11 @@
 
   function banBadge(token) {
     if (token.ban_type === 'hard') {
-      return { label: 'banned — appeal required', tone: 'critical', pulse: true };
+      return { label: $tr('banned — appeal required'), tone: 'critical', pulse: true };
     }
     if (token.ban_type === 'temporary') {
       const until = formatLocalDate(token.banned_until);
-      return { label: until ? `banned until ${until}` : 'banned (temporary)', tone: 'bad' };
+      return { label: until ? $tr('banned until {time}', { time: until }) : $tr('banned (temporary)'), tone: 'bad' };
     }
     return null;
   }
@@ -71,13 +72,13 @@
   function statusFor(token) {
     const ban = banBadge(token);
     if (ban) return ban;
-    if (token.locked) return { label: 'locked', tone: 'warn' };
-    if (token.cooldown_active) return { label: 'cooldown', tone: 'warn' };
+    if (token.locked) return { label: $tr('locked'), tone: 'warn' };
+    if (token.cooldown_active) return { label: $tr('cooldown'), tone: 'warn' };
     const s = token.session_status || '';
-    if (s === 'active') return { label: 'leased', tone: 'good', pulse: true };
-    if (s === 'queued') return { label: 'queued', tone: 'info' };
-    if (s === 'banned') return { label: 'banned', tone: 'bad' };
-    return { label: 'idle', tone: 'idle' };
+    if (s === 'active') return { label: $tr('leased'), tone: 'good', pulse: true };
+    if (s === 'queued') return { label: $tr('queued'), tone: 'info' };
+    if (s === 'banned') return { label: $tr('banned'), tone: 'bad' };
+    return { label: $tr('idle'), tone: 'idle' };
   }
 
   function cooldownLabel(token) {
@@ -114,7 +115,7 @@
       }
       error = '';
     } catch (e) {
-      error = e.message || 'Failed to fetch tokens';
+      error = e.message || $tr('Failed to fetch tokens');
     } finally {
       loading = false;
     }
@@ -127,14 +128,14 @@
     try {
       const result = await postAPI('/admin/tokens/add', { token: newToken.trim() });
       actionOK = result.ok !== false;
-      actionMessage = result.message || (actionOK ? 'Token added successfully' : 'Failed to add token');
+      actionMessage = result.message || (actionOK ? $tr('Token added successfully') : $tr('Failed to add token'));
       if (actionOK) {
         newToken = '';
         fetchData();
       }
     } catch (e) {
       actionOK = false;
-      actionMessage = e.message || 'Network error adding token';
+      actionMessage = e.message || $tr('Network error adding token');
     } finally {
       adding = false;
     }
@@ -146,11 +147,11 @@
     try {
       const result = await postAPI(url, body || undefined);
       actionOK = result.ok !== false;
-      actionMessage = result.message || (actionOK ? 'Action completed' : 'Action failed');
+      actionMessage = result.message || (actionOK ? $tr('Action completed') : $tr('Action failed'));
       fetchData();
     } catch (e) {
       actionOK = false;
-      actionMessage = e.message || 'Network error executing action';
+      actionMessage = e.message || $tr('Network error executing action');
     } finally {
       actionPending = false;
     }
@@ -177,15 +178,15 @@
       const result = await save.json();
       clientKeyOK = save.ok && result.ok;
       clientKeyMessage = clientKeyOK
-        ? `Generated & saved client API key`
-        : (result.message || 'Failed to save client API key');
+        ? $tr('Generated & saved client API key')
+        : (result.message || $tr('Failed to save client API key'));
       if (clientKeyOK) {
         generatedKey = newKey;
         fetchData();
       }
     } catch (e) {
       clientKeyOK = false;
-      clientKeyMessage = e.message || 'Network error generating client key';
+      clientKeyMessage = e.message || $tr('Network error generating client key');
     } finally {
       generatingKey = false;
     }
@@ -193,7 +194,7 @@
 
   async function startOAuthLogin() {
     oauthStarting = true;
-    oauthStatus = { message: 'Starting headless login flow…', type: 'info' };
+    oauthStatus = { message: $tr('Starting headless login flow…'), type: 'info' };
 
     try {
       const res = await fetch('/admin/login/start', { method: 'POST' });
@@ -203,7 +204,7 @@
         oauthStatus = {
           loginUrl: result.login_url,
           fingerprint: result.fingerprint,
-          message: 'Open this URL in your browser to sign in:',
+          message: $tr('Open this URL in your browser to sign in:'),
           type: 'pending',
         };
 
@@ -216,7 +217,7 @@
             if (pollData.status === 'completed') {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: `Token #${pollData.token_index} added to pool and saved to .env.`,
+                message: $tr('Token #{idx} added to pool and saved to .env.', { idx: pollData.token_index }),
                 type: 'success',
               };
               oauthStarting = false;
@@ -224,7 +225,7 @@
             } else if (pollData.status === 'error') {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: `Login failed: ${pollData.message || 'unknown error'}`,
+                message: $tr('Login failed: {message}', { message: pollData.message || $tr('unknown error') }),
                 type: 'error',
               };
               oauthStarting = false;
@@ -235,13 +236,13 @@
         }, 3000);
       } else {
         oauthStatus = {
-          message: result.message || 'Failed to start login wizard.',
+          message: result.message || $tr('Failed to start login wizard.'),
           type: 'error',
         };
         oauthStarting = false;
       }
     } catch (e) {
-      oauthStatus = { message: `Network error: ${e.message}`, type: 'error' };
+      oauthStatus = { message: $tr('Network error: {message}', { message: e.message }), type: 'error' };
       oauthStarting = false;
     }
   }
@@ -261,7 +262,7 @@
 
 <div class="page-enter">
   <div class="flex flex-col gap-6">
-    <PageHeader title="Tokens" description="Upstream credentials, device login, client API keys, and per-token session quotas">
+    <PageHeader title={$tr('Tokens')} description={$tr('Upstream credentials, device login, client API keys, and per-token session quotas')}>
       {#snippet actions()}
         <Button
           variant="secondary"
@@ -271,10 +272,10 @@
         >
           {#if oauthStarting}
             <RefreshCw size={14} class="animate-spin" />
-            <span>Authorizing…</span>
+            <span>{$tr('Authorizing…')}</span>
           {:else}
             <LogIn size={14} />
-            <span>Device Login</span>
+            <span>{$tr('Device Login')}</span>
           {/if}
         </Button>
         <Button
@@ -285,10 +286,10 @@
         >
           {#if generatingKey}
             <RefreshCw size={14} class="animate-spin" />
-            <span>Generating…</span>
+            <span>{$tr('Generating…')}</span>
           {:else}
             <Key size={14} />
-            <span>Generate API Key</span>
+            <span>{$tr('Generate API Key')}</span>
           {/if}
         </Button>
       {/snippet}
@@ -300,7 +301,7 @@
     {#if error}
       <Alert tone="error" title={error}>
         <Button variant="ghost" size="sm" onclick={() => { error = ''; fetchData(); }}>
-          Retry
+          {$tr('Retry')}
         </Button>
       </Alert>
     {/if}
@@ -313,14 +314,14 @@
         {#if oauthStatus.loginUrl}
           <div class="flex flex-wrap items-center gap-2">
             <code class="fp-num text-xs break-all max-w-full">{oauthStatus.loginUrl}</code>
-            <CopyButton text={oauthStatus.loginUrl} label="Copy link" />
+            <CopyButton text={oauthStatus.loginUrl} label={$tr('Copy link')} />
             <a
               href={oauthStatus.loginUrl}
               target="_blank"
               rel="noopener noreferrer"
               class="inline-flex items-center gap-1 text-xs text-[var(--fp-accent)] hover:underline"
             >
-              Open
+              {$tr('Open')}
               <ExternalLink size={12} />
             </a>
           </div>
@@ -329,13 +330,13 @@
     {/if}
 
     <!-- Add token form -->
-    <Card title="Add Token to Pool" description="Paste a FreeBuff auth token (cb_…) to add it to the shared pool and save it to .env. Adding burns no quota.">
+    <Card title={$tr('Add Token to Pool')} description={$tr('Paste a FreeBuff auth token (cb_…) to add it to the shared pool and save it to .env. Adding burns no quota.')}>
       <form onsubmit={addToken} class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
         <div class="flex-1 w-full">
           <Field
-            label="Token"
-            hint={tokenValid === true ? 'Valid format' : tokenValid === false ? 'Invalid format' : 'Format: cb_…'}
-            error={tokenValid === false ? 'Token must match cb_… with at least 20 characters' : ''}
+            label={$tr('Token')}
+            hint={tokenValid === true ? $tr('Valid format') : tokenValid === false ? $tr('Invalid format') : $tr('Format: cb_…')}
+            error={tokenValid === false ? $tr('Token must match cb_… with at least 20 characters') : ''}
             id="add-token-input"
           >
             <input
@@ -356,19 +357,19 @@
           loading={adding}
         >
           <Plus size={16} />
-          <span>Add Token</span>
+          <span>{$tr('Add Token')}</span>
         </Button>
       </form>
     </Card>
 
     <!-- Client API-key management -->
     <Card
-      title="Client API Keys"
-      description="sk-fb-… credentials for clients (omp, curl) to authenticate against this proxy. Stored in the API_KEYS line of .env."
+      title={$tr('Client API Keys')}
+      description={$tr('sk-fb-… credentials for clients (omp, curl) to authenticate against this proxy. Stored in the API_KEYS line of .env.')}
     >
       {#if generatedKey}
         <div class="fp-inset rounded p-3 mb-3 flex flex-wrap items-center gap-2">
-          <span class="text-xs text-[var(--fp-muted)]">New key:</span>
+          <span class="text-xs text-[var(--fp-muted)]">{$tr('New key:')}</span>
           <code class="fp-num text-xs text-[var(--fp-accent)] break-all">{generatedKey}</code>
           <CopyButton text={generatedKey} label="Copy" />
         </div>
@@ -390,8 +391,8 @@
 
     <!-- Token table -->
     <Card
-      title="Pool Tokens"
-      description={data ? `${data.token_count || 0} pooled token${data.token_count === 1 ? '' : 's'}` : ''}
+      title={$tr('Pool Tokens')}
+      description={data ? $tr('{count} pooled token(s)', { count: data.token_count || 0 }) : ''}
       pad="none"
     >
       {#if loading}
@@ -404,30 +405,30 @@
         </div>
       {:else if error}
         <EmptyState
-          title="Could not load tokens"
+          title={$tr('Could not load tokens')}
           description={error}
         >
           {#snippet action()}
             <Button variant="secondary" onclick={() => { error = ''; fetchData(); }}>
-              Retry
+              {$tr('Retry')}
             </Button>
           {/snippet}
         </EmptyState>
       {:else if !data?.tokens || data.tokens.length === 0}
         <EmptyState
-          title="No tokens in pool"
-          description="Add one above or use Device Login to generate credentials via browser."
+          title={$tr('No tokens in pool')}
+          description={$tr('Add one above or use Device Login to generate credentials via browser.')}
         />
       {:else}
         <table class="fp-table w-full">
           <thead>
             <tr>
               <th class="w-8"></th>
-              <th>Token</th>
-              <th>Status</th>
-              <th>Instance</th>
-              <th class="num">Cooldown</th>
-              <th class="text-right">Actions</th>
+              <th>{$tr('Token')}</th>
+              <th>{$tr('Status')}</th>
+              <th>{$tr('Instance')}</th>
+              <th class="num">{$tr('Cooldown')}</th>
+              <th class="text-right">{$tr('Actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -483,10 +484,10 @@
                         variant="ghost"
                         size="sm"
                         disabled={actionPending}
-                        onclick={() => triggerAction(`/admin/tokens/${idx}/unlock`, {}, `Clear cooldown for token ${idx}? Only do this if the lock is stale.`)}
+                        onclick={() => triggerAction(`/admin/tokens/${idx}/unlock`, {}, $tr('Clear cooldown for token {idx}? Only do this if the lock is stale.', { idx }))}
                       >
                         <Unlock size={13} />
-                        <span>Clear</span>
+                        <span>{$tr('Clear')}</span>
                       </Button>
                     {/if}
                     {#if token.locked}
@@ -494,30 +495,30 @@
                         variant="secondary"
                         size="sm"
                         disabled={actionPending}
-                        onclick={() => triggerAction(`/admin/tokens/${idx}/unlock-lock`, {}, `Unlock token ${idx}?`)}
+                        onclick={() => triggerAction(`/admin/tokens/${idx}/unlock-lock`, {}, $tr('Unlock token {idx}?', { idx }))}
                       >
                         <Unlock size={13} />
-                        <span>Unlock</span>
+                        <span>{$tr('Unlock')}</span>
                       </Button>
                     {:else}
                       <Button
                         variant="ghost"
                         size="sm"
                         disabled={actionPending}
-                        onclick={() => triggerAction(`/admin/tokens/${idx}/lock`, {}, `Lock token ${idx}?`)}
+                        onclick={() => triggerAction(`/admin/tokens/${idx}/lock`, {}, $tr('Lock token {idx}?', { idx }))}
                       >
                         <Lock size={13} />
-                        <span>Lock</span>
+                        <span>{$tr('Lock')}</span>
                       </Button>
                     {/if}
                     <Button
                       variant="danger"
                       size="sm"
                       disabled={actionPending}
-                      onclick={() => triggerAction('/admin/tokens/remove', { token: token.index ?? i }, `Remove token ${idx} from the pool and .env?`)}
+                      onclick={() => triggerAction('/admin/tokens/remove', { token: token.index ?? i }, $tr('Remove token {idx} from the pool and .env?', { idx }))}
                     >
                       <Trash2 size={13} />
-                      <span>Remove</span>
+                      <span>{$tr('Remove')}</span>
                     </Button>
                   </div>
                 </td>
@@ -528,37 +529,37 @@
                     <div class="fp-inset m-2 rounded p-3">
                       {#if token.session_remaining_seconds > 0 && token.session_model}
                         <div class="mb-2 px-2 py-1 rounded bg-[var(--fp-accent)]/10 text-xs text-[var(--fp-accent)] flex items-center justify-between">
-                          <span>Active Session: <code class="fp-num">{token.session_model}</code></span>
+                          <span>{$tr('Active Session:')} <code class="fp-num">{token.session_model}</code></span>
                           <span class="fp-num">{Math.floor(token.session_remaining_seconds / 60)}m {token.session_remaining_seconds % 60}s remaining</span>
                         </div>
                       {/if}
                       {#if token.has_quota && token.quota?.length > 0}
                         <div class="flex flex-col gap-2">
-                          <p class="text-xs text-[var(--fp-muted)] uppercase tracking-wider font-semibold">Session quotas</p>
+                          <p class="text-xs text-[var(--fp-muted)] uppercase tracking-wider font-semibold">{$tr('Session quotas')}</p>
                           {#each token.quota as q}
                             <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
                               <code class="fp-num text-xs text-[var(--fp-text)] sm:w-48 shrink-0 truncate">{q.model}</code>
                               <span class="fp-num text-xs text-[var(--fp-muted)]">
                                 <span class="text-[var(--fp-text)]">{q.recent}</span> / {q.limit}
                                 {#if q.limit !== '0' && q.limit !== ''}
-                                  (remaining <span class="text-[var(--fp-text)]">{Math.max(0, parseFloat(q.limit) - parseFloat(q.recent))}</span>)
+                                  {$tr('(remaining {count})', { count: Math.max(0, parseFloat(q.limit) - parseFloat(q.recent)) })}
                                 {/if}
                               </span>
                               <span class="fp-num text-xs text-[var(--fp-dim)] sm:ml-auto">
-                                {q.period}{#if q.has_entitlement} · entitled {q.entitled}{/if}
+                                {q.period}{#if q.has_entitlement} · {$tr('entitled')} {q.entitled}{/if}
                               </span>
                               <span class="fp-num text-xs text-[var(--fp-dim)]">
                                 {#if q.resets_in}
-                                  reset {formatLocalDate(q.reset_at_utc) || q.reset_at} ({q.resets_in})
+                                  {$tr('reset')} {formatLocalDate(q.reset_at_utc) || q.reset_at} ({q.resets_in})
                                 {:else}
-                                  reset {formatLocalDate(q.reset_at_utc) || q.reset_at}
+                                  {$tr('reset')} {formatLocalDate(q.reset_at_utc) || q.reset_at}
                                 {/if}
                               </span>
                             </div>
                           {/each}
                         </div>
                       {:else}
-                        <p class="text-xs text-[var(--fp-dim)] italic">No quota data available for this session.</p>
+                        <p class="text-xs text-[var(--fp-dim)] italic">{$tr('No quota data available for this session.')}</p>
                       {/if}
                     </div>
                   </td>

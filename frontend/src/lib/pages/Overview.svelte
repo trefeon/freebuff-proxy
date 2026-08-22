@@ -15,6 +15,7 @@
   import { fetchAPI } from '../api/client.js';
   import { formatLocalDate } from '../utils/format.js';
   import { usePolling } from '../utils/polling.js';
+  import { tr } from '../i18n.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -25,7 +26,7 @@
       data = await fetchAPI('/admin/api/overview');
       error = '';
     } catch (e) {
-      error = e.message || 'Could not reach the proxy API. Check that the server is running.';
+      error = e.message || $tr('Could not reach the proxy API. Check that the server is running.');
     } finally {
       loading = false;
     }
@@ -64,11 +65,11 @@
 
   function banBadge(t) {
     if (t.ban_type === 'hard') {
-      return { label: 'banned — appeal required', tone: 'critical', pulse: true };
+      return { label: $tr('banned — appeal required'), tone: 'critical', pulse: true };
     }
     if (t.ban_type === 'temporary') {
       const until = formatLocalDate(t.banned_until);
-      return { label: until ? `banned until ${until}` : 'banned (temporary)', tone: 'bad' };
+      return { label: until ? $tr('banned until {time}', { time: until }) : $tr('banned (temporary)'), tone: 'bad' };
     }
     return null;
   }
@@ -84,7 +85,7 @@
 </script>
 
 <div class="space-y-6 page-enter">
-  <PageHeader title="Overview" description="Live proxy status and token pool telemetry">
+  <PageHeader title={$tr('Overview')} description={$tr('Live proxy status and token pool telemetry')}>
     {#snippet actions()}
       {#if data}
         <StatusBadge
@@ -112,12 +113,12 @@
 
   <!-- Fetch error with retry -->
   {#if error}
-    <Alert tone="error" title="Overview unavailable">
+    <Alert tone="error" title={$tr('Overview unavailable')}>
       <p>{error}</p>
       <div class="mt-3">
         <Button variant="secondary" size="sm" onclick={retry}>
           <RefreshCw size={16} />
-          Retry
+          {$tr('Retry')}
         </Button>
       </div>
     </Alert>
@@ -128,35 +129,35 @@
       <!-- Bridge mode: no pool snapshot to summarize -->
       <Card>
         <p class="text-sm text-[var(--fp-muted)]">
-          Bridge mode relays upstream tokens per client request
-          (<span class="fp-num">{data.bridge_tokens}</span> active bridge client{data.bridge_tokens === 1 ? '' : 's'}).
-          Session pools and quota tracking are client-scoped.
+          {$tr('Bridge mode relays upstream tokens per client request')}
+          (<span class="fp-num">{data.bridge_tokens}</span> {$tr('active bridge client(s)')}).
+          {$tr('Session pools and quota tracking are client-scoped.')}
         </p>
       </Card>
     {:else if !data.has_tokens}
       <EmptyState
-        title="No upstream tokens configured"
-        description="Add tokens to AUTH_TOKENS in Config to start the pooled relay."
+        title={$tr('No upstream tokens configured')}
+        description={$tr('Add tokens to AUTH_TOKENS in Config to start the pooled relay.')}
       >
         {#snippet action()}
-          <a href="#config" class="fp-btn fp-btn-secondary">Go to Config</a>
+          <a href="#config" class="fp-btn fp-btn-secondary">{$tr('Go to Config')}</a>
         {/snippet}
       </EmptyState>
     {:else}
       <!-- KPI row -->
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Stat label="Pool total" value={poolTotal} big />
-        <Stat label="Busy" value={busyTokens} hint="tokens with active runs" big />
-        <Stat label="Cooldown" value={cooldownTokens} tone={cooldownTokens > 0 ? 'warn' : 'default'} big />
-        <Stat label="Banned" value={bannedTokens} hint="critical risk" tone={bannedTokens > 0 ? 'bad' : 'default'} big />
-        <Stat label="Requests today" value={requestsToday} big />
-        <Stat label="Models" value={data.model_count ?? 0} big />
+        <Stat label={$tr('Pool total')} value={poolTotal} big />
+        <Stat label={$tr('Busy')} value={busyTokens} hint={$tr('tokens with active runs')} big />
+        <Stat label={$tr('Cooldown')} value={cooldownTokens} tone={cooldownTokens > 0 ? 'warn' : 'default'} big />
+        <Stat label={$tr('Banned')} value={bannedTokens} hint={$tr('critical risk')} tone={bannedTokens > 0 ? 'bad' : 'default'} big />
+        <Stat label={$tr('Requests today')} value={requestsToday} big />
+        <Stat label={$tr('Models')} value={data.model_count ?? 0} big />
       </div>
 
       <!-- Token risk cards -->
       <section aria-label="At-risk tokens">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold text-[var(--fp-text)]">Token risk</h2>
+          <h2 class="text-lg font-semibold text-[var(--fp-text)]">{$tr('Token risk')}</h2>
           <span class="fp-num text-xs text-[var(--fp-dim)]">{atRiskTokens.length}/{poolTotal}</span>
         </div>
 
@@ -180,16 +181,16 @@
 
                   {#if t.cooldown_active}
                     <div class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-warning)]">
-                      Cooldown — <span class="fp-num">{formatCooldown(t.cooldown_until)}</span> remaining
+                      {$tr('Cooldown')} — <span class="fp-num">{formatCooldown(t.cooldown_until)}</span> {$tr('remaining')}
                     </div>
                   {/if}
 
                   <div class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-muted)]">
                     {#if t.daily_limit > 0}
-                      <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}/{t.daily_limit}</span> msgs today
+                      <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}/{t.daily_limit}</span> {$tr('msgs today')}
                       (<span class="fp-num">{t.usage_pct}%</span>)
                     {:else}
-                      <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}</span> msgs 24h
+                      <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}</span> {$tr('msgs 24h')}
                     {/if}
                   </div>
 
@@ -205,7 +206,7 @@
           <Card>
             <div class="flex items-center gap-2 text-sm text-[var(--fp-muted)]">
               <span class="led led-good" aria-hidden="true"></span>
-              All tokens healthy — no risk flags.
+              {$tr('All tokens healthy — no risk flags.')}
             </div>
           </Card>
         {/if}

@@ -16,6 +16,7 @@
   import { X } from '@lucide/svelte';
   import { fetchAPI } from './lib/api/client.js';
   import { sessionExpired, dismissSessionExpired } from './lib/stores/session.js';
+  import { tr } from './lib/i18n.js';
 
   function getInitialTab() {
     if (typeof window === 'undefined') return 'overview';
@@ -106,15 +107,15 @@
     <main id="main-content" class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8">
       {#if $sessionExpired && activeTab !== 'login'}
         <div class="mb-6">
-          <Alert tone="error" title="Session expired">
+          <Alert tone="error" title={$tr('Session expired')}>
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <span>Your session has ended. Sign in again to continue using the dashboard.</span>
+              <span>{$tr('Your session has ended. Sign in again to continue using the dashboard.')}</span>
               <div class="flex items-center gap-2 shrink-0">
-                <Button variant="secondary" size="sm" onclick={goToLogin}>Log in</Button>
+                <Button variant="secondary" size="sm" onclick={goToLogin}>{$tr('Log in')}</Button>
                 <button
                   type="button"
                   class="fp-btn fp-btn-ghost fp-btn-sm"
-                  aria-label="Dismiss session expired notice"
+                  aria-label={$tr('Dismiss session expired notice')}
                   onclick={dismissSessionExpired}
                 >
                   <X size={15} />

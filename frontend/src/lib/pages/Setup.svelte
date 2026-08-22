@@ -10,6 +10,7 @@
   import Button from '../components/Button.svelte';
   import Field from '../components/Field.svelte';
   import { fetchAPI } from '../api/client.js';
+  import { tr } from '../i18n.js';
   import { generateRandomApiKey } from '../utils/format.js';
   import { copyToClipboard } from '../utils/clipboard.js';
 
@@ -25,7 +26,7 @@
     try {
       data = await fetchAPI('/admin/api/setup');
     } catch (e) {
-      error = e.message || 'Failed to load setup data';
+      error = e.message || $tr('Failed to load setup data');
     } finally {
       loading = false;
     }
@@ -58,8 +59,8 @@
   const modeTone = $derived(isBridge ? 'info' : 'good');
   const modeBlurb = $derived(
     isBridge
-      ? 'Bridge mode — no token pool. Each client sends its own FreeBuff token; the proxy relays the Authorization header straight upstream.'
-      : 'Pooled mode — the proxy holds the upstream AUTH_TOKENS and selects one per request; clients authenticate with any key.'
+      ? $tr('Bridge mode — no token pool. Each client sends its own FreeBuff token; the proxy relays the Authorization header straight upstream.')
+      : $tr('Pooled mode — the proxy holds the upstream AUTH_TOKENS and selects one per request; clients authenticate with any key.')
   );
 
   // Snippet templates are the real strings from the previous Setup page,
@@ -100,7 +101,7 @@
 </script>
 
 <div class="space-y-6 page-enter">
-  <PageHeader title="Setup" description="Client configuration for AI coding tools — copy a block into your tool's config.">
+  <PageHeader title={$tr('Setup')} description={$tr("Client configuration for AI coding tools — copy a block into your tool's config.")}>
     <svelte:fragment slot="actions">
       {#if data}
         <StatusBadge status={data.mode} tone={modeTone} />
@@ -134,14 +135,14 @@
   <!-- Error -->
   {#if error}
     <div class="space-y-3">
-      <Alert tone="error" title="Failed to load setup data">{error}</Alert>
-      <Button variant="secondary" size="sm" onclick={fetchData}>Retry</Button>
+      <Alert tone="error" title={$tr('Failed to load setup data')}>{error}</Alert>
+      <Button variant="secondary" size="sm" onclick={fetchData}>{$tr('Retry')}</Button>
     </div>
   {/if}
 
   {#if data}
     <!-- Mode -->
-    <Card title="Mode" description="How clients authenticate to this gateway">
+    <Card title={$tr('Mode')} description={$tr('How clients authenticate to this gateway')}>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <StatusBadge status={data.mode} tone={modeTone} />
         {#if isBridge}
@@ -155,8 +156,8 @@
     </Card>
 
     <!-- Client API key -->
-    <Card title="Client API Key" description="The key embedded in every snippet below.">
-      <Field label="Client API key" id="setup-api-key" hint={data.key_hint}>
+    <Card title={$tr('Client API Key')} description={$tr('The key embedded in every snippet below.')}>
+      <Field label={$tr('Client API key')} id="setup-api-key" hint={data.key_hint}>
         <div class="flex flex-col sm:flex-row gap-2">
           <input
             id="setup-api-key"
@@ -175,9 +176,9 @@
     </Card>
 
     <!-- Quick start -->
-    <h2 class="text-[11px] font-mono uppercase tracking-[0.25em] text-[var(--fp-dim)]">Quick Start</h2>
+    <h2 class="text-[11px] font-mono uppercase tracking-[0.25em] text-[var(--fp-dim)]">{$tr('Quick Start')}</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card title="Base URL" description="OpenAI-compatible endpoint — same for every tool.">
+      <Card title={$tr('Base URL')} description={$tr('OpenAI-compatible endpoint — same for every tool.')}>
         <div class="flex items-center gap-2">
           <div class="fp-inset flex-1 px-3 py-2 overflow-x-auto">
             <code class="text-xs">{data.base_url}</code>
@@ -186,7 +187,7 @@
         </div>
       </Card>
 
-      <Card title="Models" description="Model IDs available to clients">
+      <Card title={$tr('Models')} description={$tr('Model IDs available to clients')}>
         {#if data.models.length > 0}
           <p class="text-xs text-[var(--fp-dim)] mb-3">
             <span class="fp-num">{data.models.length}</span> served

@@ -1,5 +1,6 @@
 <script>
   import { AlertTriangle } from '@lucide/svelte';
+  import { tr } from '../i18n.js';
   import Button from './Button.svelte';
 
   /**
@@ -17,11 +18,11 @@
       <AlertTriangle size={18} />
     </div>
     <div class="text-sm">
-      <span class="font-semibold text-[#fbbf24]">Security Warning</span>
-      <span class="text-[var(--fp-muted)]"> — You are using the default admin password (<code class="text-[var(--fp-text)] bg-[var(--fp-bg)] px-1 py-0.5 rounded text-xs font-mono">123456</code>). Change it immediately to secure this instance.</span>
+      <span class="font-semibold text-[#fbbf24]">{$tr('Security Warning')}</span>
+      <span class="text-[var(--fp-muted)]"> — {$tr('You are using the default admin password (123456). Change it immediately to secure this instance.')}</span>
     </div>
   </div>
   <Button variant="primary" size="sm" onclick={onChangePassword}>
-    Change Password
+    {$tr('Change Password')}
   </Button>
 </div>

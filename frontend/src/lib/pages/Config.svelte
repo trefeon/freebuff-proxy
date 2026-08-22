@@ -9,6 +9,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import CopyButton from '../components/CopyButton.svelte';
   import { fetchAPI, postForm } from '../api/client.js';
+  import { tr } from '../i18n.js';
   import { formatTime } from '../utils/format.js';
 
   let data = $state(null);
@@ -74,7 +75,7 @@
       originalContent = envContent;
       error = '';
     } catch (e) {
-      error = e.message || 'Failed to fetch configuration';
+      error = e.message || $tr('Failed to fetch configuration');
     } finally {
       loading = false;
     }
@@ -83,22 +84,22 @@
   function validateConfig() {
     if (saving) return;
     if (!envContent.trim()) {
-      result = { ok: false, message: 'Configuration is empty — nothing to save.' };
+      result = { ok: false, message: $tr('Configuration is empty — nothing to save.') };
       return;
     }
     if (validationErrors.length === 0) {
-      result = { ok: true, message: `Configuration is valid — ${keyCount} key${keyCount === 1 ? '' : 's'} parsed.` };
+      result = { ok: true, message: $tr('Configuration is valid — {count} key(s) parsed.', { count: keyCount }) };
     } else {
       const shown = validationErrors.slice(0, 5).join(' · ');
       const more = validationErrors.length > 5 ? ` (+${validationErrors.length - 5} more)` : '';
-      result = { ok: false, message: `Configuration invalid (${validationErrors.length}): ${shown}${more}` };
+      result = { ok: false, message: $tr('Configuration invalid ({count}): {detail}', { count: validationErrors.length, detail: `${shown}${more}` }) };
     }
   }
 
   async function saveConfig(e, opts = {}) {
     e?.preventDefault();
     if (saving || !hasUnsavedChanges) return;
-    if (opts.confirm !== false && !window.confirm('Save the .env file and reload the proxy with these changes?')) {
+    if (opts.confirm !== false && !window.confirm($tr('Save the .env file and reload the proxy with these changes?'))) {
       return;
     }
     saving = true;
@@ -109,14 +110,14 @@
       const json = await res.json();
       result = {
         ok: res.ok && json.ok,
-        message: json.message || (res.ok ? 'Configuration saved and reloaded.' : 'Save failed'),
+        message: json.message || (res.ok ? $tr('Configuration saved and reloaded.') : $tr('Save failed')),
       };
       if (result.ok) {
         lastSavedTime = new Date();
         await fetchData();
       }
     } catch (e) {
-      result = { ok: false, message: e.message || 'Network error saving configuration' };
+      result = { ok: false, message: e.message || $tr('Network error saving configuration') };
     } finally {
       saving = false;
     }
@@ -151,11 +152,11 @@
 </script>
 
 <div class="space-y-6 page-enter">
-  <PageHeader title="Config" description="Runtime .env editor — Save writes the file and reloads the running proxy.">
+  <PageHeader title={$tr('Config')} description={$tr('Runtime .env editor — Save writes the file and reloads the running proxy.')}>
     {#snippet actions()}
       <Button variant="ghost" onclick={fetchData}>
         <RefreshCw size={15} />
-        Reload
+        {$tr('Reload')}
       </Button>
       <Button
         variant="primary"
@@ -164,7 +165,7 @@
         loading={saving}
       >
         <Save size={15} />
-        Save
+        {$tr('Save')}
       </Button>
     {/snippet}
   </PageHeader>
@@ -180,7 +181,7 @@
       <div>
         <Button variant="secondary" onclick={fetchData}>
           <RefreshCw size={15} />
-          Retry
+          {$tr('Retry')}
         </Button>
       </div>
     </div>
@@ -193,7 +194,7 @@
             type="button"
             onclick={() => result = null}
             class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] transition-colors shrink-0"
-            aria-label="Dismiss alert"
+            aria-label={$tr('Dismiss alert')}
           >
             <X size={14} />
           </button>
@@ -205,19 +206,19 @@
       <!-- Editor -->
       <div class="lg:col-span-7">
         <Card
-          title=".env Editor"
-          description="Edit environment variables. Save validates server-side and reloads; rejected writes are rolled back."
+          title={$tr('.env Editor')}
+          description={$tr('Edit environment variables. Save validates server-side and reloads; rejected writes are rolled back.')}
         >
           {#snippet actions()}
             {#if data}
               <StatusBadge
-                status={data.has_env_file ? 'env loaded' : 'no env file'}
+                status={data.has_env_file ? $tr('env loaded') : $tr('no env file')}
                 tone={data.has_env_file ? 'good' : 'warn'}
               />
             {/if}
             {#if hasUnsavedChanges}
               <StatusBadge
-                status={`${changedKeysCount} changed`}
+                status={$tr('{count} changed', { count: changedKeysCount })}
                 tone="warn"
                 pulse
               />
@@ -225,7 +226,7 @@
           {/snippet}
 
           <form onsubmit={saveConfig}>
-            <label for="config-env" class="sr-only">Environment file content</label>
+            <label for="config-env" class="sr-only">{$tr('Environment file content')}</label>
             <textarea
               id="config-env"
               bind:value={envContent}
@@ -239,45 +240,45 @@
             {#if validationErrors.length > 0}
               <div role="alert" aria-live="polite" class="mt-3 p-3 rounded-[var(--fp-radius-sm)] fp-inset border-[var(--fp-error)]/30 space-y-1">
                 <p class="text-xs font-semibold text-[var(--fp-error)]">
-                  {validationErrors.length} validation error{validationErrors.length === 1 ? '' : 's'}:
+                  {$tr('{count} validation error(s):', { count: validationErrors.length })}
                 </p>
                 {#each validationErrors.slice(0, 5) as err}
                   <p class="text-[11px] font-mono text-[var(--fp-error)]/80">{err}</p>
                 {/each}
                 {#if validationErrors.length > 5}
-                  <p class="text-[11px] text-[var(--fp-dim)]">… and {validationErrors.length - 5} more</p>
+                  <p class="text-[11px] text-[var(--fp-dim)]">… {$tr('and {count} more', { count: validationErrors.length - 5 })}</p>
                 {/if}
               </div>
             {/if}
 
             <div class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center gap-3 text-[11px] text-[var(--fp-dim)] font-mono">
-                <span>{lineCount} lines</span>
+                <span>{lineCount} {$tr('lines')}</span>
                 <span class="text-[var(--fp-border-bright)]">|</span>
-                <span>{keyCount} keys</span>
+                <span>{keyCount} {$tr('keys')}</span>
                 {#if lastSavedTimeStr}
                   <span class="text-[var(--fp-border-bright)]">|</span>
-                  <span>saved {lastSavedTimeStr}</span>
+                  <span>{$tr('saved {time}', { time: lastSavedTimeStr })}</span>
                 {/if}
               </div>
               <div class="flex items-center gap-2">
                 <Button variant="secondary" onclick={validateConfig} disabled={saving}>
-                  Validate
+                  {$tr('Validate')}
                 </Button>
               </div>
           </form>
           <p class="mt-3 text-[11px] text-[var(--fp-dim)]">
-            Changes take effect after save. <kbd class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]">Ctrl+S</kbd> saves from the keyboard.
+            {$tr('Changes take effect after save.')} <kbd class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]">Ctrl+S</kbd> {$tr('saves from the keyboard')}.
           </p>
         </Card>
       </div>
 
       <!-- Effective config -->
       <div class="lg:col-span-5">
-        <Card title="Effective Configuration" description="Read-only view of the running configuration. Secret values are masked.">
+        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')}>
           {#snippet actions()}
             <StatusBadge
-              status={`${data?.effective?.length || 0} keys`}
+              status={`${data?.effective?.length || 0} ${$tr('keys')}`}
               tone={data?.effective?.length ? 'good' : 'warn'}
             />
           {/snippet}
@@ -286,8 +287,8 @@
             <table class="fp-table">
               <thead>
                 <tr>
-                  <th>Key</th>
-                  <th>Value</th>
+                  <th>{$tr('Key')}</th>
+                  <th>{$tr('Value')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,7 +298,7 @@
                       <div class="flex items-center gap-2 min-w-0">
                         <span class="fp-num text-[11px] font-semibold text-[var(--fp-text)] truncate">{kv.key}</span>
                         {#if kv.secret}
-                          <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">secret</span>
+                          <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">{$tr('secret')}</span>
                         {/if}
                       </div>
                     </td>
@@ -308,7 +309,7 @@
                         </span>
                         {#if kv.value}
                           <span class="shrink-0">
-                            <CopyButton text={kv.value} label="copy" />
+                            <CopyButton text={kv.value} label={$tr('copy')} />
                           </span>
                         {/if}
                       </div>
@@ -318,11 +319,11 @@
               </tbody>
             </table>
           {:else}
-            <EmptyState title="No effective configuration" description="Start the proxy to populate this view.">
+            <EmptyState title={$tr('No effective configuration')} description={$tr('Start the proxy to populate this view.')}>
               {#snippet action()}
                 <Button variant="secondary" onclick={fetchData}>
                   <RefreshCw size={15} />
-                  Refresh
+                  {$tr('Refresh')}
                 </Button>
               {/snippet}
             </EmptyState>

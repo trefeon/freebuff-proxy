@@ -8,6 +8,7 @@
   import EmptyState from '../components/EmptyState.svelte';
   import Button from '../components/Button.svelte';
   import { fetchAPI } from '../api/client.js';
+  import { tr } from '../i18n.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -19,7 +20,7 @@
     try {
       data = await fetchAPI('/admin/api/models');
     } catch (e) {
-      error = e.message || 'Failed to load the model catalog.';
+      error = e.message || $tr('Failed to load models');
     } finally {
       loading = false;
     }
@@ -42,13 +43,13 @@
 </script>
 
 <div class="space-y-6 page-enter">
-  <PageHeader title="Models" description="Served model catalog with upstream agent bindings and client aliases." />
+  <PageHeader title={$tr('Models')} description={$tr('Served model catalog with upstream agent bindings and client aliases.')} />
 
   {#if error}
-    <Alert tone="error" title="Failed to load models">
+    <Alert tone="error" title={$tr('Failed to load models')}>
       <p>{error}</p>
       <div class="mt-3">
-        <Button variant="secondary" size="sm" onclick={load}>Retry</Button>
+      <Button variant="secondary" size="sm" onclick={load}>{$tr('Retry')}</Button>
       </div>
     </Alert>
   {:else if loading}
@@ -65,23 +66,23 @@
     </div>
   {:else if data}
     <Stat
-      label="Served Models"
+      label={$tr('Served Models')}
       value={servedCount}
-      hint={`${data.count} registered · ${data.agents} agents`}
+      hint={$tr('{count} registered · {agents} agents', { count: data.count, agents: data.agents })}
       tone={servedCount > 0 ? 'good' : 'idle'}
       big
     />
 
     {#if data.models.length > 0}
-      <Card title="Model Catalog" pad="none">
+      <Card title={$tr('Model Catalog')} pad="none">
         <div class="overflow-x-auto">
           <table class="fp-table">
             <thead>
               <tr>
-                <th scope="col">Model ID</th>
-                <th scope="col">Served</th>
-                <th scope="col">Agent</th>
-                <th scope="col">Client Aliases</th>
+                <th scope="col">{$tr('Model ID')}</th>
+                <th scope="col">{$tr('Served')}</th>
+                <th scope="col">{$tr('Agent')}</th>
+                <th scope="col">{$tr('Client Aliases')}</th>
               </tr>
             </thead>
             <tbody>
@@ -92,7 +93,7 @@
                   <td><span class="fp-num">{m.id}</span></td>
                   <td>
                     <StatusBadge
-                      status={bound ? 'served' : 'unbound'}
+                      status={bound ? $tr('served') : $tr('unbound')}
                       tone={bound ? 'good' : 'idle'}
                     />
                   </td>
@@ -118,8 +119,8 @@
       </Card>
     {:else}
       <EmptyState
-        title="No models registered"
-        description="The model registry is empty. Add model-to-agent mappings in the gateway config and reload."
+        title={$tr('No models registered')}
+        description={$tr('The model registry is empty. Add model-to-agent mappings in the gateway config and reload.')}
       />
     {/if}
   {/if}

@@ -1,6 +1,6 @@
 <script>
   import {
-    LayoutDashboard, Key, Cpu, Settings, FileText, Wrench, Menu, X,
+    LayoutDashboard, Key, Cpu, Settings, FileText, Wrench, Menu, X, Languages,
   } from '@lucide/svelte';
 
   /**
@@ -9,6 +9,7 @@
    * @prop {{ current_version: string, has_update: boolean, latest_version: string, update_url: string }} [versionInfo]
    */
   let { activeTab = $bindable(), onTabChange, versionInfo } = $props();
+  import { tr, locale, setLocale } from './i18n.js';
 
   let mobileOpen = $state(false);
   let drawerEl = $state(null);
@@ -86,13 +87,25 @@
               <span class="led led-accent" aria-hidden="true"></span>
             {/if}
             <tab.icon size={16} class="shrink-0" />
-            <span class="font-mono text-xs">{tab.label}</span>
+            <span class="font-mono text-xs">{$tr(tab.label)}</span>
           </a>
         </li>
       {/each}
     </ul>
 
     <!-- Version badge, pinned to the bottom of the sidebar -->
+    <!-- Language toggle (issue #156): EN <-> 中文, persisted via i18n store -->
+    <div class="px-2 pb-2">
+      <button
+        type="button"
+        onclick={() => setLocale($locale === 'zh' ? 'en' : 'zh')}
+        aria-label={$locale === 'zh' ? 'Switch to English' : $tr('Language')}
+        class="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm text-[10px] font-mono uppercase tracking-[0.12em] text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors border border-[var(--fp-border)]"
+      >
+        <Languages size={13} />
+        <span>{$locale === 'zh' ? 'EN' : '中文'}</span>
+      </button>
+    </div>
     <div class="mt-auto border-t border-[var(--fp-border)] px-2 pt-3 pb-1">
       {#if versionInfo?.has_update}
         <a

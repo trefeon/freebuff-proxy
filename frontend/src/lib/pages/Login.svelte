@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { Zap } from '@lucide/svelte';
+  import { tr } from '../i18n.js';
   import Alert from '../components/Alert.svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
@@ -10,22 +11,19 @@
   let errorMsg = $state('');
   let loading = $state(false);
   let tokenInput = $state(null);
-
-  const GENERIC_LOGIN_ERROR = 'Invalid password.';
-
   // The server replies to failed logins with {"error":"..."} JSON, but a
   // proxy or error page in front of it can return HTML or an empty body.
   // Only surface a clean message; never dump the raw response body.
   function cleanLoginError(body) {
-    if (!body) return GENERIC_LOGIN_ERROR;
+    if (!body) return $tr('Invalid password.');
     try {
       const data = JSON.parse(body);
       const err = data?.error;
       const msg = typeof err === 'string' ? err : err?.message;
-      if (typeof msg !== 'string' || !msg.trim()) return GENERIC_LOGIN_ERROR;
+      if (typeof msg !== 'string' || !msg.trim()) return $tr('Invalid password.');
       return msg.trim();
     } catch {
-      return GENERIC_LOGIN_ERROR;
+      return $tr('Invalid password.');
     }
   }
 
@@ -51,7 +49,7 @@
         errorMsg = cleanLoginError(await res.text());
       }
     } catch (e) {
-      errorMsg = 'Could not reach the server. Check the connection and try again.';
+      errorMsg = $tr('Could not reach the server. Check the connection and try again.');
     } finally {
       loading = false;
     }
@@ -81,7 +79,7 @@
     {/if}
 
     <form onsubmit={handleLogin} class="space-y-5">
-      <Field label="Admin token" id="token">
+      <Field label={$tr('Admin token')} id="token">
         <input
           id="token"
           bind:this={tokenInput}
@@ -89,7 +87,7 @@
           type="password"
           autocomplete="off"
           required
-          placeholder="Enter admin token"
+          placeholder={$tr('Enter admin token')}
           class="fp-input fp-mono w-full"
         />
       </Field>
@@ -101,17 +99,16 @@
         disabled={loading || !token.trim()}
         loading={loading}
       >
-        Sign in
+        {$tr('Sign in')}
       </Button>
     </form>
 
     <div class="pt-5 mt-6 border-t border-[var(--fp-border)] text-center space-y-1">
       <p class="text-[11px] text-[var(--fp-dim)] leading-relaxed">
-        Enter your admin token to access the dashboard.
+        {$tr('Enter your admin token to access the dashboard.')}
       </p>
       <p class="text-[10px] text-[var(--fp-dim)]">
-        Set <code class="fp-mono text-[var(--fp-muted)]">ADMIN_TOKEN</code> in your
-        <code class="fp-mono text-[var(--fp-muted)]">.env</code> file to configure access.
+        {$tr('Set ADMIN_TOKEN in your .env file to configure access.')}
       </p>
     </div>
   </Card>

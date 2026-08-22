@@ -4,6 +4,7 @@
   import Alert from './Alert.svelte';
   import Field from './Field.svelte';
   import { postAPI } from '../api/client.js';
+  import { tr } from '../i18n.js';
 
   /**
    * @prop {boolean} open
@@ -39,19 +40,19 @@
     successMsg = '';
 
     if (!currentPassword.trim()) {
-      errorMsg = 'Please enter your current password.';
+      errorMsg = $tr('Please enter your current password.');
       return;
     }
     if (newPassword.length < 6) {
-      errorMsg = 'New password must be at least 6 characters.';
+      errorMsg = $tr('New password must be at least 6 characters.');
       return;
     }
     if (newPassword === '123456') {
-      errorMsg = 'New password cannot be the default password (123456).';
+      errorMsg = $tr('New password cannot be the default password (123456).');
       return;
     }
     if (newPassword !== confirmPassword) {
-      errorMsg = 'New passwords do not match.';
+      errorMsg = $tr('New passwords do not match.');
       return;
     }
 
@@ -63,16 +64,16 @@
       });
 
       if (res.ok) {
-        successMsg = res.message || 'Admin password updated successfully!';
+        successMsg = res.message || $tr('Admin password updated successfully!');
         onSuccess?.();
         setTimeout(() => {
           handleClose();
         }, 1200);
       } else {
-        errorMsg = res.message || 'Failed to update password.';
+        errorMsg = res.message || $tr('Failed to update password.');
       }
     } catch (err) {
-      errorMsg = err.message || 'Could not update password. Check connection.';
+      errorMsg = err.message || $tr('Could not update password. Check connection.');
     } finally {
       submitting = false;
     }
@@ -86,7 +87,7 @@
       type="button"
       class="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity border-0 p-0 m-0 w-full h-full cursor-default"
       onclick={handleClose}
-      aria-label="Close dialog backdrop"
+      aria-label={$tr('Close dialog backdrop')}
     ></button>
 
     <!-- Modal Card -->
@@ -103,15 +104,15 @@
             <Lock size={18} />
           </div>
           <div>
-            <h2 id="modal-title" class="text-sm font-semibold text-[var(--fp-text)]">Change Admin Password</h2>
-            <p class="text-xs text-[var(--fp-muted)]">Update the master administrative password</p>
+            <h2 id="modal-title" class="text-sm font-semibold text-[var(--fp-text)]">{$tr('Change Admin Password')}</h2>
+            <p class="text-xs text-[var(--fp-muted)]">{$tr('Update the master administrative password')}</p>
           </div>
         </div>
         <button
           type="button"
           onclick={handleClose}
           class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded-lg hover:bg-[var(--fp-border)]/50 transition-colors"
-          aria-label="Close modal"
+          aria-label={$tr('Close modal')}
         >
           <X size={16} />
         </button>
@@ -127,35 +128,35 @@
 
       <!-- Form -->
       <form onsubmit={handleSubmit} class="space-y-4">
-        <Field label="Current Password" id="current-password">
+        <Field label={$tr('Current Password')} id="current-password">
           <input
             id="current-password"
             type="password"
             bind:value={currentPassword}
-            placeholder="Enter current password (default: 123456)"
+            placeholder={$tr('Enter current password (default: 123456)')}
             required
             class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
           />
         </Field>
 
-        <Field label="New Password" id="new-password" hint="Minimum 6 characters">
+        <Field label={$tr('New Password')} id="new-password" hint={$tr('Minimum 6 characters')}>
           <input
             id="new-password"
             type="password"
             bind:value={newPassword}
-            placeholder="Enter secure new password"
+            placeholder={$tr('Enter secure new password')}
             required
             minlength="6"
             class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
           />
         </Field>
 
-        <Field label="Confirm New Password" id="confirm-password">
+        <Field label={$tr('Confirm New Password')} id="confirm-password">
           <input
             id="confirm-password"
             type="password"
             bind:value={confirmPassword}
-            placeholder="Re-enter new password"
+            placeholder={$tr('Re-enter new password')}
             required
             minlength="6"
             class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
@@ -164,11 +165,11 @@
 
         <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--fp-border)]">
           <Button variant="ghost" onclick={handleClose} disabled={submitting}>
-            Cancel
+            {$tr('Cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={submitting}>
             <Key size={14} />
-            Update Password
+            {$tr('Update Password')}
           </Button>
         </div>
       </form>
