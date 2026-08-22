@@ -672,6 +672,47 @@ func TestLiveModelSwitchDoesNotReleaseOldSlot(t *testing.T) {
 	}
 }
 
+// TestCacheRecordsUpstreamServedModel pins the honest-cache contract: when
+// upstream binds an admitted session to a different model than requested
+// (e.g. a limited-tier token pinned to mimo), the cache stores the SERVED
+// model, not what the client asked for. A later request for the coerced
+// model then reuses the session instead of pointlessly re-admitting.
+func TestCacheRecordsUpstreamServedModel(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr := newTestManager(t, mock)
+
+	var creates atomic.Int32
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		creates.Add(1)
+		// Upstream coercion: whatever was asked, serve model/B's slot.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-coerced","model":"model/B","expiresAt":"2030-01-01T00:00:00Z"}`)
+	}
+
+	if _, err := mgr.EnsureSessionForModel(context.Background(), "model/A"); err != nil {
+		t.Fatal(err)
+	}
+	if snap := mgr.Snapshot(); snap.Model != "model/B" {
+		t.Fatalf("cached model = %q, want upstream-served model/B", snap.Model)
+	}
+
+	instance, err := mgr.EnsureSessionForModel(context.Background(), "model/B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instance != "inst-coerced" {
+		t.Errorf("instance = %q, want inst-coerced (cache reused for the coerced model)", instance)
+	}
+	if got := creates.Load(); got != 1 {
+		t.Errorf("creates = %d, want 1 (no re-admission for the served model)", got)
+	}
+}
+
 // TestActiveSessionWithoutModelServesAnyModel pins the S1 leniency: a
 // session created via the default-model path (cached model "") is reused for
 // ANY requested model — the cache-hit check treats "" as a wildcard. The

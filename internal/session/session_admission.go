@@ -417,14 +417,6 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			if model == "" {
 				model = targetModel
 			}
-			// When the upstream returns a model different from what was
-			// requested, use the requested model. The upstream may pin a
-			// session to one model (e.g. MIMO) regardless of what was
-			// requested — the proxy must track what the CLIENT asked for,
-			// not what the upstream decided to serve.
-			if targetModel != "" && model != targetModel {
-				model = targetModel
-			}
 			m.mu.Lock()
 			m.commit(&cachedState{
 				status:             "active",
