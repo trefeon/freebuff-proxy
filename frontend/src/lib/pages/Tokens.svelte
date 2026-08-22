@@ -57,7 +57,20 @@
       : /^cb_[A-Za-z0-9_-]{20,}$/.test(newToken.trim())
   );
 
+  function banBadge(token) {
+    if (token.ban_type === 'hard') {
+      return { label: 'banned — appeal required', tone: 'critical', pulse: true };
+    }
+    if (token.ban_type === 'temporary') {
+      const until = formatLocalDate(token.banned_until);
+      return { label: until ? `banned until ${until}` : 'banned (temporary)', tone: 'bad' };
+    }
+    return null;
+  }
+
   function statusFor(token) {
+    const ban = banBadge(token);
+    if (ban) return ban;
     if (token.locked) return { label: 'locked', tone: 'warn' };
     if (token.cooldown_active) return { label: 'cooldown', tone: 'warn' };
     const s = token.session_status || '';

@@ -341,6 +341,7 @@ select.fp-input {
 .led-bad   { background: var(--fp-error); }
 .led-info  { background: var(--fp-info); }
 .led-idle  { background: var(--fp-dim); }
+.led-critical { background: var(--fp-error); box-shadow: 0 0 0 2px var(--fp-error-deep); }
 .led-accent{ background: var(--fp-accent); }
 
 /* ── Misc ─────────────────────────────────────────────────────── */

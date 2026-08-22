@@ -13,6 +13,7 @@
   import EmptyState from '../components/EmptyState.svelte';
   import Button from '../components/Button.svelte';
   import { fetchAPI } from '../api/client.js';
+  import { formatLocalDate } from '../utils/format.js';
   import { usePolling } from '../utils/polling.js';
 
   let data = $state(null);
@@ -59,6 +60,17 @@
       default:
         return 'idle';
     }
+  }
+
+  function banBadge(t) {
+    if (t.ban_type === 'hard') {
+      return { label: 'banned — appeal required', tone: 'critical', pulse: true };
+    }
+    if (t.ban_type === 'temporary') {
+      const until = formatLocalDate(t.banned_until);
+      return { label: until ? `banned until ${until}` : 'banned (temporary)', tone: 'bad' };
+    }
+    return null;
   }
 
   function formatCooldown(until) {
@@ -155,11 +167,15 @@
                 <div class="space-y-3">
                   <div class="flex items-center justify-between gap-2">
                     <span class="fp-num text-sm font-semibold text-[var(--fp-text)]">Token #{t.index}</span>
-                    <StatusBadge
-                      status={t.risk_level}
-                      tone={riskTone(t.risk_level)}
-                      pulse={t.risk_level === 'critical'}
-                    />
+                    {#if banBadge(t)}
+                      <StatusBadge status={banBadge(t).label} tone={banBadge(t).tone} pulse={banBadge(t).pulse} />
+                    {:else}
+                      <StatusBadge
+                        status={t.risk_level}
+                        tone={riskTone(t.risk_level)}
+                        pulse={t.risk_level === 'critical'}
+                      />
+                    {/if}
                   </div>
 
                   {#if t.cooldown_active}
