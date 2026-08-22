@@ -2,14 +2,12 @@ package runs
 
 // Wave-3 tests: the bounded deferred-FINISH queue (#90), the draining-list
 // cap/TTL eviction (#55), abandoned-lease finish on client disconnect
-// (#53/#114), context-pruner child runs (#91) + step recording (#114: steps
-// are batched and sent WITH FINISH), and run persistence across restarts
-// (#40).
+// (#53/#114), step recording (#114: steps are batched and sent WITH
+// FINISH), and run persistence across restarts (#40).
 
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -340,45 +338,6 @@ func TestRecordStepBatchesWithFinish(t *testing.T) {
 	mgr.Shutdown(context.Background())
 }
 
-func TestChildRunCreatedAfterStart(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	mgr, _ := newTestManager(t, mock, time.Hour)
-
-	run, err := mgr.Acquire(context.Background(), agentA)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// The context-pruner child must be STARTed with ancestorRunIds=[parent]
-	// and then FINISHed (best-effort, through the queue).
-	eventually(t, "context-pruner child started", func() bool {
-		for _, parent := range mock.ChildRunsStartedSnapshot() {
-			if parent == run.RunID {
-				return true
-			}
-		}
-		return false
-	})
-	eventually(t, "context-pruner child FINISHed", func() bool {
-		for _, f := range mock.FinishedRunsSnapshot() {
-			if len(f.RunID) > 0 && f.RunID != run.RunID {
-				return true
-			}
-		}
-		return false
-	})
-	// The child START must carry the ancestor link.
-	for _, sr := range mock.StartRequestsSnapshot() {
-		if sr.AgentID == "context-pruner" {
-			if len(sr.AncestorRunIDs) != 1 || sr.AncestorRunIDs[0] != run.RunID {
-				t.Errorf("context-pruner ancestorRunIds = %v, want [%s]", sr.AncestorRunIDs, run.RunID)
-			}
-		}
-	}
-	mgr.Shutdown(context.Background())
-}
-
 func TestRunPersistenceAdoptAndFinish(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -471,20 +430,6 @@ func mockFinishDone(mock *testutil.MockUpstream, runID string) <-chan struct{} {
 	return done
 }
 
-// nonChildFinished filters the mock's FINISH records to parent (non
-// context-pruner) runs: the deferred child-run creation (issue #91)
-// FINISHes child runs that pre-#91 tests did not expect.
-func nonChildFinished(mock *testutil.MockUpstream) []testutil.FinishedRun {
-	var out []testutil.FinishedRun
-	for _, f := range mock.FinishedRunsSnapshot() {
-		if strings.HasPrefix(f.RunID, "child-run-") {
-			continue
-		}
-		out = append(out, f)
-	}
-	return out
-}
-
 // TestReleaseAbandonedFinishFailureRedrains pins the abandoned-run re-drain
 // fix: when the abandoned run's FINISH fails transiently, the run must stay
 // on the draining list so Maintain retries it — without membership it would
@@ -512,6 +457,20 @@ func TestReleaseAbandonedFinishFailureRedrains(t *testing.T) {
 			}
 		}
 		return false
+	})
+	// Wait until the first (failing) FINISH attempt was actually processed:
+	// the queue worker clears run.queued at pickup, so observing Finishes-
+	// Started>=1 proves the dedupe marker is reset. The HTTP call itself may
+	// still be in flight at that instant; also require the finishing flag to
+	// drop, otherwise Maintain's re-enqueue below can be swallowed by the
+	// finishing guard in drain and the retry never happens.
+	eventually(t, "first failed FINISH attempt observed", func() bool {
+		if mock.FinishesStartedSnapshot() < 1 {
+			return false
+		}
+		mgr.mu.Lock()
+		defer mgr.mu.Unlock()
+		return !run.finishing
 	})
 
 	// Maintain retries the FINISH and it lands.

@@ -113,10 +113,18 @@ func (c *Client) TokenKey() string {
 // 1.0.0). The upstream free-tier gate (403 free_mode_cli_required) keys on
 // the CLI request envelope (x-freebuff-* headers, codebuff_metadata, forced
 // streaming and the cb_easp stop sentinel — see the package comment), but
-// the server still fingerprints the UA, and 0.10.7 (the SDK version) is
-// never emitted by a real CLI. Every upstream API call (chat + session +
-// agent-runs) sends this UA — no browser persona (#108/#109).
+// the server still fingerprints the UA. ChatCompletions is the ONLY caller:
+// empirically + snapshot-verified, the real CLI emits this UA on chat only;
+// every other upstream call goes through plain Bun fetch (#108/#109
+// rationale superseded by newest-source evidence).
 const cliUserAgent = "ai-sdk/openai-compatible/1.0.0/codebuff"
+
+// bunUserAgent is the default Bun fetch User-Agent the real CLI's non-chat
+// calls carry: session POST/GET/probe/DELETE, agent-runs START/FINISH,
+// auth login code/status and usage all use bare fetch() with no UA override,
+// so Bun sends its own default `Bun/<version>`. 1.3.14 matches the pinned
+// reference/freebuff/.bun-version and the live probe.
+const bunUserAgent = "Bun/1.3.14"
 
 const (
 	// maxErrorBodyRead caps the upstream error response body read for

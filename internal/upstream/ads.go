@@ -16,8 +16,9 @@ import (
 // freebuffCliUA is the ads-API request User-Agent, mirroring the installed
 // official CLI binary the proxy emulates (reference
 // cli/src/hooks/use-gravity-ad.ts getCliAdRequestUserAgent:
-// "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; 0.0.150 = the vendored binary).
-const freebuffCliUA = "Freebuff-CLI/0.0.150"
+// "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; 1.0.0 = cli/package.json version
+// at reference/freebuff @19d905d).
+const freebuffCliUA = "Freebuff-CLI/1.0.0"
 
 const (
 	// maxAdResponseRead caps the ad response body read.
@@ -181,10 +182,9 @@ func egressDeviceLocale() string {
 
 // getStreak GETs /api/v1/freebuff/streak (reference
 // cli/src/hooks/use-freebuff-streak-query.ts: the request() helper sets NO
-// UA override → bun's default). The proxy's equivalent of "no override" is
-// newRequest's cliUserAgent (ai-sdk 1.0.0), which is what this request
-// inherits — the old 2.0.42 login UA was never a real llm-providers
-// version (#124).
+// UA override → bun's default `Bun/<version>`). The proxy's equivalent of
+// "no override" is newRequest's bunUserAgent (Bun/1.3.14, the pinned
+// .bun-version), which is what this request inherits.
 func (c *Client) getStreak(ctx context.Context) error {
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/streak", nil)
 	if err != nil {

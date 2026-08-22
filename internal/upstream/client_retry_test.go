@@ -199,6 +199,73 @@ func TestClassifyBan(t *testing.T) {
 	}
 }
 
+// TestClassifyAccountSuspended verifies the G3 ban-class shape: the newest
+// CLI's hard ban is 403 {"error":"account_suspended","message":"...suspended
+// due to billing issues."} (reference/freebuff sdk run-cancellation.test.ts
+// :314-359). It must route into the same parseBan path as "status":"banned"
+// with NO resumes_at (24h default cooldown), while near-misses stay generic.
+func TestClassifyAccountSuspended(t *testing.T) {
+	cases := []struct {
+		name      string
+		status    int
+		body      string
+		wantBan   bool
+		wantUAErr bool // generic UpstreamError
+	}{
+		{
+			name:    "exact shape classifies ErrBanned without ResumesAt",
+			status:  http.StatusForbidden,
+			body:    `{"error":"account_suspended","message":"Your account has been suspended due to billing issues."}`,
+			wantBan: true,
+		},
+		{
+			name:      "hyphenated near-miss stays generic",
+			status:    http.StatusForbidden,
+			body:      `{"error":"account-suspended","message":"nope"}`,
+			wantUAErr: true,
+		},
+		{
+			name:      "message word without the error key stays generic",
+			status:    http.StatusForbidden,
+			body:      `{"error":"forbidden","message":"your friend was account_suspended once"}`,
+			wantUAErr: true,
+		},
+		{
+			name:      "other 403 body stays generic",
+			status:    http.StatusForbidden,
+			body:      `{"error":"forbidden"}`,
+			wantUAErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := classifyError(tc.status, tc.body, http.Header{})
+			var be *BanError
+			if tc.wantBan {
+				if !errors.Is(err, ErrBanned) {
+					t.Fatalf("errors.Is(ErrBanned) = false, got %v", err)
+				}
+				if !errors.As(err, &be) {
+					t.Fatalf("want *BanError, got %v", err)
+				}
+				if !be.ResumesAt.IsZero() {
+					t.Errorf("ResumesAt = %v, want zero (body carries no resumes_at)", be.ResumesAt)
+				}
+				return
+			}
+			if errors.Is(err, ErrBanned) {
+				t.Fatalf("near-miss classified as ErrBanned: %v", err)
+			}
+			if tc.wantUAErr {
+				var ue *UpstreamError
+				if !errors.As(err, &ue) {
+					t.Fatalf("want generic *UpstreamError, got %v", err)
+				}
+			}
+		})
+	}
+}
+
 // TestClassifyBanUnixMsResumesAt verifies parseBan decodes a unix-ms
 // resumes_at (not just RFC3339): flex-time parsing must recover the unban
 // time so the cooldown ends when the ban actually lifts.

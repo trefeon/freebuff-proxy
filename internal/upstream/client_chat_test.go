@@ -851,11 +851,11 @@ func TestChatSendsActingUserID(t *testing.T) {
 }
 
 // TestWaitingRoomChainWireFidelity verifies #124: the pre-session ad chain
-// matches the CLI wire shape — header UA Freebuff-CLI/0.0.150 (never the
+// matches the CLI wire shape — header UA Freebuff-CLI/1.0.0 (never the
 // old 2.0.42 login UA), body userAgent = the Chrome-124 browser UA,
 // device carries the host IANA timezone/locale, messages stays [] with no
-// sessionId (fresh waiting-room), and the streak GET inherits newRequest's
-// cliUserAgent (no UA override).
+// sessionId (fresh waiting-room), and the streak GET carries newRequest's
+// bunUserAgent (the real CLI's request() sets no override → Bun default).
 func TestWaitingRoomChainWireFidelity(t *testing.T) {
 	var mu sync.Mutex
 	var adsHeaders, streakHeaders http.Header
@@ -933,9 +933,10 @@ func TestWaitingRoomChainWireFidelity(t *testing.T) {
 	if _, hasSession := adsBody["sessionId"]; hasSession {
 		t.Error("ads body carries sessionId, want omitted (fresh waiting-room)")
 	}
-	// Streak GET: no UA override — it inherits newRequest's cliUserAgent.
-	if got := streakHeaders.Get("User-Agent"); got != cliUserAgent {
-		t.Errorf("streak User-Agent = %q, want %q (cliUserAgent, no override)", got, cliUserAgent)
+	// Streak GET: no UA override — it inherits newRequest's bunUserAgent
+	// (plain Bun fetch traffic, audit G5).
+	if got := streakHeaders.Get("User-Agent"); got != bunUserAgent {
+		t.Errorf("streak User-Agent = %q, want %q (bunUserAgent, no override)", got, bunUserAgent)
 	}
 }
 

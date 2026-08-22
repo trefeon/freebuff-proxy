@@ -139,26 +139,14 @@ func TestRunInvalidRecovers(t *testing.T) {
 	if got := len(mock.StartedRunsSnapshot()); got != 2 {
 		t.Errorf("started runs = %d, want 2 (re-START after run-invalid)", got)
 	}
-	// Issue #91: every new parent run creates a context-pruner child run that
-	// is started and immediately FINISHed as a best-effort side effect
-	// through the bounded queue. The invalidated run-0001 contributes its
-	// child's FINISH, and the re-STARTed run-0002 contributes its child's
-	// FINISH — so exactly 2 upstream FINISH calls (child-run ids only, never
-	// a FINISH of the invalidated parent). The queue is async: poll.
-	// FinishedRunsSnapshot() is the race-safe accessor (the mock's server
-	// goroutine appends to FinishedRuns).
-	eventually(t, "both context-pruner children FINISHed", func() bool {
-		finished := mock.FinishedRunsSnapshot()
-		if len(finished) != 2 {
-			return false
-		}
-		for _, f := range finished {
-			if !strings.HasPrefix(f.RunID, "child-run-") {
-				return false
-			}
-		}
-		return true
-	})
+	// With the #91 context-pruner child traffic gone there is NO
+	// best-effort side-effect traffic at all: the invalidated run-0001 is
+	// dropped WITHOUT an upstream FINISH, and run-0002 stays active (lease
+	// released) until rotation/shutdown — so zero agent-runs FINISH calls
+	// may have been issued.
+	if got := mock.FinishesStartedSnapshot(); got != 0 {
+		t.Errorf("FINISH attempts = %d, want 0 (invalidated run is not FINISHed; no pruner children exist)", got)
+	}
 }
 
 func TestChatSessionInvalidBoundedRetry(t *testing.T) {

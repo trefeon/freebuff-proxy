@@ -65,12 +65,17 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	// The official CLI sends the pinned llm-providers ai-sdk UA on chat and
-	// NO browser headers on any API path (bare Bun fetch) (#108/#109 fix
-	// option (a)): the utls ClientHello impersonation stays, the browser
-	// header persona does not. x-codebuff-api-key is never sent — Bearer is
-	// the only credential (#107, reference/freebuff codebuff-api.ts:337-345).
-	req.Header.Set("User-Agent", cliUserAgent)
+	// UA scoping (newest-CLI wire behavior, audit G5): the real CLI sends
+	// the pinned llm-providers ai-sdk UA ONLY on chat; every other call
+	// goes through plain Bun fetch, whose default UA is Bun/<version>
+	// (.bun-version pins 1.3.14). newRequest therefore defaults to
+	// bunUserAgent for all session/agent-runs/streak calls, and
+	// ChatCompletions overrides with cliUserAgent. No browser headers on
+	// any API path (#108/#109 fix option (a)): the utls ClientHello
+	// impersonation stays, the browser header persona does not.
+	// x-codebuff-api-key is never sent — Bearer is the only credential
+	// (#107, reference/freebuff codebuff-api.ts:337-345).
+	req.Header.Set("User-Agent", bunUserAgent)
 	ctx = req.Context()
 	if profile := c.currentStealthProfile(); profile != nil {
 		// Resolve the concrete profile ONCE per request and stash it: the

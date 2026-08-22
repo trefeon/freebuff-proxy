@@ -40,7 +40,7 @@ func fileSource(t *testing.T, path string) string {
 // retired id is absent.
 var expectedFallback = map[string]string{
 	"minimax/minimax-m3":              "base2-free-minimax-m3",
-	"openai/gpt-5.6-luna":             "base3-free-luna",
+	"openai/gpt-5.6-luna":             "base2-free-luna",
 	"deepseek/deepseek-v4-pro":        "base2-free-deepseek",
 	"deepseek/deepseek-v4-flash":      "base2-free-deepseek-flash",
 	"mimo/mimo-v2.5":                  "base2-free-mimo",
@@ -48,9 +48,11 @@ var expectedFallback = map[string]string{
 	"crof/kimi-k3-eco":                "base2-free-kimi-k3-eco",
 	"deepseek/deepseek-v4-pro-max":    "base2-free-deepseek-pro-max",
 	"deepseek/deepseek-v4-flash-max":  "base2-free-deepseek-flash-max",
-	"openai/gpt-5.6-luna-max":         "base3-free-luna-max",
+	"openai/gpt-5.6-luna-max":         "base2-free-luna-max",
 	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
 	"anthropic/claude-fable-5":        "base2-free-fable",
+	"openai/gpt-5.6-luna-es":          "base2-free-luna-es",
+	"stealth/ox-alpha":                "base2-free-ox-alpha",
 	"google/gemini-2.5-flash-lite":    "file-picker",
 	"google/gemini-3.1-flash-lite":    "file-picker-max",
 	"google/gemini-3.5-flash-lite":    "file-picker-max",
@@ -112,7 +114,7 @@ func TestFallbackMap(t *testing.T) {
 // — the same code a live Refresh runs — and requires LoadFallback to produce
 // the identical model set, model→agent routing, and agent set. When upstream
 // adds or retires a model: refresh the pinned snapshot (copy the five files
-// from the vendored reference or CodebuffAI/codebuff main) AND update
+// from the vendored reference or CodebuffAI/freebuff main) AND update
 // fallbackAgents/fallbackRootByModel in the same change — this test fails on
 // drift, so a stale fallback can no longer ship silently.
 func TestFallbackParityWithPinnedUpstream(t *testing.T) {

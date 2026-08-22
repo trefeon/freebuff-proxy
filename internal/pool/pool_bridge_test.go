@@ -355,7 +355,7 @@ func TestBridgeEvictionSkipsBusyEntry(t *testing.T) {
 	if e := p.bridgeToken("client-tok-00"); e == nil {
 		t.Fatal("busy bridge entry was evicted while its lease is outstanding")
 	}
-	finished := parentFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 {
 		t.Errorf("finished runs = %d, want 1 (only the idle evicted entry)", len(finished))
 	}
@@ -393,7 +393,7 @@ func TestShutdownDrainsBridgeEntries(t *testing.T) {
 	p.Shutdown(context.Background())
 
 	// Both bridge entries' runs were FINISHed and sessions ended.
-	finished := parentFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 2 {
 		t.Errorf("finished runs = %d, want 2 (bridge runs drained on shutdown)", len(finished))
 	}

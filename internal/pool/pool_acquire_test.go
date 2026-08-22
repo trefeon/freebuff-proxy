@@ -67,8 +67,8 @@ func TestRoundRobinDistribution(t *testing.T) {
 		if len(started) != 1 || started[0] != agentA {
 			t.Errorf("mock%d started runs = %v, want [%s]", i, started, agentA)
 		}
-		if len(parentFinished(mock)) != 0 {
-			t.Errorf("mock%d finished runs = %v, want none", i, parentFinished(mock))
+		if len(mock.FinishedRunsSnapshot()) != 0 {
+			t.Errorf("mock%d finished runs = %v, want none", i, mock.FinishedRunsSnapshot())
 		}
 	}
 
@@ -396,17 +396,11 @@ func TestInvalidateRunRestarts(t *testing.T) {
 	if started := mock.StartedRunsSnapshot(); len(started) != 2 {
 		t.Errorf("started runs = %d, want 2 (restart after invalidate)", len(started))
 	}
-	// Issue #91: run STARTs create+FINISH a context-pruner child run
-	// (best-effort, async), so FinishedRuns may contain child-run FINISHes.
-	// The assertion that matters: the INVALIDATED parent run must NOT be
-	// FINISHed (Invalidate deletes it without an upstream FINISH) — filter
-	// out child-run entries for a race-stable check.
-	for _, f := range mock.FinishedRunsSnapshot() {
-		if strings.HasPrefix(f.RunID, "child-run-") {
-			continue
-		}
-		t.Errorf("finished runs = %v, want no parent FINISH (invalidated run is not FINISHed)", mock.FinishedRunsSnapshot())
-		break
+	// The INVALIDATED parent run must NOT be FINISHed (Invalidate deletes
+	// it without an upstream FINISH), and with the #91 context-pruner child
+	// traffic gone no other FINISH may exist either.
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
+		t.Errorf("finished runs = %v, want none (invalidated run is not FINISHed)", got)
 	}
 
 	// Out-of-range tokens are ignored without panicking.

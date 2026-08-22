@@ -303,11 +303,11 @@ func TestPollCLILoginTransportErrorTransient(t *testing.T) {
 	}
 }
 
-// TestAuthLoginRequestsCarryCLIUA verifies #125: the /api/auth/cli/code and
-// /api/auth/cli/status calls send the real chat ai-sdk cliUserAgent (1.0.0),
-// never the fabricated 2.0.42 login UA (the CLI's request() sets no UA, and
-// the proxy's closest equivalent is the pinned cli UA).
-func TestAuthLoginRequestsCarryCLIUA(t *testing.T) {
+// TestAuthLoginRequestsCarryBunUA verifies the G5 UA scoping: the
+// /api/auth/cli/code and /api/auth/cli/status calls go through plain Bun
+// fetch in the real CLI (login-flow.ts request() sets no UA override), so
+// they carry bunUserAgent (Bun/1.3.14) — never the chat ai-sdk cliUserAgent.
+func TestAuthLoginRequestsCarryBunUA(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	var codeUA, statusUA string
@@ -336,11 +336,67 @@ func TestAuthLoginRequestsCarryCLIUA(t *testing.T) {
 	if _, err := client.PollCLILogin(context.Background(), code); err != nil {
 		t.Fatal(err)
 	}
-	if codeUA != cliUserAgent {
-		t.Errorf("/api/auth/cli/code User-Agent = %q, want %q", codeUA, cliUserAgent)
+	if codeUA != bunUserAgent {
+		t.Errorf("/api/auth/cli/code User-Agent = %q, want %q", codeUA, bunUserAgent)
 	}
-	if statusUA != cliUserAgent {
-		t.Errorf("/api/auth/cli/status User-Agent = %q, want %q", statusUA, cliUserAgent)
+	if statusUA != bunUserAgent {
+		t.Errorf("/api/auth/cli/status User-Agent = %q, want %q", statusUA, bunUserAgent)
+	}
+}
+
+// --- G7: stable machine-derived login fingerprint ----------------------------
+
+// TestGenerateFingerprintIDStableShape pins the official fingerprint shape
+// (cli/src/utils/fingerprint.ts:88-128): "enhanced-" + base64url(sha256) is
+// exactly 43 chars from the base64url alphabet, and the process-wide cache
+// makes repeated calls identical — stability across logins is the point
+// (anonymous-id.ts anti-abuse determinism).
+func TestGenerateFingerprintIDStableShape(t *testing.T) {
+	re := regexp.MustCompile(`^enhanced-[A-Za-z0-9_-]{43}$`)
+	first := generateFingerprintID()
+	if !re.MatchString(first) {
+		t.Fatalf("fingerprint = %q, want ^enhanced-[A-Za-z0-9_-]{43}$", first)
+	}
+	for range 5 {
+		if again := generateFingerprintID(); again != first {
+			t.Fatalf("fingerprint changed across calls: %q != %q", again, first)
+		}
+	}
+}
+
+// TestFingerprintIDVariesByHost verifies the derivation is a function of
+// the machine identity: identical inputs reproduce byte-for-byte, distinct
+// hosts (hostname or MACs) produce distinct ids.
+func TestFingerprintIDVariesByHost(t *testing.T) {
+	a := fingerprintIDFrom("host-alpha", []string{"aa:bb:cc:dd:ee:01"}, 4, 8)
+	if a != fingerprintIDFrom("host-alpha", []string{"aa:bb:cc:dd:ee:01"}, 4, 8) {
+		t.Fatal("same machine inputs must reproduce the same id")
+	}
+	b := fingerprintIDFrom("host-beta", []string{"aa:bb:cc:dd:ee:02"}, 4, 8)
+	if a == b {
+		t.Fatal("distinct hosts produced the same fingerprint id")
+	}
+	c := fingerprintIDFrom("host-alpha", []string{"aa:bb:cc:dd:ee:09"}, 4, 8)
+	if a == c {
+		t.Fatal("distinct MAC sets produced the same fingerprint id")
+	}
+}
+
+// TestLoginCarriesMachineFingerprint verifies POST /api/auth/cli/code sends
+// the stable process-wide fingerprint as its fingerprintId (not a fresh
+// random value per login).
+func TestLoginCarriesMachineFingerprint(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	client, err := NewForAuth(testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.StartCLILogin(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if want := generateFingerprintID(); mock.LastAuthFingerprintID != want {
+		t.Errorf("login fingerprintId = %q, want the stable machine id %q", mock.LastAuthFingerprintID, want)
 	}
 }
 

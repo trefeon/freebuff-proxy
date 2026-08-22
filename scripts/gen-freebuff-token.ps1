@@ -49,11 +49,12 @@ function Generate-FingerprintId {
     return "enhanced-$b64"
 }
 
-# Invoke-RestMethod on PowerShell 7 validates the User-Agent header against
-# .NET's product/version grammar and refuses "ai-sdk/openai-compatible/1.0.0/codebuff"
-# ("The format of value ... is invalid"). The upstream gate fingerprints that
-# exact UA (wire parity with the proxy's cliUserAgent), so send it raw via
-# HttpClient + TryAddWithoutValidation, which works on both PS 5.1 and 7.
+# PowerShell's User-Agent handling can mangle or reject non-.NET UA grammar,
+# and these values must match the proxy's wire identity byte-for-byte, so
+# send them raw via HttpClient + TryAddWithoutValidation, which works on
+# both PS 5.1 and 7. Auth/session paths carry Bun/1.3.14 (the proxy's
+# newRequest default, mirroring the upstream CLI); the chat ai-sdk UA never
+# appears on this script's endpoints.
 # Throws on HTTP >= 400 with an HttpStatusCode property the poll loop reads.
 function Invoke-FreebuffApi {
     param(
@@ -218,7 +219,7 @@ Write-Host "Fingerprint: $fingerprintId" -ForegroundColor DarkGray
 Write-Host "Requesting login URL..." -ForegroundColor Cyan
 
 $codeHeaders = @{
-    "User-Agent" = "ai-sdk/openai-compatible/1.0.0/codebuff"
+    "User-Agent" = "Bun/1.3.14"
     "Accept" = "application/json"
 }
 
@@ -336,7 +337,7 @@ Write-Host " Token: $authToken" -ForegroundColor White
 # -test-token probe) and refuses to save a banned account.
 if ($Verify) {
 try {
-    $probeResp = Invoke-FreebuffApi -Uri "$BaseUrl/api/v1/freebuff/session" -Method GET -Headers @{ "Authorization" = "Bearer $authToken"; "User-Agent" = "ai-sdk/openai-compatible/1.0.0/codebuff" } -TimeoutSec 15
+    $probeResp = Invoke-FreebuffApi -Uri "$BaseUrl/api/v1/freebuff/session" -Method GET -Headers @{ "Authorization" = "Bearer $authToken"; "User-Agent" = "Bun/1.3.14" } -TimeoutSec 15
     # StrictMode-safe reads: the live session response carries status +
     # accessTier but not always currentRiskScore (observed: status=active,
     # accessTier=full, no risk field) — a missing key must not abort the

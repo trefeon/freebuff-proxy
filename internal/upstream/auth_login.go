@@ -18,20 +18,26 @@ import (
 	"bytes"
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	xhtml "golang.org/x/net/html"
@@ -63,22 +69,170 @@ func NewForAuth(cfg *config.Config) (*Client, error) {
 	return c, nil
 }
 
-// newFingerprintID mints the SDK-shape "enhanced-" fingerprint id from
-// crypto/rand (reference account_login.go newFingerprintID; the CLI's
-// persistent device fingerprint uses the same prefix).
-func newFingerprintID() (string, error) {
-	var b [24]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return "", fmt.Errorf("upstream: generate login fingerprint: %w", err)
-	}
-	return "enhanced-" + hex.EncodeToString(b[:]), nil
+// The login fingerprint mirrors the official CLI's enhanced device
+// fingerprint (reference/freebuff cli/src/utils/fingerprint.ts:88-128):
+// sha256 over a deterministic machine JSON, base64url-encoded, prefixed
+// "enhanced-" — 43 chars total suffix. It is INTENTIONALLY stable across
+// restarts (anonymous-id.ts:20-24: anti-abuse determinism), so the id is
+// computed once per process. The old crypto/rand mint was wrong on both
+// axes: random per login and a hex alphabet.
+
+// fingerprintOnce caches the process-wide login fingerprint id.
+var (
+	fingerprintOnce sync.Once
+	fingerprintID   string
+)
+
+// generateFingerprintID returns the stable machine-derived "enhanced-"
+// fingerprint id sent as fingerprintId in POST /api/auth/cli/code.
+func generateFingerprintID() string {
+	fingerprintOnce.Do(func() {
+		hostname, _ := os.Hostname()
+		macs, ifaceCount := networkIdentity()
+		fingerprintID = fingerprintIDFrom(hostname, macs, ifaceCount, runtime.NumCPU())
+	})
+	return fingerprintID
 }
 
-// authLoginRequest builds an /api/auth/cli/* request with the chat ai-sdk
-// User-Agent (cliUserAgent — the fabricated 2.0.42 login UA is gone; the
-// real llm-providers version is 1.0.0), no credentials, and (for POST) the
-// JSON content type (reference freebuffLoginHeaders + login-flow.ts, whose
-// request() sets no UA at all).
+// networkIdentity collects the host's non-loopback MAC addresses (sorted,
+// zero MACs dropped) and the TOTAL interface count — the official shape
+// counts every entry of node's networkInterfaces() map, loopbacks included
+// (fingerprint.ts:100-113).
+func networkIdentity() (macs []string, interfaceCount int) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, 0
+	}
+	for _, ifc := range ifaces {
+		interfaceCount++
+		if ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		mac := ifc.HardwareAddr.String()
+		if mac == "" || mac == "00:00:00:00:00:00" {
+			continue
+		}
+		macs = append(macs, mac)
+	}
+	sort.Strings(macs)
+	return macs, interfaceCount
+}
+
+// nodePlatform/nodeArch map Go identifiers to the Node spellings the
+// official fingerprint JSON uses (process.platform / process.arch).
+func nodePlatform(goos string) string {
+	if goos == "windows" {
+		return "win32"
+	}
+	return goos
+}
+
+func nodeArch(goarch string) string {
+	switch goarch {
+	case "amd64":
+		return "x64"
+	case "386":
+		return "ia32"
+	default:
+		return goarch
+	}
+}
+
+// fingerprintIDFrom builds the official key structure over deterministic
+// host-derived values and hashes it exactly like calculateEnhancedFingerprint:
+// JSON.stringify → sha256 → base64url → "enhanced-"+hash (43 chars). The
+// struct field order MUST match fingerprint.ts's object literal order —
+// JSON bytes are hashed verbatim. Fields Go cannot read portably
+// (SMBIOS system strings, Node version, login shell) carry fixed realistic
+// literals or digests of the same machine seed; they are pinned persona
+// values and are NEVER transmitted upstream — only the final hash leaves
+// this process — so realism only needs to survive code review.
+func fingerprintIDFrom(hostname string, macs []string, ifaceCount, cpuCount int) string {
+	machineSeed := hostname + "|" + strings.Join(macs, ",")
+	seedDigest := sha256.Sum256([]byte(machineSeed))
+	seedHex := hex.EncodeToString(seedDigest[:])
+
+	info := struct {
+		System struct {
+			Manufacturer string `json:"manufacturer"`
+			Model        string `json:"model"`
+			Serial       string `json:"serial"`
+			UUID         string `json:"uuid"`
+		} `json:"system"`
+		CPU struct {
+			Manufacturer  string `json:"manufacturer"`
+			Brand         string `json:"brand"`
+			Cores         int    `json:"cores"`
+			PhysicalCores int    `json:"physicalCores"`
+		} `json:"cpu"`
+		OS struct {
+			Platform string `json:"platform"`
+			Distro   string `json:"distro"`
+			Arch     string `json:"arch"`
+			Hostname string `json:"hostname"`
+		} `json:"os"`
+		Runtime struct {
+			NodeVersion string `json:"nodeVersion"`
+			Platform    string `json:"platform"`
+			Arch        string `json:"arch"`
+			Shell       string `json:"shell"`
+			CPUCount    int    `json:"cpuCount"`
+		} `json:"runtime"`
+		Network struct {
+			MACAddresses   []string `json:"macAddresses"`
+			InterfaceCount int      `json:"interfaceCount"`
+		} `json:"network"`
+		MachineID          string `json:"machineId"`
+		FingerprintVersion string `json:"fingerprintVersion"`
+	}{}
+	info.System.Serial = seedHex[:16] // deterministic per-host persona serial
+	// UUID-shaped 8-4-4-4-12 slice of the same digest.
+	info.System.UUID = seedHex[16:24] + "-" + seedHex[24:28] + "-" +
+		seedHex[28:32] + "-" + seedHex[32:36] + "-" + seedHex[36:52]
+	info.CPU.Manufacturer = "GenuineIntel"
+	info.CPU.Brand = "Generic CPU"
+	info.CPU.Cores = cpuCount
+	info.CPU.PhysicalCores = cpuCount // no portable socket topology; cores are the deterministic choice
+	info.OS.Platform = nodePlatform(runtime.GOOS)
+	switch runtime.GOOS {
+	case "darwin":
+		info.OS.Distro = "Apple macOS"
+	case "linux":
+		info.OS.Distro = "Ubuntu Linux"
+	default:
+		info.OS.Distro = "Microsoft Windows 11 Pro"
+	}
+	info.OS.Arch = nodeArch(runtime.GOARCH)
+	info.OS.Hostname = hostname
+	info.Runtime.NodeVersion = "v22.14.0" // pinned persona: the CLI ships its own Node
+	info.Runtime.Platform = info.OS.Platform
+	info.Runtime.Arch = info.OS.Arch
+	info.Runtime.Shell = "/bin/bash" // pinned persona: Node detectShell equivalent
+	info.Runtime.CPUCount = cpuCount
+	info.Network.MACAddresses = macs
+	info.Network.InterfaceCount = ifaceCount
+	info.MachineID = seedHex[:32] // node-machine-id shape: 32 hex chars
+	info.FingerprintVersion = "2.0"
+
+	sum := sha256.Sum256([]byte(mustJSON(info)))
+	return "enhanced-" + base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// mustJSON marshals v; the input is plain data built above, so an error is
+// impossible in practice — panic loudly rather than send a degraded
+// fingerprint.
+func mustJSON(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("upstream: marshal fingerprint info: %v", err))
+	}
+	return b
+}
+
+// authLoginRequest builds an /api/auth/cli/* request with the plain Bun
+// fetch User-Agent (bunUserAgent): the real CLI's login flow goes through
+// bare Bun fetch with no UA override (login-flow.ts request()), never the
+// chat ai-sdk UA.
 func (c *Client) authLoginRequest(ctx context.Context, method, path string, body []byte) (*http.Request, error) {
 	var reader io.Reader
 	if body != nil {
@@ -88,7 +242,7 @@ func (c *Client) authLoginRequest(ctx context.Context, method, path string, body
 	if err != nil {
 		return nil, fmt.Errorf("upstream: build %s %s: %w", method, path, err)
 	}
-	req.Header.Set("User-Agent", cliUserAgent)
+	req.Header.Set("User-Agent", bunUserAgent)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -127,16 +281,13 @@ type CLILoginStatus struct {
 	Done      bool
 }
 
-// StartCLILogin begins the headless GitHub OAuth login: mints a fresh
-// fingerprint, POSTs /api/auth/cli/code, and returns the login URL plus the
-// credentials needed for PollCLILogin (reference account_login.go
-// startGitHubLoginWithProfile).
+// StartCLILogin begins the headless GitHub OAuth login: sends the stable
+// machine-derived fingerprint, POSTs /api/auth/cli/code, and returns the
+// login URL plus the credentials needed for PollCLILogin (reference
+// account_login.go startGitHubLoginWithProfile).
 func (c *Client) StartCLILogin(ctx context.Context) (*CLILoginCode, error) {
-	fingerprintID, err := newFingerprintID()
-	if err != nil {
-		return nil, err
-	}
-	payload, _ := json.Marshal(map[string]any{"fingerprintId": fingerprintID})
+	sent := generateFingerprintID()
+	payload, _ := json.Marshal(map[string]any{"fingerprintId": sent})
 	req, err := c.authLoginRequest(ctx, http.MethodPost, "/api/auth/cli/code", payload)
 	if err != nil {
 		return nil, err
@@ -173,11 +324,16 @@ func (c *Client) StartCLILogin(ctx context.Context) (*CLILoginCode, error) {
 	if decoded.ExpiresAt <= 0 {
 		decoded.ExpiresAt = time.Now().Add(time.Hour).UnixMilli()
 	}
+	// The server echoes the fingerprint id back; prefer its value for the
+	// returned code, but NEVER write it into the process-wide cache — the
+	// machine-derived id is stable by design and must not be replaced by
+	// whatever the server echoed (a local copy only).
+	echoed := sent
 	if decoded.FingerprintID != "" {
-		fingerprintID = decoded.FingerprintID
+		echoed = decoded.FingerprintID
 	}
 	return &CLILoginCode{
-		FingerprintID:   fingerprintID,
+		FingerprintID:   echoed,
 		FingerprintHash: decoded.FingerprintHash,
 		LoginURL:        decoded.LoginURL,
 		ExpiresAt:       loginExpiresAt(decoded.ExpiresAt),
@@ -220,7 +376,7 @@ func (c *Client) PollCLILogin(ctx context.Context, code *CLILoginCode) (*CLILogi
 	if err != nil {
 		return nil, fmt.Errorf("upstream: build login status request: %w", err)
 	}
-	req.Header.Set("User-Agent", cliUserAgent)
+	req.Header.Set("User-Agent", bunUserAgent)
 	resp, cancel, err := c.do(req, loginCallTimeout)
 	if err != nil {
 		// Transient transport failure: login-flow.ts logs and keeps polling
@@ -313,14 +469,14 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 	}
 
 	// 1. Load the login page so the jar picks up session cookies.
-	if _, err := getWithUA(ctx, client, code.LoginURL, cliUserAgent); err != nil {
+	if _, err := getWithUA(ctx, client, code.LoginURL, bunUserAgent); err != nil {
 		return nil, fmt.Errorf("freebuff github protocol login: login page: %w", err)
 	}
 
 	// 2. Walk the OAuth authorize page: GET the sign-in URL (the login page
 	// redirects there), find the login form, submit username+password.
 	if authorizeURL := githubProtocolAuthorizeURL(code.LoginURL); authorizeURL != "" {
-		if _, err := getWithUA(ctx, client, authorizeURL, cliUserAgent); err != nil {
+		if _, err := getWithUA(ctx, client, authorizeURL, bunUserAgent); err != nil {
 			return nil, fmt.Errorf("freebuff github protocol login: authorize page: %w", err)
 		}
 	}
@@ -328,7 +484,7 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 	// 3. The login page may live at the login URL itself (github.com/login)
 	// or on the authorize flow; submit the password form wherever it is.
 	// We track the most recent page body through the login form.
-	loginResp, err := getWithUA(ctx, client, code.LoginURL, cliUserAgent)
+	loginResp, err := getWithUA(ctx, client, code.LoginURL, bunUserAgent)
 	if err != nil {
 		return nil, fmt.Errorf("freebuff github protocol login: login form: %w", err)
 	}
@@ -338,7 +494,7 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 	}
 	form.Fields.Set("login", username)
 	form.Fields.Set("password", password)
-	postResp, err := submitForm(ctx, client, form, loginResp.finalURL, cliUserAgent)
+	postResp, err := submitForm(ctx, client, form, loginResp.finalURL, bunUserAgent)
 	if err != nil {
 		return nil, fmt.Errorf("freebuff github protocol login: password submit: %w", err)
 	}
@@ -356,7 +512,7 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 		if totpForm.Fields.Get("otp") != "" {
 			totpForm.Fields.Set("otp", code6)
 		}
-		postResp, err = submitForm(ctx, client, totpForm, postResp.finalURL, cliUserAgent)
+		postResp, err = submitForm(ctx, client, totpForm, postResp.finalURL, bunUserAgent)
 		if err != nil {
 			return nil, fmt.Errorf("freebuff github protocol login: totp submit: %w", err)
 		}
@@ -368,7 +524,7 @@ func (c *Client) ProtocolGitHubLogin(ctx context.Context, username, password, to
 		if strings.HasPrefix(target, "/") {
 			target = "https://github.com" + target
 		}
-		if _, err := getWithUA(ctx, client, target, cliUserAgent); err != nil {
+		if _, err := getWithUA(ctx, client, target, bunUserAgent); err != nil {
 			return nil, fmt.Errorf("freebuff github protocol login: oauth callback: %w", err)
 		}
 	}

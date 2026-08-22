@@ -86,11 +86,10 @@ func TestIdleRotationFinishesRuns(t *testing.T) {
 		t.Fatalf("started runs = %v, want 1", got)
 	}
 
-	// Not idle yet: a maintain pass runs normally (no FINISH). Filter the
-	// context-pruner child runs (issue #91) — their async FINISH may land
-	// at any point and must not count as a parent-run finish.
+	// Not idle yet: a maintain pass runs normally (no FINISH — no pruner
+	// children exist since G4, so any FINISH here would be a parent run).
 	p.maintainTick(context.Background())
-	if got := parentFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Fatalf("finished runs = %v before idle, want none", got)
 	}
 
@@ -101,7 +100,7 @@ func TestIdleRotationFinishesRuns(t *testing.T) {
 	p.lastActive = time.Now().Add(-time.Second)
 	p.lastActiveMu.Unlock()
 	p.maintainTick(context.Background())
-	finished := parentFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 || finished[0].Status != "completed" {
 		t.Fatalf("finished runs after idle = %v, want 1 completed", finished)
 	}
@@ -110,7 +109,7 @@ func TestIdleRotationFinishesRuns(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		p.maintainTick(context.Background())
 	}
-	if got := parentFinished(mock); len(got) != 1 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 1 {
 		t.Errorf("finished runs = %v, want still 1 parent (dormant while idle)", got)
 	}
 	if got := mock.StartedRunsSnapshot(); len(got) != 1 {
@@ -180,9 +179,9 @@ func TestIdleRotationDisabled(t *testing.T) {
 	p.LeaseRelease(lease)
 
 	p.maintainTick(context.Background())
-	// Issue #91: STARTs create+FINISH context-pruner child runs async; the
-	// assertion is that no PARENT run was finished with idle rotation off.
-	if got := parentFinished(mock); len(got) != 0 {
+	// With idle rotation off no PARENT run may be finished (and no pruner
+	// children exist since G4).
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Fatalf("finished runs = %v with idle rotation disabled, want none", got)
 	}
 }

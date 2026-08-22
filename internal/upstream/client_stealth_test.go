@@ -95,9 +95,10 @@ func TestStealthProfileResolvedOncePerRequest(t *testing.T) {
 	if stashed.ID == stealth.ProfileIDAuto || stashed.ID == stealth.ProfileIDRandom {
 		t.Fatalf("stashed profile %s is not concrete (auto must resolve once)", stashed.ID)
 	}
-	// The request carries the pinned CLI UA, not the profile's browser UA.
-	if got := req.Header.Get("User-Agent"); got != cliUserAgent {
-		t.Errorf("request User-Agent %q != the CLI UA %q (no browser persona on API calls, #109)", got, cliUserAgent)
+	// The request carries the plain Bun fetch UA (session paths are bare
+	// Bun traffic since G5), not the profile's browser UA.
+	if got := req.Header.Get("User-Agent"); got != bunUserAgent {
+		t.Errorf("request User-Agent %q != %q (no browser persona on API calls, #109)", got, bunUserAgent)
 	}
 	for _, hdr := range []string{"Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-Dest",
 		"Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform"} {

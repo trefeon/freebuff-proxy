@@ -8,7 +8,6 @@ package pool
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -419,9 +418,9 @@ func TestRecordRunStepThroughPool(t *testing.T) {
 	p.LeaseRelease(lease)
 	p.Shutdown(context.Background())
 
-	finished := parentFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 {
-		t.Fatalf("finished runs = %d, want 1 (parent only)", len(finished))
+		t.Fatalf("finished runs = %d, want 1", len(finished))
 	}
 	f := finished[0]
 	if f.Status != "completed" || f.TotalSteps != 1 {
@@ -430,18 +429,4 @@ func TestRecordRunStepThroughPool(t *testing.T) {
 	if len(f.Steps) != 1 || f.Steps[0].StepNumber != 1 || f.Steps[0].MessageID == nil || *f.Steps[0].MessageID != "chatcmpl-9" {
 		t.Errorf("FINISH steps = %+v, want step 1 with message chatcmpl-9", f.Steps)
 	}
-}
-
-// parentFinished filters the mock's FINISH records to parent (non
-// context-pruner) runs: the deferred child-run creation (issue #91)
-// FINISHes child runs that pre-#91 tests did not expect.
-func parentFinished(mock *testutil.MockUpstream) []testutil.FinishedRun {
-	var out []testutil.FinishedRun
-	for _, f := range mock.FinishedRunsSnapshot() {
-		if strings.HasPrefix(f.RunID, "child-run-") {
-			continue
-		}
-		out = append(out, f)
-	}
-	return out
 }

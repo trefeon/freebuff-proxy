@@ -16,8 +16,10 @@ import {
   FREEBUFF_DEEPSEEK_V4_PRO_MAX_MODEL_ID,
   FREEBUFF_GPT_5_6_LUNA_MAX_MODEL_ID,
   FREEBUFF_KIMI_K3_ECO_MODEL_ID,
+  FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID,
   FREEBUFF_MINIMAX_M3_MODEL_ID,
   FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID,
+  FREEBUFF_OX_ALPHA_MODEL_ID,
   LIMITED_FREEBUFF_MODEL_ID,
   FREEBUFF_MIMO_V25_MODEL_ID,
 } from './freebuff-models'
@@ -44,6 +46,25 @@ export const FREE_COST_MODE = 'free' as const
  * system prompts so they pass requestHasFreebuffSystemMarker.
  */
 export const FREEBUFF_DESKTOP_THREAD_AGENT_ID = 'freebuff-desktop-thread'
+
+/**
+ * The root Freebuff Desktop's AUTO-RUN decider runs under: the agent that picks
+ * what a tab on Auto does next when a turn ends with nothing queued (see
+ * freebuff-desktop/src/server/services/mission.ts). It is not the working
+ * agent — it never edits files or runs commands, it only chooses the next input.
+ *
+ * It is a first-party free-mode ROOT for the same reason the thread agent is,
+ * and it has to be one: a decision is made BETWEEN turns, so there is no running
+ * root for it to hang off and the subagent hierarchy gate would 403 it. Before
+ * it was listed here it fell through to the metered path and 402'd
+ * ("Out of credits") for the entire free-mode population, which is most of
+ * Desktop — auto-run simply never produced a next step for them.
+ *
+ * One id for every model, like the thread roots: the decision runs on whatever
+ * model the tab's turns run on, which is also the model its free session was
+ * admitted with. Anything else would 403 with `session_model_mismatch`.
+ */
+export const FREEBUFF_DESKTOP_AUTORUN_AGENT_ID = 'freebuff-desktop-autorun'
 
 /**
  * Suffix for the base3 desktop roots. The single-loop agent is a different
@@ -104,7 +125,9 @@ export const FREEBUFF_WEB_BASE3_AGENT_ID_BY_MODEL: Record<string, string> = {
   [FREEBUFF_GPT_5_6_LUNA_MODEL_ID]: 'base3-free-luna',
   [FREEBUFF_GLM_V52_MODEL_ID]: 'base3-free-glm',
   [FREEBUFF_KIMI_K3_ECO_MODEL_ID]: 'base3-free-kimi-k3-eco',
+  [FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]: 'base3-free-luna-es',
   [FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID]: 'base3-free-muse-spark',
+  [FREEBUFF_OX_ALPHA_MODEL_ID]: 'base3-free-ox-alpha',
 }
 
 /**
@@ -146,17 +169,20 @@ export const FREEBUFF_BASE3_AGENT_IDS: ReadonlySet<string> = new Set([
  * to. There is one variant per model because a bundled agent's model comes from
  * its definition, not from the request.
  *
- * BOTH tiers now plan on DeepSeek V4 Flash (2026-08-01, was MiniMax M3 for full
- * access). The old split existed because planning is short and quality-
- * sensitive, so it was worth a pricier model than the build; the V4-Flash-0731
- * GA build removed that tradeoff by being the strongest coding/tool-use model
- * we serve as well as the cheapest. Planning on it is now both better and free
- * of the premium pool, which the planner was the cheapest route into.
+ * BOTH TIERS PLAN ON THE UNLIMITED MODEL, and they converged again on
+ * 2026-08-18. The planner followed DeepSeek V4 Flash onto the premium pool for
+ * a few hours and was moved straight off it, because being OUT of that pool is
+ * the property this agent is designed around: a planner turn never touches a
+ * sandbox, so a premium-pooled planner is both the cheapest abuse route into
+ * the premium pool and a way for an ordinary user to spend their day's sessions
+ * without building anything. It tracks FALLBACK_FREEBUFF_MODEL_ID rather than
+ * naming a model, so it cannot drift back in the next time a model is
+ * re-tiered.
  *
- * A consequence: the two variants are pinned to the same model, so the model no
- * longer distinguishes them — see cloudPlannerAgentIdForModel. The limited
- * variant is kept registered (not deleted) so planner sessions already dispatched
- * under its id keep resolving; it is safe to remove once none are in flight.
+ * With the two variants sharing a model there is nothing to route on, so
+ * cloudPlannerAgentIdForModel returns the primary for both — see the guard
+ * there, which exists because the naive comparison sends every full-access turn
+ * to the LIMITED root the moment the models agree.
  *
  * Exported so the agent definitions, the planner UI's forced model, and the
  * "Start building" hand-off all read one set of values. They must agree: the
@@ -164,26 +190,28 @@ export const FREEBUFF_BASE3_AGENT_IDS: ReadonlySet<string> = new Set([
  * different model is rejected with session_model_mismatch.
  */
 export const CLOUD_PLANNER_AGENT_ID = 'base2-free-cloud-planner'
-export const CLOUD_PLANNER_MODEL_ID = FREEBUFF_DEEPSEEK_V4_FLASH_MODEL_ID
+export const CLOUD_PLANNER_MODEL_ID = FALLBACK_FREEBUFF_MODEL_ID
 export const CLOUD_PLANNER_LIMITED_AGENT_ID = 'base2-free-cloud-planner-limited'
 export const CLOUD_PLANNER_LIMITED_MODEL_ID = LIMITED_FREEBUFF_MODEL_ID
 
 /**
  * The model the build runs on after "Start building".
  *
- * DeepSeek V4 Flash since 2026-08-01 (was V4 Pro), for the same reason
- * DEFAULT_FREEBUFF_WEB_MODEL_ID is: the V4-Flash-0731 GA build is the strongest
- * coding model we serve and the cheapest. The build is where the tokens are —
- * one build outweighs its whole planning conversation by orders of magnitude —
- * so this is the single biggest place that choice pays off, and it takes builds
- * out of the premium session pool entirely.
+ * The unlimited model (FALLBACK_FREEBUFF_MODEL_ID) since 2026-08-18, when V4
+ * Flash became premium; V4 Flash held this from 2026-08-01, and V4 Pro before
+ * that. The build is where the tokens are — one build outweighs its whole
+ * planning conversation by orders of magnitude — so keeping builds OUT of the
+ * premium session pool matters more here than anywhere else. Following the
+ * fallback rather than naming a model is what makes that survive a re-tiering:
+ * this constant would otherwise have quietly put every Cloud build on the
+ * premium pool the hour Flash moved.
  *
  * Now the same model as the planner. That does NOT let the hand-off reuse the
  * planner's session: "Start building" still admits its own
  * (BlankCloudPlanControls.beginBuild), which is what a model-locked session
  * requires and remains correct whether or not the two models agree.
  */
-export const CLOUD_BUILD_MODEL_ID = FREEBUFF_DEEPSEEK_V4_FLASH_MODEL_ID
+export const CLOUD_BUILD_MODEL_ID = FALLBACK_FREEBUFF_MODEL_ID
 
 /** The planner model a given access tier is permitted to run. */
 export function cloudPlannerModelForAccessTier(
@@ -209,19 +237,29 @@ export function cloudBuildModelForAccessTier(
  *
  * The client picks which of these the build session is admitted on, because
  * only the client learns that the premium pool is spent — so the id arrives
- * from the browser and must be validated rather than trusted. Exactly two are
- * allowed: the recommended build model, and the always-available unlimited
- * fallback the user may choose when the premium pool is exhausted. Anything
- * else falls back to CLOUD_BUILD_MODEL_ID, so a forged request cannot steer a
- * free build onto an arbitrary model.
+ * from the browser and must be validated rather than trusted. Anything outside
+ * this set falls back to CLOUD_BUILD_MODEL_ID, so a forged request cannot steer
+ * a free build onto an arbitrary model.
+ *
+ * Three entries: the recommended build model, the always-available unlimited
+ * fallback a user may choose when the premium pool is exhausted, and the
+ * limited tier's build model — read from the tier helper, and redundant until
+ * that tier stopped building on Flash. Without it this rejected the very model
+ * cloudBuildModelForAccessTier('limited') hands the client.
  */
+const CLOUD_BUILD_MODEL_IDS: ReadonlySet<string> = new Set([
+  CLOUD_BUILD_MODEL_ID,
+  FALLBACK_FREEBUFF_MODEL_ID,
+  cloudBuildModelForAccessTier('limited'),
+])
+
 export function isCloudBuildModelId(model: string | null | undefined): boolean {
-  return model === CLOUD_BUILD_MODEL_ID || model === FALLBACK_FREEBUFF_MODEL_ID
+  return !!model && CLOUD_BUILD_MODEL_IDS.has(model)
 }
 
 /** The build model to run for a request, after validating the client's choice.
- *  Limited tiers need no special case here: runTriggerGates coerces whatever
- *  this returns down to the one model that tier permits. */
+ *  Bounds only the ids a browser may name: runTriggerGates still coerces
+ *  whatever survives down to the one model the caller's tier permits. */
 export function resolveCloudBuildModel(
   requested: string | null | undefined,
 ): string {
@@ -231,19 +269,29 @@ export function resolveCloudBuildModel(
 }
 
 /**
- * The planner variant to run. Always the primary one now: both variants pin the
- * same model, so the model cannot pick between them, and keying off it would
- * route EVERY caller — full access included — to the agent labelled
- * "(limited)". Limited tiers are served correctly by the primary variant
- * because Flash is a model their tier permits.
+ * The planner variant to run, chosen by the model the caller resolved.
  *
- * Kept as a function taking the model so callers need not change, and so the
- * choice has one place to live again if the tiers ever diverge on model.
+ * Matches the LIMITED model rather than the primary one, so an unknown or
+ * absent model falls to the primary root. That direction is deliberate: a
+ * limited caller who somehow reached the primary is corrected by
+ * runTriggerGates, while the reverse would put every full-access planner turn
+ * on the agent labelled "(limited)".
  */
 export function cloudPlannerAgentIdForModel(
-  _model: string | null | undefined,
+  model: string | null | undefined,
 ): string {
-  return CLOUD_PLANNER_AGENT_ID
+  // When the two variants share a model there is nothing to route on, and the
+  // comparison below would send EVERY turn — full access included — to the
+  // limited root. Both roots accept the shared model, so this is a routing and
+  // attribution question rather than an admission one, and the primary is the
+  // right answer. The tiers converged again on 2026-08-18 when the planner
+  // followed the unlimited model onto MiMo 2.5.
+  if (CLOUD_PLANNER_MODEL_ID === CLOUD_PLANNER_LIMITED_MODEL_ID) {
+    return CLOUD_PLANNER_AGENT_ID
+  }
+  return model === CLOUD_PLANNER_LIMITED_MODEL_ID
+    ? CLOUD_PLANNER_LIMITED_AGENT_ID
+    : CLOUD_PLANNER_AGENT_ID
 }
 
 /**
@@ -258,9 +306,10 @@ export const FREEBUFF_ROOT_AGENT_IDS = [
   'base2-free-deepseek-flash',
   'base2-free-mimo',
   'base2-free-minimax-m3',
-  'base3-free-luna',
+  'base2-free-luna',
   'base2-free-glm',
   'base2-free-kimi-k3-eco',
+  'base2-free-luna-es',
   // Extended-context `-max` roots. Listed here for the same reason every other
   // root is: a root absent from this list is treated as a subagent, so a
   // top-level request on one fails the hierarchy check with
@@ -271,11 +320,15 @@ export const FREEBUFF_ROOT_AGENT_IDS = [
   // there and no base3 twin to list.
   'base2-free-deepseek-pro-max',
   'base2-free-deepseek-flash-max',
-  'base3-free-luna-max',
+  'base2-free-luna-max',
   // Freebuff Web only (Meta Muse Spark 1.2 Contributor). Listed here like every
   // other root so its subagents pass the hierarchy gate; the model, not this
   // list, is what keeps it off the CLI and Desktop.
   'base2-free-muse-spark',
+  // Freebuff Web and Cloud only (Ox Alpha), for the same reason and with the
+  // same division of labour: the model's absence from SUPPORTED_FREEBUFF_MODELS
+  // is what keeps it off the CLI and Desktop, not this list.
+  'base2-free-ox-alpha',
   // Capacity-limited trial orchestrator (Claude Fable 5). Reachable only while
   // the server is still advertising the offer, but it must be listed here
   // unconditionally: a session admitted while the pool was open runs its full
@@ -303,11 +356,16 @@ export const FREEBUFF_ROOT_AGENT_IDS = [
   'base3-free-luna',
   'base3-free-glm',
   'base3-free-kimi-k3-eco',
+  'base3-free-luna-es',
   'base3-free-muse-spark',
+  'base3-free-ox-alpha',
   // Freebuff CLI base3 roots. Every other id it needs is already above,
   // shared with Web; Fable is the one model the CLI offers and Web does not.
   'base3-free-fable',
   ...FREEBUFF_DESKTOP_THREAD_AGENT_IDS,
+  // The Desktop auto-run decider. Spawns nothing, but the hierarchy gate reads
+  // this list for the ROOT itself, and a decision has no parent run to hang off.
+  FREEBUFF_DESKTOP_AUTORUN_AGENT_ID,
 ] as const
 const FREEBUFF_ROOT_AGENT_ID_SET: ReadonlySet<string> = new Set(
   FREEBUFF_ROOT_AGENT_IDS,
@@ -316,13 +374,15 @@ const FREEBUFF_ROOT_AGENT_ID_SET: ReadonlySet<string> = new Set(
 export const FREEBUFF_ROOT_AGENT_ID_BY_MODEL: Record<string, string> = {
   [FREEBUFF_MIMO_V25_MODEL_ID]: 'base2-free-mimo',
   [FREEBUFF_MINIMAX_M3_MODEL_ID]: 'base2-free-minimax-m3',
-  [FREEBUFF_GPT_5_6_LUNA_MODEL_ID]: 'base3-free-luna',
+  [FREEBUFF_GPT_5_6_LUNA_MODEL_ID]: 'base2-free-luna',
   [FREEBUFF_DEEPSEEK_V4_PRO_MODEL_ID]: 'base2-free-deepseek',
   [FREEBUFF_DEEPSEEK_V4_FLASH_MODEL_ID]: 'base2-free-deepseek-flash',
   [FREEBUFF_GLM_V52_MODEL_ID]: 'base2-free-glm',
   [FREEBUFF_KIMI_K3_ECO_MODEL_ID]: 'base2-free-kimi-k3-eco',
+  [FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]: 'base2-free-luna-es',
   [FREEBUFF_FABLE_5_MODEL_ID]: 'base2-free-fable',
   [FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID]: 'base2-free-muse-spark',
+  [FREEBUFF_OX_ALPHA_MODEL_ID]: 'base2-free-ox-alpha',
 }
 
 /**
@@ -446,10 +506,23 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   'base2-free-deepseek': new Set([FREEBUFF_DEEPSEEK_V4_PRO_MODEL_ID]),
   'base2-free-deepseek-flash': new Set([FREEBUFF_DEEPSEEK_V4_FLASH_MODEL_ID]),
   'base2-free-mimo': new Set([FREEBUFF_MIMO_V25_MODEL_ID]),
+  // M3 was WITHDRAWN on 2026-08-20 (see FREEBUFF_PAUSED_FREE_MODEL_IDS), and
+  // this entry stays on purpose. Withdrawal is enforced at ADMISSION: no new
+  // session can be opened for the model. Sessions admitted before the deploy
+  // are still live, and they reach this allowlist on every turn — deleting the
+  // row would fail them mid-turn with free_mode_invalid_agent_model, which is
+  // the same client wedge the withdrawal was shaped to avoid (#1801). Let them
+  // drain; the door is already shut in front of them.
   'base2-free-minimax-m3': new Set([FREEBUFF_MINIMAX_M3_MODEL_ID]),
-  'base3-free-luna': new Set([FREEBUFF_GPT_5_6_LUNA_MODEL_ID]),
+  'base2-free-luna': new Set([FREEBUFF_GPT_5_6_LUNA_MODEL_ID]),
   'base2-free-glm': new Set([FREEBUFF_GLM_V52_MODEL_ID]),
   'base2-free-kimi-k3-eco': new Set([FREEBUFF_KIMI_K3_ECO_MODEL_ID]),
+  // Novita's `-es` route. Pinned to the one model like every other root. It is
+  // a Codex session rather than Luna (see web/src/llm-api/novita.ts), so it is
+  // deliberately NOT reachable from `base2-free-luna` — the two must never
+  // share a root, or a Luna request could land on Codex.
+  'base2-free-luna-es': new Set([FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]),
+  'base3-free-luna-es': new Set([FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]),
   // Extended-context roots for the provisioned `-max` tiers. Pinned one model
   // each like every other root, and not in any client catalog: these are
   // provisioned per-account rather than rendered from a picker, so a client
@@ -460,13 +533,18 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   'base2-free-deepseek-flash-max': new Set([
     FREEBUFF_DEEPSEEK_V4_FLASH_MAX_MODEL_ID,
   ]),
-  'base3-free-luna-max': new Set([FREEBUFF_GPT_5_6_LUNA_MAX_MODEL_ID]),
+  'base2-free-luna-max': new Set([FREEBUFF_GPT_5_6_LUNA_MAX_MODEL_ID]),
   // Web-only Muse Spark root. Exactly one model, like every other pinned root:
   // the rate-limit queue accounts by model, so a root that could also run
   // something else would let a turn escape the queue's bookkeeping.
   'base2-free-muse-spark': new Set([
     FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID,
   ]),
+  // Web/Cloud-only Ox Alpha root, pinned to its one model like every other. The
+  // pinning matters here even though the model is free: an agent id is the
+  // handle a hand-written caller reaches for, and a root allowed more than one
+  // model is a door onto everything else it allows.
+  'base2-free-ox-alpha': new Set([FREEBUFF_OX_ALPHA_MODEL_ID]),
   // Limited-offer trial root. Only this agent may run Fable for free, and only
   // on Fable — the pool accounting keys off the model, so a root that could
   // also run something else would let a session escape it.
@@ -498,6 +576,10 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   [getFreebuffDesktopThreadAgentId('local', 'base3')]: FREEBUFF_DESKTOP_MODELS,
   [getFreebuffDesktopThreadAgentId('worktree', 'base3')]:
     FREEBUFF_DESKTOP_MODELS,
+  // The auto-run decider reads the same set for the same reason: it decides on
+  // the tab's own model, which is the one that tab's session was admitted with.
+  // Pinning it to a single model instead would 403 every tab on any other one.
+  [FREEBUFF_DESKTOP_AUTORUN_AGENT_ID]: FREEBUFF_DESKTOP_MODELS,
 
   // File exploration agents
   'file-picker': new Set(['google/gemini-2.5-flash-lite']),
@@ -533,7 +615,7 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   // keeps those sessions working.
   //
   // Never add lite's model (GPT-5.6 Luna) here. Freebuff now offers that model
-  // too, but it reaches it through its OWN agents — base3-free-luna and
+  // too, but it reaches it through its OWN agents — base2-free-luna and
   // code-reviewer-luna — which carry Freebuff's pinned OpenAI routing and
   // effort. This entry exists only for pre-provider-reviewer clients; widening
   // it would let a free session run the PAID product's reviewer.
@@ -608,6 +690,12 @@ export const FREEBUFF_ROOT_SYSTEM_PROMPT_OPENINGS = [
   'You are Buffy, the coding agent behind Codebuff.',
   // freebuff_bundled_agents.ts CLOUD_PLANNER_SYSTEM_PROMPT — planner roots.
   'You are Buffy, the Freebuff Cloud project planner.',
+  // freebuff-desktop/.../services/mission.ts — the Desktop mission decider.
+  // Its own opening rather than base3's: that prompt tells the model it is the
+  // coding agent, and this one spends its length establishing the opposite
+  // ("you never edit files or run commands"). Position 0 is the worst place to
+  // say the wrong thing about who is reading.
+  'You are Buffy, the auto-run agent behind Freebuff Desktop.',
   // LEGACY — base2's opening before 92371caa8 (2026-07-07). The prompt is
   // compiled into the CLI binary and the launcher force-updates on every start,
   // so this only covers installs whose update path is broken (offline,
@@ -710,6 +798,52 @@ export function isFreeModeAllowedAgentModel(
   }
 
   return false
+}
+
+/**
+ * A model the SERVER substituted, running on an agent free mode already knows.
+ *
+ * Most free-mode roots are pinned to exactly one model — `base3-free-deepseek-
+ * flash` allows Flash and nothing else — which assumes the model a request
+ * carries is the one its client picked. That stops being true whenever the
+ * server overrides the pick, which now happens two ways: a model LEAVES A TIER
+ * (Flash left the limited tier on 2026-08-18) or a model is PAUSED for free
+ * mode entirely (V4 Pro, later the same day). Admission and
+ * `checkSessionAdmissible` both substitute, and the request reaches a pinned
+ * root carrying the model WE chose.
+ *
+ * Both halves of the free-mode decision must admit that request — the gate in
+ * chat/completions and the billing check in llm-api/helpers.ts. If they
+ * disagree it falls into the METERED path: credit ledger writes for an account
+ * with no balance. Same trap `isHoneypotFreeModeAllowed` avoids, same shape.
+ *
+ * Cannot be an escalation, which is what the allowlist exists to prevent. Both
+ * accepted targets are models the server picks for users it is stepping DOWN,
+ * never up: the limited tier's only model, and the always-available fallback
+ * every surface lands on when a premium pool is spent. They name the same model
+ * today; they are checked separately because that is a coincidence of the
+ * current catalog rather than a rule, and the day it stops being true this
+ * must keep accepting both.
+ */
+export function isLimitedTierSubstitutedModel(
+  fullAgentId: string,
+  model: string,
+): boolean {
+  if (
+    model !== LIMITED_FREEBUFF_MODEL_ID &&
+    model !== FALLBACK_FREEBUFF_MODEL_ID
+  ) {
+    return false
+  }
+
+  const { publisherId, agentId } = parseAgentId(fullAgentId)
+  if (!agentId) return false
+  if (publisherId && publisherId !== 'codebuff') return false
+
+  // Known free-mode agent, and not a programmatic one (empty set) — the same
+  // two conditions isFreeModeAllowedAgentModel checks before the model itself.
+  const allowedModels = FREE_MODE_AGENT_MODELS[agentId]
+  return !!allowedModels && allowedModels.size > 0
 }
 
 /**

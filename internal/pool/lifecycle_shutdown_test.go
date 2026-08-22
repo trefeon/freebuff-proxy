@@ -31,6 +31,11 @@ func TestShutdownBridgeDrainOutsideBridgeMu(t *testing.T) {
 	defer mock.Close()
 	p := newBridgePool(t, mock)
 
+	// Arm the slow FINISH BEFORE the releases: with the #91 context-pruner
+	// child traffic gone, the release-path drain FINISHes are the ONLY
+	// upstream work, and a slow parent FINISH is what holds Shutdown inside
+	// the bridge drain for the assertion below.
+	mock.SetFinishDelay(time.Second)
 	for i := 0; i < 2; i++ {
 		lease, err := p.AcquireBridge(context.Background(), fmt.Sprintf("shutdown-tok-%d", i), modelA)
 		if err != nil {
@@ -38,13 +43,6 @@ func TestShutdownBridgeDrainOutsideBridgeMu(t *testing.T) {
 		}
 		p.LeaseRelease(lease)
 	}
-	// Wait for the async context-pruner child FINISHes to land BEFORE
-	// arming the slow FINISH, so the drain window is signalled by a parent
-	// (drain) FINISH, never a child one.
-	eventually(t, "both child FINISHes landed", func() bool {
-		return mock.FinishesStartedSnapshot() >= 2
-	})
-	mock.SetFinishDelay(time.Second)
 
 	done := make(chan struct{})
 	go func() {
@@ -52,11 +50,11 @@ func TestShutdownBridgeDrainOutsideBridgeMu(t *testing.T) {
 		close(done)
 	}()
 
-	// A parent FINISH is now in flight — i.e. Shutdown is inside the
-	// bridge drain. bridgeMu must be acquirable immediately: the drain
-	// runs OUTSIDE the lock.
-	eventually(t, "bridge drain FINISH in flight", func() bool {
-		return mock.FinishesStartedSnapshot() >= 3
+	// A parent FINISH (the first entry's release-path drain) is now in
+	// flight — Shutdown waits on it inside the bridge drain. bridgeMu must
+	// be acquirable while that wait runs: the drain runs OUTSIDE the lock.
+	eventually(t, "drain FINISH in flight", func() bool {
+		return mock.FinishesStartedSnapshot() >= 1
 	})
 	locked := make(chan struct{})
 	go func() {
@@ -72,7 +70,7 @@ func TestShutdownBridgeDrainOutsideBridgeMu(t *testing.T) {
 
 	<-done
 
-	finished := parentFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 2 {
 		t.Errorf("finished runs = %d, want 2 (both bridge entries drained)", len(finished))
 	}
@@ -118,7 +116,7 @@ func TestShutdownBridgeInflightRunFinishedOnRelease(t *testing.T) {
 	p.LeaseRelease(lease)
 
 	eventually(t, "FINISH of deferred in-flight bridge run after release", func() bool {
-		finished := parentFinished(mock)
+		finished := mock.FinishedRunsSnapshot()
 		return len(finished) == 1 && finished[0].Status == "completed"
 	})
 	if snap := entry.runs.Snapshot(); snap.ActiveRuns != 0 {

@@ -645,7 +645,8 @@ func TestClassifySessionLimitReached(t *testing.T) {
 // zero-cost GET probe sends NO x-freebuff-include-unused-rate-limits header
 // (a third-party-proxy fingerprint the vendored CLI never sends; its session
 // GET returns the same response shape without it). The probe carries only
-// the standard Authorization + CLI-parity UA, and sessionCall still parses
+// the standard Authorization + the plain Bun fetch UA (audit G5: session
+// paths are bare Bun traffic in the real CLI), and sessionCall still parses
 // glmPromo/rateLimitsByModel when the response includes them.
 func TestProbeAccountDoesNotSendIncludeUnusedRateLimits(t *testing.T) {
 	mock := testutil.NewMock()
@@ -672,8 +673,8 @@ func TestProbeAccountDoesNotSendIncludeUnusedRateLimits(t *testing.T) {
 	if gotAuth != "Bearer tok-a" {
 		t.Errorf("Authorization = %q, want Bearer tok-a", gotAuth)
 	}
-	if gotUA != cliUserAgent {
-		t.Errorf("User-Agent = %q, want %q (CLI-parity UA, no browser persona)", gotUA, cliUserAgent)
+	if gotUA != bunUserAgent {
+		t.Errorf("User-Agent = %q, want %q (Bun fetch default on session paths, no browser persona)", gotUA, bunUserAgent)
 	}
 	if st.GlmPromo == "" || !strings.Contains(st.GlmPromo, "dailySessions") {
 		t.Errorf("GlmPromo = %q, want raw glmPromo JSON", st.GlmPromo)

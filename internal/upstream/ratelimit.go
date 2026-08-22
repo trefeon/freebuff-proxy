@@ -82,6 +82,16 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// "banned" (e.g. {"error":"model temporarily banned..."}) must stay
 		// a generic 403, not trigger the long ban cooldown. (Audit B5.)
 		return parseBan(body)
+	case status == http.StatusForbidden && strings.Contains(lower, `"error":"account_suspended"`):
+		// Hard-ban shape: 403 {"error":"account_suspended","message":"...
+		// suspended due to billing issues."} (reference/freebuff
+		// sdk run-cancellation.test.ts:314-359, api/_post.ts:298-307).
+		// Same ban class as "status":"banned": the body carries no
+		// resumes_at, so BanError.ResumesAt stays zero and CooldownBan
+		// applies its 24h default (runs/cooldown.go) + webhook. Exact
+		// marker only (Audit B5 discipline): 'account-suspended' or a
+		// message merely containing the word must stay a generic 403.
+		return parseBan(body)
 	case strings.Contains(lower, "deployment_outside_hours"):
 		// Free tier is outside its operating hours: temporarily unavailable
 		// but worth a later retry. Checked before the status-driven 503/429

@@ -37,22 +37,17 @@ func TestFinishRunFailureRetriesOnMaintain(t *testing.T) {
 	}
 	mgr.Release(run)
 
-	// The first acquire's context-pruner child FINISH (issue #91) is async
-	// and must settle before the failure injection (it would otherwise
-	// consume FinishFailures); the child's FINISH also counts toward
-	// FinishesStarted.
-	eventually(t, "first child run FINISH recorded", func() bool {
-		return len(mock.FinishedRunsSnapshot()) >= 1
-	})
-	// The first FINISH fails upstream; the run must stay around for a
-	// Maintain retry, not be dropped.
+	// With the #91 context-pruner child traffic gone, no async job precedes
+	// the FINISH: the synchronous FinishRun below consumes the injected
+	// failure deterministically (the released ACTIVE run queues nothing on
+	// Release).
 	mock.SetFinishFailures(1)
 	mgr.FinishRun(context.Background(), run)
 
-	if got := mock.FinishesStartedSnapshot(); got != 2 {
-		t.Fatalf("FINISH attempts = %d, want 2 (child + failed run)", got)
+	if got := mock.FinishesStartedSnapshot(); got != 1 {
+		t.Fatalf("FINISH attempts = %d, want 1 (the failed run)", got)
 	}
-	if got := nonChildFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Fatalf("run recorded finished despite FINISH failure: %v", got)
 	}
 	mgr.mu.Lock()
@@ -98,22 +93,18 @@ func TestFinishIfReadyFailureKeepsDraining(t *testing.T) {
 	mgr.runs[agentA].StartedAt = time.Now().Add(-time.Hour)
 	mgr.mu.Unlock()
 
-	// The first acquire's context-pruner child FINISH (issue #91) is async
-	// and must settle BEFORE the failure injection: otherwise it consumes
-	// FinishFailures and run-0001's FINISH (the failure's target) succeeds.
-	eventually(t, "first child run FINISH recorded", func() bool {
-		return len(mock.FinishedRunsSnapshot()) >= 1
-	})
+	// With the #91 context-pruner child traffic gone, no other FINISH can
+	// precede the rotated run's attempt: pre-set the failure so the async
+	// drain FINISH of run-0001 consumes it.
 	mock.SetFinishFailures(1)
 	mgr.Maintain(context.Background())
 
 	// The rotated run's async FINISH failed: wait for the attempt to hit
-	// the mock (child FINISH + run-0001's failed attempt), then assert it
-	// is not recorded and still draining.
+	// the mock, then assert it is not recorded and still draining.
 	eventually(t, "run-0001 FINISH attempt", func() bool {
-		return mock.FinishesStartedSnapshot() >= 2
+		return mock.FinishesStartedSnapshot() >= 1
 	})
-	if got := nonChildFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Fatalf("run recorded finished despite FINISH failure: %v", got)
 	}
 	mgr.mu.Lock()
@@ -161,7 +152,7 @@ func TestShutdownDrainsPlainDrainingRun(t *testing.T) {
 
 	mgr.Shutdown(context.Background())
 
-	finished := nonChildFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 || finished[0].RunID != "run-0001" {
 		t.Fatalf("finished runs = %v, want exactly [run-0001]", finished)
 	}

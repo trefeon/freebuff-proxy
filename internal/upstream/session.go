@@ -225,44 +225,6 @@ func (c *Client) FinishRun(ctx context.Context, runID, status string, totalSteps
 	return nil
 }
 
-// StartChildRun POSTs /api/v1/agent-runs with action START for the
-// context-pruner child of parentRunID (issue #91, CLI parity:
-// reference/freebuff-reverse .../http.go createChildRun — agentId
-// "context-pruner", ancestorRunIds [parent]). The child is created after a
-// parent run is STARTed and FINISHed once the parent's session work closes,
-// so the upstream run tree stays balanced. Returns the child run id.
-func (c *Client) StartChildRun(ctx context.Context, parentRunID string) (string, error) {
-	payload, _ := json.Marshal(map[string]any{
-		"action":         "START",
-		"agentId":        "context-pruner",
-		"ancestorRunIds": []string{parentRunID},
-	})
-	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/agent-runs", payload)
-	if err != nil {
-		return "", err
-	}
-	resp, cancel, err := c.do(req, c.sessionCallTimeout)
-	if err != nil {
-		return "", err
-	}
-	defer releaseCancel(cancel)
-	defer func() { _ = resp.Body.Close() }()
-	body := drainBody(resp.Body)
-	if resp.StatusCode >= 400 {
-		return "", c.classify(resp.StatusCode, body, resp.Header)
-	}
-	var parsed struct {
-		RunID string `json:"runId"`
-	}
-	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
-		return "", fmt.Errorf("upstream: parse child START response %q: %w", truncate(body, 200), err)
-	}
-	if parsed.RunID == "" {
-		return "", fmt.Errorf("upstream: child START response missing runId: %q", truncate(body, 200))
-	}
-	return parsed.RunID, nil
-}
-
 // --- internals ---
 
 // sessionCall performs a session control call: parse the JSON body into a

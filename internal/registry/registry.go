@@ -28,13 +28,13 @@ import (
 )
 
 // RawBase is the upstream source of the Codebuff TS constant files.
-const RawBase = "https://raw.githubusercontent.com/CodebuffAI/codebuff/main/common/src/constants/"
+const RawBase = "https://raw.githubusercontent.com/CodebuffAI/freebuff/main/common/src/constants/"
 
 // JsDelivrBase mirrors RawBase through the jsDelivr CDN. Tried after the raw
 // source fails: raw.githubusercontent is throttled or blocked in some CI and
 // regions (mirrors freebuff2api-workers' DYNAMIC_MODELS_*_SOURCES pattern,
 // where every source carries a raw + jsDelivr pair).
-const JsDelivrBase = "https://cdn.jsdelivr.net/gh/CodebuffAI/codebuff@main/common/src/constants/"
+const JsDelivrBase = "https://cdn.jsdelivr.net/gh/CodebuffAI/freebuff@main/common/src/constants/"
 
 // mirrorFor returns the jsDelivr mirror for a raw source URL, or "" when the
 // URL is not a raw source (SetSources overrides are used as-is and never
@@ -104,9 +104,13 @@ func IsServedModel(model string) bool {
 // binary), entry order preserved. Rows upstream retired (laguna-s-2.1,
 // ling-3.0-flash, greg-2-ultra, greg-2-super) are absent: advertising a dead
 // model id in the offline fallback surfaces it via /v1/models and trips
-// upstream 403 free_mode_invalid_agent_model (issue #121). Upstream changes
-// update BOTH the pinned snapshot and this table together; the parity test
-// (TestFallbackParityWithPinnedUpstream) fails on drift.
+// upstream 403 free_mode_invalid_agent_model (issue #121). Most base3 root
+// rows are derived upstream via an Object.fromEntries spread the text parser
+// cannot evaluate, so they are absent here too — only explicitly written rows
+// (base3-free-luna-es) appear; Luna's root itself moved from base3-free-luna
+// to base2-free-luna in this snapshot.
+// Upstream changes update BOTH the pinned snapshot and this table together;
+// the parity test (TestFallbackParityWithPinnedUpstream) fails on drift.
 var fallbackAgents = []agentModels{
 	{agent: "base2-free", models: []string{
 		"minimax/minimax-m3",
@@ -119,15 +123,18 @@ var fallbackAgents = []agentModels{
 	{agent: "base2-free-deepseek-flash", models: []string{"deepseek/deepseek-v4-flash"}},
 	{agent: "base2-free-mimo", models: []string{"mimo/mimo-v2.5"}},
 	{agent: "base2-free-minimax-m3", models: []string{"minimax/minimax-m3"}},
-	{agent: "base3-free-luna", models: []string{"openai/gpt-5.6-luna"}},
+	{agent: "base2-free-luna", models: []string{"openai/gpt-5.6-luna"}},
 	{agent: "base2-free-glm", models: []string{"z-ai/glm-5.2"}},
 	{agent: "base2-free-kimi-k3-eco", models: []string{"crof/kimi-k3-eco"}},
+	{agent: "base2-free-luna-es", models: []string{"openai/gpt-5.6-luna-es"}},
+	{agent: "base3-free-luna-es", models: []string{"openai/gpt-5.6-luna-es"}},
 	{agent: "base2-free-deepseek-pro-max", models: []string{"deepseek/deepseek-v4-pro-max"}},
 	{agent: "base2-free-deepseek-flash-max", models: []string{"deepseek/deepseek-v4-flash-max"}},
-	{agent: "base3-free-luna-max", models: []string{"openai/gpt-5.6-luna-max"}},
+	{agent: "base2-free-luna-max", models: []string{"openai/gpt-5.6-luna-max"}},
 	{agent: "base2-free-muse-spark", models: []string{"meta/muse-spark-1.2-contributor"}},
+	{agent: "base2-free-ox-alpha", models: []string{"stealth/ox-alpha"}},
 	{agent: "base2-free-fable", models: []string{"anthropic/claude-fable-5"}},
-	{agent: "base2-free-cloud-planner", models: []string{"deepseek/deepseek-v4-flash"}},
+	{agent: "base2-free-cloud-planner", models: []string{"mimo/mimo-v2.5"}},
 	{agent: "base2-free-cloud-planner-limited", models: []string{"mimo/mimo-v2.5"}},
 	{agent: "file-picker", models: []string{"google/gemini-2.5-flash-lite"}},
 	{agent: "file-picker-max", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
@@ -155,13 +162,15 @@ var fallbackAgents = []agentModels{
 var fallbackRootByModel = map[string]string{
 	"mimo/mimo-v2.5":                  "base2-free-mimo",
 	"minimax/minimax-m3":              "base2-free-minimax-m3",
-	"openai/gpt-5.6-luna":             "base3-free-luna",
+	"openai/gpt-5.6-luna":             "base2-free-luna",
 	"deepseek/deepseek-v4-pro":        "base2-free-deepseek",
 	"deepseek/deepseek-v4-flash":      "base2-free-deepseek-flash",
 	"z-ai/glm-5.2":                    "base2-free-glm",
 	"crof/kimi-k3-eco":                "base2-free-kimi-k3-eco",
+	"openai/gpt-5.6-luna-es":          "base2-free-luna-es",
 	"anthropic/claude-fable-5":        "base2-free-fable",
 	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
+	"stealth/ox-alpha":                "base2-free-ox-alpha",
 }
 
 // ErrModelNotFound is returned by AgentForModel for models absent from the

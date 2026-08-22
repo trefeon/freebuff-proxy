@@ -163,10 +163,10 @@ func TestInvalidateRestarts(t *testing.T) {
 	if started := mock.StartedRunsSnapshot(); len(started) != 2 {
 		t.Errorf("STARTs = %d, want 2", len(started))
 	}
-	// Issue #91: each START also creates+FINISHes a context-pruner child
-	// run asynchronously — filter those out; the parent must never be
-	// FINISHed by Invalidate.
-	if finished := nonChildFinished(mock); len(finished) != 0 {
+	// The invalidated run must never be FINISHed (Invalidate deletes it
+	// without an upstream FINISH), and with the #91 child-run traffic gone
+	// no other FINISH may exist either.
+	if finished := mock.FinishedRunsSnapshot(); len(finished) != 0 {
 		t.Errorf("invalidated run must not be FINISHed, got %v", finished)
 	}
 }
@@ -245,10 +245,9 @@ func TestShutdownFinishesAllAndEndsSession(t *testing.T) {
 		t.Errorf("active runs after shutdown = %d, want 0", snap.ActiveRuns)
 	}
 
-	// Idempotent: a second shutdown must not duplicate FINISHes. Child-run
-	// FINISHes (issue #91) are excluded from the count.
+	// Idempotent: a second shutdown must not duplicate FINISHes.
 	mgr.Shutdown(context.Background())
-	if got := len(nonChildFinished(mock)); got != 2 {
+	if got := len(mock.FinishedRunsSnapshot()); got != 2 {
 		t.Errorf("finished runs after double shutdown = %d, want 2", got)
 	}
 }
@@ -571,7 +570,7 @@ func TestShutdownSkipsMidFinishRun(t *testing.T) {
 
 	mgr.Shutdown(context.Background())
 
-	finished := nonChildFinished(mock)
+	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 {
 		t.Fatalf("finished runs = %v, want exactly 1 (only agentB's run)", finished)
 	}
@@ -1151,7 +1150,7 @@ func TestRunFinishedDropLogsTermination(t *testing.T) {
 		t.Errorf("dropped run steps = %s, want 1", m[1])
 	}
 	// Dropped without FINISH: nothing may have reached the upstream.
-	if got := len(nonChildFinished(mock)); got != 0 {
+	if got := len(mock.FinishedRunsSnapshot()); got != 0 {
 		t.Errorf("dropped run must not be FINISHed upstream, got %d finished runs", got)
 	}
 }

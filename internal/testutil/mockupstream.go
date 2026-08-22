@@ -91,13 +91,6 @@ type MockUpstream struct {
 	RunIDs []string
 	runIdx int
 
-	// ChildRunIDs is the queue of run ids returned by context-pruner START
-	// (issue #91); defaults to child-run-NNNN when empty.
-	ChildRunIDs []string
-	childRunIdx int
-	// ChildRunsStarted records the parent run ids of context-pruner STARTs
-	// (issue #91, locked accessor ChildRunsStartedSnapshot).
-	ChildRunsStarted []string
 	// StartRequests records every agent-runs START payload (agentId +
 	// ancestorRunIds) so tests can assert the run-tree wiring.
 	StartRequests []StartRequest
@@ -159,6 +152,11 @@ type MockUpstream struct {
 	AuthCLICodeBody   string
 	// AuthCLICodeRequests counts POST /api/auth/cli/code hits.
 	AuthCLICodeRequests int
+	// LastAuthFingerprintID records the fingerprintId from the most recent
+	// POST /api/auth/cli/code body so tests can assert the login request
+	// carries the stable machine-derived fingerprint. Read it only after
+	// the request has settled (same convention as the counters above).
+	LastAuthFingerprintID string
 	// AuthCLIStatusBody is the JSON body served by GET
 	// /api/auth/cli/status. When empty, the response is 401 (pending).
 	// AuthCLIStatusRequests counts status polls.
@@ -267,6 +265,20 @@ func (m *MockUpstream) handle(w http.ResponseWriter, r *http.Request) {
 		status, body := m.AuthCLICodeStatus, m.AuthCLICodeBody
 		handler := m.AuthCLIHandler
 		m.mu.Unlock()
+		// Record the request's fingerprintId (best-effort) so tests can
+		// assert the login carries the stable machine fingerprint. The body
+		// is restored afterwards so custom AuthCLIHandler implementations
+		// can still read it.
+		raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		r.Body = io.NopCloser(strings.NewReader(string(raw)))
+		var fp struct {
+			FingerprintID string `json:"fingerprintId"`
+		}
+		if json.Unmarshal(raw, &fp) == nil && fp.FingerprintID != "" {
+			m.mu.Lock()
+			m.LastAuthFingerprintID = fp.FingerprintID
+			m.mu.Unlock()
+		}
 		if handler != nil {
 			handler(w, r)
 			return
@@ -471,30 +483,15 @@ func (m *MockUpstream) handleAgentRuns(w http.ResponseWriter, r *http.Request) {
 			AgentID:        payload.AgentID,
 			AncestorRunIDs: append([]string(nil), payload.AncestorRunIDs...),
 		})
-		var runID string
-		if payload.AgentID == "context-pruner" {
-			// Issue #91: the context-pruner child of a parent run gets its
-			// own id queue (parent + child ids must not alias).
-			idx := m.childRunIdx
-			m.childRunIdx++
-			m.ChildRunsStarted = append(m.ChildRunsStarted, firstOf(payload.AncestorRunIDs))
-			if idx >= len(m.ChildRunIDs) {
-				m.mu.Unlock()
-				writeJSON(w, 200, map[string]any{"runId": fmt.Sprintf("child-run-%04d", idx+1)})
-				return
-			}
-			runID = m.ChildRunIDs[idx]
-		} else {
-			idx := m.runIdx
-			if idx >= len(m.RunIDs) {
-				m.mu.Unlock()
-				writeJSON(w, 500, map[string]any{"error": "no mock run ids left"})
-				return
-			}
-			m.runIdx++
-			runID = m.RunIDs[idx]
-			m.StartedRuns = append(m.StartedRuns, payload.AgentID)
+		idx := m.runIdx
+		if idx >= len(m.RunIDs) {
+			m.mu.Unlock()
+			writeJSON(w, 500, map[string]any{"error": "no mock run ids left"})
+			return
 		}
+		m.runIdx++
+		runID := m.RunIDs[idx]
+		m.StartedRuns = append(m.StartedRuns, payload.AgentID)
 		m.mu.Unlock()
 		writeJSON(w, 200, map[string]any{"runId": runID})
 	case "FINISH":
@@ -532,27 +529,11 @@ func (m *MockUpstream) handleAgentRuns(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// firstOf returns the first element, or "" for an empty slice.
-func firstOf(s []string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	return s[0]
-}
-
 // StartRequestsSnapshot returns a locked copy of the START payloads.
 func (m *MockUpstream) StartRequestsSnapshot() []StartRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]StartRequest(nil), m.StartRequests...)
-}
-
-// ChildRunsStartedSnapshot returns a locked copy of the context-pruner
-// parent ids.
-func (m *MockUpstream) ChildRunsStartedSnapshot() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return append([]string(nil), m.ChildRunsStarted...)
 }
 
 func (m *MockUpstream) handleChat(w http.ResponseWriter, r *http.Request) {

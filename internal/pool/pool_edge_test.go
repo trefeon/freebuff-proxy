@@ -423,7 +423,7 @@ func TestBridgeIdleSweepSkipsBusy(t *testing.T) {
 	if p.bridgeToken("busy-tok") == nil {
 		t.Error("busy bridge entry evicted while its lease is outstanding")
 	}
-	if got := parentFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Errorf("finished runs = %d, want 0 (busy run must not be finished)", len(got))
 	}
 }
@@ -467,7 +467,7 @@ func TestBridgeDeadTokenEvictDefersWhenBusy(t *testing.T) {
 	if got := p.bridgeToken("dead-tok"); got == nil {
 		t.Fatal("busy dead-token entry evicted while its lease is outstanding")
 	}
-	if got := parentFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Errorf("finished runs = %d, want 0 (busy run must not be finished)", len(got))
 	}
 	if mock.SessionEnds != 0 {
@@ -490,7 +490,7 @@ func TestBridgeDeadTokenEvictDefersWhenBusy(t *testing.T) {
 	if got := p.bridgeToken("dead-tok"); got != nil {
 		t.Error("idle dead-token entry not evicted by the sweep")
 	}
-	if got := parentFinished(mock); len(got) != 1 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 1 {
 		t.Errorf("finished runs = %d, want 1 (idle sweep FINISH)", len(got))
 	}
 	if mock.SessionEnds != 1 {
@@ -523,7 +523,7 @@ func TestBridgeDeadTokenEvictsWhenIdle(t *testing.T) {
 	if got := p.bridgeToken("dead-tok"); got != nil {
 		t.Error("idle dead-token entry not evicted immediately")
 	}
-	if got := parentFinished(mock); len(got) != 1 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 1 {
 		t.Errorf("finished runs = %d, want 1 (dead-token FINISH)", len(got))
 	}
 	if mock.SessionEnds != 1 {
@@ -581,7 +581,7 @@ func TestBridgeEvictionAllBusyKeepsCap(t *testing.T) {
 		}
 	}
 	// No runs were FINISHed: nothing was evictable this pass.
-	if got := parentFinished(mock); len(got) != 0 {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Errorf("finished runs = %d, want 0 (nothing evictable while all entries busy)", len(got))
 	}
 	for _, l := range held {
@@ -620,7 +620,7 @@ func TestRemoveLastTokenDrainsRun(t *testing.T) {
 
 	// The removed token's run was FINISHed and its admitted session ended
 	// (both synchronous inside RemoveLastToken).
-	if got := parentFinished(mock); len(got) != 1 || got[0].Status != "completed" {
+	if got := mock.FinishedRunsSnapshot(); len(got) != 1 || got[0].Status != "completed" {
 		t.Errorf("finished runs = %v, want 1 completed", got)
 	}
 	if mock.SessionEnds != 1 {
@@ -869,17 +869,15 @@ func TestFinishTokenRuns(t *testing.T) {
 		t.Errorf("ActiveRuns = %d, want 0 after FinishTokenRuns", got)
 	}
 	finished := mock.FinishedRunsSnapshot()
-	// Issue #91: each run START also creates+FINISHes a context-pruner child
-	// run (best-effort, async), so the raw finished count includes the
-	// child. Assert the PARENT run was FINISHed with status completed
-	// (race-stable — the child may or may not have landed yet).
-	parentFinished := false
+	// FinishTokenRuns is synchronous, so the parent run-0001 FINISH is
+	// already recorded when it returns (no async pruner children since G4).
+	parentDone := false
 	for _, f := range finished {
 		if f.RunID == "run-0001" && f.Status == "completed" {
-			parentFinished = true
+			parentDone = true
 		}
 	}
-	if !parentFinished {
+	if !parentDone {
 		t.Errorf("finished runs = %v, want run-0001 completed", finished)
 	}
 

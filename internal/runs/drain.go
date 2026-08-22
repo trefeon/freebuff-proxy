@@ -16,16 +16,16 @@ import (
 )
 
 // asyncJobKind discriminates the deferred-side-effect jobs carried by the
-// bounded finish queue (issue #90/#91): FINISH a rotated/drained run, or
-// create the context-pruner child run. Chat-step recording used to be a
-// third kind (#91) but is now a synchronous in-memory append (issue #114:
-// steps are batched and sent WITH FINISH â€” the CLI has no /steps endpoint).
+// bounded finish queue (issue #90): FINISH a rotated/drained run. Chat-step
+// recording used to be a second kind (#91) but is now a synchronous
+// in-memory append (issue #114: steps are batched and sent WITH FINISH —
+// the CLI has no /steps endpoint). The context-pruner child-run job (#91)
+// was removed with G4: the newest CLI UNTRACKS pruner runs entirely
+// (reference/freebuff packages/agent-runtime/src/run-agent-step.ts:785-795
+// mints a local untracked run id, zero ledger POSTs).
 type asyncJobKind uint8
 
-const (
-	jobFinish asyncJobKind = iota
-	jobChildRun
-)
+const jobFinish asyncJobKind = iota
 
 // asyncJob is one unit of deferred upstream work. jobs are processed by a
 // single background worker per RunManager; when the bounded queue is full
@@ -126,9 +126,9 @@ func (m *RunManager) enqueueFinish(run *Run) {
 
 // enqueue submits a deferred upstream job to the bounded finish queue
 // (issue #90). When the queue is full the job runs inline, bounded by the
-// inline finish timeout â€” the caller never blocks on the worker.
+// inline finish timeout — the caller never blocks on the worker.
 func (m *RunManager) enqueue(job asyncJob) {
-	if job.run == nil && job.kind != jobChildRun {
+	if job.run == nil {
 		return
 	}
 	if m.finishQueue == nil {
@@ -158,8 +158,8 @@ func (m *RunManager) startFinishWorker() {
 	})
 }
 
-// finishLoop is the deferred-job worker: FINISH rotated/drained runs and
-// create context-pruner child runs, all best-effort.
+// finishLoop is the deferred-job worker: FINISH rotated/drained runs,
+// best-effort.
 func (m *RunManager) finishLoop() {
 	defer m.finishWg.Done()
 	defer close(m.finishExited)
@@ -186,31 +186,12 @@ func (m *RunManager) finishLoop() {
 	}
 }
 
-// runJob executes one deferred job (FINISH or child run). Best-effort:
-// failures are logged, never surfaced to a caller.
+// runJob executes one deferred job (FINISH). Best-effort: failures are
+// logged, never surfaced to a caller.
 func (m *RunManager) runJob(ctx context.Context, job asyncJob) {
 	switch job.kind {
 	case jobFinish:
 		m.finishIfReadyCtx(ctx, job.run)
-	case jobChildRun:
-		m.createChildRun(ctx, job.run)
-	}
-}
-
-// createChildRun starts the context-pruner child of parentRunID and FINISHes
-// it once created (issue #91, CLI parity: createChildRun + finishChildRun).
-// Best-effort: failures are logged only.
-func (m *RunManager) createChildRun(ctx context.Context, parent *Run) {
-	if parent == nil || parent.RunID == "" || m.client == nil {
-		return
-	}
-	childID, err := m.client.StartChildRun(ctx, parent.RunID)
-	if err != nil {
-		slog.Debug("runs: context-pruner child start failed", "parent_run_id", parent.RunID, "err", err)
-		return
-	}
-	if err := m.client.FinishRun(ctx, childID, "completed", 1, nil, ""); err != nil {
-		slog.Debug("runs: context-pruner child finish failed", "child_run_id", childID, "err", err)
 	}
 }
 

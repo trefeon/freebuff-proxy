@@ -107,7 +107,7 @@ For a guided walkthrough, read [Getting Started](docs/getting-started.md) (5 min
 - **Token Pooling & Bridge Mode**: Hot-session-first pooling with round-robin start and failover across `AUTH_TOKENS`, or zero-storage relay when clients bring their own token. See [Key Concepts](#key-concepts).
 - **Token Auto-Discovery**: With empty `AUTH_TOKENS`, credentials are read from the official CLI login files (`~/.config/manicode/credentials.json`, `~/.config/codebuff/credentials.json`). Disable with `AUTO_DISCOVER_TOKEN=false`.
 - **TLS Stealth**: browser TLS fingerprinting via uTLS (Chrome, Firefox, Safari, Edge) plus sanitized request headers so upstream traffic reads as a browser client.
-- **CLI Impersonation**: egress presents as the official FreeBuff CLI — `Freebuff-CLI/0.0.150` ads-API User-Agent with a **Chrome/124 body UA** (the shipped 0.0.150 binary's truth), `ai-sdk/openai-compatible/1.0.0/codebuff` chat UA, and your real device timezone/locale.
+- **CLI Impersonation**: egress presents as the official FreeBuff CLI — `Freebuff-CLI/1.0.0` ads-API User-Agent with a **Chrome/124 body UA**, `ai-sdk/openai-compatible/1.0.0/codebuff` chat UA, Bun/1.3.14 on session/auth endpoints, and your real device timezone/locale.
 - **Subagent-Ready Concurrency**: Single-flight session refresh prevents race conditions during high-volume tool-calling loops.
 - **Safe Mode**: On by default: anti-ban presets (TLS stealth, header sanitization, jitter, idle rotation).
 - **Operational Tooling**: `-doctor` diagnostics (config, port, DNS/TLS, registry; zero-cost per-token validity probes run by default), `-test-token` (zero-cost probe on the first token, prints live quota, exit 0/1 for installers and scripts), `-setup` interactive client configuration, and a SHA-256-verified `-update` self-updater.
@@ -278,7 +278,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `IDLE_ROTATION_TIMEOUT` | `0` | Finish runs after this idle period (`0` = disabled; `SAFE_MODE` sets 30m when unset) |
 | `SAFE_MODE` | `true` | Apply anti-ban presets (see below; set `false` to disable) |
 | `REQUEST_JITTER` | `0s` | Random delay range `[0, REQUEST_JITTER)` before upstream calls (`SAFE_MODE` sets 2s when unset) |
-| `CLI_VERSION` | `0.10.7` | Informational only: parsed and shown on the admin dashboard (Configuration Studio). No wire impact — the chat UA is pinned to `ai-sdk/openai-compatible/1.0.0/codebuff` and the ads UA to `Freebuff-CLI/0.0.150` |
+| `CLI_VERSION` | `0.10.7` | Informational only: parsed and shown on the admin dashboard (Configuration Studio). No wire impact — the chat UA is pinned to `ai-sdk/openai-compatible/1.0.0/codebuff`, the ads UA to `Freebuff-CLI/1.0.0`, and session/auth endpoints default to `Bun/1.3.14` |
 | `MODEL_ALIASES` | `""` | Map aliases to real model IDs, e.g. `gpt-4o:deepseek/deepseek-v4-pro`. When unset (or empty / parsing to no pairs) the built-ins apply: `deepseek-chat` → `deepseek/deepseek-v4-flash`, `gpt-4o` → `deepseek/deepseek-v4-pro`, `claude-3-5-sonnet` → `anthropic/claude-fable-5`. A non-empty value with ≥1 valid pair REPLACES the defaults entirely; the built-ins cannot be disabled (there is no way to express an empty alias map) |
 | `TRANSIENT_RETRIES` | `1` | Max additional attempts after a transient transport failure; `0` disables |
 | `SESSION_PERSIST` | `false` | Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (new daily slot / re-START) |

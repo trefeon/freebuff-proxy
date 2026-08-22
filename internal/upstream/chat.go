@@ -93,6 +93,10 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 			req = req.WithContext(reqCtx)
 		}
 		req.Header.Set("Accept", "application/json, text/event-stream")
+		// Chat is the ONLY path carrying the ai-sdk UA (audit G5): the real
+		// CLI pins it on model calls alone; newRequest defaulted this
+		// request to the plain Bun fetch UA every other call sends.
+		req.Header.Set("User-Agent", cliUserAgent)
 		// The chat POST carries NO x-freebuff-model / x-freebuff-instance-id
 		// headers (#106): the official CLI sends exactly Authorization + the
 		// ai-sdk UA (+ optional acting-user-id) on chat

@@ -695,9 +695,6 @@ func (m *RunManager) rotate(ctx context.Context, agentID string) error {
 		if oldRun != nil {
 			m.enqueueFinish(oldRun)
 		}
-		// Issue #91: create the context-pruner child of the new parent run
-		// (ancestorRunIds=[parent]), best-effort through the bounded queue.
-		m.enqueue(asyncJob{kind: jobChildRun, run: newRun})
 		return nil
 	}
 }
