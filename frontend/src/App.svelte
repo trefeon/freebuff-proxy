@@ -11,7 +11,11 @@
   import Login from './lib/pages/Login.svelte';
   import SecurityBanner from './lib/components/SecurityBanner.svelte';
   import ChangePasswordModal from './lib/components/ChangePasswordModal.svelte';
+  import Alert from './lib/components/Alert.svelte';
+  import Button from './lib/components/Button.svelte';
+  import { X } from '@lucide/svelte';
   import { fetchAPI } from './lib/api/client.js';
+  import { sessionExpired, dismissSessionExpired } from './lib/stores/session.js';
 
   function getInitialTab() {
     if (typeof window === 'undefined') return 'overview';
@@ -40,6 +44,14 @@
       window.location.hash = activeTab;
     }
   });
+
+  // Explicit user action only — never invoked from background polling.
+  function goToLogin() {
+    const hash = window.location.hash.replace('#', '');
+    // Carry the current tab through the login page so Login.svelte can send
+    // the user back where they were after signing in.
+    window.location.assign(hash && hash !== 'login' ? `/admin/login#${hash}` : '/admin/login');
+  }
 
   onMount(() => {
     syncTabFromURL();
@@ -92,6 +104,26 @@
 
   <div class="flex-1 flex flex-col {activeTab !== 'login' ? 'md:pl-56' : ''}">
     <main id="main-content" class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8">
+      {#if $sessionExpired && activeTab !== 'login'}
+        <div class="mb-6">
+          <Alert tone="error" title="Session expired">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <span>Your session has ended. Sign in again to continue using the dashboard.</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <Button variant="secondary" size="sm" onclick={goToLogin}>Log in</Button>
+                <button
+                  type="button"
+                  class="fp-btn fp-btn-ghost fp-btn-sm"
+                  aria-label="Dismiss session expired notice"
+                  onclick={dismissSessionExpired}
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          </Alert>
+        </div>
+      {/if}
       {#if isDefaultAdminToken && activeTab !== 'login'}
         <div class="mb-6">
           <SecurityBanner onChangePassword={() => { showChangePasswordModal = true; }} />

@@ -43,7 +43,10 @@
       });
 
       if (res.ok || res.redirected) {
-        window.location.href = '/admin';
+        // Return to the tab the user came from (hash carried through
+        // /admin/login by App.svelte's banner, or a direct #tab deep link).
+        const tab = window.location.hash.replace('#', '');
+        window.location.href = tab && tab !== 'login' ? `/admin#${tab}` : '/admin';
       } else {
         errorMsg = cleanLoginError(await res.text());
       }

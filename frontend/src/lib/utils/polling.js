@@ -1,4 +1,5 @@
 import { onMount, onDestroy } from 'svelte';
+import { isSessionDead } from '../stores/session.js';
 
 /**
  * Set up visibility-aware polling. Pauses when the tab is hidden,
@@ -16,7 +17,7 @@ export function usePolling(fetchFn, intervalMs) {
   let running = false;
 
   async function tick() {
-    if (running) return; // previous fetch still pending — skip this tick
+    if (running || isSessionDead()) return; // dead session or previous fetch still pending — skip this tick
     running = true;
     try {
       await fetchFn();
