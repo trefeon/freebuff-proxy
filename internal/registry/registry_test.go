@@ -956,3 +956,34 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		}
 	}
 }
+
+// TestPausedModelPolicy pins the withdrawn-model policy (vendor cce4800,
+// freebuff-models.ts:1401-1429): minimax/minimax-m3 is recognized upstream but
+// refused at admission with model_unavailable naming the replacement. The
+// proxy mirrors that flow — the id stays resolvable in the catalog (count
+// tokens, alias resolution) but is never served, and WithdrawnModelMessage
+// names DeepSeek V4 Flash.
+func TestPausedModelPolicy(t *testing.T) {
+	if !IsPausedModel("minimax/minimax-m3") {
+		t.Error("IsPausedModel(minimax/minimax-m3) = false, want true")
+	}
+	if IsPausedModel("deepseek/deepseek-v4-flash") {
+		t.Error("IsPausedModel(deepseek/deepseek-v4-flash) = true, want false")
+	}
+	if ServedModels["minimax/minimax-m3"] {
+		t.Error("ServedModels contains a paused model; requests would burn doomed admissions")
+	}
+
+	// The catalog still recognizes it so alias resolution/count_tokens work.
+	r := New(nil, nil)
+	r.LoadFallback()
+	if _, err := r.AgentForModel("minimax/minimax-m3"); err != nil {
+		t.Errorf("paused model lost from catalog: %v", err)
+	}
+
+	got := WithdrawnModelMessage("minimax/minimax-m3")
+	want := "MiniMax M3 is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
+	if got != want {
+		t.Errorf("WithdrawnModelMessage = %q, want %q (mirror freebuffWithdrawnModelMessage)", got, want)
+	}
+}

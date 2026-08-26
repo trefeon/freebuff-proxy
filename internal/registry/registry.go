@@ -105,6 +105,44 @@ func IsServedModel(model string) bool {
 	return ServedModels[model]
 }
 
+// PausedModels mirrors upstream FREEBUFF_PAUSED_FREE_MODEL_IDS (pinned
+// freebuff-models.ts:1401-1413): ids upstream still RECOGNIZES but refuses at
+// admission with `model_unavailable` naming the replacement
+// (freebuffWithdrawnModelMessage, freebuff-models.ts:1422-1429). minimax/
+// minimax-m3 was withdrawn from free mode on 2026-08-20 ($213/hr); serving it
+// here would burn a doomed admission per request — admission refusal is not
+// session-ending upstream, so the retry loop would amplify exactly the
+// issue-#1801-shaped load the pause exists to stop.
+//
+// The id stays in the catalog maps (count_tokens, alias resolution) but is
+// refused by the chat handlers before any lease is acquired.
+var PausedModels = map[string]string{
+	"minimax/minimax-m3": "deepseek/deepseek-v4-flash",
+}
+
+// WithdrawnModelMessage mirrors upstream freebuffWithdrawnModelMessage:
+// names the model asked for and what to use instead.
+func WithdrawnModelMessage(id string) string {
+	replacement := PausedModels[id]
+	if replacement == "" {
+		return id + " is no longer available in Freebuff."
+	}
+	name := id
+	if name == "minimax/minimax-m3" {
+		name = "MiniMax M3"
+	}
+	if replacement == "deepseek/deepseek-v4-flash" {
+		return name + " is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
+	}
+	return name + " is no longer available in Freebuff. We recommend using " + replacement + " instead."
+}
+
+// IsPausedModel reports whether model is recognized-but-withdrawn upstream.
+func IsPausedModel(model string) bool {
+	_, ok := PausedModels[model]
+	return ok
+}
+
 // fallbackAgents is the hardcoded model→agent fallback used when the sources
 // are unreachable. It mirrors the CURRENT upstream FREE_MODE_AGENT_MODELS
 // exactly: the rows below are the verbatim parse of the pinned snapshot
@@ -154,6 +192,11 @@ var fallbackAgents = []agentModels{
 	{agent: "tmux-cli", models: []string{"deepseek/deepseek-v4-flash"}},
 	{agent: "code-reviewer-minimax-m3", models: []string{"minimax/minimax-m3"}},
 	{agent: "code-reviewer-luna", models: []string{"openai/gpt-5.6-luna"}},
+	// Vendor cce4800 (2026-08-24): Ox Alpha reached CLI/Desktop, so its
+	// reviewer needs its own allowlist row — without it a base2 session falls
+	// back to the DeepSeek Flash reviewer, which that session's allowlist does
+	// not permit (pinned free-agents.ts FREEBUFF_REVIEWER_AGENT_ID_BY_MODEL).
+	{agent: "code-reviewer-ox-alpha", models: []string{"stealth/ox-alpha"}},
 	{agent: "code-reviewer-deepseek", models: []string{"deepseek/deepseek-v4-pro"}},
 	{agent: "code-reviewer-deepseek-flash", models: []string{"deepseek/deepseek-v4-flash"}},
 	{agent: "code-reviewer-mimo", models: []string{"mimo/mimo-v2.5"}},
