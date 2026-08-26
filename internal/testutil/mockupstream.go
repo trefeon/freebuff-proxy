@@ -223,7 +223,10 @@ func (m *MockUpstream) handle(w http.ResponseWriter, r *http.Request) {
 		if retryAfterMsOverride > 0 {
 			retryAfterMs = retryAfterMsOverride
 		}
-		writeRaw(w, 429, fmt.Sprintf(`{"model":"deepseek/deepseek-v4-flash","entitlementBreakdown":{"base":6,"referral":0,"streak":0},"limit":6,"period":"pacific_day","resetTimeZone":"America/Los_Angeles","resetAt":"2026-08-12T07:00:00.000Z","windowHours":24,"recentCount":6.6,"status":"rate_limited","accessTier":"limited","retryAfterMs":%d}`, retryAfterMs))
+		// Limited-tier quota is 3/day since the Levels ship (vendor
+		// cce4800: FREEBUFF_PRE_LEVELS_LIMITED_DAILY_SESSIONS = 6 is the
+		// revert lever; freebuff-models.ts:541).
+		writeRaw(w, 429, fmt.Sprintf(`{"model":"deepseek/deepseek-v4-flash","entitlementBreakdown":{"base":3,"referral":0,"streak":0},"limit":3,"period":"pacific_day","resetTimeZone":"America/Los_Angeles","resetAt":"2026-08-12T07:00:00.000Z","windowHours":24,"recentCount":3.6,"status":"rate_limited","accessTier":"limited","retryAfterMs":%d}`, retryAfterMs))
 		return
 	}
 	if ban {

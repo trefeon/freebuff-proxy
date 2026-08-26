@@ -21,10 +21,12 @@ import (
 
 // quotaSummary renders the live per-model session quota from a probe's
 // RateLimitsByModel map (models sorted for determinism), plus glmPromo when
-// the response carried it (the
-// x-freebuff-include-unused-rate-limits probe header asks upstream to
-// include the unused limits); "" when the upstream response carried no quota
-// data (compact responses omit it).
+// the response carried it; "" when the upstream response carried no quota
+// data (compact responses omit it). Full admissions include the per-model
+// breakdown by default — the proxy deliberately does NOT send the Web-only
+// x-freebuff-include-unused-rate-limits header (issue #140 P1: a
+// third-party-proxy fingerprint the CLI never sends; regression-pinned by
+// TestProbeAccountDoesNotSendIncludeUnusedRateLimits).
 func quotaSummary(st *upstream.SessionState) string {
 	if st == nil || (len(st.RateLimitsByModel) == 0 && st.GlmPromo == "") {
 		return ""
@@ -95,6 +97,8 @@ func defaultHintForCode(code, message string) string {
 		return "Free-tier sliding window rate limit (30m). Wait for Retry-After or retry with backoff."
 	case code == "free_mode_run_fanout" || strings.Contains(lowerMsg, "free_mode_run_fanout"):
 		return "Upstream refused the account's concurrent agent runs (proxy-fanout signal). Honor Retry-After; run fewer parallel requests per token, or add another token."
+	case code == "free_mode_invalid_agent_model" || strings.Contains(lowerMsg, "free_mode_invalid_agent_model"):
+		return "The model is not in upstream's free-mode allowlist (retired id or stale registry). Wait for the registry refresh; if it persists, remove the model from MODELS_ALLOW and update."
 	case code == "free_mode_capacity_deferred" || strings.Contains(lowerMsg, "free_mode_capacity_deferred"):
 		return "Free tier at capacity — request deferred. Honor Retry-After (approx 2s for 30m window, 10s default) before retrying."
 	case code == "account_banned" || strings.Contains(lowerMsg, "banned"):
@@ -216,6 +220,13 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 			// lands on another token — never the dead 502 the generic
 			// UpstreamError branch used to write.
 			code = "free_mode_run_fanout"
+		case "free_mode_invalid_agent_model":
+			// #140 P1: the (agent, model) pair is not in upstream's
+			// allowlist (stale registry serving a retired id). 429 + bounded
+			// cooldown rotates the pool instead of amplifying the 403 storm;
+			// distinct code so operators can spot it in logs, and the pool's
+			// escalation guard alerts at 3 hits/60s.
+			code = "free_mode_invalid_agent_model"
 		}
 		message, retryAfter = rle.Error(), rle.RetryAfter
 		resetAt, window = rle.ResetAt, rle.Window

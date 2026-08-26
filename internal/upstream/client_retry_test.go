@@ -78,7 +78,8 @@ func newRetryClient(t *testing.T, baseURL string, retries int, fingerprint strin
 }
 
 func TestClassifyRateLimit(t *testing.T) {
-	body := `{"model":"deepseek/deepseek-v4-flash","entitlementBreakdown":{"base":6},"limit":6,"period":"pacific_day","resetTimeZone":"America/Los_Angeles","resetAt":"2026-08-12T07:00:00.000Z","windowHours":24,"recentCount":6.6,"status":"rate_limited","accessTier":"limited","retryAfterMs":48549499}`
+	// Limited tier is 3/day since Levels (vendor cce4800, freebuff-models.ts:541).
+	body := `{"model":"deepseek/deepseek-v4-flash","entitlementBreakdown":{"base":3},"limit":3,"period":"pacific_day","resetTimeZone":"America/Los_Angeles","resetAt":"2026-08-12T07:00:00.000Z","windowHours":24,"recentCount":3.6,"status":"rate_limited","accessTier":"limited","retryAfterMs":48549499}`
 	err := classifyError(429, body, http.Header{})
 	if !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("errors.Is(ErrRateLimited) = false, got %v", err)
@@ -90,11 +91,11 @@ func TestClassifyRateLimit(t *testing.T) {
 	if rle.RetryAfter != 48549499*time.Millisecond {
 		t.Errorf("RetryAfter = %s, want 48549499ms", rle.RetryAfter)
 	}
-	if rle.Limit != 6 {
-		t.Errorf("Limit = %v, want 6", rle.Limit)
+	if rle.Limit != 3 {
+		t.Errorf("Limit = %v, want 3", rle.Limit)
 	}
-	if rle.RecentCount != 6.6 {
-		t.Errorf("RecentCount = %v, want 6.6", rle.RecentCount)
+	if rle.RecentCount != 3.6 {
+		t.Errorf("RecentCount = %v, want 3.6", rle.RecentCount)
 	}
 	wantReset, _ := time.Parse(time.RFC3339Nano, "2026-08-12T07:00:00.000Z")
 	if !rle.ResetAt.Equal(wantReset) {
@@ -1524,5 +1525,35 @@ func TestClassifyRunFanout(t *testing.T) {
 	}
 	if rle.RetryAfter != 5*time.Second {
 		t.Errorf("RetryAfter = %v, want 5s (header honored)", rle.RetryAfter)
+	}
+}
+
+// TestClassifyInvalidAgentModel pins the free_mode_invalid_agent_model
+// classification (issue #140 P1): the allowlist-refusal 403 used to fall to
+// the default branch → dead 502 upstream_unavailable, and retries amplified
+// invisibly (the v0.11.3 escalation path). It must classify as a bounded-
+// cooldown RateLimitError with a DISTINCT Status on any status the marker
+// rides, quota-shaped fields unset (no midnight lock), and it must win over
+// the session_model_mismatch family branch that would wrap ErrSessionInvalid.
+func TestClassifyInvalidAgentModel(t *testing.T) {
+	const body = `{"error":"free_mode_invalid_agent_model","message":"Model not allowed for this agent in free mode."}`
+	for _, status := range []int{http.StatusForbidden, http.StatusBadRequest, http.StatusTooManyRequests} {
+		err := classifyError(status, body, http.Header{})
+		var rle *RateLimitError
+		if !errors.As(err, &rle) {
+			t.Fatalf("status %d: classifyError = %T %v, want *RateLimitError", status, err, err)
+		}
+		if rle.Status != "free_mode_invalid_agent_model" {
+			t.Errorf("status %d: Status = %q, want free_mode_invalid_agent_model", status, rle.Status)
+		}
+		if rle.RetryAfter != InvalidModelCooldown {
+			t.Errorf("status %d: RetryAfter = %v, want %v", status, rle.RetryAfter, InvalidModelCooldown)
+		}
+		if !rle.ResetAt.IsZero() || rle.Period != "" || rle.Limit != 0 {
+			t.Errorf("status %d: quota-shaped fields set (%v/%q/%v)", status, rle.ResetAt, rle.Period, rle.Limit)
+		}
+		if errors.Is(err, ErrSessionInvalid) {
+			t.Errorf("status %d: classified as session-invalid; the session row is fine and must not be dropped", status)
+		}
 	}
 }

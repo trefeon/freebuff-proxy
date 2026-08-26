@@ -87,8 +87,8 @@ func TestAcquireRateLimitCooldowns(t *testing.T) {
 	if rle.RetryAfter != 48549499*time.Millisecond {
 		t.Errorf("RetryAfter = %s, want 48549499ms", rle.RetryAfter)
 	}
-	if rle.Limit != 6 || rle.RecentCount != 6.6 {
-		t.Errorf("quota = %v/%v, want 6/6.6", rle.RecentCount, rle.Limit)
+	if rle.Limit != 3 || rle.RecentCount != 3.6 {
+		t.Errorf("quota = %v/%v, want 3/3.6", rle.RecentCount, rle.Limit)
 	}
 
 	// The token cooled down for the upstream retry window, so subsequent

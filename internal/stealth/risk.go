@@ -59,8 +59,12 @@ const maxRiskSamples = 64
 //     ceiling, the more contended the egress IP is (admission is per-IP).
 //   - privacy signals: the upstream flagging the egress IP as vpn/proxy/
 //     tor/hosting/datacenter is the strongest single ban signal
-//     (reference/freebuff freebuff-trust.ts treats those egress classes as
-//     hard blocks or limited-tier demotions).
+//     (reference/freebuff freebuff-trust.ts: those egress classes feed
+//     ipPrivacySignals, and a live risk >= 75 applies the anonymous_network
+//     cap — trust level floors at `verified` with restricted-cohort spend).
+//     The full 4-level matrix (new/verified/established/core, thresholds
+//     25/50/75, DB-failure fail-open to established) is server-side; this
+//     engine approximates only its observable inputs.
 //
 // The engine only warns (Score/Level/Reasons); it never modifies routing.
 // The shared DefaultRiskEngine is fed by the upstream client and the egress
