@@ -318,9 +318,17 @@ type Pool struct {
 
 	// notify fires best-effort webhook alerts (issue #48): pool_exhausted
 	// when every token is rate-limited, token_banned when a ban is
-	// classified. nil disables. Wired by main from WEBHOOK_URL.
+	// classified, agent_model_mismatch_escalation when one token takes 3+
+	// free_mode_invalid_agent_model refusals in 60s (issue #140 P1). nil
+	// disables. Wired by main from WEBHOOK_URL.
 	notify   *notify.Sender
 	notifyMu sync.Mutex // guards notify reads/writes (P2-1 data race)
+
+	// mismatch tracks the per-token rolling window behind the #140 P1
+	// escalation guard (see recordMismatchEscalation). Index 0 is shared by
+	// all bridge entries; pooled tokens offset by one.
+	mismatch   map[int]mismatchEscalation
+	mismatchMu sync.Mutex
 
 	// storeSessionPersist and storeStateFile record the persistence config
 	// the store was created with (captured by SetSessionStore), so SetConfig
@@ -373,7 +381,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 		return nil, fmt.Errorf("pool: %d sessions for %d tokens", len(sessions), len(cfg.AuthTokens))
 	}
 
-	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]chan struct{})}
+	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]chan struct{}), mismatch: make(map[int]mismatchEscalation)}
 	p.cfg.Store(cfg)
 	p.msgsPerToken = make([][]time.Time, len(cfg.AuthTokens))
 	p.spendPerToken = make([]*spendLedger, len(cfg.AuthTokens))

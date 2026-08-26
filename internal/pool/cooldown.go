@@ -34,6 +34,7 @@ func (p *Pool) CooldownTokenRateLimit(token int, rle *upstream.RateLimitError) {
 		defer p.spendMu.Unlock()
 		p.recordSpendLimited(token)
 	}
+	p.recordMismatchEscalation(token, rle)
 }
 
 // CooldownTokenIpCapped applies an ip_capped cooldown to token via
@@ -97,6 +98,7 @@ func (p *Pool) CooldownBridgeRateLimit(lease *Lease, rle *upstream.RateLimitErro
 		defer p.bridgeMu.Unlock()
 		p.bridgeRecordSpendLimited(lease.Bridge)
 	}
+	p.recordMismatchEscalation(0, rle) // bridge: tokenIndex 0, shared window
 }
 
 // CooldownBridgeIpCapped applies an ip_capped cooldown to the bridge entry
@@ -142,6 +144,64 @@ func (p *Pool) notifyBan(tokenIndex int, model string) {
 	}
 	n.Send(notify.Event{Event: "token_banned", TokenIndex: tokenIndex, Model: model,
 		Message: "a FreeBuff token was classified banned upstream (403)"})
+}
+
+// mismatchEscalation is the issue #140 P1 escalation guard's state for one
+// token: free_mode_invalid_agent_model 403s inside stormWindow mean the
+// registry is serving an id upstream retired — exactly how the v0.11.3-era
+// PREFER_MAX_MODELS over-upgrade escalated accounts to `banned`. N hits in
+// the window fire ONE operator webhook (the sender throttles repeats); the
+// per-hit bounded cooldown already stops the request-path amplification.
+type mismatchEscalation struct {
+	hits      []time.Time // refusal timestamps, oldest first
+	lastStorm time.Time   // zero = no webhook fired yet in this storm
+}
+
+const (
+	mismatchWindow    = 60 * time.Second
+	mismatchThreshold = 3
+)
+
+// recordMismatchEscalation counts one free_mode_invalid_agent_model hit for
+// token and fires agent_model_mismatch_escalation once per window when the
+// count crosses the threshold. Bridge entries share the pooled path through
+// CooldownTokenRateLimit/CooldownBridgeRateLimit, so both surfaces alert.
+func (p *Pool) recordMismatchEscalation(tokenIndex int, rle *upstream.RateLimitError) {
+	if rle == nil || rle.Status != "free_mode_invalid_agent_model" {
+		return
+	}
+	now := time.Now()
+	p.mismatchMu.Lock()
+	st := p.mismatch[tokenIndex]
+	// Drop hits older than the window.
+	kept := st.hits[:0]
+	for _, t := range st.hits {
+		if now.Sub(t) < mismatchWindow {
+			kept = append(kept, t)
+		}
+	}
+	st.hits = append(kept, now)
+	fire := false
+	if len(st.hits) >= mismatchThreshold && now.Sub(st.lastStorm) >= mismatchWindow {
+		st.lastStorm = now
+		fire = true
+	}
+	p.mismatch[tokenIndex] = st
+	p.mismatchMu.Unlock()
+
+	if !fire {
+		return
+	}
+	model := rle.Status // Status names the code; Model comes from the caller below
+	p.notifyMu.Lock()
+	n := p.notify
+	p.notifyMu.Unlock()
+	if n == nil {
+		return
+	}
+	n.Send(notify.Event{Event: "agent_model_mismatch_escalation", TokenIndex: tokenIndex + 1,
+		Model:   model,
+		Message: "3+ free_mode_invalid_agent_model refusals in 60s on one token — the registry is likely serving a model upstream retired; refresh/restart or check MODELS_ALLOW before upstream escalates to ban"})
 }
 
 // UnlockToken clears any cooldown/rate-limit/ban lock on token so Acquire

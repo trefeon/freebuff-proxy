@@ -300,7 +300,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `CORS_ALLOWED_ORIGIN` | `*` | `Access-Control-Allow-Origin` for `/v1/*` responses |
 | `ADOPT_CLI_SESSION` | `false` | Adopt the upstream CLI's active session instead of creating a new one |
 | `WAITING_ROOM_CHAIN` | `false` | After an upstream 428 `waiting_room_required`, fire the reference ad-chain (POST `/api/v1/ads` per provider) + GET `/api/v1/freebuff/streak` before the next session create (issue #94(b), gated stub — best-effort, never blocks the request; not a queue-across-tokens mechanism) |
-| `WEBHOOK_URL` | `""` | Best-effort alert POSTs for exactly two events: `pool_exhausted` (all tokens rate-limited) and `token_banned` (issue #48; empty = disabled; at most one POST per event type per 5m, never blocks the request path) |
+| `WEBHOOK_URL` | `""` | Best-effort alert POSTs for three events: `pool_exhausted` (all tokens rate-limited), `token_banned`, and `agent_model_mismatch_escalation` (3+ allowlist refusals in 60s on one token — issue #140 P1; empty = disabled; at most one POST per event type per 5m, never blocks the request path) |
 | `RATE_LIMIT_PER_IP` | `0` | Requests/second allowed per client IP (`0` = disabled; e.g. `20`) |
 | `RATE_LIMIT_BURST` | `0` | Burst request capacity per client IP (`0` = default `2 * RATE_LIMIT_PER_IP`) |
 

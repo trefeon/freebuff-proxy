@@ -63,7 +63,7 @@ func (s *Sender) SetLogger(l *slog.Logger) {
 // (1-based; 0 for bridge), model the requested model when known, message a
 // human-readable summary, timestamp the event time in RFC3339.
 type Event struct {
-	Event      string `json:"event"`       // "pool_exhausted" | "token_banned"
+	Event      string `json:"event"`       // "pool_exhausted" | "token_banned" | "agent_model_mismatch_escalation"
 	TokenIndex int    `json:"token_index"` // 1-based pooled token index; 0 = bridge/unset
 	Model      string `json:"model"`       // requested model ("" when unknown)
 	Message    string `json:"message"`

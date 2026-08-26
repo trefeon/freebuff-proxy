@@ -181,6 +181,21 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// marks the refusal and the pool registry cools the (egress, model)
 		// pairing instead.
 		return &LimitedIpError{RetryAfter: retryAfter, Body: truncate(body, 200)}
+	case containsAny(lower, "free_mode_invalid_agent_model"):
+		// free_mode_invalid_agent_model: the (agent, model) pair is not in
+		// upstream's FREE_MODE_AGENT_MODELS allowlist — historically what a
+		// stale registry serving a retired id produces (#121; MiMo 2.5 Pro's
+		// second-stage retirement 403s exactly this). The default branch
+		// turned it into a dead 502 and retries amplified invisibly — issue
+		// #140 P1's escalation-guard target. It is a CONFIG/mismatch refusal,
+		// not quota: bounded cooldown (InvalidModelCooldown) so the pool
+		// rotates instead of hammering, no ResetAt/Period (no midnight lock),
+		// distinct Status so the server can surface it with an operator hint.
+		return &RateLimitError{
+			Status:     "free_mode_invalid_agent_model",
+			RetryAfter: InvalidModelCooldown,
+			Body:       truncate(body, 200),
+		}
 	case containsAny(lower, "session_superseded"):
 		// #119: 409 session_superseded is a TERMINAL gate rejection
 		// (endsTheSession:true — another instance took over the account;
@@ -482,6 +497,14 @@ func isCapacityDeferred(err error) bool {
 // backs off for a minute rather than being locked until Pacific midnight.
 // Used only when the refusal carries no Retry-After header.
 const FanoutCooldown = 60 * time.Second
+
+// InvalidModelCooldown bounds a free_mode_invalid_agent_model refusal
+// (issue #140 P1): the pair is not in the allowlist until the registry
+// refreshes, so retrying sooner only amplifies the 403 storm that escalated
+// accounts to banned in the v0.11.3 incident. A minute per hit gives the
+// live registry refresh time to land while keeping the token available for
+// other models. Used only when the refusal carries no Retry-After header.
+const InvalidModelCooldown = 60 * time.Second
 
 // LoadShedCooldown bounds a 429 load-saturation refusal (issue #133): the
 // upstream sheds load for minutes, not a day, so the token re-probes after
