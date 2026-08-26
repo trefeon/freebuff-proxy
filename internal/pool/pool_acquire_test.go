@@ -440,7 +440,7 @@ func TestPoolChat(t *testing.T) {
 		t.Fatalf("upstream chat calls = %d, want 1", len(mock.RecordedChatBodies))
 	}
 	recorded := mock.RecordedChatBodies[0]
-	for _, want := range []string{`"codebuff_metadata"`, `"data_collection":"deny"`, `"stream":true`, `"stop":["cb_easp"]`} {
+	for _, want := range []string{`"codebuff_metadata"`, `"data_collection":"deny"`, `"stream":true`, `"stop":["\"cb_easp\""]`} {
 		if !strings.Contains(recorded, want) {
 			t.Errorf("upstream body missing %s: %s", want, recorded)
 		}

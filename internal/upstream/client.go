@@ -1,9 +1,10 @@
 // Package upstream implements the codebuff.com wire client with the CLI
 // request envelope required to pass the free-mode gate
 // (403 free_mode_cli_required): x-freebuff-* headers, codebuff_metadata,
-// provider.data_collection=deny, forced streaming, and the cb_easp stop
-// sentinel. Error handling mirrors proxy-freebuff's recovery matrix: typed
-// sentinels let callers refresh sessions, rotate runs, or cool down tokens.
+// provider.data_collection=deny, forced streaming, and the JSON-quoted
+// "cb_easp" stop sentinel. Error handling mirrors proxy-freebuff's recovery
+// matrix: typed sentinels let callers refresh sessions, rotate runs, or cool
+// down tokens.
 package upstream
 
 import (
@@ -112,8 +113,9 @@ func (c *Client) TokenKey() string {
 // (reference/freebuff model-provider.ts:150; llm-providers package.json
 // 1.0.0). The upstream free-tier gate (403 free_mode_cli_required) keys on
 // the CLI request envelope (x-freebuff-* headers, codebuff_metadata, forced
-// streaming and the cb_easp stop sentinel — see the package comment), but
-// the server still fingerprints the UA. ChatCompletions is the ONLY caller:
+// streaming and the JSON-quoted "cb_easp" stop sentinel — see the package
+// comment), but the server still fingerprints the UA. ChatCompletions is the
+// ONLY caller:
 // empirically + snapshot-verified, the real CLI emits this UA on chat only;
 // every other upstream call goes through plain Bun fetch (#108/#109
 // rationale superseded by newest-source evidence).

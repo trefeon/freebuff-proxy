@@ -140,8 +140,8 @@ func TestChatCompletionsEnvelope(t *testing.T) {
 		t.Errorf("stream not forced: %v", sent["stream"])
 	}
 	stop, ok := sent["stop"].([]any)
-	if !ok || len(stop) != 1 || stop[0] != "cb_easp" {
-		t.Errorf("stop sentinel not injected: %v", sent["stop"])
+	if !ok || len(stop) != 1 || stop[0] != `"cb_easp"` {
+		t.Errorf("stop sentinel not injected (JSON-quoted form): %v", sent["stop"])
 	}
 	if sent["temperature"] != 0.7 {
 		t.Errorf("temperature lost in envelope: %v", sent["temperature"])
@@ -341,7 +341,7 @@ func TestAbortPropagation(t *testing.T) {
 func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 	t.Run("missing messages gets marker-only system", func(t *testing.T) {
 		p := map[string]any{}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs, ok := p["messages"].([]any)
 		if !ok || len(msgs) != 1 {
 			t.Fatalf("messages = %v, want a single system message", p["messages"])
@@ -354,7 +354,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 
 	t.Run("empty messages gets marker-only system", func(t *testing.T) {
 		p := map[string]any{"messages": []any{}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 1 {
 			t.Fatalf("messages = %v, want a single system message", msgs)
@@ -370,7 +370,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 			map[string]any{"role": "system", "content": content},
 			map[string]any{"role": "user", "content": "hi"},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 2 {
 			t.Fatalf("messages = %v, want unchanged length", msgs)
@@ -388,7 +388,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 			map[string]any{"role": "system", "content": parts},
 			map[string]any{"role": "user", "content": "hi"},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 2 {
 			t.Fatalf("messages = %v, want unchanged length", msgs)
@@ -411,7 +411,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 			map[string]any{"role": "system", "content": content},
 			map[string]any{"role": "user", "content": "hi"},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 2 {
 			t.Fatalf("messages = %v, want length 2", msgs)
@@ -429,7 +429,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 		p := map[string]any{"messages": []any{
 			map[string]any{"role": "system", "content": parts},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		gotParts, ok := msgs[0].(map[string]any)["content"].([]any)
 		if !ok || len(gotParts) != 2 {
@@ -448,7 +448,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 		p := map[string]any{"messages": []any{
 			map[string]any{"role": "system", "content": originalParts},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		parts, ok := msgs[0].(map[string]any)["content"].([]any)
 		if !ok || len(parts) != 3 {
@@ -467,7 +467,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 		p := map[string]any{"messages": []any{
 			map[string]any{"role": "system", "content": 12345},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if got := msgs[0].(map[string]any)["content"]; got != cliSystemMarker {
 			t.Errorf("system content = %v, want the CLI marker", got)
@@ -478,7 +478,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 		p := map[string]any{"messages": []any{
 			map[string]any{"role": "system", "content": ""},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if got := msgs[0].(map[string]any)["content"]; got != cliSystemMarker {
 			t.Errorf("system content = %v, want the CLI marker", got)
@@ -490,7 +490,7 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 			map[string]any{"role": "user", "content": "u"},
 			map[string]any{"role": "system", "content": "existing"},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 2 {
 			t.Fatalf("messages = %v, want length 2", msgs)
@@ -508,13 +508,73 @@ func TestEnsureCliSystemMarkerBranches(t *testing.T) {
 		p := map[string]any{"messages": []any{
 			map[string]any{"role": "user", "content": "u"},
 		}}
-		ensureCliSystemMarker(p)
+		ensureCliSystemMarker(p, "base2-free")
 		msgs := p["messages"].([]any)
 		if len(msgs) != 2 {
 			t.Fatalf("messages = %v, want length 2", msgs)
 		}
 		if msgs[0].(map[string]any)["role"] != "system" {
 			t.Errorf("first message = %v, want system", msgs[0])
+		}
+	})
+
+	// PR #207 routes Luna onto base3-free-luna and vendor cce4800 adds
+	// base3-free-ox-alpha: a base3 run must open with the BASE3 canonical
+	// identity (agents/base3.ts), not base2's strategic-assistant one.
+	t.Run("base3 agent gets base3 opening", func(t *testing.T) {
+		p := map[string]any{"messages": []any{
+			map[string]any{"role": "user", "content": "u"},
+		}}
+		ensureCliSystemMarker(p, "base3-free-luna")
+		msgs := p["messages"].([]any)
+		got := msgs[0].(map[string]any)["content"].(string)
+		if !strings.HasPrefix(got, cliSystemMarkerBase3) {
+			t.Errorf("base3 opening = %q, want prefix %q", got, cliSystemMarkerBase3)
+		}
+		if strings.Contains(got, "strategic coding assistant") {
+			t.Errorf("base3 run leaked the base2 identity: %q", got)
+		}
+	})
+
+	t.Run("empty agent id keeps base2 marker", func(t *testing.T) {
+		p := map[string]any{"messages": []any{
+			map[string]any{"role": "user", "content": "u"},
+		}}
+		ensureCliSystemMarker(p, "")
+		got := p["messages"].([]any)[0].(map[string]any)["content"].(string)
+		if !strings.HasPrefix(got, cliSystemMarkerPhrase) {
+			t.Errorf("default opening = %q, want the base2 marker", got)
+		}
+	})
+
+	// The gate is any-of-five (hasFreebuffRootSystemPromptOpening): a request
+	// already opening with ANY canonical identity is left untouched even when
+	// it differs from the run's own marker — prepending would corrupt a
+	// prompt that already passes the gate.
+	for _, opening := range cliSystemGateOpenings {
+		t.Run("gate accepts "+opening[:34], func(t *testing.T) {
+			p := map[string]any{"messages": []any{
+				map[string]any{"role": "system", "content": opening + "\n\nCustom persona."},
+				map[string]any{"role": "user", "content": "u"},
+			}}
+			ensureCliSystemMarker(p, "base2-free")
+			sys := p["messages"].([]any)[0].(map[string]any)
+			if got := sys["content"].(string); got != opening+"\n\nCustom persona." {
+				t.Errorf("content rewritten: %q", got)
+			}
+		})
+	}
+
+	// Mid-string mentions must still NOT suppress the prepend (#110).
+	t.Run("mid-string phrase does not suppress", func(t *testing.T) {
+		content := "Please act as " + cliSystemMarkerPhrase + " and be concise."
+		p := map[string]any{"messages": []any{
+			map[string]any{"role": "system", "content": content},
+		}}
+		ensureCliSystemMarker(p, "base2-free")
+		got := p["messages"].([]any)[0].(map[string]any)["content"].(string)
+		if !strings.HasPrefix(got, cliSystemMarker) {
+			t.Errorf("marker not prepended for mid-string mention: %q", got)
 		}
 	})
 }
@@ -567,7 +627,7 @@ func TestInjectEnvelopeBranchMatrix(t *testing.T) {
 		}
 	})
 
-	t.Run("no stop adds cb_easp", func(t *testing.T) {
+	t.Run("no stop adds quoted cb_easp", func(t *testing.T) {
 		out, err := injectEnvelope([]byte(`{"model":"m"}`), "free", ChatOptions{RunID: "r"})
 		if err != nil {
 			t.Fatal(err)
@@ -577,8 +637,8 @@ func TestInjectEnvelopeBranchMatrix(t *testing.T) {
 			t.Fatal(err)
 		}
 		stop, ok := payload["stop"].([]any)
-		if !ok || len(stop) != 1 || stop[0] != "cb_easp" {
-			t.Errorf("stop = %v, want [cb_easp]", payload["stop"])
+		if !ok || len(stop) != 1 || stop[0] != `"cb_easp"` {
+			t.Errorf(`stop = %v, want ["\"cb_easp\""] (JSON-quoted, agent-runtime constants.ts:3)`, payload["stop"])
 		}
 	})
 

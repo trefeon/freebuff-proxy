@@ -34,6 +34,11 @@ type ChatOptions struct {
 	// promptId per prompt, run.ts:722/822). Empty falls back to a fresh draw
 	// so callers without a run manager still send a well-shaped id.
 	ClientID string
+	// AgentID is the run's root agent id (e.g. base2-free-luna,
+	// base3-free-luna). It selects which canonical root identity opens the
+	// system prompt: base3-free-* roots speak the base3 sentence (agents/
+	// base3.ts), everything else keeps the base2 one. Empty = base2 marker.
+	AgentID string
 	// StepNumber is the 1-based per-run agent step counter (CLI parity:
 	// llm_step_number is merged on every chat call, String(n);
 	// reference/freebuff agent-runtime run-agent-step.ts:1175-1177).
@@ -166,19 +171,67 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 }
 
 const (
+	// cliSystemMarker is the base2 root identity prepended at position 0 of
+	// the first system message. Its leading sentence is canonical opening #1
+	// of FREEBUFF_ROOT_SYSTEM_PROMPT_OPENINGS (pinned free-agents.ts:693-722,
+	// agents/base2/base2.ts createBase2('free', …)).
 	cliSystemMarker       = "You are Buffy, the strategic coding assistant. You are the AI agent behind the product, Freebuff, a tool where users can chat with you to code with AI for free."
 	cliSystemMarkerPhrase = "You are Buffy, the strategic coding assistant"
+	// cliSystemMarkerBase3 is canonical opening #2 (agents/base3.ts
+	// createBase3(…)): every base3-free-* Web/Cloud/CLI root composes its
+	// prompt onto this sentence. PR #207 routes Luna (and vendor cce4800 Ox
+	// Alpha) onto base3 roots, so runs on those agents must open with THEIR
+	// canonical identity, not base2's.
+	cliSystemMarkerBase3 = "You are Buffy, the coding agent behind Codebuff."
 )
 
-// ensureCliSystemMarker guarantees the canonical "You are Buffy…" opening at
-// byte position 0 of the first system message (the free-mode gate's trimmed
-// prefix test — see the check loop below). It prepends the marker rather
-// than replacing, so custom system instructions survive.
-func ensureCliSystemMarker(payload map[string]any) {
+// cliSystemGateOpenings mirrors FREEBUFF_ROOT_SYSTEM_PROMPT_OPENINGS (pinned
+// free-agents.ts:693-722): the free-mode gate is an any-of-five trimmed
+// PREFIX test at position 0 (hasFreebuffRootSystemPromptOpening), so a request
+// that already opens with ANY canonical identity must be left untouched —
+// prepending would corrupt a prompt that already passes the gate.
+var cliSystemGateOpenings = []string{
+	cliSystemMarkerPhrase,
+	"You are Buffy, the coding agent behind Codebuff.",
+	"You are Buffy, the Freebuff Cloud project planner.",
+	"You are Buffy, the auto-run agent behind Freebuff Desktop.",
+	"You are Buffy, a strategic assistant that orchestrates complex coding tasks through specialized sub-agents.",
+}
+
+// systemMarkerFor picks the canonical identity matching the run's root agent
+// family: base3 roots speak base3, everything else keeps the base2 marker.
+func systemMarkerFor(agentID string) string {
+	if strings.HasPrefix(agentID, "base3") {
+		return cliSystemMarkerBase3
+	}
+	return cliSystemMarker
+}
+
+// hasCanonicalOpening reports whether content already begins with one of the
+// five gate openings after trimming leading whitespace (the gate tolerates
+// template-literal trim differences, nothing else).
+func hasCanonicalOpening(content string) bool {
+	trimmed := strings.TrimLeft(content, " \t\n\r")
+	for _, opening := range cliSystemGateOpenings {
+		if strings.HasPrefix(trimmed, opening) {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureCliSystemMarker guarantees the run's canonical "You are Buffy…"
+// opening at byte position 0 of the first system message (the free-mode
+// gate's trimmed prefix test — see the check loop below). It prepends the
+// marker rather than replacing, so custom system instructions survive. A
+// message that already opens with ANY of the five canonical identities is
+// left alone regardless of agentID: the gate is any-of-five.
+func ensureCliSystemMarker(payload map[string]any, agentID string) {
+	marker := systemMarkerFor(agentID)
 	rawMsgs, ok := payload["messages"].([]any)
 	if !ok || len(rawMsgs) == 0 {
 		payload["messages"] = []any{
-			map[string]any{"role": "system", "content": cliSystemMarker},
+			map[string]any{"role": "system", "content": marker},
 		}
 		return
 	}
@@ -190,18 +243,18 @@ func ensureCliSystemMarker(payload map[string]any) {
 		}
 		if msg["role"] == "system" {
 			// The server gate is a TRIMMED PREFIX test at position 0
-			// (hasFreebuffRootSystemPromptOpening, free-agents.ts:617-645),
+			// (hasFreebuffRootSystemPromptOpening, free-agents.ts:739-744),
 			// hardened against the prepend-and-cancel proxy trick: a message
 			// that merely mentions the phrase mid-string must NOT suppress
 			// the canonical prefix (#110).
-			if content, ok := msg["content"].(string); ok && strings.HasPrefix(strings.TrimSpace(content), cliSystemMarkerPhrase) {
-				return // already present
+			if content, ok := msg["content"].(string); ok && hasCanonicalOpening(content) {
+				return // already canonical
 			}
 			if parts, ok := msg["content"].([]any); ok {
 				for _, p := range parts {
 					if partMap, ok := p.(map[string]any); ok {
-						if txt, ok := partMap["text"].(string); ok && strings.HasPrefix(strings.TrimSpace(txt), cliSystemMarkerPhrase) {
-							return // already present
+						if txt, ok := partMap["text"].(string); ok && hasCanonicalOpening(txt) {
+							return // already canonical
 						}
 					}
 				}
@@ -218,14 +271,14 @@ func ensureCliSystemMarker(payload map[string]any) {
 		if msg["role"] == "system" {
 			if str, ok := msg["content"].(string); ok {
 				if str == "" {
-					msg["content"] = cliSystemMarker
+					msg["content"] = marker
 				} else {
-					msg["content"] = cliSystemMarker + "\n\n" + str
+					msg["content"] = marker + "\n\n" + str
 				}
 			} else if parts, ok := msg["content"].([]any); ok {
-				msg["content"] = append([]any{map[string]any{"type": "text", "text": cliSystemMarker}}, parts...)
+				msg["content"] = append([]any{map[string]any{"type": "text", "text": marker}}, parts...)
 			} else {
-				msg["content"] = cliSystemMarker
+				msg["content"] = marker
 			}
 			rawMsgs[i] = msg
 			payload["messages"] = rawMsgs
@@ -234,7 +287,7 @@ func ensureCliSystemMarker(payload map[string]any) {
 	}
 
 	newMsgs := make([]any, 0, len(rawMsgs)+1)
-	newMsgs = append(newMsgs, map[string]any{"role": "system", "content": cliSystemMarker})
+	newMsgs = append(newMsgs, map[string]any{"role": "system", "content": marker})
 	newMsgs = append(newMsgs, rawMsgs...)
 	payload["messages"] = newMsgs
 }
@@ -249,7 +302,7 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 		return nil, fmt.Errorf("parse request body: %w", err)
 	}
 
-	ensureCliSystemMarker(payload)
+	ensureCliSystemMarker(payload, opts.AgentID)
 
 	// client_id is minted ONCE PER RUN and repeated here — never a fresh
 	// draw per chat call. The CLI mints it once per prompt (run.ts:722
@@ -288,7 +341,13 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	payload["provider"] = map[string]any{"data_collection": "deny"}
 	payload["stream"] = true
 	if _, hasStop := payload["stop"]; !hasStop {
-		payload["stop"] = []string{"cb_easp"}
+		// The CLI's global stop sequence is the JSON-ENCODED token, not the
+		// bare one (agent-runtime/src/constants.ts:3:
+		// globalStopSequence = `${JSON.stringify(endsAgentStepParam)}` =
+		// `"cb_easp"` with the quotes; prompt-agent-stream.ts:100 passes it
+		// as stopSequences). endsAgentStepParam itself is a tool-param name
+		// (common/src/tools/constants.ts:7).
+		payload["stop"] = []string{`"cb_easp"`}
 	}
 
 	out, err := json.Marshal(payload)

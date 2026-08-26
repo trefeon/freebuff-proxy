@@ -272,7 +272,7 @@ func TestChatStream(t *testing.T) {
 		t.Errorf("x-freebuff-instance-id = %q on the chat POST, want absent (#106)", got)
 	}
 	recorded := mock.RecordedChatBodies[0]
-	for _, want := range []string{`"codebuff_metadata"`, `"data_collection":"deny"`, `"stream":true`, `"stop":["cb_easp"]`, `"run_id":"run-0001"`} {
+	for _, want := range []string{`"codebuff_metadata"`, `"data_collection":"deny"`, `"stream":true`, `"stop":["\"cb_easp\""]`, `"run_id":"run-0001"`} {
 		if !strings.Contains(recorded, want) {
 			t.Errorf("upstream body missing %s: %s", want, recorded)
 		}
