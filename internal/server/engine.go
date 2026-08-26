@@ -58,6 +58,12 @@ type relayFunc func(ctx context.Context, w http.ResponseWriter, up io.Reader, st
 // retry-once recovery, then relay the forced stream to the client through
 // relay. kind names the endpoint in request/done log lines.
 func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, stream bool, normalized []byte, reasoningEffort, kind string, relay relayFunc) {
+	// Issue #140 P2a: the tool-name tolerance map. The handlers normalize
+	// with NormalizeRequestMapped, which renames mapped client tools to
+	// official signature names IN the normalized body; the mapper that maps
+	// them BACK is rebuilt here from the client's ORIGINAL body so response
+	// relays can restore names the client dispatched on.
+	toolMap := convert.NewToolMapper(originalBodyFromContext(r.Context()))
 	// D1: the access wrapper minted the request's correlation id; direct
 	// handler calls (tests) mint here so it is never empty. The value is
 	// threaded into the request context AND into ChatOptions.RequestID so
@@ -313,7 +319,7 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	s.logger.Info(kind+" routing", routingAttrs...)
 
 	chatStart := time.Now()
-	stats := &relayStats{servedModel: servedModel}
+	stats := &relayStats{servedModel: servedModel, toolMap: toolMap}
 	relay(ctx, w, up, stats, chatStart)
 	// Issue #114: record the completed chat as a run step — steps are
 	// batched in memory and sent WITH FINISH (the CLI has no /steps
@@ -540,6 +546,9 @@ func (s *Server) chatAttempt(
 		// One client_id for the whole run: a fresh draw per call is the
 		// free_mode_run_fanout shape (see injectEnvelope).
 		ClientID: lease.Run.ClientID,
+		// The run's root agent family selects the canonical system-prompt
+		// opening: base3-free-* roots speak base3, others base2.
+		AgentID: lease.Run.AgentID,
 		// D1: the request's correlation id, threaded to the upstream
 		// client so its do()/retry log lines share the server's req_id.
 		RequestID: st.reqID,
