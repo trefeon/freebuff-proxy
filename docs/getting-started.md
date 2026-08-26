@@ -77,6 +77,13 @@ The proxy is **direct-egress only** — there is no HTTP/SOCKS proxy support (th
 **Option C — Multi-token pooling (no VPN needed):**
 Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,token3,token4,token5` in `.env` with 4-5 accounts. Each gets 3 sessions/day on `mimo/mimo-v2.5` (base; the 0.0.150 trust-level ladder can raise a token up to 7/day), giving you ~12-15 usable sessions per day.
 
+> **Shared-network cap (issue #140 P2b):** all pooled tokens in one deployment
+> share the proxy's egress, so its accounts sit on one /24 by construction.
+> Upstream's `shared_signup_network` trust cap **permanently limits accounts**
+> once ~8 share a subnet — `-doctor` prints a shared-network advisory whenever
+> two or more tokens are configured. For full-trust isolation, route distinct
+> accounts through distinct residential exits (Option A per machine).
+
 See the [Getting Started — Access Tiers](#access-tiers--workarounds) section for per-model quota pools and effort ladders.
 
 **Do NOT use any of these — they trigger the restricted cohort or an outright ban:**

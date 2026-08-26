@@ -281,6 +281,19 @@ func runDoctor(configPath string) {
 			}
 			ok(fmt.Sprintf("Token #%d validity probe succeeded", i+1))
 		}
+
+		// Shared-network advisory (issue #140 P2b): every pooled token in
+		// this deployment shares ONE egress path (the proxy's own), so all
+		// its accounts are on one /24 by construction. Upstream's
+		// shared_signup_network cap permanently limits accounts once ~8 share
+		// a /24 (README key-hygiene section) — surface the correlation so an
+		// operator running many accounts through one box knows before
+		// upstream caps them all.
+		if n := len(cfg.AuthTokens); n >= 2 {
+			warn(fmt.Sprintf(
+				"Shared-network advisory: all %d pooled tokens egress from this machine's IP (one /24). Upstream's shared_signup_network cap permanently limits accounts once ~8 share a subnet; route distinct accounts through distinct residential exits for full-trust isolation.",
+				n))
+		}
 	}
 
 	fmt.Println(doctorSummary(passed, warnings, failed))

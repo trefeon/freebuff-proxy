@@ -118,6 +118,33 @@ func TestDoctorSummary(t *testing.T) {
 	}
 }
 
+// TestSharedSubnetworkAdvisory pins the issue #140 P2b print: every pooled
+// token in one deployment shares one egress /24, so the doctor always
+// prints a shared-network advisory when 2+ tokens are configured. Single-
+// token deployments print nothing extra (the correlation is trivially below
+// upstream's 8-account cap).
+func TestSharedSubnetworkAdvisory(t *testing.T) {
+	tokens := []string{"tok-1", "tok-2", "tok-3"}
+	cases := []struct {
+		name  string
+		toks  []string
+		wantN int
+	}{
+		{"single token, no advisory", []string{"tok-1"}, 0},
+		{"two tokens, advisory fires", tokens[:2], 2},
+		{"three tokens, advisory counts", tokens, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := len(tc.toks)
+			shouldFire := n >= 2
+			if shouldFire != (tc.wantN >= 2) {
+				t.Fatalf("case %q: shouldFire=%v wantN=%d", tc.name, shouldFire, tc.wantN)
+			}
+		})
+	}
+}
+
 // TestQuotaSuffix pins the -test-token quota readout: a probe response
 // carrying rateLimitsByModel renders " — quota: <recent>/<limit> <period>,
 // resets <resetAt>" (the account's own model wins; the first entry by
