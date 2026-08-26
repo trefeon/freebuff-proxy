@@ -207,6 +207,32 @@ func TestCardFromSnapshotStanding(t *testing.T) {
 	if card.StandingLevel != "" || card.StandingScore != 0 {
 		t.Errorf("standing fields populated without a block: %q/%v", card.StandingLevel, card.StandingScore)
 	}
+
+	// Issue #140 P3d: cap + earn-back fields land on the card too.
+	card = cardFromSnapshot(pool.TokenSnapshot{
+		Token:     2,
+		RiskLevel: "low",
+		Standing: &upstream.SessionStanding{
+			Level:        "verified",
+			Label:        "Verified",
+			Score:        30,
+			CappedBy:     "third_party_client",
+			CappedReason: "A foreign tool schema was seen on this account.",
+			Blurb:        "Your account is capped at verified trust.",
+			NextSteps: []upstream.StandingNextStep{
+				{ID: "verify_email", Label: "Verify your email", Detail: "Adds 25 points.", Points: 25, Href: "/settings"},
+			},
+		},
+	})
+	if card.StandingCappedBy != "third_party_client" || card.StandingCappedReason == "" {
+		t.Errorf("cappedBy/reason = %q/%q, want third_party_client/non-empty", card.StandingCappedBy, card.StandingCappedReason)
+	}
+	if card.StandingBlurb == "" {
+		t.Error("blurb not carried to the card")
+	}
+	if len(card.StandingNextSteps) != 1 || card.StandingNextSteps[0].ID != "verify_email" || card.StandingNextSteps[0].Points != 25 {
+		t.Errorf("nextSteps = %+v, want one verify_email step worth 25", card.StandingNextSteps)
+	}
 }
 
 // TestCardFromSnapshotBanAndLocked pins the #198/#199 ban mapping: an active

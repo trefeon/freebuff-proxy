@@ -560,6 +560,14 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 		if !t.Standing.NextLevelAt.IsZero() {
 			card.StandingNextLevelAt = t.Standing.NextLevelAt.Format(time.RFC3339)
 		}
+		card.StandingCappedBy = t.Standing.CappedBy
+		card.StandingCappedReason = t.Standing.CappedReason
+		card.StandingBlurb = t.Standing.Blurb
+		for _, s := range t.Standing.NextSteps {
+			card.StandingNextSteps = append(card.StandingNextSteps, standingStepCard{
+				ID: s.ID, Label: s.Label, Detail: s.Detail, Points: s.Points, Href: s.Href,
+			})
+		}
 	}
 	return card
 }
@@ -665,6 +673,23 @@ type tokenCard struct {
 	StandingScore       float64 `json:"standing_score"`
 	StandingNextLevel   string  `json:"standing_next_level"`
 	StandingNextLevelAt string  `json:"standing_next_level_at"`
+	// Standing cap + earn-back hints (issue #140 P3d, FreebuffStandingInfo):
+	// cappedBy/cappedReason name the trust cap holding the level, blurb is
+	// upstream's human explanation, nextSteps the suggested actions.
+	StandingCappedBy     string             `json:"standing_capped_by,omitempty"`
+	StandingCappedReason string             `json:"standing_capped_reason,omitempty"`
+	StandingBlurb        string             `json:"standing_blurb,omitempty"`
+	StandingNextSteps    []standingStepCard `json:"standing_next_steps,omitempty"`
+}
+
+// standingStepCard is one dashboard-ready earn-back action
+// (FreebuffTrustNextStep).
+type standingStepCard struct {
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	Detail string  `json:"detail,omitempty"`
+	Points float64 `json:"points"`
+	Href   string  `json:"href,omitempty"`
 }
 
 // bridgeTokenCard is a dashboard-ready view of one bridge entry (#187).

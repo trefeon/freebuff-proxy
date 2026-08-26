@@ -533,6 +533,58 @@
                           <span class="fp-num">{Math.floor(token.session_remaining_seconds / 60)}m {token.session_remaining_seconds % 60}s remaining</span>
                         </div>
                       {/if}
+                      {#if token.has_standing}
+                        <!-- Standing / trust block (issue #140 P3d): level,
+                             score progress toward the next level, the cap
+                             holding the account (capped_by), and upstream's
+                             suggested earn-back actions. -->
+                        <div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
+                          <div class="flex items-center justify-between gap-2 mb-1">
+                            <p class="text-xs text-[var(--fp-muted)] uppercase tracking-wider font-semibold">{$tr('Account standing')}</p>
+                            <span class="text-xs text-[var(--fp-text)] font-semibold">{token.standing_label || token.standing_level}</span>
+                          </div>
+                          {#if token.standing_score != null && token.standing_next_level}
+                            <div class="flex items-center gap-2">
+                              <div class="h-1.5 flex-1 rounded bg-[var(--fp-bg)] overflow-hidden">
+                                <div
+                                  class="h-full rounded bg-[var(--fp-accent)]"
+                                  style={`width: ${Math.min(100, Math.max(0, token.standing_score))}%`}
+                                ></div>
+                              </div>
+                              <span class="fp-num text-xs text-[var(--fp-muted)] shrink-0">
+                                {$tr('score {score} → next: {level}', { score: token.standing_score, level: token.standing_next_level })}
+                              </span>
+                            </div>
+                          {:else if token.standing_score != null}
+                            <span class="fp-num text-xs text-[var(--fp-muted)]">{$tr('score {score}', { score: token.standing_score })}</span>
+                          {/if}
+                          {#if token.standing_blurb}
+                            <p class="text-xs text-[var(--fp-dim)] mt-1">{token.standing_blurb}</p>
+                          {/if}
+                          {#if token.standing_capped_by}
+                            <p class="text-xs mt-1 text-[var(--fp-warning)]">
+                              {$tr('Capped by')} <code class="fp-num">{token.standing_capped_by}</code>{#if token.standing_capped_reason}: {token.standing_capped_reason}{/if}
+                            </p>
+                          {/if}
+                          {#if token.standing_next_steps?.length > 0}
+                            <ul class="mt-1.5 flex flex-col gap-1">
+                              {#each token.standing_next_steps as step}
+                                <li class="text-xs text-[var(--fp-text)] flex items-start gap-1.5">
+                                  <span class="fp-num text-[var(--fp-accent)] shrink-0">+{step.points}</span>
+                                  <span>
+                                    {step.label}{#if step.detail} — <span class="text-[var(--fp-dim)]">{step.detail}</span>{/if}
+                                    {#if step.href}
+                                      <a href={step.href} target="_blank" rel="noopener noreferrer" class="ml-1 text-[var(--fp-accent)] hover:underline inline-flex items-center gap-0.5">
+                                        <ExternalLink size={10} />
+                                      </a>
+                                    {/if}
+                                  </span>
+                                </li>
+                              {/each}
+                            </ul>
+                          {/if}
+                        </div>
+                      {/if}
                       {#if token.has_quota && token.quota?.length > 0}
                         <div class="flex flex-col gap-2">
                           <p class="text-xs text-[var(--fp-muted)] uppercase tracking-wider font-semibold">{$tr('Session quotas')}</p>

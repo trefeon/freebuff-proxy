@@ -838,11 +838,17 @@ func TestTokensPageStanding(t *testing.T) {
 	mock := testutil.NewMock()
 	t.Cleanup(mock.Close)
 	mock.Standing = map[string]any{
-		"level":       "established",
-		"label":       "Established",
-		"score":       62,
-		"nextLevelAt": "2026-08-20T12:00:00Z",
-		"nextLevel":   "core",
+		"level":        "verified",
+		"label":        "Verified",
+		"score":        30,
+		"nextLevelAt":  "2026-08-20T12:00:00Z",
+		"nextLevel":    "established",
+		"cappedBy":     "anonymous_network",
+		"cappedReason": "Egress IP is a hosting ASN.",
+		"blurb":        "Trust capped by your network.",
+		"nextSteps": []map[string]any{
+			{"id": "verify_email", "label": "Verify your email", "detail": "Adds 25 points.", "points": 25, "href": "/settings"},
+		},
 	}
 	mock.ChatBody = testutil.SSEEvent(`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"`+dashModel+`","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`) +
 		testutil.SSEEvent(`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"`+dashModel+`","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`)
@@ -892,7 +898,14 @@ func TestTokensPageStanding(t *testing.T) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	page := string(mustReadAll(t, resp))
-	for _, want := range []string{`"standing_label":"Established"`, `"standing_score":62`, `"2026-08-20T12:00:00Z"`, `"core"`} {
+	for _, want := range []string{
+		`"standing_label":"Verified"`, `"standing_score":30`, `"2026-08-20T12:00:00Z"`, `"established"`,
+		// Issue #140 P3d: cap + earn-back fields serialize onto the page.
+		`"standing_capped_by":"anonymous_network"`,
+		`"standing_capped_reason":"Egress IP is a hosting ASN."`,
+		`"standing_blurb":"Trust capped by your network."`,
+		`"standing_next_steps":[{"id":"verify_email","label":"Verify your email","detail":"Adds 25 points.","points":25,"href":"/settings"}]`,
+	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("tokens page missing standing %q in: %s", want, page[:min(len(page), 500)])
 		}
