@@ -802,7 +802,6 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 	}
 
 	disabledModels := []string{
-		"minimax/minimax-m3",
 		"google/gemini-2.5-flash-lite",
 		"google/gemini-3.1-flash-lite",
 		"google/gemini-3.5-flash-lite",
@@ -880,5 +879,88 @@ func TestStrictFiveModelsEnforced(t *testing.T) {
 	}
 	if health.Models != 5 {
 		t.Errorf("health.Models = %d, want 5", health.Models)
+	}
+}
+
+// TestPausedModelWithdrawnMessage pins the withdrawn-model flow (issue #140
+// drift, vendor cce4800): minimax/minimax-m3 is upstream-recognized but
+// admission-refused, so the proxy fast-refuses it with upstream's own copy —
+// naming the replacement — instead of the generic supported-list dump. The
+// refusal must land BEFORE any lease acquisition (no doomed admissions), on
+// all three chat surfaces.
+func TestPausedModelWithdrawnMessage(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	ts, _ := newTestServer(t, nil, mock)
+
+	const wantMsg = "MiniMax M3 is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
+
+	t.Run("openai chat", func(t *testing.T) {
+		body := `{"model":"minimax/minimax-m3","messages":[{"role":"user","content":"hi"}]}`
+		resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(body), nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", resp.StatusCode, data)
+		}
+		var out struct {
+			Error struct {
+				Message string `json:"message"`
+				Code    string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(data, &out); err != nil {
+			t.Fatalf("not JSON: %v", err)
+		}
+		if out.Error.Code != "model_unavailable" {
+			t.Errorf("code = %q, want model_unavailable", out.Error.Code)
+		}
+		if out.Error.Message != wantMsg {
+			t.Errorf("message = %q, want %q (mirror freebuffWithdrawnModelMessage)", out.Error.Message, wantMsg)
+		}
+	})
+
+	t.Run("anthropic messages", func(t *testing.T) {
+		body := `{"model":"minimax/minimax-m3","messages":[{"role":"user","content":"hi"}],"max_tokens":16}`
+		resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/messages", []byte(body), map[string]string{
+			"anthropic-version": "2023-06-01",
+		})
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", resp.StatusCode, data)
+		}
+		var out struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(data, &out); err != nil {
+			t.Fatalf("not JSON: %v", err)
+		}
+		if out.Error.Message != wantMsg {
+			t.Errorf("message = %q, want %q", out.Error.Message, wantMsg)
+		}
+	})
+
+	t.Run("responses", func(t *testing.T) {
+		body := `{"model":"minimax/minimax-m3","input":"hi"}`
+		resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/responses", []byte(body), nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", resp.StatusCode, data)
+		}
+		if !strings.Contains(string(data), "DeepSeek V4 Flash") {
+			t.Errorf("body missing replacement model: %s", data)
+		}
+	})
+
+	// No doomed admission may reach the mock: zero session/chat traffic.
+	if got := len(mock.RecordedChatBodies); got != 0 {
+		t.Errorf("upstream chat calls = %d, want 0 (refusal precedes any lease)", got)
+	}
+
+	// count_tokens still resolves the paused id (recognition preserved).
+	ctBody := []byte(`{"model":"minimax/minimax-m3","messages":[{"role":"user","content":"hello"}]}`)
+	respCT, _ := doJSON(t, http.MethodPost, ts.URL+"/v1/messages/count_tokens", ctBody, map[string]string{
+		"anthropic-version": "2023-06-01",
+	})
+	if respCT.StatusCode != http.StatusOK {
+		t.Errorf("count_tokens status = %d, want 200 (paused ids stay recognized)", respCT.StatusCode)
 	}
 }

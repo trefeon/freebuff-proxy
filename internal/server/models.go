@@ -10,10 +10,17 @@ import (
 	"freebuff-proxy/internal/session"
 )
 
-// ModelUnavailableMessage formats the rejection error message for unserved/disabled models (issue #189).
-// The supported set is enumerated by SupportedModelsHelpText — never hardcode
-// the count here; it drifted (said 6) after the luna-es drop made it 5.
+// ModelUnavailableMessage formats the rejection error message for
+// unserved/disabled models (issue #189). Withdrawn-but-recognized upstream ids
+// (registry.PausedModels, e.g. minimax/minimax-m3) get upstream's own
+// withdrawn-model copy naming the replacement (freebuffWithdrawnModelMessage)
+// instead of the generic supported-list dump: the client that sends that id is
+// a released binary whose picker still lists it, and "not available" alone
+// leaves the user staring at a row that looks fine and does not work.
 func ModelUnavailableMessage(rawModel string) string {
+	if registry.IsPausedModel(rawModel) {
+		return registry.WithdrawnModelMessage(rawModel)
+	}
 	return fmt.Sprintf("Model '%s' is not available. Supported models: %s", rawModel, registry.SupportedModelsHelpText)
 }
 

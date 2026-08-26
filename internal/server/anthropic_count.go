@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"freebuff-proxy/internal/registry"
 	"freebuff-proxy/internal/tokenestimate"
 )
 
@@ -56,7 +57,11 @@ func (s *Server) handleMessagesCountTokens(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	model := s.reg.ResolveModel(rawModel)
-	if !s.modelAllowed(model) {
+	// Paused ids stay RECOGNIZED here (issue #140 drift): count_tokens is a
+	// local estimate with no upstream admission, so a released client probing
+	// its still-listed picker id gets a number, not a refusal. Only the chat
+	// surfaces refuse paused models.
+	if !s.modelAllowed(model) && !registry.IsPausedModel(model) {
 		s.writeAnthropicError(w, r, http.StatusBadRequest,
 			ModelUnavailableMessage(rawModel), "invalid_request_error", 0)
 		return
