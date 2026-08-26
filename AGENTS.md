@@ -137,6 +137,19 @@ Single unified trunk on `main`. All features, CLI utilities, and embedded dashbo
 - Never `git push --force` on `main`.
 - The proxy can be compiled with or without the embedded dashboard via Go build tags (`-tags dashboard`) and configured at runtime via `DASHBOARD_ENABLED`.
 
+### Reference repo policy (MANDATORY)
+
+**Always sync `reference/freebuff` to the latest upstream before any reference-driven work.**
+
+```bash
+bash scripts/sync-upstream.sh --test-all   # refresh pins + verify parity
+bash scripts/sync-upstream.sh --check      # drift-only check
+```
+
+- Upstream churns constants frequently (availability windows, session caps, agent maps). Stale reference data produces wrong wire behavior — never trust an unsynced tree.
+- If the sync changes pinned snapshots, update `fallbackAgents` / `fallbackRootByModel` in `internal/registry/registry.go` to match (the parity test fails on drift), and re-run any drift analysis against in-flight work before continuing.
+- Record the upstream SHA used for any decision that encodes reference facts into code.
+
 ## Repository Policy
 
 - This repository is **public**. Only public-safe, secret-free content may ever be committed.
