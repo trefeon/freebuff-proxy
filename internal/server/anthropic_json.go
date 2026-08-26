@@ -62,6 +62,9 @@ func (s *Server) relayAnthropicJSON(ctx context.Context, w http.ResponseWriter, 
 	if servedModel == "" {
 		servedModel = requestedModel
 	}
+	// Restore client tool names (#140 P2a) BEFORE the Anthropic translation
+	// reads them: tool_use blocks must carry the client's dispatch name.
+	stats.toolMap.FromUpstreamChunk(completion)
 	msgObj := anthropicMessageFromCompletion(completion, servedModel)
 	out, err := json.Marshal(msgObj)
 	if err != nil {

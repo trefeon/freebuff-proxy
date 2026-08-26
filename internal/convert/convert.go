@@ -150,6 +150,33 @@ func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
 	return json.Marshal(out)
 }
 
+// NormalizeRequestMapped is NormalizeRequest plus the issue #140 P2a
+// tool-name tolerance layer: client tool names with official equivalents are
+// renamed to the signature names on the wire (so upstream's foreign_toolset
+// check and the third_party_client trust cap never see them) and the
+// returned ToolMapper restores the client's names on every response path.
+// The parameter schemas are forwarded untouched — the model fills arguments
+// per the schema it was shown, so only names need restoring.
+func NormalizeRequestMapped(body []byte, modelOverride string) ([]byte, ToolMapper, error) {
+	mapper := NewToolMapper(body)
+	out, err := NormalizeRequest(body, modelOverride)
+	if err != nil {
+		return nil, ToolMapper{}, err
+	}
+	// Apply renames on top of the normalized body.
+	var payload map[string]any
+	if err := json.Unmarshal(out, &payload); err != nil {
+		return out, ToolMapper{}, nil //nolint:NormalizeRequest already validated; unreachable in practice
+	}
+	mapper.ToUpstream(payload)
+	mapper.RenameRequestToolChoice(payload)
+	renamed, merr := json.Marshal(payload)
+	if merr != nil {
+		return out, ToolMapper{}, nil // fall back to unrenamed rather than fail the request
+	}
+	return renamed, mapper, nil
+}
+
 // normalizeMessages rewrites message role "developer" to "system" in place,
 // extracts leaked think tags from assistant messages, restores missing reasoning_content
 // via globalReasoningLookup, and ensures content: null on assistant tool calls.

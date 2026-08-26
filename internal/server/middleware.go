@@ -297,6 +297,20 @@ func reqIDFrom(ctx context.Context) string {
 	return id
 }
 
+// originalBodyKey carries the client's raw request body (issue #140 P2a):
+// handlers normalize+rename tools into a separate buffer, and chatCore needs
+// the ORIGINAL names to build the response-side restore map.
+type originalBodyKey struct{}
+
+func withOriginalBody(ctx context.Context, body []byte) context.Context {
+	return context.WithValue(ctx, originalBodyKey{}, body)
+}
+
+func originalBodyFromContext(ctx context.Context) []byte {
+	b, _ := ctx.Value(originalBodyKey{}).([]byte)
+	return b
+}
+
 // newReqID mints a UUIDv4 correlation id from crypto/rand (RFC 4122 §4.4:
 // 122 random bits, version 4, variant 1). A rand failure is unrecoverable
 // in practice; fall back to a time-seeded hex id rather than failing the

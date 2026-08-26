@@ -206,6 +206,17 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			// re-marshal when the chunk actually changed so untouched
 			// frames keep their exact bytes.
 			clean = streamChatContentToToolCalls(clean, xmlExtractor, &xmlCallIndex, &xmlCallsSeen)
+			// Restore client tool names (#140 P2a): the request renamed
+			// mapped client tools to official signature names, so fragments
+			// carrying those names must read the CLIENT's name on the wire.
+			if stats.toolMap.Len() > 0 && bytes.Contains(clean, []byte(`"tool_calls"`)) {
+				var chunk map[string]any
+				if json.Unmarshal(clean, &chunk) == nil && stats.toolMap.FromUpstreamChunk(chunk) {
+					if b, merr := json.Marshal(chunk); merr == nil {
+						clean = b
+					}
+				}
+			}
 			// Rewrite finish_reason for the terminal chunk when ALL tool calls
 			// in this stream were end_turn. The terminal chunk carries no
 			// "end_turn" string (only finish_reason: "tool_calls"), so the
@@ -559,6 +570,11 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 			changed := false
 			if bytes.Contains(out, []byte(`"end_turn"`)) {
 				convert.StripEndTurnToolCalls(comp)
+				changed = true
+			}
+			// Restore client tool names (#140 P2a) before the finish_reason
+			// alignment below reads the delivered tool_calls.
+			if stats.toolMap.FromUpstreamChunk(comp) {
 				changed = true
 			}
 			if rawChoices, ok := comp["choices"].([]any); ok {

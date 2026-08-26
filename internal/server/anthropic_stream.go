@@ -47,6 +47,10 @@ type anthropicStreamState struct {
 	finishReason       string
 	sawToolCall        bool
 	usage              map[string]any
+	// toolMap restores client tool names (#140 P2a): the request renamed
+	// mapped tools to official signature names upstream, so tool_use blocks
+	// must open with the CLIENT's dispatch name.
+	toolMap convert.ToolMapper
 
 	thinkingParts []string
 	textParts     []string
@@ -86,6 +90,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 		toolCalls:          make(map[int]*anthropicToolState),
 		endTurnCallIndexes: make(map[int]bool),
 		finishReason:       "end_turn",
+		toolMap:            stats.toolMap,
 	}
 	// Streaming XML tool-call extraction: MiMo/Hermes/Qwen/CodeBuff models
 	// emit <tool_call>/<codebuff_tool_call>/<function_call> blocks inline in
@@ -264,6 +269,12 @@ func (s *Server) accumulateAnthropicChunk(send func(map[string]any), st *anthrop
 			name := ""
 			if fn != nil {
 				name, _ = fn["name"].(string)
+			}
+			// Restore client tool names (#140 P2a): the request renamed
+			// mapped client tools to official signature names upstream; a
+			// tool_use block must open with the CLIENT's dispatch name.
+			if name != "" {
+				name = st.toolMap.RestoreName(name)
 			}
 			if name == "end_turn" {
 				st.endTurnCallIndexes[upIdx] = true

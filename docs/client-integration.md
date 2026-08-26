@@ -165,6 +165,30 @@ For multi-account management or multi-user API routing:
 
 ---
 
+## Tool-Name Tolerance (agentic clients)
+
+FreeBuff's trust system permanently caps any account it sees sending a
+non-official tool schema (`third_party_client` sticky cap: trust level floors
+at `verified`, spend ceiling drops to the restricted $0.50/day cohort), and
+its free-mode gate can downgrade tool-bearing requests with no official tool
+to a free fallback model. The proxy neutralizes this for you:
+
+- Well-known third-party harness tool names are renamed to their official
+  FreeBuff equivalents on the upstream wire — `read`/`read_file`/`view` →
+  `read_files`, `write`/`write_to_file` → `write_file`,
+  `bash`/`execute`/`execute_command`/`shell` → `run_terminal_command`,
+  `edit`/`replace_in_file` → `str_replace`, `ls`/`list_files` →
+  `list_directory`, `grep`/`search_files` → `code_search`,
+  `todo`/`todowrite` → `write_todos`.
+- Your parameter schemas pass through untouched, and the model's tool calls
+  come back carrying YOUR original names — clients need zero changes.
+- Unmapped custom tools pass through unchanged.
+
+This is why Cline/Roo/Claude Code-style tool loops are safe to run through
+the proxy without risking your account's trust tier.
+
+---
+
 ## Access Tiers
 
 FreeBuff assigns access tiers at the Cloudflare edge based on TCP source IP GeoIP (not HTTP headers):
