@@ -380,11 +380,7 @@ func ptrInt(n int) *int { return &n }
 // flash row (the DeepSeek API's own chat alias); claude-3-5-sonnet maps to
 // the Claude-line fable-5 row. An explicitly-set MODEL_ALIASES (even
 // empty) suppresses all defaults.
-var defaultModelAliases = map[string]string{
-	"deepseek-chat":     "deepseek/deepseek-v4-flash",
-	"gpt-4o":            "deepseek/deepseek-v4-pro",
-	"claude-3-5-sonnet": "anthropic/claude-fable-5",
-}
+var defaultModelAliases = map[string]string{}
 
 // defaultFallbackModels returns the FALLBACK_MODEL defaults (issue #100):
 // the daily premium free-catalog rows (deepseek-v4-pro, gpt-5.6-luna) fall back

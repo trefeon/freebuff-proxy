@@ -32,15 +32,6 @@
     data ? data.models.filter((m) => m.agent).length : 0
   );
 
-  // Client aliases (MODEL_ALIASES) that resolve to a given model id.
-  function aliasesFor(id) {
-    if (!data?.aliases) return '';
-    return data.aliases
-      .filter((a) => a.real === id)
-      .map((a) => a.alias)
-      .join(', ');
-  }
-
   function quotaFor(id) {
     switch (id) {
       case 'z-ai/glm-5.3-flash':
@@ -64,7 +55,7 @@
 </script>
 
 <div class="space-y-6 page-enter">
-  <PageHeader title={$tr('Models')} description={$tr('Served model catalog with upstream agent bindings and client aliases.')} />
+  <PageHeader title={$tr('Models')} description={$tr('Served model catalog with upstream agent bindings and session quotas.')} />
 
   {#if error}
     <Alert tone="error" title={$tr('Failed to load models')}>
@@ -103,14 +94,12 @@
                 <th scope="col">{$tr('Model ID')}</th>
                 <th scope="col">{$tr('Served')}</th>
                 <th scope="col">{$tr('Agent')}</th>
-                <th scope="col">{$tr('Client Aliases')}</th>
                 <th scope="col">{$tr('Quota')}</th>
               </tr>
             </thead>
             <tbody>
               {#each data.models as m}
                 {@const bound = Boolean(m.agent)}
-                {@const aliases = aliasesFor(m.id)}
                 <tr>
                   <td><span class="fp-num">{m.id}</span></td>
                   <td>
@@ -122,13 +111,6 @@
                   <td>
                     {#if bound}
                       <span class="fp-mono text-[var(--fp-muted)]">{m.agent}</span>
-                    {:else}
-                      <span class="text-[var(--fp-dim)]">—</span>
-                    {/if}
-                  </td>
-                  <td>
-                    {#if aliases}
-                      <span class="fp-mono text-[var(--fp-muted)]">{aliases}</span>
                     {:else}
                       <span class="text-[var(--fp-dim)]">—</span>
                     {/if}
