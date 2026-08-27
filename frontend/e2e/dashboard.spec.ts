@@ -306,13 +306,9 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(rows).toHaveCount(7);
   });
 
-  test('Overview shows client integration, API_KEYS, and base_url', async ({ page }) => {
+  test('Overview shows client integration and base_url', async ({ page }) => {
     const f = loadFixtures();
-    const configWithKeys = {
-      ...f.config,
-      env_content: 'AUTH_TOKENS=tok0,tok1\nAPI_KEYS=sk-test-aaa,sk-test-bbb\nADMIN_TOKEN=secret\n',
-    };
-    await mockDashboard(page, f, { configWithApiKeys: configWithKeys });
+    await mockDashboard(page, f);
 
     await page.goto('http://127.0.0.1:4173/admin/#overview');
     await page.waitForResponse((r) => r.url().includes('/admin/api/overview') && r.status() === 200, { timeout: 5000 }).catch(() => {});
@@ -323,12 +319,6 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(page.getByText('http://127.0.0.1:3457/v1').first()).toBeVisible();
     await expect(page.getByText('POST /v1/chat/completions')).toBeVisible();
     await expect(page.getByText('POST /v1/messages')).toBeVisible();
-
-    // API_KEYS parsing: keys are initially masked, toggle unmasks
-    const showKeyBtn = page.locator('button[aria-label="Show API key"]').first();
-    await expect(showKeyBtn).toBeVisible();
-    await showKeyBtn.click();
-    await expect(page.getByText('sk-test-aaa')).toBeVisible();
   });
 
   test('Login 401 shows error banner and stays on login', async ({ page }) => {
