@@ -101,7 +101,11 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 		spend := p.spendSnapshot(i)
 
 		sessionRemaining := int64(0)
-		if ss.Status == "active" && !ss.ExpiresAt.IsZero() {
+		if ss.RemainingMs > 0 {
+			// Server-authoritative countdown (wire remainingMs) — prefer over
+			// the local expiresAt approximation to avoid clock-skew drift.
+			sessionRemaining = ss.RemainingMs / 1000
+		} else if ss.Status == "active" && !ss.ExpiresAt.IsZero() {
 			if rem := time.Until(ss.ExpiresAt); rem > 0 {
 				sessionRemaining = int64(rem.Seconds())
 			}
@@ -142,6 +146,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Entitlement:             ss.Entitlement,
 			GlmPromo:                ss.GlmPromo,
 			Standing:                ss.Standing,
+			Referral:                ss.Referral,
 			Locked:                  tok.locked.Load(),
 			TransientRetries:        tok.client.TransientRetries(),
 			FingerprintRotations:    tok.client.FingerprintRotations(),

@@ -137,6 +137,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["openai/gpt-5.6-luna"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "premium",
+				PoolLabel:   "Premium",
 				Entitlement: map[string]float64{"base": 5},
 			},
 			"deepseek/deepseek-v4-pro": {
@@ -145,6 +147,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["deepseek/deepseek-v4-pro"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "premium",
+				PoolLabel:   "Premium",
 				Entitlement: map[string]float64{"base": 5},
 			},
 			"z-ai/glm-5.3-flash": {
@@ -153,6 +157,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["z-ai/glm-5.3-flash"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "premium",
+				PoolLabel:   "Premium",
 				Entitlement: map[string]float64{"base": 2},
 			},
 			"mimo/mimo-v2.5": {
@@ -161,6 +167,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["mimo/mimo-v2.5"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "unlimited",
+				PoolLabel:   "Unlimited",
 			},
 			"stealth/ox-alpha": {
 				Model:       "stealth/ox-alpha",
@@ -168,6 +176,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["stealth/ox-alpha"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "unlimited",
+				PoolLabel:   "Unlimited",
 			},
 			"deepseek/deepseek-v4-flash": {
 				Model:       "deepseek/deepseek-v4-flash",
@@ -175,6 +185,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["deepseek/deepseek-v4-flash"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
+				Pool:        "unlimited",
+				PoolLabel:   "Unlimited",
 			},
 			"z-ai/glm-5.2": {
 				Model:       "z-ai/glm-5.2",
@@ -182,6 +194,8 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 				RecentCount: st.recentCounts["z-ai/glm-5.2"],
 				ResetAt:     pacMidnight,
 				Period:      "promo",
+				Pool:        "glm-promo",
+				PoolLabel:   "GLM Referral",
 				Entitlement: map[string]float64{"referral": 1},
 			},
 		},
@@ -193,6 +207,14 @@ func mockSessionState(token string, requestedModel string, consume bool) *Sessio
 			CappedBy:    "third_party_client",
 			Blurb:       "Your account is in good standing. Full access to all models.",
 			NextLevelAt: time.Time{},
+		},
+		Referral: &SessionReferral{
+			Code:                    "CB-MOCK0",
+			ReferrerName:            "",
+			QualifiedCount:          2,
+			WeeklySessionsRemaining: 3,
+			ResetAt:                 pacMidnight,
+			GithubLinked:            true,
 		},
 	}
 

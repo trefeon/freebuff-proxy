@@ -549,12 +549,41 @@
                           {/if}
                         </div>
                       {/if}
-                      {#if token.has_quota && token.quota?.length > 0}
+                      						{#if token.has_referral}
+							<div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-surface)]/60 border border-[var(--fp-border)]">
+								<div class="flex items-center justify-between gap-2">
+									<p class="text-xs font-semibold text-[var(--fp-text)]">
+										{$tr('Referral')}
+										<span class="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] font-mono uppercase tracking-wider text-[var(--fp-accent)]">{token.referral_code}</span>
+									</p>
+									{#if token.referral_sessions_left > 0}
+										<span class="fp-num text-xs text-[var(--fp-muted)]">
+											{$tr('{count} GLM session(s) left', { count: token.referral_sessions_left })}
+										</span>
+									{/if}
+								</div>
+								<div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-[var(--fp-dim)]">
+									<span>{$tr('{count} qualified referral(s)', { count: token.referral_qualified_count || 0 })}</span>
+									{#if token.referral_github_linked}
+										<span class="text-[var(--fp-success)]">{$tr('GitHub linked')}</span>
+									{:else}
+										<span class="text-[var(--fp-warning)]">{$tr('GitHub not linked')}</span>
+									{/if}
+									{#if token.referral_reset_at}
+										<span>{$tr('resets')} {formatLocalDate(token.referral_reset_at)}</span>
+									{/if}
+								</div>
+							</div>
+						{/if}
+						{#if token.has_quota && token.quota?.length > 0}
                         <div class="flex flex-col gap-2">
                           <p class="text-xs text-[var(--fp-muted)] uppercase tracking-wider font-semibold">{$tr('Session quotas')}</p>
                           {#each token.quota as q}
                             <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
                               <code class="fp-num text-xs text-[var(--fp-text)] sm:w-48 shrink-0 truncate">{q.model}</code>
+                              {#if q.pool_label}
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] font-mono uppercase tracking-wider text-[var(--fp-dim)] shrink-0">{q.pool_label}</span>
+                              {/if}
                               <span class="fp-num text-xs text-[var(--fp-muted)]">
                                 <span class="text-[var(--fp-text)]">{q.recent}</span> / {q.limit}
                                 {#if q.limit !== '0' && q.limit !== ''}

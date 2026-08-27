@@ -238,6 +238,8 @@ type tokenDetail struct {
 
 type quotaRow struct {
 	Model          string  `json:"model"`
+	Pool           string  `json:"pool,omitempty"`
+	PoolLabel      string  `json:"pool_label,omitempty"`
 	Limit          string  `json:"limit"`
 	Recent         string  `json:"recent"`
 	Remaining      float64 `json:"remaining"`
@@ -280,6 +282,8 @@ func (d *Dashboard) tokensData() tokensData {
 			}
 			row := quotaRow{
 				Model:      model,
+				Pool:       q.Pool,
+				PoolLabel:  q.PoolLabel,
 				Limit:      formatQuota(q.Limit),
 				Recent:     formatQuota(q.RecentCount),
 				Remaining:  rem,
@@ -569,6 +573,16 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 			})
 		}
 	}
+	if t.Referral != nil {
+		card.HasReferral = true
+		card.ReferralCode = t.Referral.Code
+		card.ReferralQualifiedCount = t.Referral.QualifiedCount
+		card.ReferralSessionsLeft = t.Referral.WeeklySessionsRemaining
+		card.ReferralGithubLinked = t.Referral.GithubLinked
+		if !t.Referral.ResetAt.IsZero() {
+			card.ReferralResetAt = t.Referral.ResetAt.Format(time.RFC3339)
+		}
+	}
 	return card
 }
 
@@ -706,6 +720,13 @@ type tokenCard struct {
 	StandingCappedReason string             `json:"standing_capped_reason,omitempty"`
 	StandingBlurb        string             `json:"standing_blurb,omitempty"`
 	StandingNextSteps    []standingStepCard `json:"standing_next_steps,omitempty"`
+	// Referral (FreebuffReferralInfo): invite program state for this token.
+	HasReferral            bool   `json:"has_referral"`
+	ReferralCode           string `json:"referral_code,omitempty"`
+	ReferralQualifiedCount int    `json:"referral_qualified_count"`
+	ReferralSessionsLeft   int    `json:"referral_sessions_left"`
+	ReferralGithubLinked   bool   `json:"referral_github_linked"`
+	ReferralResetAt        string `json:"referral_reset_at,omitempty"`
 }
 
 // standingStepCard is one dashboard-ready earn-back action

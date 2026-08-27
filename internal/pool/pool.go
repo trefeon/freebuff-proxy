@@ -174,6 +174,9 @@ type TokenSnapshot struct {
 	// Standing is the upstream account standing block (issue #96); nil until
 	// the session reports it.
 	Standing *upstream.SessionStanding
+	// Referral is the upstream referral block (FreebuffReferralInfo); nil until
+	// the session reports it.
+	Referral *upstream.SessionReferral
 	// TransientRetries / FingerprintRotations are this token's upstream
 	// client counters (TRANSIENT_RETRIES): retried transport failures and
 	// pinned TLS fingerprint swaps. Surfaced per-token in /metrics.
@@ -345,6 +348,7 @@ type Pool struct {
 	randMu  sync.Mutex
 	randGen *rand.Rand
 }
+
 // admissionGate is the per-model leader election gate: the leader creates
 // the gate, followers block on gate.ch, and the chosen token is
 // communicated via gate.token/hasToken (guarded by modelAdmissionGateMu).

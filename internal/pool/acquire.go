@@ -23,16 +23,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand/v2"
-	"sort"
-	"strings"
-	"time"
 	"freebuff-proxy/internal/config"
 	"freebuff-proxy/internal/notify"
 	"freebuff-proxy/internal/phasetiming"
 	"freebuff-proxy/internal/runs"
 	"freebuff-proxy/internal/session"
 	"freebuff-proxy/internal/upstream"
+	"math/rand/v2"
+	"sort"
+	"strings"
+	"time"
 )
 
 // Acquire resolves the model's agent, picks a start token round-robin, and

@@ -25,6 +25,7 @@ type SessionState struct {
 	RequestedModel     string
 	ExpiresAt          time.Time
 	AdmittedAt         time.Time
+	RemainingMs        int64
 	GracePeriodEndsAt  time.Time
 	GraceRemainingMs   int64
 	Position           int
@@ -59,6 +60,19 @@ type SessionState struct {
 	// from the session response's "standing" field ({level,label,score,
 	// nextLevelAt,nextLevel}); nil when the response omits it.
 	Standing *SessionStanding
+	// Referral is the upstream referral block (FreebuffReferralInfo), parsed
+	// from the session response's "referral" field; nil when omitted.
+	Referral *SessionReferral
+}
+
+// SessionReferral mirrors the upstream FreebuffReferralInfo wire block.
+type SessionReferral struct {
+	Code                    string
+	ReferrerName            string
+	QualifiedCount          int
+	WeeklySessionsRemaining int
+	ResetAt                 time.Time
+	GithubLinked            bool
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -237,6 +251,11 @@ type ModelQuota struct {
 	RecentCount float64
 	ResetAt     time.Time
 	Period      string // "pacific_day" | "pacific_week" (empty when absent)
+	// Pool / PoolLabel group models that share one session-quota pool on
+	// the wire (FreebuffSessionRateLimit). Pool is opaque — group by it, never
+	// match on its value; PoolLabel is the server-authored display string.
+	Pool        string
+	PoolLabel   string
 	Entitlement map[string]float64
 }
 
@@ -249,7 +268,20 @@ type rawModelQuota struct {
 	RecentCount          float64            `json:"recentCount"`
 	Period               string             `json:"period"`
 	ResetAt              any                `json:"resetAt"`
+	Pool                 string             `json:"pool"`
+	PoolLabel            string             `json:"poolLabel"`
 	EntitlementBreakdown map[string]float64 `json:"entitlementBreakdown"`
+}
+
+// rawReferral mirrors the session response's "referral" block
+// (FreebuffReferralInfo in reference/common/src/types/freebuff-session.ts).
+type rawReferral struct {
+	Code                    string `json:"code"`
+	ReferrerName            string `json:"referrerName"`
+	QualifiedCount          int    `json:"qualifiedCount"`
+	WeeklySessionsRemaining int    `json:"weeklySessionsRemaining"`
+	ResetAt                 any    `json:"resetAt"`
+	GithubLinked            bool   `json:"githubLinked"`
 }
 
 // rawStanding mirrors the session response's "standing" block (issue #96).
@@ -302,6 +334,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		RequestedModel         string                   `json:"requestedModel"`
 		ExpiresAt              any                      `json:"expiresAt"`
 		AdmittedAt             any                      `json:"admittedAt"`
+		RemainingMs            int64                    `json:"remainingMs"`
 		GracePeriodEndsAt      any                      `json:"gracePeriodEndsAt"`
 		GracePeriodRemainingMs int64                    `json:"gracePeriodRemainingMs"`
 		Position               int                      `json:"position"`
@@ -322,6 +355,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		GlmPromo               json.RawMessage          `json:"glmPromo"`
 		RateLimitsByModel      map[string]rawModelQuota `json:"rateLimitsByModel"`
 		Standing               *rawStanding             `json:"standing"`
+		Referral               *rawReferral             `json:"referral"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -330,6 +364,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			Model:              raw.Model,
 			CurrentModel:       raw.CurrentModel,
 			RequestedModel:     raw.RequestedModel,
+			RemainingMs:        raw.RemainingMs,
 			GraceRemainingMs:   raw.GracePeriodRemainingMs,
 			Position:           raw.Position,
 			QueueDepth:         raw.QueueDepth,
@@ -368,6 +403,19 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			}
 			state.Standing = standing
 		}
+		if raw.Referral != nil {
+			ref := &SessionReferral{
+				Code:                    raw.Referral.Code,
+				ReferrerName:            raw.Referral.ReferrerName,
+				QualifiedCount:          raw.Referral.QualifiedCount,
+				WeeklySessionsRemaining: raw.Referral.WeeklySessionsRemaining,
+				GithubLinked:            raw.Referral.GithubLinked,
+			}
+			if ref.ResetAt, err = parseFlexTime(raw.Referral.ResetAt); err != nil {
+				ref.ResetAt = time.Time{}
+			}
+			state.Referral = ref
+		}
 		if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
 			state.ExpiresAt = time.Time{}
 		}
@@ -394,6 +442,8 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 					Limit:       q.Limit,
 					RecentCount: q.RecentCount,
 					Period:      q.Period,
+					Pool:        q.Pool,
+					PoolLabel:   q.PoolLabel,
 					Entitlement: q.EntitlementBreakdown,
 				}
 				if mq.Model == "" {

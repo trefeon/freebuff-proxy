@@ -303,6 +303,9 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 					RecentCount: rl.RecentCount,
 					Period:      rl.Period,
 					ResetAt:     rl.ResetAt,
+					Pool:        rl.Pool,
+					PoolLabel:   rl.PoolLabel,
+					Entitlement: rl.Entitlement,
 				}
 			}
 		}
