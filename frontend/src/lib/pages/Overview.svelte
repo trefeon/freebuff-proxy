@@ -30,13 +30,14 @@
   let deletingKey = $state('');
   let visibleKeys = $state({});
   let showGeneratedModal = $state(false);
+  let tokenRotation = $state('drain');
+  let savingRotation = $state(false);
   let modalEl = $state(null);
   let lastFocusedEl = null;
 
   function toggleKeyVisibility(key) {
     visibleKeys = { ...visibleKeys, [key]: !visibleKeys[key] };
   }
-
   function maskKey(key) {
     if (visibleKeys[key]) return key;
     if (!key) return '';
@@ -167,16 +168,45 @@
         const m = envContent.match(/^\s*API_KEYS=(.*)$/m);
         const val = m ? m[1].trim() : '';
         apiKeys = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
+        const mRot = envContent.match(/^\s*TOKEN_ROTATION=(.*)$/m);
+        const rotVal = mRot ? mRot[1].trim().toLowerCase() : 'drain';
+        tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
       } catch {
         apiKeys = [];
+        tokenRotation = 'drain';
       }
-      error = '';
     } catch (e) {
       error = e.message || $tr('Could not reach the proxy API. Check that the server is running.');
     } finally {
       loading = false;
     }
   }
+  async function setTokenRotation(newMode) {
+    if (savingRotation || tokenRotation === newMode) return;
+    savingRotation = true;
+    try {
+      const cfgRes = await fetchAPI('/admin/api/config');
+      const envContent = cfgRes?.env_content || '';
+      const regex = /^\s*TOKEN_ROTATION=(.*)$/m;
+      const match = envContent.match(regex);
+      const newContent = match
+        ? envContent.replace(regex, `TOKEN_ROTATION=${newMode}`)
+        : (envContent ? `${envContent}\nTOKEN_ROTATION=${newMode}` : `TOKEN_ROTATION=${newMode}`);
+      const save = await fetch('/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ content: newContent }),
+      });
+      if (save.ok) {
+        tokenRotation = newMode;
+      }
+    } catch (e) {
+      console.warn('Failed to update token rotation', e);
+    } finally {
+      savingRotation = false;
+    }
+  }
+
   function retry() {
     error = '';
     loading = true;
@@ -448,6 +478,85 @@
           </Card>
         </div>
 
+        <!-- Token Rotation Scheme Selector -->
+        <div class="mt-4">
+          <Card
+            title={$tr('Token Rotation Scheme')}
+            description={$tr('Policy used by the gateway to select upstream accounts for model requests.')}
+          >
+            {#snippet actions()}
+              <span class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]">
+                <span class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"></span>
+                <span class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]">{tokenRotation}</span>
+              </span>
+            {/snippet}
+
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={$tr('Token Rotation Policy')}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tokenRotation === 'drain'}
+                  disabled={savingRotation}
+                  onclick={() => setTokenRotation('drain')}
+                  class="fp-btn {tokenRotation === 'drain' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+                >
+                  {$tr('Drain (Safest)')}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tokenRotation === 'round_robin'}
+                  disabled={savingRotation}
+                  onclick={() => setTokenRotation('round_robin')}
+                  class="fp-btn {tokenRotation === 'round_robin' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+                >
+                  {$tr('Round Robin (1:1)')}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tokenRotation === 'least_used'}
+                  disabled={savingRotation}
+                  onclick={() => setTokenRotation('least_used')}
+                  class="fp-btn {tokenRotation === 'least_used' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+                >
+                  {$tr('Least Used (Max Quota)')}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={tokenRotation === 'random'}
+                  disabled={savingRotation}
+                  onclick={() => setTokenRotation('random')}
+                  class="fp-btn {tokenRotation === 'random' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+                >
+                  {$tr('Random (Stochastic)')}
+                </button>
+              </div>
+
+              <div class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2">
+                {#if tokenRotation === 'drain'}
+                  <p class="leading-relaxed">
+                    <strong class="text-[var(--fp-text)]">{$tr('Drain Mode (Default):')}</strong> {$tr('Drains one account completely (e.g. 5/5 Luna sessions) before switching to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.')}
+                  </p>
+                {:else if tokenRotation === 'round_robin'}
+                  <p class="leading-relaxed text-[var(--fp-warning)]">
+                    <strong class="text-[var(--fp-text)]">{$tr('Round-Robin Mode (Study):')}</strong> {$tr('Rotates to the next token on every single session (1:1). Note: rapid token switching across healthy accounts may trigger upstream farm detection.')}
+                  </p>
+                {:else if tokenRotation === 'least_used'}
+                  <p class="leading-relaxed">
+                    <strong class="text-[var(--fp-text)]">{$tr('Least-Used Mode:')}</strong> {$tr('Always selects the account with the largest remaining session quota to balance usage evenly.')}
+                  </p>
+                {:else if tokenRotation === 'random'}
+                  <p class="leading-relaxed">
+                    <strong class="text-[var(--fp-text)]">{$tr('Random Mode:')}</strong> {$tr('Stochastically selects among all eligible tokens with remaining quota to generate unpredictable noise.')}
+                  </p>
+                {/if}
+              </div>
+            </div>
+          </Card>
+        </div>
         <!-- Client API-key management -->
         <div class="mt-4">
           <Card

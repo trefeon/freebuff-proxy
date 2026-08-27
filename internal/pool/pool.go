@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -339,8 +340,11 @@ type Pool struct {
 	// effect on the next restart.
 	storeSessionPersist bool
 	storeStateFile      string
-}
 
+	// randMu and randGen support stochastic rotation ("random" TokenRotation mode)
+	randMu  sync.Mutex
+	randGen *rand.Rand
+}
 // admissionGate is the per-model leader election gate: the leader creates
 // the gate, followers block on gate.ch, and the chosen token is
 // communicated via gate.token/hasToken (guarded by modelAdmissionGateMu).

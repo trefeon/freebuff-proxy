@@ -74,6 +74,7 @@ type Config struct {
 	CORSAllowedOrigin string            // Access-Control-Allow-Origin for /v1/* responses (CORS_ALLOWED_ORIGIN; default "*")
 	RequestJitter     time.Duration     // random delay range [0, RequestJitter) before upstream chat calls
 	CLIVersion        string            // upstream CLI version string (default: 0.10.7)
+	TokenRotation     string            // "drain" (default) | "round_robin" | "least_used" | "random"
 	ModelAliases      map[string]string // map model alias -> real model ID (#25)
 	TransientRetries  int               // max additional attempts after a transient transport failure (0 = disabled; default 1)
 	SessionPersist    bool              // true = persist session state to disk so restart resumes unexpired sessions (SESSION_PERSIST)
@@ -267,6 +268,7 @@ type rawConfig struct {
 	WaitingRoomChain                 bool                    `json:"WAITING_ROOM_CHAIN"`
 	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
+	TokenRotation                    string                  `json:"TOKEN_ROTATION"`
 	DashboardEnabled                 bool                    `json:"DASHBOARD_ENABLED"`
 }
 
@@ -340,8 +342,8 @@ func defaultRawConfig() rawConfig {
 		RotationInterval:                 "6h",
 		RequestTimeout:                   "15m",
 		SessionCallTimeout:               "30s",
+		TokenRotation:                    "drain",
 		RegistryRefresh:                  "6h",
-		CostMode:                         "free", // free-tier mode; omission routes requests as PAID and fresh free accounts get 402 "Out of credits" (upstream check: cost_mode !== 'free' → billing)
 		MaxMessagesPerDay:                nil,
 		MaxSpendPerDay:                   nil,         // 0 = unlimited advisory spend ceiling (never enforced)
 		IdleRotationTimeout:              "",          // "" = disabled (unset → SAFE_MODE preset may fill)
