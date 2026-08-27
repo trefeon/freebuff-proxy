@@ -217,22 +217,13 @@ test.describe('dashboard hermetic mocks', () => {
     expect(overviewCount).toBeGreaterThanOrEqual(2);
   });
 
-  test('Tokens parses API_KEYS from config env_content and lists quota', async ({ page }) => {
+  test('Tokens lists pooled tokens and expands quota table', async ({ page }) => {
     const f = loadFixtures();
-    // Provide a config where env_content actually contains API_KEYS line,
-    // because the base fixture trims it to tok0,tok1 only.
-    const configWithKeys = {
-      ...f.config,
-      env_content: 'AUTH_TOKENS=tok0,tok1\nAPI_KEYS=sk-test-aaa,sk-test-bbb\nADMIN_TOKEN=secret\n',
-    };
-    await mockDashboard(page, f, { configWithApiKeys: configWithKeys });
+    await mockDashboard(page, f);
+
     await page.goto('http://127.0.0.1:4173/admin/#tokens');
-    await page.waitForResponse((r) => r.url().includes('/admin/api/tokens') && r.status() === 200, { timeout: 5000 }).catch(() => {});
     await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
-    // API_KEYS parsing: keys are initially masked, toggle unmasks
-    const showKeyBtn = page.locator('button[aria-label="Show API key"]').first();
-    await expect(showKeyBtn).toBeVisible();
-    // Quota table is inside expanded row — click expand for token 0
+    await expect(page.getByText('#0')).toBeVisible({ timeout: 10000 });
     const expandBtn = page.locator('button[aria-label*="Expand quotas"]').first();
     await expect(expandBtn).toBeVisible();
     await expandBtn.click();
@@ -315,9 +306,13 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(rows).toHaveCount(7);
   });
 
-  test('Overview shows client integration and base_url', async ({ page }) => {
+  test('Overview shows client integration, API_KEYS, and base_url', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    const configWithKeys = {
+      ...f.config,
+      env_content: 'AUTH_TOKENS=tok0,tok1\nAPI_KEYS=sk-test-aaa,sk-test-bbb\nADMIN_TOKEN=secret\n',
+    };
+    await mockDashboard(page, f, { configWithApiKeys: configWithKeys });
 
     await page.goto('http://127.0.0.1:4173/admin/#overview');
     await page.waitForResponse((r) => r.url().includes('/admin/api/overview') && r.status() === 200, { timeout: 5000 }).catch(() => {});
@@ -328,6 +323,12 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(page.getByText('http://127.0.0.1:3457/v1').first()).toBeVisible();
     await expect(page.getByText('POST /v1/chat/completions')).toBeVisible();
     await expect(page.getByText('POST /v1/messages')).toBeVisible();
+
+    // API_KEYS parsing: keys are initially masked, toggle unmasks
+    const showKeyBtn = page.locator('button[aria-label="Show API key"]').first();
+    await expect(showKeyBtn).toBeVisible();
+    await showKeyBtn.click();
+    await expect(page.getByText('sk-test-aaa')).toBeVisible();
   });
 
   test('Login 401 shows error banner and stays on login', async ({ page }) => {
