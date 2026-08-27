@@ -74,19 +74,19 @@ func New(cfg func() *config.Config, p *pool.Pool, reg *registry.Registry, logger
 // releaseURL is where the update badge points (the releases page).
 const releaseURL = "https://github.com/trefeon/freebuff-proxy/releases"
 
-// pickDefaultModel selects deepseek/deepseek-v4-flash when present, or the first available model.
+// pickDefaultModel selects mimo/mimo-v2.5 when present, or the first available model.
 func pickDefaultModel(models []string) string {
 	if len(models) == 0 {
 		return ""
 	}
-	const preferred = "deepseek/deepseek-v4-flash"
+	const preferred = "mimo/mimo-v2.5"
 	for _, m := range models {
 		if m == preferred {
 			return preferred
 		}
 	}
 	for _, m := range models {
-		if strings.Contains(m, "deepseek-v4-flash") {
+		if strings.Contains(m, "mimo-v2.5") {
 			return m
 		}
 	}

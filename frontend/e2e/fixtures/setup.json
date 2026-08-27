@@ -1,7 +1,7 @@
 {
   "base_url": "http://127.0.0.1:3457/v1",
   "key_hint": "sk-any (pooled mode; the proxy picks from AUTH_TOKENS)",
-  "model": "deepseek/deepseek-v4-flash",
+  "model": "mimo/mimo-v2.5",
   "models": [
     "deepseek/deepseek-v4-flash",
     "deepseek/deepseek-v4-pro",

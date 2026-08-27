@@ -274,6 +274,7 @@
       {#snippet footer()}
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <span class="fp-num text-xs text-[var(--fp-muted)]">
+            {rangeStart}–{rangeEnd} of {filteredEntries.length}
           </span>
           <div class="flex items-center gap-2">
             <Button
