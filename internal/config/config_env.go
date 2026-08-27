@@ -570,7 +570,8 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.SessionCallTimeout, get, "SESSION_CALL_TIMEOUT")
 	overrideStringFrom(&raw.TokenRotation, get, "TOKEN_ROTATION")
 	overrideCSVFrom(&raw.APIKeys, get, "API_KEYS")
-	// ACTING_USER_ID / legacy USER_ID (#126), same-source: a .env USER_ID
+	overrideStringFrom(&raw.AdminToken, get, "ADMIN_TOKEN")
+	overrideStringFrom(&raw.CostMode, get, "COST_MODE")
 	// beats a JSON ACTING_USER_ID (dotenv outranks JSON), ACTING_USER_ID
 	// wins when both are in the .env.
 	overrideStringAlias(&raw.ActingUserID, get, "ACTING_USER_ID", "USER_ID")

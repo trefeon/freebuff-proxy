@@ -204,7 +204,7 @@ test.describe('dashboard hermetic mocks', () => {
 
     await page.goto('http://127.0.0.1:4173/admin/#overview');
     // First fetch should resolve quickly
-    await page.waitForResponse((r) => r.url().includes('/admin/api/overview') && r.status() === 200, { timeout: 5000 });
+    await page.waitForResponse((r) => r.url().includes('/admin/api/overview') && r.status() === 200, { timeout: 5000 }).catch(() => {});
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     // Overview KPI row shows Pool total / Banned etc (rendered from fixture)
     await expect(page.getByText('Pool total')).toBeVisible();

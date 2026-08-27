@@ -343,8 +343,8 @@ func defaultRawConfig() rawConfig {
 		RequestTimeout:                   "15m",
 		SessionCallTimeout:               "30s",
 		TokenRotation:                    "drain",
+		CostMode:                         "free",
 		RegistryRefresh:                  "6h",
-		MaxMessagesPerDay:                nil,
 		MaxSpendPerDay:                   nil,         // 0 = unlimited advisory spend ceiling (never enforced)
 		IdleRotationTimeout:              "",          // "" = disabled (unset → SAFE_MODE preset may fill)
 		SafeMode:                         true,        // anti-ban presets on by default; set SAFE_MODE=false to disable
