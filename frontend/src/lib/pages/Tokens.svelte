@@ -177,13 +177,17 @@
         body: new URLSearchParams({ content: newContent }),
       });
       const result = await save.json();
-      clientKeyOK = save.ok && result.ok;
-      clientKeyMessage = clientKeyOK
-        ? $tr('Generated & saved client API key')
-        : (result.message || $tr('Failed to save client API key'));
+      const isSaved = save.ok;
+      const isOverridden = result?.message && String(result.message).includes('overridden by the process environment');
+      clientKeyOK = isSaved;
       if (clientKeyOK) {
         generatedKey = newKey;
+        clientKeyMessage = isOverridden
+          ? $tr('Generated & saved client API key (environment notice: server process environment takes precedence until restart)')
+          : $tr('Generated & saved client API key');
         fetchData();
+      } else {
+        clientKeyMessage = result?.message || $tr('Failed to save client API key');
       }
     } catch (e) {
       clientKeyOK = false;
@@ -213,12 +217,16 @@
         body: new URLSearchParams({ content: newContent }),
       });
       const result = await save.json();
-      clientKeyOK = save.ok && result.ok;
-      clientKeyMessage = clientKeyOK
-        ? $tr('Deleted client API key')
-        : (result.message || $tr('Failed to delete client API key'));
+      const isSaved = save.ok;
+      const isOverridden = result?.message && String(result.message).includes('overridden by the process environment');
+      clientKeyOK = isSaved;
       if (clientKeyOK) {
+        clientKeyMessage = isOverridden
+          ? $tr('Deleted client API key (environment notice: server process environment takes precedence until restart)')
+          : $tr('Deleted client API key');
         fetchData();
+      } else {
+        clientKeyMessage = result?.message || $tr('Failed to delete client API key');
       }
     } catch (e) {
       clientKeyOK = false;
