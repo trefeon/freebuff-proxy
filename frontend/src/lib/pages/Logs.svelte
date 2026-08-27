@@ -67,12 +67,7 @@
     await fetchLogs();
   }
 
-  function handleFilterChange(e) {
-    if (e?.currentTarget?.id === 'log-msg' && typeof e.currentTarget.value === 'string') {
-      filterMsg = e.currentTarget.value;
-    } else if (e?.currentTarget?.id === 'log-level' && typeof e.currentTarget.value === 'string') {
-      filterLevel = e.currentTarget.value;
-    }
+  function handleFilterChange() {
     page = 0;
     fetchLogs();
   }
