@@ -41,11 +41,6 @@ func getMockState(token string) *mockTokenState {
 	return v.(*mockTokenState)
 }
 
-// resetMockStates clears all dummy-token usage state (test helper).
-func resetMockStates() {
-	mockStates.Range(func(k, _ any) bool { mockStates.Delete(k); return true })
-}
-
 // mockQuotaLimit mirrors the real tier caps for the served models.
 func mockQuotaLimit(model string) float64 {
 	switch model {
@@ -415,6 +410,7 @@ func (c *Client) FinishRun(ctx context.Context, runID, status string, totalSteps
 		return nil
 	}
 	if steps == nil {
+		steps = []RunStep{}
 	}
 	payload := map[string]any{
 		"action":        "FINISH",
