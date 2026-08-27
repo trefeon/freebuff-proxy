@@ -11,6 +11,9 @@
     ChevronDown,
     ChevronRight,
     RefreshCw,
+    Eye,
+    EyeOff,
+    X,
   } from '@lucide/svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
@@ -41,7 +44,56 @@
   let generatingKey = $state(false);
   let generatedKey = $state('');
   let deletingKey = $state('');
+  let visibleKeys = $state({});
+  let showGeneratedModal = $state(false);
+  let modalEl = $state(null);
+  let lastFocusedEl = null;
 
+  function toggleKeyVisibility(key) {
+    visibleKeys[key] = !visibleKeys[key];
+  }
+
+  function maskKey(key) {
+    if (visibleKeys[key]) return key;
+    if (!key) return '';
+    if (key.length <= 10) return '••••••••';
+    const prefix = key.startsWith('sk-fb-') ? 'sk-fb-' : key.slice(0, 6);
+    const suffix = key.slice(-4);
+    return `${prefix}••••••••••••••••••••••••${suffix}`;
+  }
+
+  function openGeneratedKeyModal(key) {
+    generatedKey = key;
+    showGeneratedModal = true;
+    lastFocusedEl = typeof document !== 'undefined' ? document.activeElement : null;
+  }
+
+  function closeGeneratedKeyModal() {
+    showGeneratedModal = false;
+    if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
+      lastFocusedEl.focus();
+    }
+  }
+
+  function handleModalKeydown(e) {
+    if (e.key === 'Escape') {
+      closeGeneratedKeyModal();
+      return;
+    }
+    if (e.key === 'Tab' && modalEl) {
+      const focusable = modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
   // Device login flow
   let oauthStarting = $state(false);
   let oauthStatus = $state(null);
@@ -181,7 +233,7 @@
       const isOverridden = result?.message && String(result.message).includes('overridden by the process environment');
       clientKeyOK = isSaved;
       if (clientKeyOK) {
-        generatedKey = newKey;
+        openGeneratedKeyModal(newKey);
         clientKeyMessage = isOverridden
           ? $tr('Generated & saved client API key (environment notice: server process environment takes precedence until restart)')
           : $tr('Generated & saved client API key');
@@ -304,6 +356,8 @@
   });
 </script>
 
+<svelte:window onkeydown={showGeneratedModal ? handleModalKeydown : undefined} />
+
 <div class="page-enter">
   <div class="flex flex-col gap-6">
     <PageHeader title={$tr('Tokens')} description={$tr('Upstream credentials, device login, client API keys, and per-token session quotas')} />
@@ -402,20 +456,38 @@
           {/if}
         </Button>
       {/snippet}
-      {#if generatedKey}
-        <div class="fp-inset rounded p-3 mb-3 flex flex-wrap items-center gap-2">
-          <span class="text-xs text-[var(--fp-muted)]">{$tr('New key:')}</span>
-          <code class="fp-num text-xs text-[var(--fp-accent)] break-all">{generatedKey}</code>
-          <CopyButton text={generatedKey} label="Copy" />
-        </div>
-      {/if}
       {#if apiKeys.length > 0}
         <div class="flex flex-col gap-2 mb-3">
-          {#each apiKeys as key}
+          {#each apiKeys as key (key)}
             <div class="fp-inset rounded flex items-center justify-between gap-2 px-3 py-2">
-              <code class="fp-num text-xs truncate">{key}</code>
-              <CopyButton text={key} label="Copy" />
-              <Button variant="ghost" size="sm" onclick={() => deleteApiKey(key)} disabled={deletingKey===key}><Trash2 size={14} /><span>Delete</span></Button>
+              <code class="fp-num text-xs truncate flex-1 select-all font-mono">{maskKey(key)}</code>
+              <div class="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => toggleKeyVisibility(key)}
+                  aria-label={visibleKeys[key] ? $tr('Hide API key') : $tr('Show API key')}
+                  title={visibleKeys[key] ? $tr('Hide API key') : $tr('Show API key')}
+                >
+                  {#if visibleKeys[key]}
+                    <EyeOff size={14} />
+                  {:else}
+                    <Eye size={14} />
+                  {/if}
+                </Button>
+                <CopyButton text={key} label="Copy" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => deleteApiKey(key)}
+                  disabled={deletingKey === key}
+                  aria-label={$tr('Delete API key')}
+                  title={$tr('Delete API key')}
+                >
+                  <Trash2 size={14} />
+                  <span>{$tr('Delete')}</span>
+                </Button>
+              </div>
             </div>
           {/each}
         </div>
@@ -424,6 +496,79 @@
         <Alert tone={clientKeyOK ? 'success' : 'error'} title={clientKeyMessage} />
       {/if}
     </Card>
+
+    <!-- Pop-up modal for newly generated API key -->
+    {#if showGeneratedModal}
+      <div
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="presentation"
+      >
+        <!-- Backdrop -->
+        <button
+          type="button"
+          class="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity border-0 p-0 m-0 w-full h-full cursor-default"
+          onclick={closeGeneratedKeyModal}
+          aria-label={$tr('Close modal backdrop')}
+          tabindex="-1"
+        ></button>
+
+        <!-- Modal Card -->
+        <div
+          bind:this={modalEl}
+          tabindex="-1"
+          class="relative w-full max-w-lg bg-[var(--fp-card)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-4 page-enter focus:outline-none"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="generated-key-title"
+        >
+          <!-- Header -->
+          <div class="flex items-center justify-between border-b border-[var(--fp-border)] pb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]">
+                <Key size={18} />
+              </div>
+              <div>
+                <h2 id="generated-key-title" class="text-base font-semibold text-[var(--fp-text)]">
+                  {$tr('Client API Key Generated')}
+                </h2>
+                <p class="text-xs text-[var(--fp-muted)]">
+                  {$tr('Saved to .env in API_KEYS')}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="text-[var(--fp-muted)] hover:text-[var(--fp-text)] p-1.5 rounded-lg hover:bg-[var(--fp-surface-2)] transition-colors"
+              onclick={closeGeneratedKeyModal}
+              aria-label={$tr('Close dialog')}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <!-- Content -->
+          <p class="text-sm text-[var(--fp-muted)]">
+            {$tr('Use this key to authenticate clients (omp, Claude Code CLI, Cursor, curl) against this proxy.')}
+          </p>
+
+          <div class="fp-inset rounded-lg p-3.5 flex flex-col gap-2 bg-[var(--fp-surface)] border border-[var(--fp-border)]">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider">{$tr('API Key')}</span>
+              <CopyButton text={generatedKey} label="Copy Key" />
+            </div>
+            <code class="fp-num text-sm text-[var(--fp-accent)] break-all font-mono select-all bg-[var(--fp-surface-2)] p-2.5 rounded border border-[var(--fp-border)]">
+              {generatedKey}
+            </code>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--fp-border)]">
+            <Button variant="primary" size="md" onclick={closeGeneratedKeyModal}>
+              {$tr('Done')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    {/if}
 
     <!-- Token table -->
     <Card
