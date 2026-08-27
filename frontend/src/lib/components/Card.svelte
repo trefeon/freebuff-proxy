@@ -23,7 +23,7 @@
 
 <section class="fp-card {className}">
   {#if title || description || actions}
-    <header class="flex items-start justify-between gap-4 {pad === 'md' ? 'px-5 pt-4' : ''}">
+    <header class="flex items-start justify-between gap-4 px-5 pt-4">
       <div>
         {#if title}
           <h2 class="text-[15px] font-semibold text-[var(--fp-text)]">{title}</h2>

@@ -14,7 +14,6 @@
   } from '@lucide/svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
-  import Field from '../components/Field.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import Alert from '../components/Alert.svelte';
   import EmptyState from '../components/EmptyState.svelte';
@@ -41,6 +40,7 @@
   let clientKeyOK = $state(true);
   let generatingKey = $state(false);
   let generatedKey = $state('');
+  let deletingKey = $state('');
 
   // Device login flow
   let oauthStarting = $state(false);
@@ -170,10 +170,11 @@
       const match = envContent.match(regex);
       const existing = match ? match[1].trim() : '';
       const updated = existing ? `${existing},${newKey}` : newKey;
+      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
       const save = await fetch('/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ content: envContent.replace(regex, `API_KEYS=${updated}`) }),
+        body: new URLSearchParams({ content: newContent }),
       });
       const result = await save.json();
       clientKeyOK = save.ok && result.ok;
@@ -189,6 +190,41 @@
       clientKeyMessage = e.message || $tr('Network error generating client key');
     } finally {
       generatingKey = false;
+    }
+  }
+
+  async function deleteApiKey(target) {
+    if (deletingKey) return;
+    deletingKey = target;
+    clientKeyMessage = '';
+    try {
+      const cfgRes = await fetchAPI('/admin/api/config');
+      const envContent = cfgRes?.env_content || '';
+      const regex = /^\s*API_KEYS=(.*)$/m;
+      const match = envContent.match(regex);
+      const val = match ? match[1].trim() : '';
+      const keys = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const filtered = keys.filter((k) => k !== target);
+      const updated = filtered.join(',');
+      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
+      const save = await fetch('/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ content: newContent }),
+      });
+      const result = await save.json();
+      clientKeyOK = save.ok && result.ok;
+      clientKeyMessage = clientKeyOK
+        ? $tr('Deleted client API key')
+        : (result.message || $tr('Failed to delete client API key'));
+      if (clientKeyOK) {
+        fetchData();
+      }
+    } catch (e) {
+      clientKeyOK = false;
+      clientKeyMessage = e.message || $tr('Network error deleting client key');
+    } finally {
+      deletingKey = '';
     }
   }
 
@@ -262,38 +298,7 @@
 
 <div class="page-enter">
   <div class="flex flex-col gap-6">
-    <PageHeader title={$tr('Tokens')} description={$tr('Upstream credentials, device login, client API keys, and per-token session quotas')}>
-      {#snippet actions()}
-        <Button
-          variant="secondary"
-          size="sm"
-          onclick={startOAuthLogin}
-          disabled={oauthStarting}
-        >
-          {#if oauthStarting}
-            <RefreshCw size={14} class="animate-spin" />
-            <span>{$tr('Authorizing…')}</span>
-          {:else}
-            <LogIn size={14} />
-            <span>{$tr('Device Login')}</span>
-          {/if}
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onclick={generateClientKey}
-          disabled={generatingKey}
-        >
-          {#if generatingKey}
-            <RefreshCw size={14} class="animate-spin" />
-            <span>{$tr('Generating…')}</span>
-          {:else}
-            <Key size={14} />
-            <span>{$tr('Generate API Key')}</span>
-          {/if}
-        </Button>
-      {/snippet}
-    </PageHeader>
+    <PageHeader title={$tr('Tokens')} description={$tr('Upstream credentials, device login, client API keys, and per-token session quotas')} />
 
     {#if actionMessage}
       <Alert tone={actionOK ? 'success' : 'error'} title={actionMessage} />
@@ -331,14 +336,21 @@
 
     <!-- Add token form -->
     <Card title={$tr('Add Token to Pool')} description={$tr('Paste a FreeBuff auth token (cb_…) to add it to the shared pool and save it to .env. Adding burns no quota.')}>
-      <form onsubmit={addToken} class="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-        <div class="flex-1 w-full">
-          <Field
-            label={$tr('Token')}
-            hint={tokenValid === true ? $tr('Valid format') : tokenValid === false ? $tr('Invalid format') : $tr('Format: cb_…')}
-            error={tokenValid === false ? $tr('Token must match cb_… with at least 20 characters') : ''}
-            id="add-token-input"
-          >
+      {#snippet actions()}
+        <Button variant="secondary" size="sm" onclick={startOAuthLogin} disabled={oauthStarting}>
+          {#if oauthStarting}
+            <RefreshCw size={14} class="animate-spin" />
+            <span>{$tr('Authorizing…')}</span>
+          {:else}
+            <LogIn size={14} />
+            <span>{$tr('Device Login')}</span>
+          {/if}
+        </Button>
+      {/snippet}
+      <form onsubmit={addToken} class="flex flex-col gap-1.5">
+        <label for="add-token-input" class="text-xs text-[var(--fp-muted)]">{$tr('Token')}</label>
+        <div class="flex flex-col sm:flex-row gap-2 sm:items-end">
+          <div class="flex-1 flex flex-col gap-1.5">
             <input
               id="add-token-input"
               type="text"
@@ -347,18 +359,22 @@
               autocomplete="off"
               spellcheck="false"
               class="fp-input fp-num w-full"
+              aria-describedby="add-token-input-hint"
+              aria-invalid={tokenValid === false ? 'true' : undefined}
             />
-          </Field>
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={adding || !newToken.trim() || tokenValid === false}
+            loading={adding}
+            class="shrink-0 self-end"
+          >
+            <Plus size={16} />
+            <span>{$tr('Add Token')}</span>
+          </Button>
         </div>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={adding || !newToken.trim() || tokenValid === false}
-          loading={adding}
-        >
-          <Plus size={16} />
-          <span>{$tr('Add Token')}</span>
-        </Button>
+        <p id="add-token-input-hint" class="text-[11px] text-[var(--fp-dim)]">{$tr('Format: cb_…')}</p>
       </form>
     </Card>
 
@@ -367,6 +383,17 @@
       title={$tr('Client API Keys')}
       description={$tr('sk-fb-… credentials for clients (omp, curl) to authenticate against this proxy. Stored in the API_KEYS line of .env.')}
     >
+      {#snippet actions()}
+        <Button variant="primary" size="sm" onclick={generateClientKey} disabled={generatingKey}>
+          {#if generatingKey}
+            <RefreshCw size={14} class="animate-spin" />
+            <span>{$tr('Generating…')}</span>
+          {:else}
+            <Key size={14} />
+            <span>{$tr('Generate API Key')}</span>
+          {/if}
+        </Button>
+      {/snippet}
       {#if generatedKey}
         <div class="fp-inset rounded p-3 mb-3 flex flex-wrap items-center gap-2">
           <span class="text-xs text-[var(--fp-muted)]">{$tr('New key:')}</span>
@@ -380,6 +407,7 @@
             <div class="fp-inset rounded flex items-center justify-between gap-2 px-3 py-2">
               <code class="fp-num text-xs truncate">{key}</code>
               <CopyButton text={key} label="Copy" />
+              <Button variant="ghost" size="sm" onclick={() => deleteApiKey(key)} disabled={deletingKey===key}><Trash2 size={14} /><span>Delete</span></Button>
             </div>
           {/each}
         </div>

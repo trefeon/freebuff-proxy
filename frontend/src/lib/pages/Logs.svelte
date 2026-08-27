@@ -17,22 +17,31 @@
   let loading = $state(true);
   let error = $state('');
   let manualRefresh = $state(false);
-  let filterLevel = $state('');
+  let filterLevel = $state('info');
   let filterMsg = $state('');
+  let hideAdmin = $state(true);
   let autoPoll = $state(true);
   let page = $state(0);
   const PAGE_SIZE = 50;
 
   let entries = $derived.by(() => data?.entries || []);
+  let filteredEntries = $derived.by(() => {
+    if (!hideAdmin) return entries;
+    return entries.filter((e) => {
+      const fields = parseLogFields(e.fields);
+      return !fields.some((f) => f.key === 'path' && String(f.value).includes('/admin'));
+    });
+  });
   let pagedEntries = $derived.by(() => {
     const start = page * PAGE_SIZE;
-    return entries.slice(start, start + PAGE_SIZE);
+    return filteredEntries.slice(start, start + PAGE_SIZE);
   });
-  let totalPages = $derived.by(() => Math.max(1, Math.ceil(entries.length / PAGE_SIZE)));
-  let hasActiveFilter = $derived.by(() => filterLevel !== '' || filterMsg.trim() !== '');
-  let rangeStart = $derived.by(() => (entries.length === 0 ? 0 : page * PAGE_SIZE + 1));
-  let rangeEnd = $derived.by(() => Math.min((page + 1) * PAGE_SIZE, entries.length));
-
+  let totalPages = $derived.by(() => Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE)));
+  let hasActiveFilter = $derived.by(
+    () => filterLevel !== 'info' || filterMsg.trim() !== '' || !hideAdmin
+  );
+  let rangeStart = $derived.by(() => (filteredEntries.length === 0 ? 0 : page * PAGE_SIZE + 1));
+  let rangeEnd = $derived.by(() => Math.min((page + 1) * PAGE_SIZE, filteredEntries.length));
   async function fetchLogs() {
     try {
       const query = new URLSearchParams();
@@ -64,8 +73,9 @@
   }
 
   function clearFilters() {
-    filterLevel = '';
+    filterLevel = 'info';
     filterMsg = '';
+    hideAdmin = true;
     handleFilterChange();
   }
 
@@ -117,9 +127,12 @@
         oninput={handleFilterChange}
         placeholder={$tr('Filter message…')}
       />
-
       <Button variant="ghost" size="sm" aria-pressed={autoPoll} onclick={() => (autoPoll = !autoPoll)}>
         {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
+      </Button>
+
+      <Button variant="ghost" size="sm" aria-pressed={hideAdmin} onclick={() => { hideAdmin = !hideAdmin; page = 0; }}>
+        {$tr('Hide admin')}
       </Button>
 
       {#if hasActiveFilter}
@@ -164,7 +177,7 @@
       title={$tr('Log ring disabled')}
       description={$tr('The server was started without an active logring handler, so no log entries are available.')}
     />
-  {:else if data && entries.length === 0}
+  {:else if data && filteredEntries.length === 0}
     <EmptyState
       title={$tr('No matching log entries')}
       description={hasActiveFilter
@@ -213,7 +226,7 @@
       {#snippet footer()}
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <span class="fp-num text-xs text-[var(--fp-muted)]">
-            {rangeStart}–{rangeEnd} of {entries.length}
+            {rangeStart}–{rangeEnd} of {filteredEntries.length}
           </span>
           <div class="flex items-center gap-2">
             <Button

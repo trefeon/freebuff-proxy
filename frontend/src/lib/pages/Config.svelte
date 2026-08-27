@@ -202,12 +202,13 @@
       </Alert>
     {/if}
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
       <!-- Editor -->
-      <div class="lg:col-span-7">
+      <div class="lg:col-span-6 flex flex-col h-full">
         <Card
           title={$tr('.env Editor')}
           description={$tr('Edit environment variables. Save validates server-side and reloads; rejected writes are rolled back.')}
+          class="flex-1 flex flex-col h-full"
         >
           {#snippet actions()}
             {#if data}
@@ -274,61 +275,62 @@
       </div>
 
       <!-- Effective config -->
-      <div class="lg:col-span-5">
-        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')}>
+      <div class="lg:col-span-6 flex flex-col h-full">
+        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} class="flex-1 flex flex-col h-full">
           {#snippet actions()}
             <StatusBadge
               status={`${data?.effective?.length || 0} ${$tr('keys')}`}
               tone={data?.effective?.length ? 'good' : 'warn'}
             />
           {/snippet}
-
-          {#if data?.effective?.length}
-            <table class="fp-table">
-              <caption class="sr-only">{$tr('Effective configuration — key and value')}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{$tr('Key')}</th>
-                  <th scope="col">{$tr('Value')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each data.effective as kv}
+          <div class="flex-1 flex flex-col min-h-[320px]">
+            {#if data?.effective?.length}
+              <table class="fp-table">
+                <caption class="sr-only">{$tr('Effective configuration — key and value')}</caption>
+                <thead>
                   <tr>
-                    <td>
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="fp-num text-[11px] font-semibold text-[var(--fp-text)] truncate">{kv.key}</span>
-                        {#if kv.secret}
-                          <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">{$tr('secret')}</span>
-                        {/if}
-                      </div>
-                    </td>
-                    <td>
-                      <div class="flex items-center gap-2 min-w-0">
-                        <span class="fp-num text-[11px] text-[var(--fp-muted)] truncate max-w-[180px]">
-                          {kv.secret ? '••••••••' : (kv.value || '—')}
-                        </span>
-                        {#if kv.value}
-                          <span class="shrink-0">
-                            <CopyButton text={kv.value} label={$tr('copy')} />
-                          </span>
-                        {/if}
-                      </div>
-                    </td>
+                    <th scope="col">{$tr('Key')}</th>
+                    <th scope="col">{$tr('Value')}</th>
                   </tr>
-                {/each}
-              </tbody>
-            </table>
-          {:else}
-            <EmptyState title={$tr('No effective configuration')} description={$tr('Start the proxy to populate this view.')}>
-              {#snippet action()}
-                <Button variant="secondary" onclick={fetchData}>
-                  <RefreshCw size={15} />
-                  {$tr('Refresh')}
-                </Button>
-              {/snippet}
-            </EmptyState>
-          {/if}
+                </thead>
+                <tbody>
+                  {#each data.effective as kv}
+                    <tr>
+                      <td>
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="fp-num text-[11px] font-semibold text-[var(--fp-text)] truncate">{kv.key}</span>
+                          {#if kv.secret}
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">{$tr('secret')}</span>
+                          {/if}
+                        </div>
+                      </td>
+                      <td>
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="fp-num text-[11px] text-[var(--fp-muted)] truncate max-w-[180px]">
+                            {kv.secret ? '••••••••' : (kv.value || '—')}
+                          </span>
+                          {#if kv.value}
+                            <span class="shrink-0">
+                              <CopyButton text={kv.value} label={$tr('copy')} />
+                            </span>
+                          {/if}
+                        </div>
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {:else}
+              <EmptyState title={$tr('No effective configuration')} description={$tr('Start the proxy to populate this view.')}>
+                {#snippet action()}
+                  <Button variant="secondary" onclick={fetchData}>
+                    <RefreshCw size={15} />
+                    {$tr('Refresh')}
+                  </Button>
+                {/snippet}
+              </EmptyState>
+            {/if}
+          </div>
         </Card>
       </div>
     </div>

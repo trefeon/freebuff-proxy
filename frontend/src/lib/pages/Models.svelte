@@ -40,6 +40,27 @@
       .map((a) => a.alias)
       .join(', ');
   }
+
+  function quotaFor(id) {
+    switch (id) {
+      case 'z-ai/glm-5.3-flash':
+        return '2/day glm_v53_flash';
+      case 'openai/gpt-5.6-luna':
+        return '5/day shared premium';
+      case 'deepseek/deepseek-v4-pro':
+        return '5/day shared premium';
+      case 'deepseek/deepseek-v4-flash':
+        return 'unmetered';
+      case 'mimo/mimo-v2.5':
+        return 'unmetered';
+      case 'z-ai/glm-5.2':
+        return 'referral +1/day';
+      case 'stealth/ox-alpha':
+        return 'unmetered';
+      default:
+        return '—';
+    }
+  }
 </script>
 
 <div class="space-y-6 page-enter">
@@ -77,13 +98,13 @@
       <Card title={$tr('Model Catalog')} pad="none">
         <div class="overflow-x-auto">
           <table class="fp-table">
-            <caption class="sr-only">{$tr('Model catalog — model id, served status, agent binding and client aliases')}</caption>
             <thead>
               <tr>
                 <th scope="col">{$tr('Model ID')}</th>
                 <th scope="col">{$tr('Served')}</th>
                 <th scope="col">{$tr('Agent')}</th>
                 <th scope="col">{$tr('Client Aliases')}</th>
+                <th scope="col">{$tr('Quota')}</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +133,7 @@
                       <span class="text-[var(--fp-dim)]">—</span>
                     {/if}
                   </td>
+                  <td><span class="fp-num text-xs text-[var(--fp-muted)]">{quotaFor(m.id)}</span></td>
                 </tr>
               {/each}
             </tbody>
