@@ -4,7 +4,7 @@
    * Data: GET /admin/api/overview (pooled snapshot + token cards), polled every 15s.
    * All KPIs/cards map to real response fields only.
    */
-  import { RefreshCw, ExternalLink } from '@lucide/svelte';
+  import { RefreshCw, ExternalLink, Key, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import Stat from '../components/Stat.svelte';
@@ -14,17 +14,162 @@
   import EmptyState from '../components/EmptyState.svelte';
   import Button from '../components/Button.svelte';
   import { fetchAPI } from '../api/client.js';
-  import { formatLocalDate } from '../utils/format.js';
+  import { formatLocalDate, generateRandomApiKey } from '../utils/format.js';
   import { usePolling } from '../utils/polling.js';
   import { tr } from '../i18n.js';
-
   let data = $state(null);
   let loading = $state(true);
   let error = $state('');
 
+  // Client API-key management (API_KEYS in .env)
+  let apiKeys = $state([]);
+  let clientKeyMessage = $state('');
+  let clientKeyOK = $state(true);
+  let generatingKey = $state(false);
+  let generatedKey = $state('');
+  let deletingKey = $state('');
+  let visibleKeys = $state({});
+  let showGeneratedModal = $state(false);
+  let modalEl = $state(null);
+  let lastFocusedEl = null;
+
+  function toggleKeyVisibility(key) {
+    visibleKeys = { ...visibleKeys, [key]: !visibleKeys[key] };
+  }
+
+  function maskKey(key) {
+    if (visibleKeys[key]) return key;
+    if (!key) return '';
+    if (key.length <= 10) return '••••••••';
+    const prefix = key.startsWith('sk-fb-') ? 'sk-fb-' : key.slice(0, 6);
+    const suffix = key.slice(-4);
+    return `${prefix}••••••••••••••••••••••••${suffix}`;
+  }
+
+  function openGeneratedKeyModal(key) {
+    generatedKey = key;
+    showGeneratedModal = true;
+    lastFocusedEl = typeof document !== 'undefined' ? document.activeElement : null;
+  }
+
+  function closeGeneratedKeyModal() {
+    showGeneratedModal = false;
+    if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
+      lastFocusedEl.focus();
+    }
+  }
+
+  function handleModalKeydown(e) {
+    if (e.key === 'Escape') {
+      closeGeneratedKeyModal();
+      return;
+    }
+    if (e.key === 'Tab' && modalEl) {
+      const focusable = modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  async function generateClientKey() {
+    if (generatingKey) return;
+    generatingKey = true;
+    generatedKey = '';
+    clientKeyMessage = '';
+    try {
+      const newKey = generateRandomApiKey();
+      const cfgRes = await fetchAPI('/admin/api/config');
+      const envContent = cfgRes?.env_content || '';
+      const regex = /^\s*API_KEYS=(.*)$/m;
+      const match = envContent.match(regex);
+      const existing = match ? match[1].trim() : '';
+      const updated = existing ? `${existing},${newKey}` : newKey;
+      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
+      const save = await fetch('/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ content: newContent }),
+      });
+      const result = await save.json();
+      const isSaved = save.ok;
+      const isOverridden = result?.message && String(result.message).includes('overridden by the process environment');
+      clientKeyOK = isSaved;
+      if (clientKeyOK) {
+        openGeneratedKeyModal(newKey);
+        clientKeyMessage = isOverridden
+          ? $tr('Generated & saved client API key (environment notice: server process environment takes precedence until restart)')
+          : $tr('Generated & saved client API key');
+        fetchData();
+      } else {
+        clientKeyMessage = result?.message || $tr('Failed to save client API key');
+      }
+    } catch (e) {
+      clientKeyOK = false;
+      clientKeyMessage = e.message || $tr('Network error generating client key');
+    } finally {
+      generatingKey = false;
+    }
+  }
+
+  async function deleteApiKey(target) {
+    if (deletingKey) return;
+    deletingKey = target;
+    clientKeyMessage = '';
+    try {
+      const cfgRes = await fetchAPI('/admin/api/config');
+      const envContent = cfgRes?.env_content || '';
+      const regex = /^\s*API_KEYS=(.*)$/m;
+      const match = envContent.match(regex);
+      const val = match ? match[1].trim() : '';
+      const keys = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const filtered = keys.filter((k) => k !== target);
+      const updated = filtered.join(',');
+      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
+      const save = await fetch('/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ content: newContent }),
+      });
+      const result = await save.json();
+      const isSaved = save.ok;
+      const isOverridden = result?.message && String(result.message).includes('overridden by the process environment');
+      clientKeyOK = isSaved;
+      if (clientKeyOK) {
+        clientKeyMessage = isOverridden
+          ? $tr('Deleted client API key (environment notice: server process environment takes precedence until restart)')
+          : $tr('Deleted client API key');
+        fetchData();
+      } else {
+        clientKeyMessage = result?.message || $tr('Failed to delete client API key');
+      }
+    } catch (e) {
+      clientKeyOK = false;
+      clientKeyMessage = e.message || $tr('Network error deleting client key');
+    } finally {
+      deletingKey = '';
+    }
+  }
+
   async function fetchData() {
     try {
       data = await fetchAPI('/admin/api/overview');
+      try {
+        const cfgRes = await fetchAPI('/admin/api/config');
+        const envContent = cfgRes?.env_content || '';
+        const m = envContent.match(/^\s*API_KEYS=(.*)$/m);
+        const val = m ? m[1].trim() : '';
+        apiKeys = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      } catch {
+        apiKeys = [];
+      }
       error = '';
     } catch (e) {
       error = e.message || $tr('Could not reach the proxy API. Check that the server is running.');
@@ -32,7 +177,6 @@
       loading = false;
     }
   }
-
   function retry() {
     error = '';
     loading = true;
@@ -79,11 +223,10 @@
     if (!until) return '';
     const diff = new Date(until).getTime() - Date.now();
     if (diff <= 0) return '';
-    const mins = Math.ceil(diff / 60000);
-    if (mins < 60) return `${mins}m`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   }
 </script>
+
+<svelte:window onkeydown={showGeneratedModal ? handleModalKeydown : undefined} />
 
 <div class="space-y-6 page-enter">
   <PageHeader title={$tr('Overview')} description={$tr('Live proxy status and token pool telemetry')}>
@@ -280,7 +423,7 @@
               <CopyButton text={data?.base_url || 'http://127.0.0.1:3457/v1'} label={$tr('Copy URL')} />
             </div>
             <p class="mt-3 text-xs text-[var(--fp-muted)]">
-              {$tr('Authentication: Use any Client API Key from the')} <a href="#tokens" class="text-[var(--fp-accent)] hover:underline font-medium">{$tr('Tokens page')}</a> {$tr('via Bearer token or x-api-key header.')}
+              {$tr('Authentication: Use any Client API Key below via Bearer token or x-api-key header.')}
             </p>
           </Card>
 
@@ -304,7 +447,145 @@
             </div>
           </Card>
         </div>
+
+        <!-- Client API-key management -->
+        <div class="mt-4">
+          <Card
+            title={$tr('Client API Keys')}
+            description={$tr('sk-fb-… credentials for clients (omp, Cursor, Claude Code, curl) to authenticate against this gateway. Stored in API_KEYS in .env.')}
+          >
+            {#snippet actions()}
+              <Button variant="primary" size="sm" onclick={generateClientKey} disabled={generatingKey}>
+                {#if generatingKey}
+                  <RefreshCw size={14} class="animate-spin" />
+                  <span>{$tr('Generating…')}</span>
+                {:else}
+                  <Key size={14} />
+                  <span>{$tr('Generate API Key')}</span>
+                {/if}
+              </Button>
+            {/snippet}
+
+            {#if apiKeys.length > 0}
+              <div class="flex flex-col gap-2 mb-3">
+                {#each apiKeys as key (key)}
+                  <div class="fp-inset rounded flex items-center justify-between gap-2 px-3 py-2">
+                    <code class="fp-num text-xs truncate flex-1 select-all font-mono">{maskKey(key)}</code>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onclick={() => toggleKeyVisibility(key)}
+                        aria-label={visibleKeys[key] ? $tr('Hide API key') : $tr('Show API key')}
+                        title={visibleKeys[key] ? $tr('Hide API key') : $tr('Show API key')}
+                      >
+                        {#if visibleKeys[key]}
+                          <EyeOff size={14} />
+                        {:else}
+                          <Eye size={14} />
+                        {/if}
+                      </Button>
+                      <CopyButton text={key} label="Copy" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onclick={() => deleteApiKey(key)}
+                        disabled={deletingKey === key}
+                        aria-label={$tr('Delete API key')}
+                        title={$tr('Delete API key')}
+                      >
+                        <Trash2 size={14} />
+                        <span>{$tr('Delete')}</span>
+                      </Button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-xs text-[var(--fp-dim)] mb-3">
+                {$tr('No client API keys configured. In open mode, clients can authenticate with any key or leave it unset.')}
+              </p>
+            {/if}
+
+            {#if clientKeyMessage}
+              <Alert tone={clientKeyOK ? 'success' : 'error'} title={clientKeyMessage} />
+            {/if}
+          </Card>
+        </div>
       </section>
+
+      <!-- Pop-up modal for newly generated API key -->
+      {#if showGeneratedModal}
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="presentation"
+        >
+          <!-- Backdrop -->
+          <button
+            type="button"
+            class="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity border-0 p-0 m-0 w-full h-full cursor-default"
+            onclick={closeGeneratedKeyModal}
+            aria-label={$tr('Close modal backdrop')}
+            tabindex="-1"
+          ></button>
+
+          <!-- Modal Card -->
+          <div
+            bind:this={modalEl}
+            tabindex="-1"
+            class="relative w-full max-w-lg bg-[var(--fp-card)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-4 page-enter focus:outline-none"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="generated-key-title"
+          >
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-[var(--fp-border)] pb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="p-2 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]">
+                  <Key size={18} />
+                </div>
+                <div>
+                  <h2 id="generated-key-title" class="text-base font-semibold text-[var(--fp-text)]">
+                    {$tr('Client API Key Generated')}
+                  </h2>
+                  <p class="text-xs text-[var(--fp-muted)]">
+                    {$tr('Saved to .env in API_KEYS')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="text-[var(--fp-muted)] hover:text-[var(--fp-text)] p-1.5 rounded-lg hover:bg-[var(--fp-surface-2)] transition-colors"
+                onclick={closeGeneratedKeyModal}
+                aria-label={$tr('Close dialog')}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <!-- Content -->
+            <p class="text-sm text-[var(--fp-muted)]">
+              {$tr('Use this key to authenticate clients (omp, Claude Code CLI, Cursor, curl) against this gateway.')}
+            </p>
+
+            <div class="fp-inset rounded-lg p-3.5 flex flex-col gap-2 bg-[var(--fp-surface)] border border-[var(--fp-border)]">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider">{$tr('API Key')}</span>
+                <CopyButton text={generatedKey} label="Copy Key" />
+              </div>
+              <code class="fp-num text-sm text-[var(--fp-accent)] break-all font-mono select-all bg-[var(--fp-surface-2)] p-2.5 rounded border border-[var(--fp-border)]">
+                {generatedKey}
+              </code>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-[var(--fp-border)]">
+              <Button variant="primary" size="md" onclick={closeGeneratedKeyModal}>
+                {$tr('Done')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>
