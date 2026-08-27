@@ -61,8 +61,8 @@ func TestPremiumSnapshotFromQuotaMap(t *testing.T) {
 		{
 			name: "both premium and glm",
 			m: map[string]session.QuotaSnapshot{
-				"openai/gpt-5.6-luna":  {Model: "openai/gpt-5.6-luna", Limit: 5, RecentCount: 3, Period: "pacific_day", ResetAt: future},
-				"z-ai/glm-5.3-flash": {Model: "z-ai/glm-5.3-flash", Limit: 2, RecentCount: 2, Period: "glm_v53_flash", ResetAt: future},
+				"openai/gpt-5.6-luna": {Model: "openai/gpt-5.6-luna", Limit: 5, RecentCount: 3, Period: "pacific_day", ResetAt: future},
+				"z-ai/glm-5.3-flash":  {Model: "z-ai/glm-5.3-flash", Limit: 2, RecentCount: 2, Period: "glm_v53_flash", ResetAt: future},
 			},
 			wantP:      true,
 			wantGLM:    true,
