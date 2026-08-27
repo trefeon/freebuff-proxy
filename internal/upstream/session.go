@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,12 +20,52 @@ func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 // (#120): the CLI's session POST is a bare fetch with Authorization + the
 // optional x-freebuff-model header only (reference/freebuff
 // freebuff-session-api.ts callFreebuffSession, codebuff-api.ts sets
+
+// mockTokenState tracks per-token usage for dummy tokens so the mock behaves
+// like a real upstream session: recentCount rises per model, standing score
+// degrades on cooldown, and quota resets at Pacific midnight.
+type mockTokenState struct {
+	mu           sync.Mutex
+	recentCounts map[string]float64 // model -> recentCount
+	standing     float64            // current standing score (0-100)
+}
+
+var mockStates sync.Map // token -> *mockTokenState
+
+// getMockState returns the (lazily created) usage state for a dummy token.
+func getMockState(token string) *mockTokenState {
+	v, _ := mockStates.LoadOrStore(token, &mockTokenState{
+		recentCounts: map[string]float64{},
+		standing:     95.0,
+	})
+	return v.(*mockTokenState)
+}
+
+// resetMockStates clears all dummy-token usage state (test helper).
+func resetMockStates() {
+	mockStates.Range(func(k, _ any) bool { mockStates.Delete(k); return true })
+}
+
+// mockQuotaLimit mirrors the real tier caps for the served models.
+func mockQuotaLimit(model string) float64 {
+	switch model {
+	case "openai/gpt-5.6-luna", "deepseek/deepseek-v4-pro":
+		return 5
+	case "z-ai/glm-5.3-flash":
+		return 2
+	case "z-ai/glm-5.2":
+		return 1
+	default: // mimo, ox-alpha, deepseek-flash: unmetered
+		return 9999
+	}
+}
+
 func isDummyToken(token string) bool {
 	t := strings.ToLower(strings.TrimSpace(token))
 	return strings.HasPrefix(t, "cb_dummy") || strings.HasPrefix(t, "dummy-") || strings.HasPrefix(t, "mock-")
 }
 
-func mockSessionState(token string, requestedModel string) *SessionState {
+func mockSessionState(token string, requestedModel string, consume bool) *SessionState {
 	if requestedModel == "" {
 		requestedModel = "mimo/mimo-v2.5"
 	}
@@ -36,6 +77,36 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 		pacMidnight = pacMidnight.AddDate(0, 0, 1)
 	}
 
+	st := getMockState(token)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	limit := mockQuotaLimit(requestedModel)
+	if consume {
+		st.recentCounts[requestedModel]++
+	}
+	recent := st.recentCounts[requestedModel]
+	score := st.standing
+
+	// Status transitions: active while quota remains; cooldown once recent >= limit.
+	status := "active"
+	var retryAfterMs int64
+	if limit <= 9999 && recent >= limit {
+		status = "cooldown"
+		retryAfterMs = int64(time.Until(pacMidnight).Seconds() * 1000)
+		if score > 60 {
+			score -= 10
+			st.standing = score
+		}
+	}
+	if status == "active" && score < 95 {
+		score++
+		if score > 95 {
+			score = 95
+		}
+		st.standing = score
+	}
+
 	instanceID := fmt.Sprintf("a%08x-b%04x-4%03x-8%03x-e%012x",
 		now.UnixMilli()&0xFFFFFFFF, now.UnixMilli()&0xFFFF,
 		now.UnixMilli()&0x0FFF, now.UnixMilli()&0x0FFF,
@@ -43,8 +114,8 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 
 	unlimited := float64(9999)
 
-	return &SessionState{
-		Status:          "active",
+	state := &SessionState{
+		Status:          status,
 		InstanceID:      instanceID,
 		Model:           requestedModel,
 		CurrentModel:    requestedModel,
@@ -55,14 +126,15 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 		QueueDepth:      0,
 		EstimatedWaitMs: 0,
 		PollAt:          now.Add(30 * time.Second),
-		Limit:           5,
-		RecentCount:     0,
+		Limit:           limit,
+		RecentCount:     recent,
 		ResetAt:         pacMidnight,
+		RetryAfterMs:    retryAfterMs,
 		RateLimitsByModel: map[string]ModelQuota{
 			"openai/gpt-5.6-luna": {
 				Model:       "openai/gpt-5.6-luna",
 				Limit:       5,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["openai/gpt-5.6-luna"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 5},
@@ -70,7 +142,7 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 			"deepseek/deepseek-v4-pro": {
 				Model:       "deepseek/deepseek-v4-pro",
 				Limit:       5,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["deepseek/deepseek-v4-pro"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 5},
@@ -78,7 +150,7 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 			"z-ai/glm-5.3-flash": {
 				Model:       "z-ai/glm-5.3-flash",
 				Limit:       2,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["z-ai/glm-5.3-flash"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 2},
@@ -86,28 +158,28 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 			"mimo/mimo-v2.5": {
 				Model:       "mimo/mimo-v2.5",
 				Limit:       unlimited,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["mimo/mimo-v2.5"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"stealth/ox-alpha": {
 				Model:       "stealth/ox-alpha",
 				Limit:       unlimited,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["stealth/ox-alpha"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"deepseek/deepseek-v4-flash": {
 				Model:       "deepseek/deepseek-v4-flash",
 				Limit:       unlimited,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["deepseek/deepseek-v4-flash"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"z-ai/glm-5.2": {
 				Model:       "z-ai/glm-5.2",
 				Limit:       1,
-				RecentCount: 0,
+				RecentCount: st.recentCounts["z-ai/glm-5.2"],
 				ResetAt:     pacMidnight,
 				Period:      "promo",
 				Entitlement: map[string]float64{"referral": 1},
@@ -116,18 +188,25 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 		Standing: &SessionStanding{
 			Level:       "trusted",
 			Label:       "Trusted",
-			Score:       95.0,
+			Score:       score,
 			NextLevel:   "",
 			CappedBy:    "third_party_client",
 			Blurb:       "Your account is in good standing. Full access to all models.",
 			NextLevelAt: time.Time{},
 		},
 	}
+
+	if requestedModel == "z-ai/glm-5.2" {
+		state.GlmPromo = fmt.Sprintf("{\"dailySessions\":%d,\"endsAt\":%q}",
+			int(limit), pacMidnight.UTC().Format(time.RFC3339))
+	}
+
+	return state
 }
 
 func (c *Client) CreateSessionForModel(ctx context.Context, model string) (*SessionState, error) {
 	if isDummyToken(c.token) {
-		return mockSessionState(c.token, model), nil
+		return mockSessionState(c.token, model, true), nil
 	}
 	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", nil)
 	if err != nil {
@@ -153,7 +232,7 @@ func (c *Client) GetSession(ctx context.Context, instanceID string) (*SessionSta
 // GET itself (gap #2).
 func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, compact bool) (*SessionState, error) {
 	if isDummyToken(c.token) {
-		return mockSessionState(c.token, ""), nil
+		return mockSessionState(c.token, "", false), nil
 	}
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/session", nil)
 	if err != nil {
@@ -187,7 +266,7 @@ func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, comp
 // returns the full *SessionState.
 func (c *Client) ProbeAccount(ctx context.Context) (*SessionState, error) {
 	if isDummyToken(c.token) {
-		return mockSessionState(c.token, ""), nil
+		return mockSessionState(c.token, "", false), nil
 	}
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/session", nil)
 	if err != nil {
