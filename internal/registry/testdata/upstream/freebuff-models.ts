@@ -6,8 +6,10 @@ import {
 } from '../util/zoned-time'
 import {
   deepSeekExpensiveWindowEndsAt,
+  FALLBACK_WINDOW_TIME_ZONE,
   formatDeepSeekExpensiveWindowReturn,
   formatDeepSeekOffPeakWindowLocal,
+  formatWindowTimeZoneLabel,
   isDeepSeekExpensiveWindow,
 } from './freebuff-peak-hours'
 import { mimoModels } from './model-config'
@@ -1691,6 +1693,18 @@ export function freebuffWithdrawnModelMessage(id: string): string {
   return `${name} is no longer available in Freebuff. We recommend using ${replacement} instead.`
 }
 
+/** The same fact as `freebuffWithdrawnModelMessage`, shaped to sit inside the
+ *  sentence released clients build around `availableHours` — "<model> isn't
+ *  available right now (…)". Those binaries predate the `withdrawn` flag and
+ *  render that field verbatim, so this is the only wording they can be told a
+ *  withdrawal in. */
+export function freebuffWithdrawnModelAvailabilityLabel(): string {
+  const replacement =
+    SUPPORTED_FREEBUFF_MODELS.find((m) => m.id === DEFAULT_FREEBUFF_MODEL_ID)
+      ?.displayName ?? DEFAULT_FREEBUFF_MODEL_ID
+  return `no longer offered in free mode — we recommend ${replacement}`
+}
+
 /** Suffix-tolerant like the other model predicates, so a dated provider
  *  snapshot of a paused model cannot slip past the pause. */
 export function isFreebuffPausedFreeModelId(
@@ -2002,6 +2016,26 @@ export const FREEBUFF_TAKEOVER_INSTANCE_HEADER =
  *  which is what lets the server tell a run that is finishing from a tab that
  *  died. Server-side accessor: `getSessionGraceMs()`. */
 export const FREEBUFF_SESSION_GRACE_MS = 30 * 60 * 1000
+
+/** How long a Desktop tab may hold its session with nothing running before the
+ *  app gives the slot back.
+ *
+ *  Sessions are otherwise released only on tab close, sign-out and app exit, so
+ *  a tab that ran one turn and was left open held the account's ONLY slot (every
+ *  model on the limited tier, the premium bucket on full) for up to an hour with
+ *  nothing happening in it — and every other tab's picker read as "you can't
+ *  change model here".
+ *
+ *  Ending early is not a forfeit: the server re-stamps `session_units` to the
+ *  fraction actually elapsed (`buildAdmitStampStatement`), so this REFUNDS the
+ *  unused window and the next send re-admits on the same instance id. Getting it
+ *  wrong costs one extra admission, not a session.
+ *
+ *  Ten minutes is measured against reading a long answer and typing the next
+ *  prompt. Only a turn keeps the clock alive — scrolling and typing are
+ *  invisible to the server half — so it is deliberately several times longer
+ *  than it would need to be if it could see the user. */
+export const FREEBUFF_DESKTOP_IDLE_RELEASE_MS = 10 * 60 * 1000
 
 /** Models that accept image input. Used to decide whether uploaded images are
  *  forwarded to the model as real multimodal content. */
@@ -2547,10 +2581,18 @@ export function resolveFreebuffSessionModelForAccessTier(
   }
   // NOTE: a withdrawn model does NOT resolve here. It used to coerce silently
   // to the fallback, which kept clients running but left a user who picked it
-  // watching a different model answer with no explanation. Admission now
-  // REFUSES it with `model_unavailable` and a message naming the replacement
-  // (see freebuffWithdrawnModelMessage). That refusal is deliberately not
+  // watching a different model answer with no explanation. Admission REFUSES it
+  // with `model_unavailable` and a message naming the replacement (see
+  // freebuffWithdrawnModelMessage). That refusal is deliberately not
   // session-ending, so the client shows the message instead of re-admitting.
+  //
+  // That last paragraph described an intention rather than the code from
+  // 2026-08-20 until 2026-08-27: nothing on either admission path consulted the
+  // pause at all — `isFreebuffSessionModelAvailable` reads the availability
+  // WINDOW — so a withdrawn pick admitted normally, spent a session unit, took
+  // Desktop's single premium slot for the hour, and was then refused by the
+  // chat gate on every request against it. `withdrawnModelRefusal` in
+  // web/src/server/free-session/public-api.ts is the refusal this names.
   if (isSupportedFreebuffModelId(id)) return id
   return resolveFreebuffWebModel(id, {
     includeGodOnly: options.includeGodOnly ?? true,
@@ -3004,10 +3046,15 @@ export function getFreebuffModelUnavailableLabel(
     SUPPORTED_FREEBUFF_MODELS.find((candidate) => candidate.id === id) ??
     getFreebuffWebModel(id)
   if (model.availability === 'off_peak_only') {
-    return `Back at ${formatLocalTime(
-      deepSeekExpensiveWindowEndsAt(now),
-      now,
-      options,
+    const back = deepSeekExpensiveWindowEndsAt(now)
+    // Named, even though this label is only ever built in-app. "In-app" is not
+    // the same as "on the reader's clock": a CLI on a remote box renders that
+    // BOX's zone, and the human reading it is somewhere else entirely. The zone
+    // costs four characters and removes the one question the label exists to
+    // answer.
+    return `Back at ${formatLocalTime(back, now, options)} ${formatWindowTimeZoneLabel(
+      back,
+      options.timeZone,
     )}`
   }
   return getFreebuffDeploymentAvailabilityLabel(now, options)
@@ -3177,13 +3224,75 @@ function isAvailableAt(
 export function freebuffModelUnavailableWindow(
   id: string,
   now: Date = new Date(),
+  /**
+   * The zone to quote in. Defaults to UTC and NOT to the runtime's zone,
+   * because every caller of this function is the SERVER: it does not know where
+   * the reader is, and the container it runs in is not an answer. Left to the
+   * runtime it rendered whatever that container happened to be set to and named
+   * no zone at all, so a user in Germany was told V4 Flash returned "at 10:00
+   * AM" — 10:00 UTC, noon for them — at 10:34 on their own clock.
+   *
+   * Clients that DO know the reader's zone should render `availableAt` instead
+   * (see freebuffModelUnavailableAt); this string is the floor, correct for
+   * everyone and local to no one.
+   */
+  timeZone: string = FALLBACK_WINDOW_TIME_ZONE,
 ): string {
   const model =
     SUPPORTED_FREEBUFF_MODELS.find((candidate) => candidate.id === id) ??
     getFreebuffWebModel(id)
   return model.availability === 'off_peak_only'
-    ? formatDeepSeekExpensiveWindowReturn(now)
+    ? formatDeepSeekExpensiveWindowReturn(now, timeZone)
     : FREEBUFF_DEPLOYMENT_HOURS_LABEL
+}
+
+/**
+ * The instant `id` comes back, as an ISO string — or undefined when there is no
+ * such instant to name.
+ *
+ * The machine-readable half of the pair above, and the reason a client never
+ * has to parse prose to say "12:00" to a reader in Berlin. Only `off_peak_only`
+ * has a computable return time: `deployment_hours` is our staffing window and
+ * the limited-offer branch is a pool that refills on no schedule, so both
+ * return undefined rather than a guess a client would render as fact.
+ */
+export function freebuffModelUnavailableAt(
+  id: string,
+  now: Date = new Date(),
+): string | undefined {
+  const model =
+    SUPPORTED_FREEBUFF_MODELS.find((candidate) => candidate.id === id) ??
+    getFreebuffWebModel(id)
+  if (model.availability !== 'off_peak_only') return undefined
+  if (!isDeepSeekExpensiveWindow(now)) return undefined
+  return deepSeekExpensiveWindowEndsAt(now).toISOString()
+}
+
+/**
+ * The one renderer every client uses for a `model_unavailable` refusal.
+ *
+ * Prefers `availableAt` — an instant, which each surface formats in the zone
+ * its own reader lives in — and falls back to the server's UTC prose for a
+ * response that carries no instant (an older server, or a closure with no
+ * computable return time). Shared rather than reimplemented per surface so the
+ * CLI, Desktop and Web cannot drift into three different answers to "when?".
+ */
+export function formatFreebuffModelUnavailableWindow(
+  body: { availableHours: string; availableAt?: string },
+  options: LocalTimeFormatOptions & { now?: Date } = {},
+): string {
+  if (!body.availableAt) return body.availableHours
+  const ends = new Date(body.availableAt)
+  if (Number.isNaN(ends.getTime())) return body.availableHours
+  const now = options.now ?? new Date()
+  // The zone is named here too. A reader who sees "again at 12:00 PM" in a
+  // desktop app and "again at 10:00 AM UTC" in a support reply has to work out
+  // whether those are the same moment; printing GMT+2 beside the first makes
+  // that a subtraction rather than a guess.
+  return `again at ${formatLocalTime(ends, now, options)} ${formatWindowTimeZoneLabel(
+    ends,
+    options.timeZone,
+  )}`
 }
 
 export function isFreebuffSessionModelAvailable(

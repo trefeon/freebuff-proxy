@@ -19,8 +19,12 @@ type BridgeTokenSnapshot struct {
 	SessionActive bool                             `json:"session_active"`
 	Model         string                           `json:"model"`
 	QuotaByModel  map[string]session.QuotaSnapshot `json:"quota_by_model,omitempty"`
-	SpendDay      float64                          `json:"spend_day"`
-	SpendPct      int                              `json:"spend_pct"`
+	// PremiumQuota and Glm53FlashQuota mirror TokenSnapshot's premium views
+	// (quota_tracker.go). Nil when the bridge entry has no premium quota.
+	PremiumQuota    *PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	Glm53FlashQuota *PremiumQuotaSnapshot `json:"glm53flash_quota,omitempty"`
+	SpendDay        float64               `json:"spend_day"`
+	SpendPct        int                   `json:"spend_pct"`
 	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
 	// (issues #198/#199): "temporary" (auto-lifts at BannedUntil) vs
 	// "hard" (never self-heals); zero values when no ban is active.
@@ -119,6 +123,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 		}
 		// Active-ban view for healthz/dashboard consumers (issues #198/#199).
 		banType, bannedUntil := banView(rs.BanError, rs.BannedUntil)
+		premium, glm53 := premiumSnapshotFromQuotaMap(ss.QuotaByModel)
 
 		out = append(out, TokenSnapshot{
 			Token:                   i,
@@ -139,6 +144,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			CountryBlockReason:      countryReason,
 			SessionActiveUsersForIP: ss.ActiveUsersForIP,
 			QuotaByModel:            ss.QuotaByModel,
+			PremiumQuota:            premium,
+			Glm53FlashQuota:         glm53,
 			Entitlement:             ss.Entitlement,
 			GlmPromo:                ss.GlmPromo,
 			Standing:                ss.Standing,

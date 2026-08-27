@@ -294,15 +294,17 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 		}
 		// Build quota map from session snapshot.
 		var quotaByModel map[string]session.QuotaSnapshot
-		if sess := e.session.Snapshot(); sess.QuotaByModel != nil {
-			quotaByModel = make(map[string]session.QuotaSnapshot)
-			for model, rl := range sess.QuotaByModel {
+		sessForQuota := e.session.Snapshot()
+		if sessForQuota.QuotaByModel != nil {
+			quotaByModel = make(map[string]session.QuotaSnapshot, len(sessForQuota.QuotaByModel))
+			for model, rl := range sessForQuota.QuotaByModel {
 				quotaByModel[model] = session.QuotaSnapshot{
 					Model:       rl.Model,
 					Limit:       rl.Limit,
 					RecentCount: rl.RecentCount,
 					Period:      rl.Period,
 					ResetAt:     rl.ResetAt,
+					Entitlement: rl.Entitlement,
 				}
 			}
 		}
@@ -321,20 +323,23 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			}
 		}
 		banType, bannedUntil := banView(eRuns.BanError, eRuns.BannedUntil)
+		premiumQuota, glmQuota := premiumSnapshotFromQuotaMap(sess.QuotaByModel)
 		snaps = append(snaps, BridgeTokenSnapshot{
-			Key:           ke.key,
-			LastUsed:      e.lastUsed,
-			ActiveRuns:    eRuns.ActiveRuns,
-			Requests:      eRuns.Requests,
-			Locked:        e.locked.Load(),
-			CooldownUntil: cooldownUntil,
-			SessionActive: sess.Status == "active",
-			Model:         model,
-			QuotaByModel:  quotaByModel,
-			SpendDay:      float64(spend.Day),
-			SpendPct:      spendPct,
-			BanType:       banType,
-			BannedUntil:   bannedUntil,
+			Key:             ke.key,
+			LastUsed:        e.lastUsed,
+			ActiveRuns:      eRuns.ActiveRuns,
+			Requests:        eRuns.Requests,
+			Locked:          e.locked.Load(),
+			CooldownUntil:   cooldownUntil,
+			SessionActive:   sess.Status == "active",
+			Model:           model,
+			QuotaByModel:    quotaByModel,
+			SpendDay:        float64(spend.Day),
+			SpendPct:        spendPct,
+			PremiumQuota:    premiumQuota,
+			Glm53FlashQuota: glmQuota,
+			BanType:         banType,
+			BannedUntil:     bannedUntil,
 		})
 	}
 	return snaps

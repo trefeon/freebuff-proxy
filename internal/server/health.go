@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"freebuff-proxy/internal/pool"
 	"freebuff-proxy/internal/telemetry"
 )
 
@@ -65,6 +66,12 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			}
 			tok["quota"] = quota
 		}
+		if snap.PremiumQuota != nil {
+			tok["premium_quota"] = premiumQuotaMap(snap.PremiumQuota)
+		}
+		if snap.Glm53FlashQuota != nil {
+			tok["glm53flash_quota"] = premiumQuotaMap(snap.Glm53FlashQuota)
+		}
 		if len(snap.Entitlement) > 0 {
 			tok["entitlement"] = snap.Entitlement
 		}
@@ -87,6 +94,30 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		if bs.CooldownUntil.After(time.Now()) {
 			entry["cooldown_until"] = bs.CooldownUntil
 		}
+		if len(bs.QuotaByModel) > 0 {
+			quota := make(map[string]any, len(bs.QuotaByModel))
+			for model, q := range bs.QuotaByModel {
+				qEntry := map[string]any{
+					"limit":        q.Limit,
+					"recent_count": q.RecentCount,
+					"period":       q.Period,
+				}
+				if !q.ResetAt.IsZero() {
+					qEntry["reset_at"] = q.ResetAt
+				}
+				if len(q.Entitlement) > 0 {
+					qEntry["entitlement"] = q.Entitlement
+				}
+				quota[model] = qEntry
+			}
+			entry["quota"] = quota
+		}
+		if bs.PremiumQuota != nil {
+			entry["premium_quota"] = premiumQuotaMap(bs.PremiumQuota)
+		}
+		if bs.Glm53FlashQuota != nil {
+			entry["glm53flash_quota"] = premiumQuotaMap(bs.Glm53FlashQuota)
+		}
 		bridgeEntries = append(bridgeEntries, entry)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -98,6 +129,29 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		"bridge_tokens":  s.pool.BridgeCount(),
 		"bridge_entries": bridgeEntries,
 	})
+}
+
+// premiumQuotaMap renders a PremiumQuotaSnapshot as the healthz JSON map.
+// reset_at is RFC3339; model is fixed to the premium pool sentinel for
+// clients that key off it.
+func premiumQuotaMap(q *pool.PremiumQuotaSnapshot) map[string]any {
+	m := map[string]any{
+		"limit":        q.Limit,
+		"used":         q.Used,
+		"remaining":    q.Remaining,
+		"period":       q.Period,
+		"reset_at":     q.ResetAt.Format(time.RFC3339),
+		"percent_used": q.PercentUsed,
+		"entitled":     q.Entitled,
+		"capped":       q.Capped,
+		"model":        "_premium_pool",
+	}
+	// Keep glm_v53_flash distinguishable for the dedicated lane; the period
+	// already carries it but the model sentinel helps the frontend.
+	if q.Period == "glm_v53_flash" {
+		m["model"] = "z-ai/glm-5.3-flash"
+	}
+	return m
 }
 
 // escapeLabelValue escapes a Prometheus label value per the text exposition
@@ -268,6 +322,101 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 						snap.Token+1, escapeLabelValue(from), escapeLabelValue(to), n)
 				}
 			}
+		}
+	}
+	sb.WriteString("\n")
+
+	// Premium quota metrics (quota_tracker.go): one gauge family per field,
+	// emitted only when the premium snapshot is present (nil means no data).
+	sb.WriteString("# HELP freebuff_proxy_premium_quota_limit Premium quota limit (5 for pacific_day pool) per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_premium_quota_limit gauge\n")
+	for _, snap := range snaps {
+		if snap.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Limit)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Limit)
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_premium_quota_used Premium quota used per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_premium_quota_used gauge\n")
+	for _, snap := range snaps {
+		if snap.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Used)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Used)
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_premium_quota_remaining Premium quota remaining per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_premium_quota_remaining gauge\n")
+	for _, snap := range snaps {
+		if snap.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Remaining)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Remaining)
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_premium_quota_percent Premium quota percent used per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_premium_quota_percent gauge\n")
+	for _, snap := range snaps {
+		if snap.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_percent{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.PercentUsed)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.PremiumQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_percent{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.PercentUsed)
+		}
+	}
+	sb.WriteString("\n")
+	// GLM 5.3 Flash lane (2/day)
+	sb.WriteString("# HELP freebuff_proxy_glm53flash_quota_limit GLM 5.3 Flash quota limit per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_glm53flash_quota_limit gauge\n")
+	for _, snap := range snaps {
+		if snap.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_limit{token=\"%d\"} %d\n", snap.Token+1, snap.Glm53FlashQuota.Limit)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_limit{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.Glm53FlashQuota.Limit)
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_glm53flash_quota_used GLM 5.3 Flash quota used per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_glm53flash_quota_used gauge\n")
+	for _, snap := range snaps {
+		if snap.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_used{token=\"%d\"} %d\n", snap.Token+1, snap.Glm53FlashQuota.Used)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_used{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.Glm53FlashQuota.Used)
+		}
+	}
+	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_glm53flash_quota_remaining GLM 5.3 Flash quota remaining per token\n")
+	sb.WriteString("# TYPE freebuff_proxy_glm53flash_quota_remaining gauge\n")
+	for _, snap := range snaps {
+		if snap.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_remaining{token=\"%d\"} %d\n", snap.Token+1, snap.Glm53FlashQuota.Remaining)
+		}
+	}
+	for _, bs := range s.pool.BridgeSnapshot() {
+		if bs.Glm53FlashQuota != nil {
+			fmt.Fprintf(&sb, "freebuff_proxy_glm53flash_quota_remaining{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.Glm53FlashQuota.Remaining)
 		}
 	}
 	sb.WriteString("\n")

@@ -162,8 +162,6 @@ type TokenSnapshot struct {
 	SessionActiveUsersForIP int
 	// QuotaByModel is the live per-model session quota from the last
 	// admission (key = model id); empty until the session reports it.
-	// Entitlement is a top-level per-token view (empty: the upstream wire
-	// nests entitlement inside each rate-limit entry).
 	QuotaByModel map[string]session.QuotaSnapshot
 	Entitlement  map[string]float64
 	// GlmPromo is the raw upstream glmPromo block ({dailySessions, endsAt})
@@ -191,6 +189,12 @@ type TokenSnapshot struct {
 	// Locked is set when the token has been administratively locked by the
 	// operator; Acquire never selects a locked token.
 	Locked bool `json:"locked"`
+	// PremiumQuota is the 5/day premium-pool quota (pacific_day) derived from
+	// the live QuotaByModel entry for the premium models. Nil when no premium
+	// quota has been reported.
+	PremiumQuota *PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	// Glm53FlashQuota is the 2/day GLM 5.3 Flash lane (glm_v53_flash).
+	Glm53FlashQuota *PremiumQuotaSnapshot `json:"glm53flash_quota,omitempty"`
 	// BanType / BannedUntil surface the token's active upstream ban
 	// (issues #198/#199): BanType is "temporary" when the ban carries a
 	// resumes_at deadline (auto-lifts at BannedUntil) and "hard" when it
@@ -266,7 +270,7 @@ type Pool struct {
 
 	// Bridge mode (no AUTH_TOKENS): lazily-created per-client-token entries.
 	// bridgeOrder keeps the LRU order, oldest first. Guarded by bridgeMu.
-	bridgeMu    sync.Mutex
+	bridgeMu    sync.RWMutex
 	bridge      map[string]*bridgeEntry
 	bridgeOrder []string
 

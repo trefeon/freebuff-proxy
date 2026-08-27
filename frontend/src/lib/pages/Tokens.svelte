@@ -20,6 +20,7 @@
   import EmptyState from '../components/EmptyState.svelte';
   import CopyButton from '../components/CopyButton.svelte';
   import PageHeader from '../components/PageHeader.svelte';
+  import PremiumQuotaBar from '../components/PremiumQuotaBar.svelte';
   import { fetchAPI, postAPI } from '../api/client.js';
   import { usePolling } from '../utils/polling.js';
   import { formatLocalDate, generateRandomApiKey } from '../utils/format.js';
@@ -527,6 +528,17 @@
                 <tr>
                   <td colspan="6" class="!p-0">
                     <div class="fp-inset m-2 rounded p-3">
+                      <!-- Premium Quota Tracker — pacific_day 5/day pool + glm_v53_flash lane -->
+                      <div class="flex flex-col gap-2 mb-3">
+                        {#if token.premium_quota}
+                          <PremiumQuotaBar quota={token.premium_quota} title={$tr('Premium pool')} {now} />
+                        {:else}
+                          <p class="text-xs text-[var(--fp-dim)] italic">{$tr('No premium quota data — run a request or -test-token to populate.')}</p>
+                        {/if}
+                        {#if token.glm53flash_quota}
+                          <PremiumQuotaBar quota={token.glm53flash_quota} title={$tr('GLM 5.3 Flash pool')} {now} />
+                        {/if}
+                      </div>
                       {#if token.session_remaining_seconds > 0 && token.session_model}
                         <div class="mb-2 px-2 py-1 rounded bg-[var(--fp-accent)]/10 text-xs text-[var(--fp-accent)] flex items-center justify-between">
                           <span>{$tr('Active Session:')} <code class="fp-num">{token.session_model}</code></span>

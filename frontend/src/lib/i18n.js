@@ -283,8 +283,14 @@ const zh = {
 	'Network error: {message}': '网络错误：{message}',
 	'and {count} more': '还有 {count} 处',
 	'Client API key': '客户端 API 密钥',
+	// Premium quota tracker
+	'Premium pool': '高级配额池',
+	'GLM 5.3 Flash pool': 'GLM 5.3 Flash 配额池',
+	'Quota exhausted': '配额已耗尽',
+	'No premium quota data — run a request or -test-token to populate.': '暂无高级配额数据 — 发起一次请求或运行 -test-token 以填充。',
+	'Resets in': '重置于',
+	'Remaining': '剩余',
 };
-
 const dictionaries = { en, zh };
 
 import { writable, derived } from 'svelte/store';

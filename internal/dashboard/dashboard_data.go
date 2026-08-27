@@ -229,11 +229,13 @@ type tokensData struct {
 
 type tokenDetail struct {
 	tokenCard
-	SessionInstance         string     `json:"session_instance"`
-	SessionModel            string     `json:"session_model"`
-	SessionRemainingSeconds int64      `json:"session_remaining_seconds"`
-	Quota                   []quotaRow `json:"quota"`
-	HasQuota                bool       `json:"has_quota"`
+	SessionInstance         string                     `json:"session_instance"`
+	SessionModel            string                     `json:"session_model"`
+	SessionRemainingSeconds int64                      `json:"session_remaining_seconds"`
+	Quota                   []quotaRow                 `json:"quota"`
+	HasQuota                bool                       `json:"has_quota"`
+	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	Glm53FlashQuota         *pool.PremiumQuotaSnapshot `json:"glm53flash_quota,omitempty"`
 }
 
 type quotaRow struct {
@@ -269,6 +271,8 @@ func (d *Dashboard) tokensData() tokensData {
 			SessionInstance:         shortID(t.SessionInstanceID),
 			SessionModel:            t.SessionModel,
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
+			PremiumQuota:            t.PremiumQuota,
+			Glm53FlashQuota:         t.Glm53FlashQuota,
 		}
 		for model, q := range t.QuotaByModel {
 			rem := float64(0)
@@ -719,18 +723,20 @@ type standingStepCard struct {
 
 // bridgeTokenCard is a dashboard-ready view of one bridge entry (#187).
 type bridgeTokenCard struct {
-	Key           string  `json:"key"`    // masked hash prefix
-	Status        string  `json:"status"` // active|cooldown|locked
-	Model         string  `json:"model"`
-	ActiveRuns    int     `json:"active_runs"`
-	Requests      int     `json:"requests"`
-	Locked        bool    `json:"locked"`
-	CooldownUntil string  `json:"cooldown_until"`
-	SessionActive bool    `json:"session_active"`
-	SpendDay      float64 `json:"spend_day"`
-	SpendPct      int     `json:"spend_pct"`
-	BanType       string  `json:"ban_type,omitempty"`
-	BannedUntil   string  `json:"banned_until,omitempty"`
+	Key             string                     `json:"key"`    // masked hash prefix
+	Status          string                     `json:"status"` // active|cooldown|locked
+	Model           string                     `json:"model"`
+	ActiveRuns      int                        `json:"active_runs"`
+	Requests        int                        `json:"requests"`
+	Locked          bool                       `json:"locked"`
+	CooldownUntil   string                     `json:"cooldown_until"`
+	SessionActive   bool                       `json:"session_active"`
+	SpendDay        float64                    `json:"spend_day"`
+	SpendPct        int                        `json:"spend_pct"`
+	BanType         string                     `json:"ban_type,omitempty"`
+	BannedUntil     string                     `json:"banned_until,omitempty"`
+	PremiumQuota    *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	Glm53FlashQuota *pool.PremiumQuotaSnapshot `json:"glm53flash_quota,omitempty"`
 }
 
 func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
@@ -745,18 +751,20 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		bannedUntil = snap.BannedUntil.Format(time.RFC3339)
 	}
 	return bridgeTokenCard{
-		Key:           shortKey(snap.Key),
-		Status:        status,
-		Model:         snap.Model,
-		ActiveRuns:    snap.ActiveRuns,
-		Requests:      snap.Requests,
-		Locked:        snap.Locked,
-		CooldownUntil: shortTime(snap.CooldownUntil),
-		SessionActive: snap.SessionActive,
-		SpendDay:      snap.SpendDay,
-		SpendPct:      snap.SpendPct,
-		BanType:       snap.BanType,
-		BannedUntil:   bannedUntil,
+		Key:             shortKey(snap.Key),
+		Status:          status,
+		Model:           snap.Model,
+		ActiveRuns:      snap.ActiveRuns,
+		Requests:        snap.Requests,
+		Locked:          snap.Locked,
+		CooldownUntil:   shortTime(snap.CooldownUntil),
+		SessionActive:   snap.SessionActive,
+		SpendDay:        snap.SpendDay,
+		SpendPct:        snap.SpendPct,
+		BanType:         snap.BanType,
+		BannedUntil:     bannedUntil,
+		PremiumQuota:    snap.PremiumQuota,
+		Glm53FlashQuota: snap.Glm53FlashQuota,
 	}
 }
 
