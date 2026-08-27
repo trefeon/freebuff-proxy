@@ -202,13 +202,12 @@
       </Alert>
     {/if}
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       <!-- Editor -->
-      <div class="lg:col-span-6 flex flex-col h-full">
+      <div class="lg:col-span-6">
         <Card
           title={$tr('.env Editor')}
           description={$tr('Edit environment variables. Save validates server-side and reloads; rejected writes are rolled back.')}
-          class="flex-1 flex flex-col h-full"
         >
           {#snippet actions()}
             {#if data}
@@ -231,9 +230,9 @@
             <textarea
               id="config-env"
               bind:value={envContent}
-              rows="18"
+              rows="20"
               spellcheck="false"
-              class="fp-input fp-mono w-full text-[13px] p-3.5
+              class="fp-input fp-mono w-full min-h-[440px] text-[13px] p-3.5 resize-y
                 {validationErrors.length > 0 ? 'border-[var(--fp-error)]/60' : envValid ? 'border-[var(--fp-success)]/40' : ''}"
               placeholder="# Configuration variables..."
             ></textarea>
@@ -275,15 +274,15 @@
       </div>
 
       <!-- Effective config -->
-      <div class="lg:col-span-6 flex flex-col h-full">
-        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} class="flex-1 flex flex-col h-full">
+      <div class="lg:col-span-6">
+        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} pad="none">
           {#snippet actions()}
             <StatusBadge
               status={`${data?.effective?.length || 0} ${$tr('keys')}`}
               tone={data?.effective?.length ? 'good' : 'warn'}
             />
           {/snippet}
-          <div class="flex-1 flex flex-col min-h-[320px]">
+          <div class="overflow-x-auto max-h-[540px] overflow-y-auto">
             {#if data?.effective?.length}
               <table class="fp-table">
                 <caption class="sr-only">{$tr('Effective configuration — key and value')}</caption>
