@@ -1,0 +1,308 @@
+{
+  "enabled": true,
+  "level": "",
+  "msg": "",
+  "has_filter": false,
+  "entries": [
+    {
+      "time": "2026-08-27T10:00:00Z",
+      "level": "info",
+      "message": "error handling request 0: upstream timeout",
+      "fields": "req_id=req-0000  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:01:00Z",
+      "level": "warn",
+      "message": "request 1 completed",
+      "fields": "req_id=req-0001  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:02:00Z",
+      "level": "error",
+      "message": "request 2 completed",
+      "fields": "req_id=req-0002  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:03:00Z",
+      "level": "debug",
+      "message": "request 3 completed",
+      "fields": "req_id=req-0003  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:04:00Z",
+      "level": "info",
+      "message": "request 4 completed",
+      "fields": "req_id=req-0004  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:05:00Z",
+      "level": "warn",
+      "message": "error handling request 5: upstream timeout",
+      "fields": "req_id=req-0005  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:06:00Z",
+      "level": "error",
+      "message": "request 6 completed",
+      "fields": "req_id=req-0006  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:07:00Z",
+      "level": "debug",
+      "message": "search query filtered by msg param",
+      "fields": "req_id=req-0007  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:08:00Z",
+      "level": "info",
+      "message": "request 8 completed",
+      "fields": "req_id=req-0008  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:09:00Z",
+      "level": "warn",
+      "message": "request 9 completed",
+      "fields": "req_id=req-0009  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:10:00Z",
+      "level": "error",
+      "message": "error handling request 10: upstream timeout",
+      "fields": "req_id=req-0010  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:11:00Z",
+      "level": "debug",
+      "message": "request 11 completed",
+      "fields": "req_id=req-0011  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:12:00Z",
+      "level": "info",
+      "message": "request 12 completed",
+      "fields": "req_id=req-0012  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:13:00Z",
+      "level": "warn",
+      "message": "request 13 completed",
+      "fields": "req_id=req-0013  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:14:00Z",
+      "level": "error",
+      "message": "request 14 completed",
+      "fields": "req_id=req-0014  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:15:00Z",
+      "level": "debug",
+      "message": "error handling request 15: upstream timeout",
+      "fields": "req_id=req-0015  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:16:00Z",
+      "level": "info",
+      "message": "request 16 completed",
+      "fields": "req_id=req-0016  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:17:00Z",
+      "level": "warn",
+      "message": "request 17 completed",
+      "fields": "req_id=req-0017  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:18:00Z",
+      "level": "error",
+      "message": "request 18 completed",
+      "fields": "req_id=req-0018  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:19:00Z",
+      "level": "debug",
+      "message": "request 19 completed",
+      "fields": "req_id=req-0019  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:20:00Z",
+      "level": "info",
+      "message": "error handling request 20: upstream timeout",
+      "fields": "req_id=req-0020  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:21:00Z",
+      "level": "warn",
+      "message": "request 21 completed",
+      "fields": "req_id=req-0021  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:22:00Z",
+      "level": "error",
+      "message": "request 22 completed",
+      "fields": "req_id=req-0022  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:23:00Z",
+      "level": "debug",
+      "message": "request 23 completed",
+      "fields": "req_id=req-0023  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:24:00Z",
+      "level": "info",
+      "message": "request 24 completed",
+      "fields": "req_id=req-0024  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:25:00Z",
+      "level": "warn",
+      "message": "error handling request 25: upstream timeout",
+      "fields": "req_id=req-0025  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:26:00Z",
+      "level": "error",
+      "message": "request 26 completed",
+      "fields": "req_id=req-0026  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:27:00Z",
+      "level": "debug",
+      "message": "request 27 completed",
+      "fields": "req_id=req-0027  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:28:00Z",
+      "level": "info",
+      "message": "request 28 completed",
+      "fields": "req_id=req-0028  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:29:00Z",
+      "level": "warn",
+      "message": "request 29 completed",
+      "fields": "req_id=req-0029  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:30:00Z",
+      "level": "error",
+      "message": "error handling request 30: upstream timeout",
+      "fields": "req_id=req-0030  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:31:00Z",
+      "level": "debug",
+      "message": "request 31 completed",
+      "fields": "req_id=req-0031  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:32:00Z",
+      "level": "info",
+      "message": "request 32 completed",
+      "fields": "req_id=req-0032  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:33:00Z",
+      "level": "warn",
+      "message": "request 33 completed",
+      "fields": "req_id=req-0033  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:34:00Z",
+      "level": "error",
+      "message": "request 34 completed",
+      "fields": "req_id=req-0034  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:35:00Z",
+      "level": "debug",
+      "message": "error handling request 35: upstream timeout",
+      "fields": "req_id=req-0035  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:36:00Z",
+      "level": "info",
+      "message": "request 36 completed",
+      "fields": "req_id=req-0036  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:37:00Z",
+      "level": "warn",
+      "message": "request 37 completed",
+      "fields": "req_id=req-0037  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:38:00Z",
+      "level": "error",
+      "message": "request 38 completed",
+      "fields": "req_id=req-0038  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:39:00Z",
+      "level": "debug",
+      "message": "request 39 completed",
+      "fields": "req_id=req-0039  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:40:00Z",
+      "level": "info",
+      "message": "error handling request 40: upstream timeout",
+      "fields": "req_id=req-0040  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:41:00Z",
+      "level": "warn",
+      "message": "request 41 completed",
+      "fields": "req_id=req-0041  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:42:00Z",
+      "level": "error",
+      "message": "request 42 completed",
+      "fields": "req_id=req-0042  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:43:00Z",
+      "level": "debug",
+      "message": "request 43 completed",
+      "fields": "req_id=req-0043  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:44:00Z",
+      "level": "info",
+      "message": "request 44 completed",
+      "fields": "req_id=req-0044  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:45:00Z",
+      "level": "warn",
+      "message": "error handling request 45: upstream timeout",
+      "fields": "req_id=req-0045  path=/admin/api/logs  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:46:00Z",
+      "level": "error",
+      "message": "request 46 completed",
+      "fields": "req_id=req-0046  model=deepseek/deepseek-v4-flash  path=/v1/messages"
+    },
+    {
+      "time": "2026-08-27T10:47:00Z",
+      "level": "debug",
+      "message": "request 47 completed",
+      "fields": "req_id=req-0047  path=/admin/api/tokens  method=GET"
+    },
+    {
+      "time": "2026-08-27T10:48:00Z",
+      "level": "info",
+      "message": "request 48 completed",
+      "fields": "req_id=req-0048  model=deepseek/deepseek-v4-flash  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-08-27T10:49:00Z",
+      "level": "warn",
+      "message": "request 49 completed",
+      "fields": "req_id=req-0049  path=/admin/api/logs  method=GET"
+    }
+  ]
+}

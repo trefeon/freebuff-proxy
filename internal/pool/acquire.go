@@ -23,16 +23,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
-	"time"
-
 	"freebuff-proxy/internal/config"
 	"freebuff-proxy/internal/notify"
 	"freebuff-proxy/internal/phasetiming"
 	"freebuff-proxy/internal/runs"
 	"freebuff-proxy/internal/session"
 	"freebuff-proxy/internal/upstream"
+	"math/rand/v2"
+	"sort"
+	"strings"
+	"time"
 )
 
 // Acquire resolves the model's agent, picks a start token round-robin, and
@@ -729,11 +729,70 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 
 		return a < b
 	})
+	rot := "drain"
+	if c := p.cfg.Load(); c != nil && c.TokenRotation != "" {
+		rot = c.TokenRotation
+	}
 
-	order := make([]int, 0, len(*toks))
-	order = append(order, matchingHot...)
-	order = append(order, coldTokens...)
-	order = append(order, mismatchedHot...)
+	var order []int
+	switch rot {
+	case "round_robin":
+		// Round-robin mode: visit all eligible tokens sequentially starting from 'start'
+		for offset := 0; offset < len(*toks); offset++ {
+			idx := (start + offset) % len(*toks)
+			if eligible(idx) {
+				order = append(order, idx)
+			}
+		}
+
+	case "least_used":
+		// Least-used mode: rank tokens with the LARGEST remaining quota first (preserve balance)
+		var eligibleTokens []int
+		for idx := range *toks {
+			if eligible(idx) {
+				eligibleTokens = append(eligibleTokens, idx)
+			}
+		}
+		sort.SliceStable(eligibleTokens, func(i, j int) bool {
+			a, b := eligibleTokens[i], eligibleTokens[j]
+			tokA, tokB := (*toks)[a], (*toks)[b]
+			aKnown, aRem, _ := quotaRemaining(tokA, model)
+			bKnown, bRem, _ := quotaRemaining(tokB, model)
+			if aKnown != bKnown {
+				return aKnown
+			}
+			if aKnown && aRem != bRem {
+				return aRem > bRem // largest remaining quota first
+			}
+			return a < b
+		})
+		order = eligibleTokens
+
+	case "random":
+		// Random mode: stochastic shuffle among eligible tokens
+		var eligibleTokens []int
+		for idx := range *toks {
+			if eligible(idx) {
+				eligibleTokens = append(eligibleTokens, idx)
+			}
+		}
+		if len(eligibleTokens) > 1 {
+			if p.randGen == nil {
+				p.randGen = rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 1))
+			}
+			p.randGen.Shuffle(len(eligibleTokens), func(i, j int) {
+				eligibleTokens[i], eligibleTokens[j] = eligibleTokens[j], eligibleTokens[i]
+			})
+			p.randMu.Unlock()
+		}
+		order = eligibleTokens
+
+	default: // "drain" (default)
+		order = make([]int, 0, len(*toks))
+		order = append(order, matchingHot...)
+		order = append(order, coldTokens...)
+		order = append(order, mismatchedHot...)
+	}
 
 	if len(order) == 0 {
 		// All tokens are cooling down or capped: fallback to round-robin

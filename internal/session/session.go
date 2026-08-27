@@ -136,6 +136,11 @@ type Manager struct {
 	// commit(non-nil) without fresh quota restores it so the dashboard
 	// quota table stays visible between quota-carrying responses.
 	savedQuota map[string]upstream.ModelQuota
+	// savedRemainingMs / savedReferral mirror the quota/glmPromo stash (issue
+	// #146/#178): they survive invalidation so the dashboard keeps showing the
+	// session countdown and referral banner between quota-carrying responses.
+	savedRemainingMs int64
+	savedReferral    *upstream.SessionReferral
 	// savedGlmPromo preserves the last glmPromo block across
 	// invalidation/re-admission cycles, mirroring savedQuota (issue #178):
 	// the GLM promo quota row must stay visible while the session is
@@ -211,6 +216,12 @@ type cachedState struct {
 	// standing is the upstream account standing block (issue #96); nil until
 	// an admission/poll that carried it.
 	standing *upstream.SessionStanding
+	// remainingMs is the server-authoritative ms left in the active session
+	// (wire remainingMs); 0 when absent.
+	remainingMs int64
+	// referral is the upstream referral block (FreebuffReferralInfo); nil
+	// until an admission/poll that carried it.
+	referral *upstream.SessionReferral
 }
 
 // NewManager builds a session manager for the given upstream client.
@@ -273,6 +284,14 @@ func (m *Manager) commit(cs *cachedState) {
 		if m.state.glmPromo != "" {
 			m.savedGlmPromo = m.state.glmPromo
 		}
+		// Stash the server-authoritative countdown and referral block the same
+		// way, so the dashboard keeps them across quota-carrying cycles.
+		if m.state.remainingMs > 0 {
+			m.savedRemainingMs = m.state.remainingMs
+		}
+		if m.state.referral != nil {
+			m.savedReferral = m.state.referral
+		}
 	}
 	// Restore the previously-seen quota map when the new state omits
 	// rateLimitsByModel (the upstream intermittently drops the field on
@@ -285,6 +304,14 @@ func (m *Manager) commit(cs *cachedState) {
 	// it (issue #178), mirroring the quota-map restore above.
 	if cs != nil && cs.glmPromo == "" && m.savedGlmPromo != "" {
 		cs.glmPromo = m.savedGlmPromo
+	}
+	// Restore the countdown and referral the same way when the new state
+	// omits them.
+	if cs != nil && cs.remainingMs == 0 && m.savedRemainingMs > 0 {
+		cs.remainingMs = m.savedRemainingMs
+	}
+	if cs != nil && cs.referral == nil && m.savedReferral != nil {
+		cs.referral = m.savedReferral
 	}
 	m.state = cs
 	if m.store != nil && m.key != "" {
@@ -481,6 +508,9 @@ type SessionSnapshot struct {
 	Model         string
 	QueuePosition int
 	QueueDepth    int
+	// RemainingMs is the server-authoritative milliseconds left in the active
+	// session (wire remainingMs); 0 when absent.
+	RemainingMs int64
 	// Refreshing reports whether a session admission or pre-emptive re-admit
 	// is currently in flight for this manager.
 	Refreshing         bool
@@ -511,6 +541,9 @@ type SessionSnapshot struct {
 	// Standing is the upstream account standing block (issue #96); nil until
 	// an admission/poll that carried it.
 	Standing *upstream.SessionStanding
+	// Referral is the upstream referral block (FreebuffReferralInfo); nil
+	// until an admission/poll that carried it.
+	Referral *upstream.SessionReferral
 }
 
 // QuotaSnapshot is one model's live session quota for healthz/metrics
@@ -521,6 +554,8 @@ type QuotaSnapshot struct {
 	RecentCount float64
 	ResetAt     time.Time
 	Period      string
+	Pool        string
+	PoolLabel   string
 	Entitlement map[string]float64
 }
 
@@ -540,6 +575,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 					RecentCount: q.RecentCount,
 					ResetAt:     q.ResetAt,
 					Period:      q.Period,
+					Pool:        q.Pool,
+					PoolLabel:   q.PoolLabel,
 					Entitlement: q.Entitlement,
 				}
 			}
@@ -548,6 +585,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			Refreshing:   m.refreshing,
 			QuotaByModel: quota,
 			GlmPromo:     m.savedGlmPromo,
+			RemainingMs:  m.savedRemainingMs,
+			Referral:     m.savedReferral,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -558,6 +597,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			RecentCount: q.RecentCount,
 			ResetAt:     q.ResetAt,
 			Period:      q.Period,
+			Pool:        q.Pool,
+			PoolLabel:   q.PoolLabel,
 			Entitlement: q.Entitlement,
 		}
 	}
@@ -583,6 +624,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		QuotaByModel:       quota,
 		GlmPromo:           m.state.glmPromo,
 		Standing:           m.state.standing,
+		RemainingMs:        m.state.remainingMs,
+		Referral:           m.state.referral,
 	}
 }
 
@@ -707,6 +750,18 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 		m.savedQuota = st.RateLimitsByModel
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel
+		}
+	}
+	if st.RemainingMs > 0 {
+		m.savedRemainingMs = st.RemainingMs
+		if m.state != nil {
+			m.state.remainingMs = st.RemainingMs
+		}
+	}
+	if st.Referral != nil {
+		m.savedReferral = st.Referral
+		if m.state != nil {
+			m.state.referral = st.Referral
 		}
 	}
 }

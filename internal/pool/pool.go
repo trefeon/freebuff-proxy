@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -171,6 +172,9 @@ type TokenSnapshot struct {
 	// Standing is the upstream account standing block (issue #96); nil until
 	// the session reports it.
 	Standing *upstream.SessionStanding
+	// Referral is the upstream referral block (FreebuffReferralInfo); nil until
+	// the session reports it.
+	Referral *upstream.SessionReferral
 	// TransientRetries / FingerprintRotations are this token's upstream
 	// client counters (TRANSIENT_RETRIES): retried transport failures and
 	// pinned TLS fingerprint swaps. Surfaced per-token in /metrics.
@@ -343,6 +347,10 @@ type Pool struct {
 	// effect on the next restart.
 	storeSessionPersist bool
 	storeStateFile      string
+
+	// randMu and randGen support stochastic rotation ("random" TokenRotation mode)
+	randMu  sync.Mutex
+	randGen *rand.Rand
 }
 
 // admissionGate is the per-model leader election gate: the leader creates
@@ -663,4 +671,14 @@ func bestRateLimit(entries []*upstream.RateLimitError) *upstream.RateLimitError 
 		}
 	}
 	return best
+}
+
+// EnsureTokenSession admits/creates an upstream session for a specific model on a specific token (dashboard dev action).
+func (p *Pool) EnsureTokenSession(ctx context.Context, token int, model string) (string, error) {
+	toks := p.toks.Load()
+	if token < 0 || token >= len(*toks) {
+		return "", fmt.Errorf("pool: token %d out of range", token)
+	}
+	tok := (*toks)[token]
+	return tok.session.EnsureSessionForModel(ctx, model)
 }

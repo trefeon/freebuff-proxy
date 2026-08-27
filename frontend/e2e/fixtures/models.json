@@ -1,0 +1,49 @@
+{
+  "count": 7,
+  "agents": 7,
+  "has_aliases": true,
+  "models": [
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "agent": "base2-free-deepseek-flash"
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro",
+      "agent": "base2-free-deepseek"
+    },
+    {
+      "id": "mimo/mimo-v2.5",
+      "agent": "base2-free-mimo"
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "agent": "base2-free-luna"
+    },
+    {
+      "id": "stealth/ox-alpha",
+      "agent": "base2-free-ox-alpha"
+    },
+    {
+      "id": "z-ai/glm-5.2",
+      "agent": "base2-free-glm"
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "agent": "base2-free-glm-5-3-flash"
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "flash",
+      "real": "deepseek/deepseek-v4-flash"
+    },
+    {
+      "alias": "glm",
+      "real": "z-ai/glm-5.2"
+    },
+    {
+      "alias": "luna",
+      "real": "openai/gpt-5.6-luna"
+    }
+  ]
+}

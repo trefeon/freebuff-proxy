@@ -14,7 +14,13 @@
   // The server replies to failed logins with {"error":"..."} JSON, but a
   // proxy or error page in front of it can return HTML or an empty body.
   // Only surface a clean message; never dump the raw response body.
-  function cleanLoginError(body) {
+  function cleanLoginError(res, body) {
+    if (res?.status === 403) {
+      return $tr('Request blocked (CSRF/Origin mismatch). Please access directly via 127.0.0.1:3457.');
+    }
+    if (res?.status === 429) {
+      return $tr('Too many failed attempts — try again in a minute.');
+    }
     if (!body) return $tr('Invalid password.');
     try {
       const data = JSON.parse(body);
@@ -23,6 +29,7 @@
       if (typeof msg !== 'string' || !msg.trim()) return $tr('Invalid password.');
       return msg.trim();
     } catch {
+      if (body.includes('Too many failed')) return $tr('Too many failed attempts — try again in a minute.');
       return $tr('Invalid password.');
     }
   }
@@ -46,7 +53,7 @@
         const tab = window.location.hash.replace('#', '');
         window.location.href = tab && tab !== 'login' ? `/admin#${tab}` : '/admin';
       } else {
-        errorMsg = cleanLoginError(await res.text());
+        errorMsg = cleanLoginError(res, await res.text());
       }
     } catch (e) {
       errorMsg = $tr('Could not reach the server. Check the connection and try again.');

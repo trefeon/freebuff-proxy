@@ -1,0 +1,19 @@
+{
+  "base_url": "http://127.0.0.1:3457/v1",
+  "key_hint": "sk-any (pooled mode; the proxy picks from AUTH_TOKENS)",
+  "model": "mimo/mimo-v2.5",
+  "models": [
+    "deepseek/deepseek-v4-flash",
+    "deepseek/deepseek-v4-pro",
+    "mimo/mimo-v2.5",
+    "openai/gpt-5.6-luna",
+    "stealth/ox-alpha",
+    "z-ai/glm-5.2",
+    "z-ai/glm-5.3-flash"
+  ],
+  "mode": "pooled",
+  "bridge": false,
+  "bridge_tokens": 0,
+  "token_count": 2,
+  "has_tokens": true
+}

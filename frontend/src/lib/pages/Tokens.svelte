@@ -11,6 +11,8 @@
     ChevronDown,
     ChevronRight,
     RefreshCw,
+    Zap,
+    Check,
   } from '@lucide/svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
@@ -50,6 +52,8 @@
 
   // Token table
   let expandedToken = $state(null);
+  let spawnModels = $state({});
+  let spawnModels = $state({});
   let actionPending = $state(false);
   let now = $state(Date.now());
 
@@ -538,6 +542,57 @@
                         {#if token.glm53flash_quota}
                           <PremiumQuotaBar quota={token.glm53flash_quota} title={$tr('GLM 5.3 Flash pool')} {now} />
                         {/if}
+                      </div>
+                      <!-- Dev Tools: Session Generator & Diagnostics Toolbar -->
+                      <div class="mb-3 p-2.5 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] flex flex-wrap items-center justify-between gap-2.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider">{$tr('Dev Session:')}</span>
+                          <select
+                            bind:value={spawnModels[idx]}
+                            class="fp-input !text-xs !py-1 !px-2 !h-7 !w-44 !inline-block"
+                          >
+                            <option value="stealth/ox-alpha">stealth/ox-alpha (1M)</option>
+                            <option value="openai/gpt-5.6-luna">openai/gpt-5.6-luna (5/d)</option>
+                            <option value="mimo/mimo-v2.5">mimo/mimo-v2.5 (unlimited)</option>
+                            <option value="z-ai/glm-5.3-flash">z-ai/glm-5.3-flash (2/d)</option>
+                            <option value="deepseek/deepseek-v4-flash">deepseek/deepseek-v4-flash</option>
+                            <option value="deepseek/deepseek-v4-pro">deepseek/deepseek-v4-pro</option>
+                            <option value="z-ai/glm-5.2">z-ai/glm-5.2 (referral)</option>
+                          </select>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            class="!h-7 !text-xs !px-2.5"
+                            disabled={actionPending}
+                            onclick={() => triggerAction(`/admin/tokens/${idx}/session`, { model: spawnModels[idx] || 'stealth/ox-alpha' }, $tr('Create upstream session for token #{idx} on {model}?', { idx, model: spawnModels[idx] || 'stealth/ox-alpha' }))}
+                          >
+                            <Zap size={12} />
+                            <span>{$tr('Make Session')}</span>
+                          </Button>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            class="!h-7 !text-xs !px-2"
+                            disabled={actionPending}
+                            onclick={() => triggerAction(`/admin/tokens/${idx}/test`, {}, $tr('Probe token #{idx} against upstream?', { idx }))}
+                          >
+                            <RefreshCw size={12} />
+                            <span>{$tr('Probe')}</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            class="!h-7 !text-xs !px-2"
+                            disabled={actionPending}
+                            onclick={() => triggerAction(`/admin/tokens/${idx}/finish`, {}, $tr('Finish active runs on token #{idx}?', { idx }))}
+                          >
+                            <Check size={12} />
+                            <span>{$tr('Finish Runs')}</span>
+                          </Button>
+                        </div>
                       </div>
                       {#if token.session_remaining_seconds > 0 && token.session_model}
                         <div class="mb-2 px-2 py-1 rounded bg-[var(--fp-accent)]/10 text-xs text-[var(--fp-accent)] flex items-center justify-between">

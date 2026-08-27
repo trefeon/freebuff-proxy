@@ -95,6 +95,7 @@ func Load(configPath string) (Config, error) {
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
+	overrideString(&raw.TokenRotation, "TOKEN_ROTATION")
 	overrideBool(&raw.DashboardEnabled, "DASHBOARD_ENABLED")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
@@ -347,6 +348,21 @@ func Load(configPath string) (Config, error) {
 	if adminToken == "" {
 		adminToken = DefaultAdminToken
 	}
+
+	tokenRotation := strings.ToLower(strings.TrimSpace(raw.TokenRotation))
+	switch tokenRotation {
+	case "", "drain":
+		tokenRotation = "drain"
+	case "round_robin", "roundrobin", "rr":
+		tokenRotation = "round_robin"
+	case "least_used", "leastused":
+		tokenRotation = "least_used"
+	case "random", "rand":
+		tokenRotation = "random"
+	default:
+		return Config{}, fmt.Errorf("invalid TOKEN_ROTATION: %q (must be drain, round_robin, least_used, or random)", raw.TokenRotation)
+	}
+
 	cfg := Config{
 		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
 		UpstreamBaseURL:                  upstreamBaseURL,
@@ -354,6 +370,7 @@ func Load(configPath string) (Config, error) {
 		RotationInterval:                 rotationInterval,
 		RequestTimeout:                   requestTimeout,
 		SessionCallTimeout:               sessionCallTimeout,
+		TokenRotation:                    tokenRotation,
 		APIKeys:                          dedupeStrings(raw.APIKeys),
 		AdminToken:                       adminToken,
 		HTTP2Upstream:                    raw.HTTP2Upstream,
@@ -551,10 +568,10 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.RotationInterval, get, "ROTATION_INTERVAL")
 	overrideStringFrom(&raw.RequestTimeout, get, "REQUEST_TIMEOUT")
 	overrideStringFrom(&raw.SessionCallTimeout, get, "SESSION_CALL_TIMEOUT")
+	overrideStringFrom(&raw.TokenRotation, get, "TOKEN_ROTATION")
 	overrideCSVFrom(&raw.APIKeys, get, "API_KEYS")
 	overrideStringFrom(&raw.AdminToken, get, "ADMIN_TOKEN")
 	overrideStringFrom(&raw.CostMode, get, "COST_MODE")
-	// ACTING_USER_ID / legacy USER_ID (#126), same-source: a .env USER_ID
 	// beats a JSON ACTING_USER_ID (dotenv outranks JSON), ACTING_USER_ID
 	// wins when both are in the .env.
 	overrideStringAlias(&raw.ActingUserID, get, "ACTING_USER_ID", "USER_ID")

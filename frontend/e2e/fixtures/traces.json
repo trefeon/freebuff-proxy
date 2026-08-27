@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "traces": [
+    {
+      "id": "trace-0001",
+      "model": "deepseek/deepseek-v4-flash",
+      "started_at": "2026-08-27T10:00:00Z",
+      "duration_ms": 1234,
+      "status": "ok",
+      "token": 0
+    },
+    {
+      "id": "trace-0002",
+      "model": "openai/gpt-5.6-luna",
+      "started_at": "2026-08-27T10:01:00Z",
+      "duration_ms": 842,
+      "status": "ok",
+      "token": 1
+    }
+  ]
+}

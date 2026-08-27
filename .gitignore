@@ -10,6 +10,7 @@ reference/
 config.json
 config.*.json
 !config.example.json
+!frontend/e2e/fixtures/config.json
 *.pem
 *.key
 

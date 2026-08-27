@@ -19,15 +19,8 @@ func TestDefaultModelAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{
-		"deepseek-chat":     "deepseek/deepseek-v4-flash",
-		"gpt-4o":            "deepseek/deepseek-v4-pro",
-		"claude-3-5-sonnet": "anthropic/claude-fable-5",
-	}
-	for alias, real := range want {
-		if got := cfg.ModelAliases[alias]; got != real {
-			t.Errorf("ModelAliases[%q] = %q, want default %q", alias, got, real)
-		}
+	if len(cfg.ModelAliases) != 0 {
+		t.Errorf("ModelAliases len = %d, want empty by default", len(cfg.ModelAliases))
 	}
 }
 

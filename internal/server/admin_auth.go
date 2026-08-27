@@ -234,11 +234,23 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || !strings.EqualFold(u.Host, r.Host) {
+				if err != nil {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusForbidden)
 					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
 					return
+				}
+				if !strings.EqualFold(u.Host, r.Host) {
+					originH, originP, err1 := net.SplitHostPort(u.Host)
+					reqH, reqP, err2 := net.SplitHostPort(r.Host)
+					if err1 == nil && err2 == nil && originP == reqP && isLoopbackHost(originH) && isLoopbackHost(reqH) {
+						// Allowed: localhost:3457 vs 127.0.0.1:3457 on same port
+					} else {
+						w.Header().Set("Content-Type", "text/html; charset=utf-8")
+						w.WriteHeader(http.StatusForbidden)
+						s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
+						return
+					}
 				}
 			}
 			if sfs := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))); sfs != "" {

@@ -240,6 +240,8 @@ type tokenDetail struct {
 
 type quotaRow struct {
 	Model          string  `json:"model"`
+	Pool           string  `json:"pool,omitempty"`
+	PoolLabel      string  `json:"pool_label,omitempty"`
 	Limit          string  `json:"limit"`
 	Recent         string  `json:"recent"`
 	Remaining      float64 `json:"remaining"`
@@ -284,6 +286,8 @@ func (d *Dashboard) tokensData() tokensData {
 			}
 			row := quotaRow{
 				Model:      model,
+				Pool:       q.Pool,
+				PoolLabel:  q.PoolLabel,
 				Limit:      formatQuota(q.Limit),
 				Recent:     formatQuota(q.RecentCount),
 				Remaining:  rem,
@@ -573,6 +577,16 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 			})
 		}
 	}
+	if t.Referral != nil {
+		card.HasReferral = true
+		card.ReferralCode = t.Referral.Code
+		card.ReferralQualifiedCount = t.Referral.QualifiedCount
+		card.ReferralSessionsLeft = t.Referral.WeeklySessionsRemaining
+		card.ReferralGithubLinked = t.Referral.GithubLinked
+		if !t.Referral.ResetAt.IsZero() {
+			card.ReferralResetAt = t.Referral.ResetAt.Format(time.RFC3339)
+		}
+	}
 	return card
 }
 
@@ -638,6 +652,7 @@ func humanDuration(d time.Duration) string {
 // --- overview ---
 
 type overviewData struct {
+	BaseURL              string            `json:"base_url"`
 	Mode                 string            `json:"mode"`
 	InBridge             bool              `json:"in_bridge"`
 	BridgeTokens         int               `json:"bridge_tokens"`
@@ -709,6 +724,13 @@ type tokenCard struct {
 	StandingCappedReason string             `json:"standing_capped_reason,omitempty"`
 	StandingBlurb        string             `json:"standing_blurb,omitempty"`
 	StandingNextSteps    []standingStepCard `json:"standing_next_steps,omitempty"`
+	// Referral (FreebuffReferralInfo): invite program state for this token.
+	HasReferral            bool   `json:"has_referral"`
+	ReferralCode           string `json:"referral_code,omitempty"`
+	ReferralQualifiedCount int    `json:"referral_qualified_count"`
+	ReferralSessionsLeft   int    `json:"referral_sessions_left"`
+	ReferralGithubLinked   bool   `json:"referral_github_linked"`
+	ReferralResetAt        string `json:"referral_reset_at,omitempty"`
 }
 
 // standingStepCard is one dashboard-ready earn-back action
@@ -855,12 +877,16 @@ func (d *Dashboard) overviewData() overviewData {
 	cfg := d.cfg()
 	ps := d.pool.PoolSnapshot()
 	mode := cfg.EffectiveMode()
+	host := "localhost"
+	if h, _, err := net.SplitHostPort(cfg.ListenAddr); err == nil && h != "" && h != "0.0.0.0" && h != "::" {
+		host = h
+	}
 	od := overviewData{
+		BaseURL:              "http://" + host + "/v1",
 		Mode:                 mode,
 		InBridge:             mode == "bridge",
 		Models:               servedModels(d.reg),
 		ModelCount:           len(servedModels(d.reg)),
-		Uptime:               time.Since(d.started).Round(time.Second).String(),
 		SafeMode:             cfg.SafeMode,
 		MaxMessagesPerDay:    cfg.MaxMessagesPerDay,
 		TransientRetries:     ps.TransientRetries,
