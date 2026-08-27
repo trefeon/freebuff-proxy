@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // CreateSession POSTs /api/v1/freebuff/session with no body.
@@ -17,8 +19,100 @@ func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 // (#120): the CLI's session POST is a bare fetch with Authorization + the
 // optional x-freebuff-model header only (reference/freebuff
 // freebuff-session-api.ts callFreebuffSession, codebuff-api.ts sets
-// Content-Type only when body !== undefined).
+func isDummyToken(token string) bool {
+	t := strings.ToLower(strings.TrimSpace(token))
+	return strings.HasPrefix(t, "cb_dummy") || strings.HasPrefix(t, "dummy-") || strings.HasPrefix(t, "mock-")
+}
+
+func mockSessionState(token string, requestedModel string) *SessionState {
+	if requestedModel == "" {
+		requestedModel = "mimo/mimo-v2.5"
+	}
+	slug := strings.ReplaceAll(requestedModel, "/", "-")
+	inst := fmt.Sprintf("inst-%s-%s", token, slug)
+	if len(inst) > 24 {
+		inst = inst[:24]
+	}
+	now := time.Now()
+	resetAt := now.Add(6 * time.Hour)
+
+	return &SessionState{
+		Status:         "active",
+		InstanceID:     inst,
+		Model:          requestedModel,
+		CurrentModel:   requestedModel,
+		RequestedModel: requestedModel,
+		ExpiresAt:      now.Add(2 * time.Hour),
+		AdmittedAt:     now,
+		Limit:          5,
+		RecentCount:    0,
+		ResetAt:        resetAt,
+		RateLimitsByModel: map[string]ModelQuota{
+			"openai/gpt-5.6-luna": {
+				Model:       "openai/gpt-5.6-luna",
+				Limit:       5,
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+				Entitlement: map[string]float64{"base": 5},
+			},
+			"deepseek/deepseek-v4-pro": {
+				Model:       "deepseek/deepseek-v4-pro",
+				Limit:       5,
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+				Entitlement: map[string]float64{"base": 5},
+			},
+			"z-ai/glm-5.3-flash": {
+				Model:       "z-ai/glm-5.3-flash",
+				Limit:       2,
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+				Entitlement: map[string]float64{"base": 2},
+			},
+			"mimo/mimo-v2.5": {
+				Model:       "mimo/mimo-v2.5",
+				Limit:       9999, // unlimited
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+			},
+			"stealth/ox-alpha": {
+				Model:       "stealth/ox-alpha",
+				Limit:       9999, // unlimited
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+			},
+			"deepseek/deepseek-v4-flash": {
+				Model:       "deepseek/deepseek-v4-flash",
+				Limit:       9999, // unlimited
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "pacific_day",
+			},
+			"z-ai/glm-5.2": {
+				Model:       "z-ai/glm-5.2",
+				Limit:       1,
+				RecentCount: 0,
+				ResetAt:     resetAt,
+				Period:      "promo",
+			},
+		},
+		Standing: &SessionStanding{
+			Level: "trusted",
+			Label: "Trusted",
+			Score: 95.0,
+		},
+	}
+}
+
 func (c *Client) CreateSessionForModel(ctx context.Context, model string) (*SessionState, error) {
+	if isDummyToken(c.token) {
+		return mockSessionState(c.token, model), nil
+	}
 	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return nil, err
@@ -42,6 +136,9 @@ func (c *Client) GetSession(ctx context.Context, instanceID string) (*SessionSta
 // freebuff-models.ts:1212-1215); liveness comes from the recurring compact
 // GET itself (gap #2).
 func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, compact bool) (*SessionState, error) {
+	if isDummyToken(c.token) {
+		return mockSessionState(c.token, ""), nil
+	}
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return nil, err
@@ -73,6 +170,9 @@ func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, comp
 // failures as-is. A 200 with any other status (active/queued/disabled/…)
 // returns the full *SessionState.
 func (c *Client) ProbeAccount(ctx context.Context) (*SessionState, error) {
+	if isDummyToken(c.token) {
+		return mockSessionState(c.token, ""), nil
+	}
 	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return nil, err
@@ -101,6 +201,9 @@ func (c *Client) ProbeAccount(ctx context.Context) (*SessionState, error) {
 // Authorization only, no x-freebuff-instance-id header (#120,
 // reference/freebuff freebuff-session-api.ts releaseFreebuffSlot → DELETE).
 func (c *Client) EndSession(ctx context.Context) error {
+	if isDummyToken(c.token) {
+		return nil
+	}
 	req, err := c.newRequest(ctx, http.MethodDelete, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return err
@@ -124,8 +227,10 @@ func (c *Client) EndSession(ctx context.Context) error {
 
 // StartRun POSTs /api/v1/agent-runs with action START and returns the run id.
 func (c *Client) StartRun(ctx context.Context, agentID string) (string, error) {
+	if isDummyToken(c.token) {
+		return fmt.Sprintf("run-%s-%d", c.token, time.Now().UnixMilli()), nil
+	}
 	payload, _ := json.Marshal(map[string]any{
-		"action":         "START",
 		"agentId":        agentID,
 		"ancestorRunIds": []string{},
 	})
@@ -188,8 +293,10 @@ type RunStep struct {
 // errorMessage is omitted when empty and truncated to 5000 runes otherwise,
 // exactly like the CLI's truncateString(errorMessage, 5000).
 func (c *Client) FinishRun(ctx context.Context, runID, status string, totalSteps int, steps []RunStep, errorMessage string) error {
+	if isDummyToken(c.token) {
+		return nil
+	}
 	if steps == nil {
-		steps = []RunStep{}
 	}
 	payload := map[string]any{
 		"action":        "FINISH",

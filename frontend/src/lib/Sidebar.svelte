@@ -1,6 +1,6 @@
 <script>
   import {
-    LayoutDashboard, Key, Cpu, Settings, FileText, Menu, X,
+    LayoutDashboard, Key, Cpu, Settings, FileText, FlaskConical, Menu, X,
   } from '@lucide/svelte';
 
   /**
@@ -21,8 +21,8 @@
     { id: 'models',   label: 'Models',   icon: Cpu },
     { id: 'config',   label: 'Config',   icon: Settings },
     { id: 'logs',     label: 'Logs',     icon: FileText },
+    { id: 'devtools', label: 'Dev Tools', icon: FlaskConical },
   ];
-
   function switchTab(id) {
     activeTab = id;
     onTabChange?.(id);

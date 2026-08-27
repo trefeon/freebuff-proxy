@@ -7,8 +7,8 @@
   import Models from './lib/pages/Models.svelte';
   import Config from './lib/pages/Config.svelte';
   import Logs from './lib/pages/Logs.svelte';
+  import DevTools from './lib/pages/DevTools.svelte';
   import Login from './lib/pages/Login.svelte';
-  import SecurityBanner from './lib/components/SecurityBanner.svelte';
   import ChangePasswordModal from './lib/components/ChangePasswordModal.svelte';
   import Alert from './lib/components/Alert.svelte';
   import Button from './lib/components/Button.svelte';
@@ -154,6 +154,8 @@
             <Config />
           {:else if activeTab === 'logs'}
             <Logs />
+          {:else if activeTab === 'devtools'}
+            <DevTools />
           {:else if activeTab === 'login'}
             <Login />
           {/if}
