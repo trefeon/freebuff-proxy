@@ -1,5 +1,5 @@
 <script>
-  import { RefreshCw, ChevronLeft, ChevronRight } from '@lucide/svelte';
+  import { RefreshCw, ChevronLeft, ChevronRight, Search, EyeOff } from '@lucide/svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import Card from '../components/Card.svelte';
   import Button from '../components/Button.svelte';
@@ -104,10 +104,23 @@
     description={$tr('Structured entries from the in-memory ring buffer (200 max, newest first), filtered by level and message.')}
   >
     {#snippet actions()}
-      <label for="log-level" class="sr-only">Log level</label>
+      <Button variant="ghost" size="sm" aria-pressed={autoPoll} onclick={() => (autoPoll = !autoPoll)}>
+        {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
+      </Button>
+      <Button variant="secondary" size="sm" loading={manualRefresh} onclick={refresh} disabled={loading && !data}>
+        <RefreshCw size={14} />
+        {$tr('Refresh')}
+      </Button>
+    {/snippet}
+  </PageHeader>
+
+  <!-- Filter & Search Toolbar -->
+  <div class="fp-card p-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-2.5 flex-1">
+      <label for="log-level" class="sr-only">{$tr('Log level')}</label>
       <select
         id="log-level"
-        class="fp-input w-auto"
+        class="fp-input text-xs w-32 py-1.5"
         bind:value={filterLevel}
         onchange={handleFilterChange}
       >
@@ -118,36 +131,44 @@
         <option value="error">{$tr('Error')}</option>
       </select>
 
-      <label for="log-msg" class="sr-only">Filter by message</label>
-      <input
-        id="log-msg"
-        type="text"
-        class="fp-input w-56"
-        bind:value={filterMsg}
-        oninput={handleFilterChange}
-        placeholder={$tr('Filter message…')}
-      />
-      <Button variant="ghost" size="sm" aria-pressed={autoPoll} onclick={() => (autoPoll = !autoPoll)}>
-        {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
-      </Button>
+      <div class="relative flex-1 min-w-[200px] max-w-md">
+        <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] pointer-events-none" />
+        <label for="log-msg" class="sr-only">{$tr('Filter by message')}</label>
+        <input
+          id="log-msg"
+          type="text"
+          class="fp-input text-xs w-full pl-8 py-1.5"
+          bind:value={filterMsg}
+          oninput={handleFilterChange}
+          placeholder={$tr('Filter message…')}
+        />
+      </div>
 
-      <Button variant="ghost" size="sm" aria-pressed={hideAdmin} onclick={() => { hideAdmin = !hideAdmin; page = 0; }}>
-        {$tr('Hide admin')}
+      <Button
+        variant={hideAdmin ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-pressed={hideAdmin}
+        onclick={() => { hideAdmin = !hideAdmin; page = 0; }}
+        class="text-xs"
+      >
+        <EyeOff size={13} />
+        <span>{$tr('Hide admin')}</span>
       </Button>
 
       {#if hasActiveFilter}
-        <Button variant="ghost" size="sm" onclick={clearFilters}>
+        <Button variant="ghost" size="sm" onclick={clearFilters} class="text-xs text-[var(--fp-dim)] hover:text-[var(--fp-text)]">
           {$tr('Clear filters')}
         </Button>
       {/if}
+    </div>
 
-      <Button variant="secondary" size="sm" loading={manualRefresh} onclick={refresh} disabled={loading && !data}>
-        <RefreshCw size={14} />
-        {$tr('Refresh')}
-      </Button>
-    {/snippet}
-  </PageHeader>
-
+    <div class="flex items-center gap-2 shrink-0 text-xs font-mono text-[var(--fp-muted)]">
+      <span class="inline-flex items-center gap-1.5">
+        <span class="led {filteredEntries.length > 0 ? 'led-good' : 'led-idle'}"></span>
+        <span>{filteredEntries.length} {$tr('entries')}</span>
+      </span>
+    </div>
+  </div>
   {#if error}
     <Alert tone="error" title={$tr('Could not load log entries')}>
       <p class="text-sm">{error}</p>
