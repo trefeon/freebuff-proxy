@@ -68,8 +68,10 @@
   }
 
   function handleFilterChange(e) {
-    if (e?.currentTarget && typeof e.currentTarget.value === 'string') {
+    if (e?.currentTarget?.id === 'log-msg' && typeof e.currentTarget.value === 'string') {
       filterMsg = e.currentTarget.value;
+    } else if (e?.currentTarget?.id === 'log-level' && typeof e.currentTarget.value === 'string') {
+      filterLevel = e.currentTarget.value;
     }
     page = 0;
     fetchLogs();
