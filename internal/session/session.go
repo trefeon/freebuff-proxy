@@ -624,6 +624,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		QuotaByModel:       quota,
 		GlmPromo:           m.state.glmPromo,
 		Standing:           m.state.standing,
+		RemainingMs:        m.state.remainingMs,
+		Referral:           m.state.referral,
 	}
 }
 
