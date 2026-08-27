@@ -202,12 +202,13 @@
       </Alert>
     {/if}
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
       <!-- Editor -->
-      <div class="lg:col-span-6">
+      <div class="lg:col-span-6 flex flex-col">
         <Card
           title={$tr('.env Editor')}
           description={$tr('Edit environment variables. Save validates server-side and reloads; rejected writes are rolled back.')}
+          class="flex-1 flex flex-col"
         >
           {#snippet actions()}
             {#if data}
@@ -225,20 +226,19 @@
             {/if}
           {/snippet}
 
-          <form onsubmit={saveConfig}>
+          <form onsubmit={saveConfig} class="flex-1 flex flex-col">
             <label for="config-env" class="sr-only">{$tr('Environment file content')}</label>
             <textarea
               id="config-env"
               bind:value={envContent}
-              rows="20"
               spellcheck="false"
-              class="fp-input fp-mono w-full min-h-[440px] text-[13px] p-3.5 resize-y
+              class="fp-input fp-mono w-full flex-1 min-h-[350px] text-[13px] p-3.5 resize-none
                 {validationErrors.length > 0 ? 'border-[var(--fp-error)]/60' : envValid ? 'border-[var(--fp-success)]/40' : ''}"
               placeholder="# Configuration variables..."
             ></textarea>
 
             {#if validationErrors.length > 0}
-              <div role="alert" aria-live="polite" class="mt-3 p-3 rounded-[var(--fp-radius-sm)] fp-inset border-[var(--fp-error)]/30 space-y-1">
+              <div role="alert" aria-live="polite" class="mt-3 p-3 rounded-[var(--fp-radius-sm)] fp-inset border-[var(--fp-error)]/30 space-y-1 shrink-0">
                 <p class="text-xs font-semibold text-[var(--fp-error)]">
                   {$tr('{count} validation error(s):', { count: validationErrors.length })}
                 </p>
@@ -251,7 +251,7 @@
               </div>
             {/if}
 
-            <div class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
               <div class="flex items-center gap-3 text-[11px] text-[var(--fp-dim)] font-mono">
                 <span>{lineCount} {$tr('lines')}</span>
                 <span class="text-[var(--fp-border-bright)]">|</span>
@@ -266,23 +266,23 @@
                   {$tr('Validate')}
                 </Button>
               </div>
+            </div>
           </form>
-          <p class="mt-3 text-[11px] text-[var(--fp-dim)]">
+          <p class="mt-3 text-[11px] text-[var(--fp-dim)] shrink-0">
             {$tr('Changes take effect after save.')} <kbd class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]">Ctrl+S</kbd> {$tr('saves from the keyboard')}.
           </p>
         </Card>
       </div>
 
       <!-- Effective config -->
-      <div class="lg:col-span-6">
-        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} pad="none">
+      <div class="lg:col-span-6 flex flex-col">
+        <Card title={$tr('Effective Configuration')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} pad="none" class="flex-1 flex flex-col">
           {#snippet actions()}
             <StatusBadge
-              status={`${data?.effective?.length || 0} ${$tr('keys')}`}
               tone={data?.effective?.length ? 'good' : 'warn'}
             />
           {/snippet}
-          <div class="overflow-x-auto max-h-[540px] overflow-y-auto">
+          <div class="overflow-x-auto flex-1">
             {#if data?.effective?.length}
               <table class="fp-table">
                 <caption class="sr-only">{$tr('Effective configuration — key and value')}</caption>

@@ -39,7 +39,7 @@
       {/if}
     </header>
   {/if}
-  <div class={pad === 'md' ? 'p-5' : ''}>
+  <div class="flex-1 flex flex-col {pad === 'md' ? 'p-5' : ''}">
     {#if children}
       {@render children()}
     {/if}
