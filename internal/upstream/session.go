@@ -231,6 +231,7 @@ func (c *Client) StartRun(ctx context.Context, agentID string) (string, error) {
 		return fmt.Sprintf("run-%s-%d", c.token, time.Now().UnixMilli()), nil
 	}
 	payload, _ := json.Marshal(map[string]any{
+		"action":         "START",
 		"agentId":        agentID,
 		"ancestorRunIds": []string{},
 	})
