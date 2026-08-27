@@ -664,3 +664,13 @@ func bestRateLimit(entries []*upstream.RateLimitError) *upstream.RateLimitError 
 	}
 	return best
 }
+
+// EnsureTokenSession admits/creates an upstream session for a specific model on a specific token (dashboard dev action).
+func (p *Pool) EnsureTokenSession(ctx context.Context, token int, model string) (string, error) {
+	toks := p.toks.Load()
+	if token < 0 || token >= len(*toks) {
+		return "", fmt.Errorf("pool: token %d out of range", token)
+	}
+	tok := (*toks)[token]
+	return tok.session.EnsureSessionForModel(ctx, model)
+}

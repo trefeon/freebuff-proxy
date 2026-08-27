@@ -76,6 +76,28 @@ func (s *Server) handleTokenFinish(w http.ResponseWriter, r *http.Request) {
 	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" runs finished.")
 }
 
+func (s *Server) handleTokenSpawnSession(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err != nil {
+		s.dash.RenderConfigResult(w, r, false, "Invalid token ID: "+err.Error())
+		return
+	}
+	model := strings.TrimSpace(r.FormValue("model"))
+	if model == "" {
+		model = "mimo/mimo-v2.5"
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	instanceID, err := s.pool.EnsureTokenSession(ctx, id, model)
+	if err != nil {
+		s.logger.Warn("dashboard token session create failed", "token", id, "model", model, "err", err)
+		s.dash.RenderConfigResult(w, r, false, fmt.Sprintf("Token #%d session failed for %s: %s", id, model, err.Error()))
+		return
+	}
+	s.logger.Info("dashboard token session created", "token", id, "model", model, "instance", instanceID)
+	s.dash.RenderConfigResult(w, r, true, fmt.Sprintf("Token #%d session created for %s (instance: %s).", id, model, instanceID))
+}
+
 func (s *Server) handleTokenTest(w http.ResponseWriter, r *http.Request) {
 	id, err := tokenActionID(r)
 	var state *upstream.SessionState

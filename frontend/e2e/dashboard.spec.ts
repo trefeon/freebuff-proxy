@@ -227,7 +227,7 @@ test.describe('dashboard hermetic mocks', () => {
     const expandBtn = page.locator('button[aria-label*="Expand quotas"]').first();
     await expect(expandBtn).toBeVisible();
     await expandBtn.click();
-    await expect(page.getByText('deepseek/deepseek-v4-flash').first()).toBeVisible();
+    await expect(page.locator('td', { hasText: 'deepseek/deepseek-v4-flash' }).first()).toBeVisible();
   });
 
   test('Config shows env_content in editor and effective table', async ({ page }) => {
