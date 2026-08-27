@@ -98,82 +98,17 @@
   }
 </script>
 
-<div class="space-y-6 page-enter">
+<div class="space-y-4 page-enter">
   <PageHeader
     title={$tr('Logs')}
     description={$tr('Structured entries from the in-memory ring buffer (200 max, newest first), filtered by level and message.')}
-  >
-    {#snippet actions()}
-      <Button variant="ghost" size="sm" aria-pressed={autoPoll} onclick={() => (autoPoll = !autoPoll)}>
-        {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
-      </Button>
-      <Button variant="secondary" size="sm" loading={manualRefresh} onclick={refresh} disabled={loading && !data}>
-        <RefreshCw size={14} />
-        {$tr('Refresh')}
-      </Button>
-    {/snippet}
-  </PageHeader>
+  />
 
-  <!-- Filter & Search Toolbar -->
-  <div class="fp-card p-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-    <div class="flex flex-wrap items-center gap-2.5 flex-1">
-      <label for="log-level" class="sr-only">{$tr('Log level')}</label>
-      <select
-        id="log-level"
-        class="fp-input text-xs w-32 py-1.5"
-        bind:value={filterLevel}
-        onchange={handleFilterChange}
-      >
-        <option value="">{$tr('All levels')}</option>
-        <option value="debug">{$tr('Debug')}</option>
-        <option value="info">{$tr('Info')}</option>
-        <option value="warn">{$tr('Warn')}</option>
-        <option value="error">{$tr('Error')}</option>
-      </select>
-
-      <div class="relative flex-1 min-w-[200px] max-w-md">
-        <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] pointer-events-none" />
-        <label for="log-msg" class="sr-only">{$tr('Filter by message')}</label>
-        <input
-          id="log-msg"
-          type="text"
-          class="fp-input text-xs w-full pl-8 py-1.5"
-          bind:value={filterMsg}
-          oninput={handleFilterChange}
-          placeholder={$tr('Filter message…')}
-        />
-      </div>
-
-      <Button
-        variant={hideAdmin ? 'secondary' : 'ghost'}
-        size="sm"
-        aria-pressed={hideAdmin}
-        onclick={() => { hideAdmin = !hideAdmin; page = 0; }}
-        class="text-xs"
-      >
-        <EyeOff size={13} />
-        <span>{$tr('Hide admin')}</span>
-      </Button>
-
-      {#if hasActiveFilter}
-        <Button variant="ghost" size="sm" onclick={clearFilters} class="text-xs text-[var(--fp-dim)] hover:text-[var(--fp-text)]">
-          {$tr('Clear filters')}
-        </Button>
-      {/if}
-    </div>
-
-    <div class="flex items-center gap-2 shrink-0 text-xs font-mono text-[var(--fp-muted)]">
-      <span class="inline-flex items-center gap-1.5">
-        <span class="led {filteredEntries.length > 0 ? 'led-good' : 'led-idle'}"></span>
-        <span>{filteredEntries.length} {$tr('entries')}</span>
-      </span>
-    </div>
-  </div>
   {#if error}
     <Alert tone="error" title={$tr('Could not load log entries')}>
       <p class="text-sm">{error}</p>
       <div class="mt-3">
-      <Button variant="secondary" size="sm" onclick={refresh}>{$tr('Retry')}</Button>
+        <Button variant="secondary" size="sm" onclick={refresh}>{$tr('Retry')}</Button>
       </div>
     </Alert>
   {/if}
@@ -183,7 +118,7 @@
       <span class="sr-only">{$tr('Loading logs…')}</span>
       <Card pad="none">
         <div class="p-4 space-y-3" aria-hidden="true">
-          {#each [0, 1, 2, 3, 4, 5, 6] as i}
+          {#each [0, 1, 2, 3, 4, 5, 6] as i (i)}
             <div class="flex items-center gap-3">
               <span class="skeleton rounded-full size-2 shrink-0"></span>
               <span class="skeleton skeleton-line" style="width:{45 + (i % 4) * 12}%"></span>
@@ -198,23 +133,114 @@
       title={$tr('Log ring disabled')}
       description={$tr('The server was started without an active logring handler, so no log entries are available.')}
     />
-  {:else if data && filteredEntries.length === 0}
-    <EmptyState
-      title={$tr('No matching log entries')}
-      description={hasActiveFilter
-        ? $tr('No log entries matched your level or message filter.')
-        : $tr('The log ring is empty — entries will appear here as the proxy logs activity.')}
-    >
-      {#if hasActiveFilter}
-        {#snippet action()}
-          <Button variant="secondary" size="sm" onclick={clearFilters}>{$tr('Clear filters')}</Button>
-        {/snippet}
-      {/if}
-    </EmptyState>
   {:else if data}
     <Card pad="none">
-      <div class="fp-inset m-4 overflow-x-auto">
-        <ul class="divide-y divide-[var(--fp-border)]">
+      <!-- Integrated Top Toolbar Header -->
+      <div class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <!-- Filter Controls (Left Group) -->
+        <div class="flex flex-wrap items-center gap-2 flex-1">
+          <!-- Level Select -->
+          <label for="log-level" class="sr-only">{$tr('Log level')}</label>
+          <select
+            id="log-level"
+            class="fp-input !text-xs !py-1 !px-2.5 !h-8 !w-auto !inline-block"
+            bind:value={filterLevel}
+            onchange={handleFilterChange}
+          >
+            <option value="">{$tr('All levels')}</option>
+            <option value="debug">{$tr('Debug')}</option>
+            <option value="info">{$tr('Info')}</option>
+            <option value="warn">{$tr('Warn')}</option>
+            <option value="error">{$tr('Error')}</option>
+          </select>
+
+          <!-- Search Input with Search Icon -->
+          <div class="relative flex-1 min-w-[180px] max-w-xs">
+            <Search size={13} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] pointer-events-none" />
+            <label for="log-msg" class="sr-only">{$tr('Filter by message')}</label>
+            <input
+              id="log-msg"
+              type="text"
+              class="fp-input !text-xs !pl-8 !pr-2.5 !py-1 !h-8 !w-full"
+              bind:value={filterMsg}
+              oninput={handleFilterChange}
+              placeholder={$tr('Filter message…')}
+            />
+          </div>
+
+          <!-- Hide admin toggle -->
+          <Button
+            variant={hideAdmin ? 'secondary' : 'ghost'}
+            size="sm"
+            aria-pressed={hideAdmin}
+            onclick={() => { hideAdmin = !hideAdmin; page = 0; }}
+            class="!h-8 !text-xs !px-2.5 shrink-0"
+          >
+            <EyeOff size={13} />
+            <span>{$tr('Hide admin')}</span>
+          </Button>
+
+          {#if hasActiveFilter}
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={clearFilters}
+              class="!h-8 !text-xs !px-2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] shrink-0"
+            >
+              {$tr('Clear filters')}
+            </Button>
+          {/if}
+        </div>
+
+        <!-- Live Controls (Right Group) -->
+        <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <span class="inline-flex items-center gap-1.5 text-xs font-mono text-[var(--fp-muted)] mr-1">
+            <span class="led {filteredEntries.length > 0 ? 'led-good' : 'led-idle'}"></span>
+            <span>{filteredEntries.length} {$tr('entries')}</span>
+          </span>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={autoPoll}
+            onclick={() => (autoPoll = !autoPoll)}
+            class="!h-8 !text-xs !px-2.5"
+          >
+            {$tr('Auto {state}', { state: autoPoll ? $tr('on') : $tr('off') })}
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={manualRefresh}
+            onclick={refresh}
+            disabled={loading && !data}
+            class="!h-8 !text-xs !px-2.5"
+          >
+            <RefreshCw size={13} />
+            <span>{$tr('Refresh')}</span>
+          </Button>
+        </div>
+      </div>
+
+      {#if filteredEntries.length === 0}
+        <div class="p-8">
+          <EmptyState
+            title={$tr('No matching log entries')}
+            description={hasActiveFilter
+              ? $tr('No log entries matched your level or message filter.')
+              : $tr('The log ring is empty — entries will appear here as the proxy logs activity.')}
+          >
+            {#if hasActiveFilter}
+              {#snippet action()}
+                <Button variant="secondary" size="sm" onclick={clearFilters}>{$tr('Clear filters')}</Button>
+              {/snippet}
+            {/if}
+          </EmptyState>
+        </div>
+      {:else}
+        <div class="fp-inset m-3.5 overflow-x-auto">
+          <ul class="divide-y divide-[var(--fp-border)]">
           {#each pagedEntries as e}
             {@const fields = parseLogFields(e.fields)}
             {@const entryJson = JSON.stringify(
@@ -244,10 +270,10 @@
           {/each}
         </ul>
       </div>
+      {/if}
       {#snippet footer()}
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <span class="fp-num text-xs text-[var(--fp-muted)]">
-            {rangeStart}–{rangeEnd} of {filteredEntries.length}
           </span>
           <div class="flex items-center gap-2">
             <Button
