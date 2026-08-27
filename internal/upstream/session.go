@@ -28,31 +28,42 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 	if requestedModel == "" {
 		requestedModel = "mimo/mimo-v2.5"
 	}
-	slug := strings.ReplaceAll(requestedModel, "/", "-")
-	inst := fmt.Sprintf("inst-%s-%s", token, slug)
-	if len(inst) > 24 {
-		inst = inst[:24]
-	}
 	now := time.Now()
-	resetAt := now.Add(6 * time.Hour)
+	pacific := pacificLoc()
+	pacNow := now.In(pacific)
+	pacMidnight := time.Date(pacNow.Year(), pacNow.Month(), pacNow.Day(), 0, 0, 0, 0, pacific)
+	if !pacNow.Before(pacMidnight) {
+		pacMidnight = pacMidnight.AddDate(0, 0, 1)
+	}
+
+	instanceID := fmt.Sprintf("a%08x-b%04x-4%03x-8%03x-e%012x",
+		now.UnixMilli()&0xFFFFFFFF, now.UnixMilli()&0xFFFF,
+		now.UnixMilli()&0x0FFF, now.UnixMilli()&0x0FFF,
+		now.UnixMilli()&0xFFFFFFFFFFFF)
+
+	unlimited := float64(9999)
 
 	return &SessionState{
-		Status:         "active",
-		InstanceID:     inst,
-		Model:          requestedModel,
-		CurrentModel:   requestedModel,
-		RequestedModel: requestedModel,
-		ExpiresAt:      now.Add(2 * time.Hour),
-		AdmittedAt:     now,
-		Limit:          5,
-		RecentCount:    0,
-		ResetAt:        resetAt,
+		Status:          "active",
+		InstanceID:      instanceID,
+		Model:           requestedModel,
+		CurrentModel:    requestedModel,
+		RequestedModel:  requestedModel,
+		ExpiresAt:       now.Add(24 * time.Hour),
+		AdmittedAt:      now,
+		Position:        0,
+		QueueDepth:      0,
+		EstimatedWaitMs: 0,
+		PollAt:          now.Add(30 * time.Second),
+		Limit:           5,
+		RecentCount:     0,
+		ResetAt:         pacMidnight,
 		RateLimitsByModel: map[string]ModelQuota{
 			"openai/gpt-5.6-luna": {
 				Model:       "openai/gpt-5.6-luna",
 				Limit:       5,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 5},
 			},
@@ -60,7 +71,7 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 				Model:       "deepseek/deepseek-v4-pro",
 				Limit:       5,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 5},
 			},
@@ -68,43 +79,48 @@ func mockSessionState(token string, requestedModel string) *SessionState {
 				Model:       "z-ai/glm-5.3-flash",
 				Limit:       2,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Entitlement: map[string]float64{"base": 2},
 			},
 			"mimo/mimo-v2.5": {
 				Model:       "mimo/mimo-v2.5",
-				Limit:       9999, // unlimited
+				Limit:       unlimited,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"stealth/ox-alpha": {
 				Model:       "stealth/ox-alpha",
-				Limit:       9999, // unlimited
+				Limit:       unlimited,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"deepseek/deepseek-v4-flash": {
 				Model:       "deepseek/deepseek-v4-flash",
-				Limit:       9999, // unlimited
+				Limit:       unlimited,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 			},
 			"z-ai/glm-5.2": {
 				Model:       "z-ai/glm-5.2",
 				Limit:       1,
 				RecentCount: 0,
-				ResetAt:     resetAt,
+				ResetAt:     pacMidnight,
 				Period:      "promo",
+				Entitlement: map[string]float64{"referral": 1},
 			},
 		},
 		Standing: &SessionStanding{
-			Level: "trusted",
-			Label: "Trusted",
-			Score: 95.0,
+			Level:       "trusted",
+			Label:       "Trusted",
+			Score:       95.0,
+			NextLevel:   "",
+			CappedBy:    "third_party_client",
+			Blurb:       "Your account is in good standing. Full access to all models.",
+			NextLevelAt: time.Time{},
 		},
 	}
 }
