@@ -145,17 +145,20 @@
   {/if}
 
   {#if loading && !data}
-    <Card pad="none">
-      <div class="p-4 space-y-3">
-        {#each [0, 1, 2, 3, 4, 5, 6] as i}
-          <div class="flex items-center gap-3">
-            <span class="skeleton rounded-full size-2 shrink-0"></span>
-            <span class="skeleton skeleton-line" style="width:{45 + (i % 4) * 12}%"></span>
-            <span class="skeleton skeleton-line ml-auto" style="width:15%"></span>
-          </div>
-        {/each}
-      </div>
-    </Card>
+    <div aria-live="polite" aria-busy="true">
+      <span class="sr-only">{$tr('Loading logs…')}</span>
+      <Card pad="none">
+        <div class="p-4 space-y-3" aria-hidden="true">
+          {#each [0, 1, 2, 3, 4, 5, 6] as i}
+            <div class="flex items-center gap-3">
+              <span class="skeleton rounded-full size-2 shrink-0"></span>
+              <span class="skeleton skeleton-line" style="width:{45 + (i % 4) * 12}%"></span>
+              <span class="skeleton skeleton-line ml-auto" style="width:15%"></span>
+            </div>
+          {/each}
+        </div>
+      </Card>
+    </div>
   {:else if data && !data.enabled}
     <EmptyState
       title={$tr('Log ring disabled')}

@@ -19,6 +19,8 @@
   let submitting = $state(false);
   let errorMsg = $state('');
   let successMsg = $state('');
+  let dialogEl = $state(null);
+  let previouslyFocusedEl = null;
 
   function resetForm() {
     currentPassword = '';
@@ -78,6 +80,111 @@
       submitting = false;
     }
   }
+
+  function getFocusable(container) {
+    if (!container) return [];
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(container.querySelectorAll(selector)).filter((el) => {
+      // filter out hidden elements
+      if (el.hasAttribute('hidden')) return false;
+      // offsetParent null means display:none; keep if it's the active element
+      // Use getComputedStyle as fallback for visibility
+      try {
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none') return false;
+      } catch {}
+      return true;
+    });
+  }
+
+  function trapFocus(e) {
+    if (e.key !== 'Tab' || !dialogEl) return;
+    const focusables = getFocusable(dialogEl);
+    if (focusables.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey) {
+      if (active === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  function setBackgroundInert(enabled) {
+    try {
+      const targets = [
+        document.getElementById('main-content'),
+        document.querySelector('aside[aria-label="Sidebar"]'),
+        document.querySelector('header'),
+      ];
+      for (const el of targets) {
+        if (!el) continue;
+        // Avoid inert-ing the dialog itself (dialog is not inside these targets)
+        if (enabled) {
+          if ('inert' in el) el.inert = true;
+          else el.setAttribute('inert', '');
+          el.setAttribute('aria-hidden', 'true');
+        } else {
+          if ('inert' in el) el.inert = false;
+          el.removeAttribute('inert');
+          el.removeAttribute('aria-hidden');
+        }
+      }
+    } catch {}
+  }
+
+  $effect(() => {
+    if (!open) return;
+    previouslyFocusedEl =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    // Defer focus and inert until after the dialog is mounted
+    queueMicrotask(() => {
+      try {
+        const focusables = getFocusable(dialogEl);
+        const target = focusables[0] ?? dialogEl;
+        target?.focus();
+        setBackgroundInert(true);
+      } catch {}
+    });
+
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+        return;
+      }
+      if (e.key === 'Tab') trapFocus(e);
+    };
+
+    document.addEventListener('keydown', handleKeydown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeydown);
+      document.body.style.overflow = prevOverflow;
+      try {
+        setBackgroundInert(false);
+      } catch {}
+      queueMicrotask(() => {
+        try {
+          previouslyFocusedEl?.focus();
+        } catch {}
+      });
+    };
+  });
 </script>
 
 {#if open}
@@ -88,11 +195,14 @@
       class="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity border-0 p-0 m-0 w-full h-full cursor-default"
       onclick={handleClose}
       aria-label={$tr('Close dialog backdrop')}
+      tabindex="-1"
     ></button>
 
     <!-- Modal Card -->
     <div
-      class="relative w-full max-w-md bg-[var(--fp-card)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-5 page-enter"
+      bind:this={dialogEl}
+      tabindex="-1"
+      class="relative w-full max-w-md bg-[var(--fp-card)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-5 page-enter focus:outline-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -111,7 +221,7 @@
         <button
           type="button"
           onclick={handleClose}
-          class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded-lg hover:bg-[var(--fp-border)]/50 transition-colors"
+          class="min-w-11 min-h-11 w-11 h-11 flex items-center justify-center text-[var(--fp-dim)] hover:text-[var(--fp-text)] rounded-lg hover:bg-[var(--fp-border)]/50 transition-colors shrink-0"
           aria-label={$tr('Close modal')}
         >
           <X size={16} />
@@ -132,6 +242,7 @@
           <input
             id="current-password"
             type="password"
+            autocomplete="current-password"
             bind:value={currentPassword}
             placeholder={$tr('Enter current password (default: 123456)')}
             required
@@ -143,6 +254,7 @@
           <input
             id="new-password"
             type="password"
+            autocomplete="new-password"
             bind:value={newPassword}
             placeholder={$tr('Enter secure new password')}
             required
@@ -155,6 +267,7 @@
           <input
             id="confirm-password"
             type="password"
+            autocomplete="new-password"
             bind:value={confirmPassword}
             placeholder={$tr('Re-enter new password')}
             required

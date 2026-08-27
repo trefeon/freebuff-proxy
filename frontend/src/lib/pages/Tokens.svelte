@@ -419,21 +419,20 @@
           title={$tr('No tokens in pool')}
           description={$tr('Add one above or use Device Login to generate credentials via browser.')}
         />
-      {:else}
         <table class="fp-table w-full">
+          <caption class="sr-only">{$tr('Pool tokens — token, status, instance, cooldown and actions')}</caption>
           <thead>
             <tr>
-              <th class="w-8"></th>
-              <th>{$tr('Token')}</th>
-              <th>{$tr('Status')}</th>
-              <th>{$tr('Instance')}</th>
-              <th class="num">{$tr('Cooldown')}</th>
-              <th class="text-right">{$tr('Actions')}</th>
+              <th scope="col" class="w-8"><span class="sr-only">{$tr('Expand')}</span></th>
+              <th scope="col">{$tr('Token')}</th>
+              <th scope="col">{$tr('Status')}</th>
+              <th scope="col">{$tr('Instance')}</th>
+              <th scope="col" class="num">{$tr('Cooldown')}</th>
+              <th scope="col" class="text-right">{$tr('Actions')}</th>
             </tr>
           </thead>
           <tbody>
             {#each data.tokens as token, i (token.index ?? i)}
-              {@const idx = token.index ?? i}
               {@const st = statusFor(token)}
               {@const isExpanded = expandedToken === idx}
               <tr>

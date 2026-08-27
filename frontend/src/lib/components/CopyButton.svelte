@@ -33,10 +33,11 @@
   title={label}
 >
   {#if copied}
-    <Check size={14} class="text-[var(--fp-success)]" />
+    <Check size={14} class="text-[var(--fp-success)]" aria-hidden="true" />
     <span>Copied</span>
   {:else}
-    <Clipboard size={14} />
+    <Clipboard size={14} aria-hidden="true" />
     <span>{label}</span>
   {/if}
 </Button>
+<span aria-live="polite" aria-atomic="true" class="sr-only">{copied ? 'Copied' : ''}</span>

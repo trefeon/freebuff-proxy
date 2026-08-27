@@ -25,11 +25,10 @@
   --fp-border:        #232D3D;
   --fp-border-bright: #303C50;
 
-  /* Text */
+  /* Text — --fp-dim tuned to 5.0:1 on --fp-surface (#141A25) and 5.3:1 on --fp-surface-2 at 11px (WCAG AA 4.5:1) */
   --fp-text:         #E9EDF3;
   --fp-muted:        #96A2B4;
-  --fp-dim:          #72809A;
-
+  --fp-dim:          #8296B5;
   /* Accent — signal gold */
   --fp-accent:        #E3A857;
   --fp-accent-hover:  #F0BE7A;
@@ -172,7 +171,8 @@ code, pre, .font-mono, .fp-mono {
   border-radius: var(--fp-radius-sm);
   border: 1px solid transparent;
   padding: 0.5rem 0.875rem;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
   transition: background-color var(--fp-duration) var(--fp-ease),
               border-color var(--fp-duration) var(--fp-ease),
@@ -239,8 +239,9 @@ code, pre, .font-mono, .fp-mono {
 }
 
 .fp-btn-sm {
-  padding: 0.3125rem 0.625rem;
-  min-height: 26px;
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  min-width: 44px;
   font-size: 12px;
 }
 
@@ -343,6 +344,19 @@ select.fp-input {
 .led-idle  { background: var(--fp-dim); }
 .led-critical { background: var(--fp-error); box-shadow: 0 0 0 2px var(--fp-error-deep); }
 .led-accent{ background: var(--fp-accent); }
+
+/* ── Accessibility — visually hidden but screen-reader accessible ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ── Misc ─────────────────────────────────────────────────────── */
 .tabular-nums {

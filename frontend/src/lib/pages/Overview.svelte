@@ -97,17 +97,20 @@
     {/snippet}
   </PageHeader>
 
-  <!-- Loading skeleton -->
+  <!-- Loading skeleton — live region announces loading without duplicating Alert -->
   {#if loading}
-    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" aria-hidden="true">
-      {#each [1, 2, 3, 4, 5, 6] as _}
-        <div class="skeleton skeleton-card"></div>
-      {/each}
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" aria-hidden="true">
-      {#each [1, 2, 3] as _}
-        <div class="skeleton skeleton-card"></div>
-      {/each}
+    <div aria-live="polite" aria-busy="true">
+      <span class="sr-only">{$tr('Loading overview…')}</span>
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" aria-hidden="true">
+        {#each [1, 2, 3, 4, 5, 6] as _}
+          <div class="skeleton skeleton-card"></div>
+        {/each}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4" aria-hidden="true">
+        {#each [1, 2, 3] as _}
+          <div class="skeleton skeleton-card"></div>
+        {/each}
+      </div>
     </div>
   {/if}
 

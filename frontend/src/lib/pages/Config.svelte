@@ -285,10 +285,11 @@
 
           {#if data?.effective?.length}
             <table class="fp-table">
+              <caption class="sr-only">{$tr('Effective configuration — key and value')}</caption>
               <thead>
                 <tr>
-                  <th>{$tr('Key')}</th>
-                  <th>{$tr('Value')}</th>
+                  <th scope="col">{$tr('Key')}</th>
+                  <th scope="col">{$tr('Value')}</th>
                 </tr>
               </thead>
               <tbody>

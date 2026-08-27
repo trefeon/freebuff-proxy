@@ -312,6 +312,13 @@ locale.subscribe((value) => {
 	} catch {
 		// storage blocked — in-memory locale still works
 	}
+	try {
+		if (typeof document !== 'undefined' && document.documentElement) {
+			document.documentElement.lang = value;
+		}
+	} catch {
+		// document not available
+	}
 });
 
 /** Switch the UI language ('en' | 'zh'). */

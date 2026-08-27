@@ -77,6 +77,7 @@
       <Card title={$tr('Model Catalog')} pad="none">
         <div class="overflow-x-auto">
           <table class="fp-table">
+            <caption class="sr-only">{$tr('Model catalog — model id, served status, agent binding and client aliases')}</caption>
             <thead>
               <tr>
                 <th scope="col">{$tr('Model ID')}</th>

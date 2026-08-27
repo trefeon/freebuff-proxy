@@ -17,7 +17,7 @@
   import { fetchAPI } from './lib/api/client.js';
   import { sessionExpired, dismissSessionExpired } from './lib/stores/session.js';
   import { tr } from './lib/i18n.js';
-
+  import { locale } from './lib/i18n.js';
   function getInitialTab() {
     if (typeof window === 'undefined') return 'overview';
     const path = window.location.pathname;
@@ -46,6 +46,14 @@
     }
   });
 
+  // Keep <html lang> in sync with the i18n store — on mount + on every zh toggle.
+  $effect(() => {
+    const l = $locale;
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = l === 'zh' ? 'zh' : 'en';
+    }
+  });
+
   // Explicit user action only — never invoked from background polling.
   function goToLogin() {
     const hash = window.location.hash.replace('#', '');
@@ -55,6 +63,10 @@
   }
 
   onMount(() => {
+    // Sync lang immediately on mount (store already resolved from localStorage/navigator)
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = $locale === 'zh' ? 'zh' : 'en';
+    }
     syncTabFromURL();
     window.addEventListener('hashchange', syncTabFromURL);
 
@@ -104,7 +116,7 @@
   {/if}
 
   <div class="flex-1 flex flex-col {activeTab !== 'login' ? 'md:pl-56' : ''}">
-    <main id="main-content" class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8">
+    <main id="main-content" tabindex="-1" class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8">
       {#if $sessionExpired && activeTab !== 'login'}
         <div class="mb-6">
           <Alert tone="error" title={$tr('Session expired')}>
