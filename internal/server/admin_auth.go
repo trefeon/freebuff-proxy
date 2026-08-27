@@ -234,7 +234,15 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				u, err := url.Parse(origin)
-				if err != nil || !strings.EqualFold(u.Host, r.Host) {
+				if err != nil {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.WriteHeader(http.StatusForbidden)
+					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
+					return
+				}
+				originHost := u.Host
+				// Allow if hosts match, OR if both origin and server host are loopback (e.g. 127.0.0.1 <-> localhost, or Vite :5173 -> proxy :3457)
+				if !strings.EqualFold(originHost, r.Host) && !(isLoopbackHost(originHost) && isLoopbackHost(r.Host)) {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusForbidden)
 					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
@@ -242,7 +250,7 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 				}
 			}
 			if sfs := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))); sfs != "" {
-				if sfs != "same-origin" && sfs != "none" {
+				if sfs != "same-origin" && sfs != "none" && !isLoopbackHost(r.Host) {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusForbidden)
 					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
