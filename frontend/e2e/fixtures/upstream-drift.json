@@ -1,0 +1,30 @@
+{
+  "drift": {
+    "upstream": "https://github.com/CodebuffAI/freebuff.git",
+    "upstream_sha": "63a1d68f50264536d602a6c76c477619aa22b3af",
+    "checked_at": "2026-08-26T10:10:25Z",
+    "files": [
+      {
+        "group": "registry",
+        "file": "common/src/constants/free-agents.ts",
+        "pinned_sha": "358c414e36cb",
+        "vendor_sha": "358c414e36cb",
+        "status": "SAME"
+      },
+      {
+        "group": "registry",
+        "file": "common/src/constants/freebuff-model-ids.ts",
+        "pinned_sha": "b4a0f2aca8ea",
+        "vendor_sha": "b4a0f2aca8ea",
+        "status": "SAME"
+      },
+      {
+        "group": "registry",
+        "file": "common/src/constants/freebuff-models.ts",
+        "pinned_sha": "b3f78f258791",
+        "vendor_sha": "093deb24eb97",
+        "status": "DRIFT"
+      }
+    ]
+  }
+}
