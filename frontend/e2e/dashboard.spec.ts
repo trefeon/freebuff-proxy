@@ -315,19 +315,19 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(rows).toHaveCount(7);
   });
 
-  test('Setup shows mode, base_url and 7 models', async ({ page }) => {
+  test('Overview shows client integration and base_url', async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    await page.goto('http://127.0.0.1:4173/admin/#setup');
-    await page.waitForResponse((r) => r.url().includes('/admin/api/setup') && r.status() === 200, { timeout: 5000 }).catch(() => {});
-    await expect(page.getByRole('heading', { name: 'Setup' })).toBeVisible();
-    // Mode badge from setup fixture (pooled)
-    await expect(page.getByText('pooled', { exact: true }).first()).toBeVisible();
-    // Base URL — appears in many snippets, check first occurrence
+    await page.goto('http://127.0.0.1:4173/admin/#overview');
+    await page.waitForResponse((r) => r.url().includes('/admin/api/overview') && r.status() === 200, { timeout: 5000 }).catch(() => {});
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+
+    // Client integration section with base URL and dual protocols
+    await expect(page.getByRole('heading', { name: 'Client Integration' })).toBeVisible();
     await expect(page.getByText('http://127.0.0.1:3457/v1').first()).toBeVisible();
-    // Models count
-    await expect(page.getByText('stealth/ox-alpha')).toBeVisible();
+    await expect(page.getByText('POST /v1/chat/completions')).toBeVisible();
+    await expect(page.getByText('POST /v1/messages')).toBeVisible();
   });
 
   test('Login 401 shows error banner and stays on login', async ({ page }) => {

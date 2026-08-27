@@ -9,6 +9,7 @@
   import StatusBadge from '../components/StatusBadge.svelte';
   import Stat from '../components/Stat.svelte';
   import Card from '../components/Card.svelte';
+  import CopyButton from '../components/CopyButton.svelte';
   import Alert from '../components/Alert.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import Button from '../components/Button.svelte';
@@ -260,6 +261,49 @@
             </div>
           </Card>
         {/if}
+      </section>
+
+      <!-- Universal Client Integration & Endpoints Card -->
+      <section aria-label="Client integration">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold text-[var(--fp-text)]">{$tr('Client Integration')}</h2>
+          <span class="text-xs font-mono text-[var(--fp-muted)]">OpenAI & Anthropic Compatible</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Gateway Base URL -->
+          <Card title={$tr('Gateway Base URL')} description={$tr('Universal base endpoint for any OpenAI or Anthropic client, SDK, or CLI tool.')}>
+            <div class="flex items-center gap-2">
+              <div class="fp-inset flex-1 px-3 py-2 overflow-x-auto">
+                <code class="fp-num text-xs text-[var(--fp-accent)] font-mono font-semibold">{data?.base_url || 'http://127.0.0.1:3457/v1'}</code>
+              </div>
+              <CopyButton text={data?.base_url || 'http://127.0.0.1:3457/v1'} label={$tr('Copy URL')} />
+            </div>
+            <p class="mt-3 text-xs text-[var(--fp-muted)]">
+              {$tr('Authentication: Use any Client API Key from the')} <a href="#tokens" class="text-[var(--fp-accent)] hover:underline font-medium">{$tr('Tokens page')}</a> {$tr('via Bearer token or x-api-key header.')}
+            </p>
+          </Card>
+
+          <!-- Supported Protocols & Routes -->
+          <Card title={$tr('Supported Wire Protocols')} description={$tr('Dual-protocol translation handled transparently by the gateway.')}>
+            <div class="space-y-2">
+              <div class="fp-inset px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="px-1.5 py-0.5 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] font-mono text-[10px] text-[var(--fp-accent)]">OpenAI</span>
+                  <span class="font-mono text-[var(--fp-text)] truncate">POST /v1/chat/completions</span>
+                </div>
+                <span class="text-[var(--fp-dim)] text-[11px] shrink-0">Cursor, Aider, OMP</span>
+              </div>
+              <div class="fp-inset px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="px-1.5 py-0.5 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] font-mono text-[10px] text-[#A78BFA]">Anthropic</span>
+                  <span class="font-mono text-[var(--fp-text)] truncate">POST /v1/messages</span>
+                </div>
+                <span class="text-[var(--fp-dim)] text-[11px] shrink-0">Claude Code, Cline</span>
+              </div>
+            </div>
+          </Card>
+        </div>
       </section>
     {/if}
   {/if}

@@ -634,6 +634,7 @@ func humanDuration(d time.Duration) string {
 // --- overview ---
 
 type overviewData struct {
+	BaseURL              string            `json:"base_url"`
 	Mode                 string            `json:"mode"`
 	InBridge             bool              `json:"in_bridge"`
 	BridgeTokens         int               `json:"bridge_tokens"`
@@ -847,12 +848,16 @@ func (d *Dashboard) overviewData() overviewData {
 	cfg := d.cfg()
 	ps := d.pool.PoolSnapshot()
 	mode := cfg.EffectiveMode()
+	host := "localhost"
+	if h, _, err := net.SplitHostPort(cfg.ListenAddr); err == nil && h != "" && h != "0.0.0.0" && h != "::" {
+		host = h
+	}
 	od := overviewData{
+		BaseURL:              "http://" + host + "/v1",
 		Mode:                 mode,
 		InBridge:             mode == "bridge",
 		Models:               servedModels(d.reg),
 		ModelCount:           len(servedModels(d.reg)),
-		Uptime:               time.Since(d.started).Round(time.Second).String(),
 		SafeMode:             cfg.SafeMode,
 		MaxMessagesPerDay:    cfg.MaxMessagesPerDay,
 		TransientRetries:     ps.TransientRetries,

@@ -1,6 +1,6 @@
 <script>
   import {
-    LayoutDashboard, Key, Cpu, Settings, FileText, Wrench, Menu, X,
+    LayoutDashboard, Key, Cpu, Settings, FileText, Menu, X,
   } from '@lucide/svelte';
 
   /**
@@ -21,7 +21,6 @@
     { id: 'models',   label: 'Models',   icon: Cpu },
     { id: 'config',   label: 'Config',   icon: Settings },
     { id: 'logs',     label: 'Logs',     icon: FileText },
-    { id: 'setup',    label: 'Setup',    icon: Wrench },
   ];
 
   function switchTab(id) {
