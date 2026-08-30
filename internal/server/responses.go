@@ -250,10 +250,38 @@ func responsesInputToMessages(input any, instructions any) []any {
 					"tool_call_id": callID,
 					"content":      content,
 				})
-			case "function_call", "reasoning", "item_reference":
-				// Locally unexecutable or non-replayable items are skipped
-				// (the reference does the same — the upstream cannot run
-				// them).
+			case "function_call":
+				// Replay the assistant turn that requested the tool. It must
+				// survive translation even though the upstream never runs it:
+				// the matching "function_call_output" above becomes a
+				// role:"tool" message, and a tool message whose tool_call_id
+				// has no preceding assistant tool_calls entry is an orphan.
+				// Chat backends drop orphaned tool replies, so the model never
+				// sees the result and re-issues the identical call forever.
+				callID, _ := entry["call_id"].(string)
+				name, _ := entry["name"].(string)
+				arguments, _ := entry["arguments"].(string)
+				if callID == "" || name == "" {
+					continue
+				}
+				if arguments == "" {
+					arguments = "{}"
+				}
+				messages = append(messages, map[string]any{
+					"role":    "assistant",
+					"content": nil,
+					"tool_calls": []any{map[string]any{
+						"id":   callID,
+						"type": "function",
+						"function": map[string]any{
+							"name":      name,
+							"arguments": arguments,
+						},
+					}},
+				})
+			case "reasoning", "item_reference":
+				// Non-replayable items are skipped: the upstream cannot use
+				// them and they carry no state the model needs.
 				continue
 			default:
 				role, _ := entry["role"].(string)
