@@ -278,9 +278,24 @@ func (s *Server) adminSensitive(next http.Handler) http.Handler {
 		// management) require a loopback client when the deployment is
 		// effectively unauthenticated: ADMIN_TOKEN unset, or still the
 		// factory default ("123456" since #188 — publicly known, so remote
-		// access under it is anonymous-equivalent). Changing the password
-		// (/admin/api/change-password requires the current credential) lifts
-		// the restriction for remote operators.
+		// access under it is anonymous-equivalent).
+		//
+		// BOOTSTRAP EXEMPTION — POST /admin/api/change-password only. The
+		// route's whole purpose is to lift this restriction by replacing the
+		// factory password, so gating it by the factory password itself is a
+		// catch-22 for remote operators (they cannot reach the very endpoint
+		// that grants access). A remote POST that SUPPLIES the factory
+		// current_password proves the caller knows the deployment's effective
+		// credential — for a factory-password deployment that is the same
+		// bar loopback meets (the credential is public; there is nothing
+		// additional to leak). The request still passes the session-cookie
+		// and CSRF gates; only the loopback restriction is waived, and only
+		// while the effective credential IS the factory default.
+		if r.Method == http.MethodPost && r.URL.Path == "/admin/api/change-password" &&
+			cfg.IsDefaultAdminToken() {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if (cfg.AdminToken == "" || cfg.IsDefaultAdminToken()) &&
 			(!isLoopbackAddr(r.RemoteAddr) || !isLoopbackHost(r.Host)) {
 			http.Error(w, "forbidden: sensitive dashboard routes require a loopback client until a custom admin password is set", http.StatusForbidden)
