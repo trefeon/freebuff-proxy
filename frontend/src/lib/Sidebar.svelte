@@ -232,21 +232,10 @@
 <header
   class="md:hidden sticky top-0 z-50 border-b border-[var(--fp-border)] bg-[var(--fp-bg)]"
 >
-  <div class="flex items-center justify-between h-14 px-4">
-    <a href={adminRoot} class="flex items-center gap-2.5 group" aria-label="freebuff-proxy dashboard home">
-      <svg viewBox="0 0 32 32" class="w-7 h-7 shrink-0" aria-hidden="true">
-        <rect width="32" height="32" rx="7" fill="var(--fp-accent)" />
-        <path d="M18 6 9 18h5l-1 8 9-12h-5z" fill="var(--fp-bg)" />
-      </svg>
-      <span class="flex flex-col leading-tight">
-        <span class="text-sm font-semibold text-[var(--fp-text)] tracking-tight">freebuff-proxy</span>
-        <span class="text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--fp-dim)]">Admin</span>
-      </span>
-    </a>
-
+  <div class="flex items-center gap-2 h-14 px-4">
     <button
       bind:this={hamburgerEl}
-      class="p-2.5 min-w-11 min-h-11 rounded-lg text-[var(--fp-muted)] hover:text-white hover:bg-[var(--fp-surface)] transition-colors flex items-center justify-center"
+      class="p-2.5 min-w-11 min-h-11 rounded-lg text-[var(--fp-muted)] hover:text-white hover:bg-[var(--fp-surface)] transition-colors flex items-center justify-center shrink-0"
       onclick={mobileOpen ? closeDrawer : openDrawer}
       aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
       aria-expanded={mobileOpen}
@@ -258,6 +247,17 @@
         <Menu size={20} />
       {/if}
     </button>
+
+    <a href={adminRoot} class="flex items-center gap-2.5 group" aria-label="freebuff-proxy dashboard home">
+      <svg viewBox="0 0 32 32" class="w-7 h-7 shrink-0" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="var(--fp-accent)" />
+        <path d="M18 6 9 18h5l-1 8 9-12h-5z" fill="var(--fp-bg)" />
+      </svg>
+      <span class="flex flex-col leading-tight">
+        <span class="text-sm font-semibold text-[var(--fp-text)] tracking-tight">freebuff-proxy</span>
+        <span class="text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--fp-dim)]">Admin</span>
+      </span>
+    </a>
   </div>
 </header>
 
