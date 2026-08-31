@@ -80,6 +80,30 @@
     return 'default';
   }
 
+
+  // Live session countdown (freebuff TUI parity): the tokens poll refreshes
+  // session_remaining_seconds every ~10s; between polls this ticks locally
+  // from the last server-anchor (expiresAt = fetch time + remaining), so the
+  // readout moves every second instead of stepping in poll-sized chunks.
+  // Each poll re-anchors to the fresh server value, correcting drift.
+  let nowTick = $state(Date.now());
+  $effect(() => {
+    const t = setInterval(() => {
+      nowTick = Date.now();
+    }, 1000);
+    return () => clearInterval(t);
+  });
+  const sessionEndsAtMs = $derived(Date.now() + (token.session_remaining_seconds || 0) * 1000);
+  const sessionRemaining = $derived(Math.max(0, Math.floor((sessionEndsAtMs - nowTick) / 1000)));
+
+  function fmtCountdown(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s remaining`;
+    return `${m}m ${s}s remaining`;
+  }
+
   const st = $derived(statusFor(token));
 </script>
 
@@ -226,7 +250,7 @@
         {#if token.session_remaining_seconds > 0 && token.session_model}
           <div class="mb-2 px-2 py-1 rounded bg-[var(--fp-accent)]/10 text-xs text-[var(--fp-accent)] flex items-center justify-between">
             <span>{$tr('Active Session:')} <code class="fp-num">{token.session_model}</code></span>
-            <span class="fp-num">{Math.floor(token.session_remaining_seconds / 60)}m {token.session_remaining_seconds % 60}s remaining</span>
+            <span class="fp-num">{fmtCountdown(sessionRemaining)}</span>
           </div>
         {/if}
         {#if token.has_standing}
