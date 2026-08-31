@@ -117,7 +117,8 @@
         clientKeyMessage = isOverridden
           ? $tr('Deleted client API key (environment notice: server process environment takes precedence until restart)')
           : $tr('Deleted client API key');
-        fetchData();
+        apiKeys = filtered;
+        fetchConfig();
       } else {
         clientKeyMessage = result?.message || $tr('Failed to delete client API key');
       }
