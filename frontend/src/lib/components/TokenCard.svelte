@@ -113,16 +113,16 @@
   <td class="w-14">
     <div class="inline-flex items-center gap-0.5">
       {#if totalTokens > 1}
-        <div class="flex flex-col shrink-0">
+        <div class="flex flex-col shrink-0 -my-1">
           <button
             type="button"
             disabled={actionPending || idx === 0}
             title={$tr('Move Up / Prioritize')}
             aria-label={$tr('Move Up')}
             onclick={() => onSwap?.(idx, idx - 1)}
-            class="p-0.5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronUp size={12} />
+            <ChevronUp size={14} />
           </button>
           <button
             type="button"
@@ -130,9 +130,9 @@
             title={$tr('Move Down')}
             aria-label={$tr('Move Down')}
             onclick={() => onSwap?.(idx, idx + 1)}
-            class="p-0.5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronDown size={12} />
+            <ChevronDown size={14} />
           </button>
         </div>
       {/if}
@@ -141,7 +141,7 @@
         onclick={onToggle}
         aria-expanded={expanded}
         aria-label={expanded ? `Collapse details for token ${idx}` : `Expand details for token ${idx}`}
-        class="inline-flex items-center justify-center w-6 h-6 text-[var(--fp-dim)] hover:text-[var(--fp-text)]"
+        class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] transition-colors"
       >
         {#if expanded}
           <ChevronDown size={16} />
