@@ -464,7 +464,8 @@
           description={$tr('Add one above or use Device Login to generate credentials via browser.')}
         />
       {:else}
-        <table class="fp-table w-full">
+        <div class="overflow-x-auto">
+        <table class="fp-table w-full min-w-[640px]">
           <thead>
             <tr>
               <th class="w-8"></th>
@@ -496,6 +497,7 @@
             {/each}
           </tbody>
         </table>
+        </div>
       {/if}
     </Card>
     {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}

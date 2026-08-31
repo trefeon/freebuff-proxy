@@ -326,6 +326,17 @@ select.fp-input {
   background: var(--fp-surface-2);
 }
 
+/* Mobile: tighter cell padding + rounded scroll container hint */
+@media (max-width: 640px) {
+  .fp-table thead th,
+  .fp-table tbody td {
+    padding: 0.5rem 0.5rem;
+  }
+  .fp-table {
+    font-size: 12px;
+  }
+}
+
 .fp-table .num {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
