@@ -238,10 +238,12 @@ code, pre, .font-mono, .fp-mono {
   border-color: var(--fp-error);
 }
 
+.fp-btn.fp-btn-sm,
 .fp-btn-sm {
   padding: 0.25rem 0.625rem;
-  height: 32px;
-  min-height: 32px;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
   min-width: auto;
   font-size: 12px;
   gap: 5px;
