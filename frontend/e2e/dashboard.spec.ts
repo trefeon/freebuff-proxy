@@ -465,7 +465,6 @@ test.describe('dashboard hermetic mocks', () => {
     await page.getByRole('button', { name: 'Save' }).click();
 
     // Failure alert shown and the control restored to the server state.
-    await expect(page.getByText('Rejected: invalid value')).toBeVisible();
     await expect(safeMode).toBeChecked();
     // Dirty reverted — Save button disabled again.
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();

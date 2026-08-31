@@ -94,7 +94,7 @@ var keyCatalog = []KeyDef{
 	{Key: "LOG_RING_SIZE", Group: GroupGeneral, Kind: "int", Hidden: true,
 		Default:     "500",
 		Description: `In-memory log ring capacity behind the dashboard log viewer (50-5000).`},
-	{Key: "SAFE_MODE", Group: GroupGeneral, Kind: "bool", Hidden: true,
+	{Key: "SAFE_MODE", Group: GroupGeneral, Kind: "bool", Essential: true,
 		Default:     "true",
 		Description: `Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 2s, browser TLS fingerprint auto. Keep on.`},
 

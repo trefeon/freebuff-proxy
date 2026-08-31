@@ -6,8 +6,9 @@
     "default": "",
     "restart_only": true,
     "secret": false,
-    "description": "Optional FreeBuff account id sent as x-freebuff-acting-user-id. BAN RISK: only the token's own account id is safe (any other value impersonates another user). Pre-rename name USER_ID still works. Empty = header omitted.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Optional FreeBuff account id sent as x-freebuff-acting-user-id. BAN RISK: only the token's own account id is safe (any other value impersonates another user). Pre-rename name USER_ID still works. Empty = header omitted."
   },
   {
     "key": "AUTO_DISCOVER_TOKEN",
@@ -16,8 +17,9 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "description": "When AUTH_TOKENS is empty, read credentials from the official CLI login files (false disables). Environment-only: it controls whether .env is read at all, so a .env line is inert outside Docker.",
-    "essential": true
+    "essential": false,
+    "hidden": true,
+    "description": "When AUTH_TOKENS is empty, read credentials from the official CLI login files (false disables). Environment-only: it controls whether .env is read at all, so a .env line is inert outside Docker."
   },
   {
     "key": "CLI_VERSION",
@@ -26,8 +28,9 @@
     "default": "0.10.7",
     "restart_only": false,
     "secret": false,
-    "description": "Upstream CLI version string; informational only — parsed and shown on the dashboard, no wire impact.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Upstream CLI version string; informational only — parsed and shown on the dashboard, no wire impact."
   },
   {
     "key": "DASHBOARD_ENABLED",
@@ -36,8 +39,8 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "description": "Serve the embedded admin dashboard at /admin (false disables all /admin routes with 404).",
-    "essential": true
+    "essential": false,
+    "description": "Serve the embedded admin dashboard at /admin (false disables all /admin routes with 404)."
   },
   {
     "key": "DEBUG_DUMP",
@@ -46,8 +49,9 @@
     "default": "false",
     "restart_only": true,
     "secret": false,
-    "description": "Persist redacted traffic dumps to ./dump/ (mode 0600, debugging only).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Persist redacted traffic dumps to ./dump/ (mode 0600, debugging only)."
   },
   {
     "key": "DEVTOOLS_ENABLED",
@@ -56,8 +60,9 @@
     "default": "false",
     "restart_only": false,
     "secret": false,
-    "description": "Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default off: it is a manual testing surface that hammers /v1/*.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default off: it is a manual testing surface that hammers /v1/*."
   },
   {
     "key": "LISTEN_ADDR",
@@ -66,8 +71,8 @@
     "default": "127.0.0.1:3457",
     "restart_only": false,
     "secret": false,
-    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces).",
-    "essential": true
+    "essential": false,
+    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces)."
   },
   {
     "key": "LOG_ACCESS",
@@ -76,8 +81,9 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "description": "Log one access line per HTTP request (healthz/metrics/OPTIONS are rate-limited to 1/min regardless).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Log one access line per HTTP request (healthz/metrics/OPTIONS are rate-limited to 1/min regardless)."
   },
   {
     "key": "LOG_FILE",
@@ -86,31 +92,27 @@
     "default": "",
     "restart_only": false,
     "secret": false,
-    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr.",
-    "essential": true
+    "essential": false,
+    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr."
   },
   {
     "key": "LOG_FORMAT",
     "group": "general",
     "kind": "select",
-    "default": "",
-    "restart_only": false,
-    "secret": false,
-    "description": "",
     "enum": [
       "text",
       "json"
     ],
-    "essential": false
+    "default": "text",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Log format: text (key=value, colored) or json (one JSON object per line)."
   },
   {
     "key": "LOG_LEVEL",
     "group": "general",
     "kind": "select",
-    "default": "",
-    "restart_only": false,
-    "secret": false,
-    "description": "",
     "enum": [
       "debug",
       "info",
@@ -118,7 +120,11 @@
       "error",
       "trace"
     ],
-    "essential": true
+    "default": "info",
+    "restart_only": false,
+    "secret": false,
+    "essential": true,
+    "description": "Log level (trace = wire-level bodies)."
   },
   {
     "key": "LOG_RING_SIZE",
@@ -127,8 +133,9 @@
     "default": "500",
     "restart_only": false,
     "secret": false,
-    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000)."
   },
   {
     "key": "SAFE_MODE",
@@ -137,8 +144,8 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 2s, browser TLS fingerprint auto. Keep on.",
-    "essential": true
+    "essential": true,
+    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 2s, browser TLS fingerprint auto. Keep on."
   },
   {
     "key": "ADOPT_CLI_SESSION",
@@ -147,8 +154,9 @@
     "default": "false",
     "restart_only": true,
     "secret": false,
-    "description": "Adopt the upstream CLI's active session (from freebuff-instance-owner.json) instead of creating a new one; with empty AUTH_TOKENS the token is sourced from the CLI credentials file.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Adopt the upstream CLI's active session (from freebuff-instance-owner.json) instead of creating a new one; with empty AUTH_TOKENS the token is sourced from the CLI credentials file."
   },
   {
     "key": "API_KEYS",
@@ -157,8 +165,9 @@
     "default": "",
     "restart_only": false,
     "secret": true,
-    "description": "Comma-separated client keys required for /v1/* (empty = open; ignored in bridge mode). In hybrid mode API_KEYS is the discriminator: a matching credential uses the pool, any other is relayed upstream as a bridge token.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Comma-separated client keys required for /v1/* (empty = open; ignored in bridge mode). Managed in the Overview and Client API Keys section."
   },
   {
     "key": "AUTH_TOKENS",
@@ -167,8 +176,9 @@
     "default": "",
     "restart_only": false,
     "secret": true,
-    "description": "Comma-separated upstream FreeBuff tokens. EMPTY = bridge mode: the proxy stores no tokens and each client sends its own; set = pooled (or hybrid with BRIDGE_ENABLED).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Comma-separated upstream FreeBuff tokens. Managed in the Tokens page and Device Login."
   },
   {
     "key": "BRIDGE_ENABLED",
@@ -177,8 +187,8 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "description": "With AUTH_TOKENS set, accept bridge-mode clients (their own token relayed) alongside the pool — hybrid mode. 0 = locked-down pooled-only instance.",
-    "essential": true
+    "essential": true,
+    "description": "With AUTH_TOKENS set, accept bridge-mode clients (their own token relayed) alongside the pool — hybrid mode. 0 = locked-down pooled-only instance."
   },
   {
     "key": "BRIDGE_IDLE_EVICT",
@@ -187,8 +197,9 @@
     "default": "72h",
     "restart_only": false,
     "secret": false,
-    "description": "How long a bridge entry may sit unused before its runs are FINISHed and it is evicted from the cache (sliding TTL; zero or invalid → 72h).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "How long a bridge entry may sit unused before its runs are FINISHed and it is evicted from the cache (sliding TTL; zero or invalid → 72h)."
   },
   {
     "key": "IDLE_ROTATION_TIMEOUT",
@@ -197,8 +208,9 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset)."
   },
   {
     "key": "MODEL_UNAVAILABLE_CACHE_TTL",
@@ -207,8 +219,9 @@
     "default": "1h",
     "restart_only": false,
     "secret": false,
-    "description": "How long a model_unavailable admission refusal is remembered per model (off-window models short-circuit to the fallback within the TTL).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "How long a model_unavailable admission refusal is remembered per model (off-window models short-circuit to the fallback within the TTL)."
   },
   {
     "key": "RATE_LIMIT_BURST",
@@ -217,8 +230,8 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP).",
-    "essential": false
+    "essential": false,
+    "description": "Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP)."
   },
   {
     "key": "RATE_LIMIT_PER_IP",
@@ -227,58 +240,63 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Requests/second allowed per client IP (0 = disabled; e.g. 20).",
-    "essential": true
+    "essential": true,
+    "description": "Requests/second allowed per client IP (0 = disabled; e.g. 20)."
   },
   {
     "key": "ROTATION_INTERVAL",
     "group": "pool",
     "kind": "text",
     "default": "6h",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
-    "description": "Agent-run rotation interval.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Agent-run rotation interval."
   },
   {
     "key": "RUNS_DRAIN_QUEUE_CAP",
     "group": "pool",
     "kind": "int",
     "default": "64",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
-    "description": "Draining-runs list cap; entries beyond it are force-dropped (FINISH is best-effort).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Draining-runs list cap; entries beyond it are force-dropped (FINISH is best-effort)."
   },
   {
     "key": "RUNS_DRAIN_TTL",
     "group": "pool",
     "kind": "text",
     "default": "10m",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
-    "description": "Draining-runs TTL eviction window.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Draining-runs TTL eviction window."
   },
   {
     "key": "RUN_FINISH_INLINE_TIMEOUT",
     "group": "pool",
     "kind": "text",
     "default": "250ms",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
-    "description": "Synchronous inline FINISH fallback bound when the deferred-FINISH queue is full.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Synchronous inline FINISH fallback bound when the deferred-FINISH queue is full."
   },
   {
     "key": "RUN_FINISH_QUEUE_SIZE",
     "group": "pool",
     "kind": "int",
     "default": "64",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
-    "description": "Bounded deferred-FINISH worker queue for rotated/drained runs (full queue falls back to a synchronous FINISH).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Bounded deferred-FINISH worker queue for rotated/drained runs (full queue falls back to a synchronous FINISH)."
   },
   {
     "key": "SESSION_CREATE_MAX_PARALLEL_GLOBAL",
@@ -287,8 +305,9 @@
     "default": "128",
     "restart_only": false,
     "secret": false,
-    "description": "Cap on concurrent in-flight session admissions (wait-or-503) across all models.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Cap on concurrent in-flight session admissions (wait-or-503) across all models."
   },
   {
     "key": "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
@@ -297,8 +316,9 @@
     "default": "32",
     "restart_only": false,
     "secret": false,
-    "description": "Per-model cap on concurrent in-flight session admissions.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Per-model cap on concurrent in-flight session admissions."
   },
   {
     "key": "SESSION_IDLE_END",
@@ -307,8 +327,8 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "End upstream sessions after this idle period, releasing the token's daily admission slot while the proxy sits unused (0 = disabled, opt-in).",
-    "essential": false
+    "essential": false,
+    "description": "End upstream sessions after this idle period, releasing the token's daily admission slot while the proxy sits unused (0 = disabled, opt-in)."
   },
   {
     "key": "SESSION_PERSIST",
@@ -317,8 +337,8 @@
     "default": "true",
     "restart_only": true,
     "secret": false,
-    "description": "Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (default true). Set to false to disable.",
-    "essential": false
+    "essential": true,
+    "description": "Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (default true). Set to false to disable."
   },
   {
     "key": "SESSION_PROBE_CACHE_TTL",
@@ -327,8 +347,9 @@
     "default": "15s",
     "restart_only": false,
     "secret": false,
-    "description": "Reuse the last successful session state (skip redundant session poll GETs) within this window.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Reuse the last successful session state (skip redundant session poll GETs) within this window."
   },
   {
     "key": "SESSION_RE_ADMIT_LEAD",
@@ -337,8 +358,9 @@
     "default": "60s",
     "restart_only": false,
     "secret": false,
-    "description": "Re-admit a session pre-emptively when less than this remains: the request rides the old session while the refresh runs in the background.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Re-admit a session pre-emptively when less than this remains: the request rides the old session while the refresh runs in the background."
   },
   {
     "key": "SESSION_STATE_FILE",
@@ -347,24 +369,25 @@
     "default": ".freebuff-session-state.json",
     "restart_only": true,
     "secret": false,
-    "description": "Path of the session state file (used when SESSION_PERSIST=true; token-keyed, 0600, raw tokens never written).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Path of the session state file (used when SESSION_PERSIST=true; token-keyed, 0600, raw tokens never written)."
   },
   {
     "key": "TOKEN_ROTATION",
     "group": "pool",
     "kind": "select",
-    "default": "",
-    "restart_only": false,
-    "secret": false,
-    "description": "",
     "enum": [
       "drain",
       "round_robin",
       "least_used",
       "random"
     ],
-    "essential": true
+    "default": "drain",
+    "restart_only": false,
+    "secret": false,
+    "essential": true,
+    "description": "Token selection strategy: drain (exhaust a token's session before rotating), round_robin, least_used, or random."
   },
   {
     "key": "WAITING_ROOM_CHAIN",
@@ -373,8 +396,9 @@
     "default": "false",
     "restart_only": false,
     "secret": false,
-    "description": "After an upstream 428 waiting_room_required, fire the reference ad-chain + streak requests before the next session create (best-effort, never blocks).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "After an upstream 428 waiting_room_required, fire the reference ad-chain + streak requests before the next session create (best-effort, never blocks)."
   },
   {
     "key": "BRIDGE_DAILY_LIMIT",
@@ -383,8 +407,9 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Global daily chat cap across ALL bridge-mode entries (0 = unlimited).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Global daily chat cap across ALL bridge-mode entries (0 = unlimited)."
   },
   {
     "key": "FALLBACK_AFTER_MS",
@@ -393,8 +418,8 @@
     "default": "10000",
     "restart_only": false,
     "secret": false,
-    "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 disables fallback. Queue-wait only — never on 429 quota exhaustion.",
-    "essential": true
+    "essential": false,
+    "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 disables fallback. Queue-wait only — never on 429 quota exhaustion."
   },
   {
     "key": "FALLBACK_MODEL",
@@ -403,8 +428,8 @@
     "default": "",
     "restart_only": false,
     "secret": false,
-    "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Unset default: openai/gpt-5.6-luna → deepseek/deepseek-v4-flash.",
-    "essential": false
+    "essential": false,
+    "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Unset default: openai/gpt-5.6-luna → deepseek/deepseek-v4-flash."
   },
   {
     "key": "MAX_MESSAGES_PER_DAY",
@@ -413,8 +438,8 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement).",
-    "essential": true
+    "essential": false,
+    "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement)."
   },
   {
     "key": "MAX_SPEND_PER_DAY",
@@ -423,8 +448,9 @@
     "default": "0",
     "restart_only": false,
     "secret": false,
-    "description": "Advisory per-token Pacific-day spend ceiling in ledger units (0 = unlimited). Never enforced — surfacing only, on /healthz.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Advisory per-token Pacific-day spend ceiling in ledger units (0 = unlimited). Never enforced — surfacing only, on /healthz."
   },
   {
     "key": "QUOTA_FALLBACK_MODELS",
@@ -433,8 +459,8 @@
     "default": "deepseek/deepseek-v4-flash=mimo/mimo-v2.5,z-ai/glm-5.2=deepseek/deepseek-v4-flash,openai/gpt-5.6-luna=deepseek/deepseek-v4-flash",
     "restart_only": false,
     "secret": false,
-    "description": "Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs).",
-    "essential": false
+    "essential": true,
+    "description": "Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs)."
   },
   {
     "key": "SCARCE_SESSION_MODELS",
@@ -443,21 +469,22 @@
     "default": "openai/gpt-5.6-luna",
     "restart_only": false,
     "secret": false,
-    "description": "1-session/day models to keep alive for their full session (never idle-evict or DELETE on shutdown while active).",
-    "essential": false
+    "essential": false,
+    "description": "1-session/day models to keep alive for their full session (never idle-evict or DELETE on shutdown while active)."
   },
   {
     "key": "COST_MODE",
     "group": "upstream",
     "kind": "select",
-    "default": "",
-    "restart_only": false,
-    "secret": false,
-    "description": "",
     "enum": [
       "free"
     ],
-    "essential": true
+    "default": "free",
+    "restart_only": true,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "MUST stay \"free\": any other value routes requests as PAID and fresh free accounts get 402 \"Out of credits\"."
   },
   {
     "key": "HTTP2_UPSTREAM",
@@ -466,8 +493,9 @@
     "default": "true",
     "restart_only": true,
     "secret": false,
-    "description": "Negotiate HTTP/2 with the upstream so the ALPN matches real browsers; false forces HTTP/1.1.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Negotiate HTTP/2 with the upstream so the ALPN matches real browsers; false forces HTTP/1.1."
   },
   {
     "key": "MODELS_ALLOW",
@@ -476,8 +504,8 @@
     "default": "",
     "restart_only": false,
     "secret": false,
-    "description": "Comma-separated model allowlist: when set, only these resolved model ids are served and any other request is rejected with 404 model_not_found. Empty = all models allowed.",
-    "essential": true
+    "essential": true,
+    "description": "Comma-separated model allowlist: when set, only these resolved model ids are served and any other request is rejected with 404 model_not_found. Empty = all models allowed."
   },
   {
     "key": "MODELS_HIDE_UNAVAILABLE",
@@ -486,8 +514,8 @@
     "default": "false",
     "restart_only": false,
     "secret": false,
-    "description": "/v1/models prunes models marked unavailable (region/tier demotion, quota exhaustion); off by default so a stale signal never hides a working model.",
-    "essential": false
+    "essential": false,
+    "description": "/v1/models prunes models marked unavailable (region/tier demotion, quota exhaustion); off by default so a stale signal never hides a working model."
   },
   {
     "key": "MODEL_ALIASES",
@@ -496,8 +524,8 @@
     "default": "",
     "restart_only": false,
     "secret": false,
-    "description": "Map aliases to real model IDs (e.g. gpt-4o:openai/gpt-5.6-luna; comma-separated). No built-in aliases — clients must map explicitly.",
-    "essential": false
+    "essential": true,
+    "description": "Map aliases to real model IDs (e.g. gpt-4o:openai/gpt-5.6-luna; comma-separated). No built-in aliases — clients must map explicitly."
   },
   {
     "key": "REGISTRY_REFRESH",
@@ -506,8 +534,9 @@
     "default": "6h",
     "restart_only": false,
     "secret": false,
-    "description": "Model catalog refresh interval.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Model catalog refresh interval."
   },
   {
     "key": "REQUEST_JITTER",
@@ -516,8 +545,9 @@
     "default": "0s",
     "restart_only": true,
     "secret": false,
-    "description": "Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 2s when unset; 0 disables.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 2s when unset; 0 disables."
   },
   {
     "key": "REQUEST_TIMEOUT",
@@ -526,8 +556,9 @@
     "default": "15m",
     "restart_only": true,
     "secret": false,
-    "description": "Upstream request timeout.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Upstream request timeout."
   },
   {
     "key": "SESSION_CALL_TIMEOUT",
@@ -536,17 +567,14 @@
     "default": "30s",
     "restart_only": true,
     "secret": false,
-    "description": "Session call timeout.",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Session call timeout."
   },
   {
     "key": "TLS_FINGERPRINT",
     "group": "upstream",
     "kind": "select",
-    "default": "",
-    "restart_only": false,
-    "secret": false,
-    "description": "",
     "enum": [
       "auto",
       "chrome120",
@@ -558,7 +586,12 @@
       "edge126",
       "random"
     ],
-    "essential": true
+    "default": "auto",
+    "restart_only": true,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Browser TLS fingerprint for upstream egress (auto picks a browser-like fingerprint per request; empty = plain Go transport)."
   },
   {
     "key": "TRANSIENT_RETRIES",
@@ -567,8 +600,8 @@
     "default": "1",
     "restart_only": true,
     "secret": false,
-    "description": "Max additional attempts after a transient transport failure (never retries 429/403/401; 0 disables).",
-    "essential": false
+    "essential": false,
+    "description": "Max additional attempts after a transient transport failure (never retries 429/403/401; 0 disables)."
   },
   {
     "key": "UPSTREAM_BASE_URL",
@@ -577,8 +610,9 @@
     "default": "https://www.codebuff.com",
     "restart_only": true,
     "secret": false,
-    "description": "Upstream API endpoint (codebuff.com is normalized to www.codebuff.com).",
-    "essential": false
+    "essential": false,
+    "hidden": true,
+    "description": "Upstream API endpoint (codebuff.com is normalized to www.codebuff.com)."
   },
   {
     "key": "ADMIN_TOKEN",
@@ -587,8 +621,8 @@
     "default": "123456",
     "restart_only": false,
     "secret": true,
-    "description": "Login password for the admin dashboard and the bearer token POST /admin/reload requires. Defaults to the factory password 123456 — rotate it; while the factory default is active, sensitive dashboard routes additionally require a loopback client.",
-    "essential": true
+    "essential": true,
+    "description": "Login password for the admin dashboard and the bearer token POST /admin/reload requires. Defaults to the factory password 123456 — rotate it; while the factory default is active, sensitive dashboard routes additionally require a loopback client."
   },
   {
     "key": "CORS_ALLOWED_ORIGIN",
@@ -597,8 +631,8 @@
     "default": "*",
     "restart_only": false,
     "secret": false,
-    "description": "Access-Control-Allow-Origin for /v1/* responses.",
-    "essential": true
+    "essential": false,
+    "description": "Access-Control-Allow-Origin for /v1/* responses."
   },
   {
     "key": "WEBHOOK_URL",
@@ -607,7 +641,7 @@
     "default": "",
     "restart_only": true,
     "secret": true,
-    "description": "Best-effort alert POSTs for pool_exhausted, token_banned, and agent_model_mismatch_escalation (empty = disabled; at most one POST per event type per 5m; may carry credentials in the URL userinfo).",
-    "essential": true
+    "essential": false,
+    "description": "Best-effort alert POSTs for pool_exhausted, token_banned, and agent_model_mismatch_escalation (empty = disabled; at most one POST per event type per 5m; may carry credentials in the URL userinfo)."
   }
 ]

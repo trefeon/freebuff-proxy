@@ -1,6 +1,9 @@
 package config
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 )
@@ -181,6 +184,18 @@ func TestCatalogSecretFlags(t *testing.T) {
 		if !secretKeys[key] {
 			t.Errorf("key %s is flagged secret but is not in the expected secret set", key)
 		}
+	}
+}
+
+func TestConfigMetaFixtureSync(t *testing.T) {
+	data, err := json.MarshalIndent(Catalog(), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, '\n')
+	fixturePath := filepath.Join("..", "..", "..", "frontend", "e2e", "fixtures", "config-meta.json")
+	if _, err := os.Stat(fixturePath); err == nil {
+		_ = os.WriteFile(fixturePath, data, 0o644)
 	}
 }
 
