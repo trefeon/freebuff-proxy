@@ -171,7 +171,7 @@
   let groups = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
     return GROUP_ORDER.map((g) => {
-      let entries = meta.filter((e) => e.group === g);
+      let entries = meta.filter((e) => e.group === g && !e.hidden);
       if (q) {
         entries = entries.filter(
           (e) =>
@@ -443,7 +443,7 @@
           onclick={() => viewMode = 'essential'}
         >
           <Sparkles size={13} />
-          <span>{$tr('Essential (17)')}</span>
+          <span>{$tr('Essential ({count})', { count: meta.filter(e => !e.hidden && isKeyEssential(e)).length })}</span>
         </button>
         <button
           type="button"
@@ -451,7 +451,7 @@
           onclick={() => viewMode = 'all'}
         >
           <SlidersHorizontal size={13} />
-          <span>{$tr('All Settings ({count})', { count: meta.length })}</span>
+          <span>{$tr('All Settings ({count})', { count: meta.filter(e => !e.hidden).length })}</span>
         </button>
       </div>
 
