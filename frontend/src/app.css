@@ -332,7 +332,8 @@ select.fp-input {
   text-align: right;
 }
 
-.fp-table th.num {
+.fp-table th.text-right,
+.fp-table td.text-right {
   text-align: right;
 }
 
