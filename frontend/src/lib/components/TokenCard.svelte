@@ -152,11 +152,18 @@
     </div>
   </td>
   <td>
-    <div class="flex items-center gap-1.5">
-      <span class="fp-num text-xs font-semibold text-[var(--fp-text)]">#{idx}</span>
-      {#if idx === 0}
-        <span class="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30">
-          {$tr('Primary')}
+    <div class="flex flex-col gap-0.5">
+      <div class="flex items-center gap-1.5">
+        <span class="fp-num text-xs font-semibold text-[var(--fp-text)]">#{idx}</span>
+        {#if idx === 0}
+          <span class="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30">
+            {$tr('Primary')}
+          </span>
+        {/if}
+      </div>
+      {#if token.email || token.account_id}
+        <span class="text-[11px] text-[var(--fp-muted)] truncate max-w-[160px]" title={token.email || token.account_id}>
+          {token.email || token.account_id}
         </span>
       {/if}
     </div>

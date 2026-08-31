@@ -255,6 +255,21 @@ type meAccount struct {
 	DiscordID string `json:"discord_id"`
 }
 
+// FetchAccountInfo queries GET /api/v1/me to retrieve the account email and id.
+func (c *Client) FetchAccountInfo(ctx context.Context) (email, id string, err error) {
+	if isDummyToken(c.token) {
+		return "", "", nil
+	}
+	acct, status, err := c.probeMe(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	if status != http.StatusOK || acct == nil {
+		return "", "", fmt.Errorf("upstream returned status %d", status)
+	}
+	return acct.Email, acct.ID, nil
+}
+
 // probeSession reuses the Client's zero-cost token probe (GET
 // /api/v1/freebuff/session with no x-freebuff-instance-id header — claims
 // no session slot, consumes none of the daily allowance) and maps the

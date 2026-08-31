@@ -288,6 +288,9 @@ func (s *Server) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flow.Index = index
+	if index >= 0 {
+		s.pool.SetTokenAccountInfo(index, status.User.Email, status.User.ID)
+	}
 	s.logger.Info("login wizard: completed", "flow", flow.ID, "token_index", index, "user", status.User.Name)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "token_index": index, "user": status.User.Name})

@@ -12,6 +12,8 @@ import (
 func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 	card := tokenCard{
 		Index:            t.Token,
+		Email:            t.Email,
+		AccountID:        t.AccountID,
 		SessionStatus:    t.SessionStatus,
 		QueuePosition:    t.SessionQueuePosition,
 		QueueDepth:       t.SessionQueueDepth,

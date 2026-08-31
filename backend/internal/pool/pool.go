@@ -116,6 +116,8 @@ type bridgeEntry struct {
 // TokenSnapshot is one token's healthz view.
 type TokenSnapshot struct {
 	Token                   int
+	Email                   string `json:"email,omitempty"`
+	AccountID               string `json:"account_id,omitempty"`
 	CooldownUntil           time.Time
 	SessionStatus           string
 	SessionInstanceID       string
@@ -387,7 +389,8 @@ type tokenEntry struct {
 	session *session.Manager
 	runs    *runs.RunManager
 	client  *upstream.Client
-	// token is the raw AUTH_TOKENS string this entry was built from. A
+	email      atomic.Pointer[string]
+	accountID  atomic.Pointer[string]
 	// config reload that replaces the account at this slot REBUILDS the
 	// entry (see Pool.SetConfig): the old entry is retired and drained
 	// (runs FINISHed, session ended) and a fresh one is constructed for
@@ -424,6 +427,41 @@ type tokenEntry struct {
 	// entry rebuild that an AUTH_TOKENS slot change triggers (SetConfig —
 	// the whole entry is replaced, so the marker dies with it).
 	quarantine atomic.Pointer[quarantineState]
+}
+
+func (e *tokenEntry) Email() string {
+	if p := e.email.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+func (e *tokenEntry) SetEmail(email string) {
+	if email != "" {
+		e.email.Store(&email)
+	}
+}
+
+func (e *tokenEntry) AccountID() string {
+	if p := e.accountID.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+func (e *tokenEntry) SetAccountID(id string) {
+	if id != "" {
+		e.accountID.Store(&id)
+	}
+}
+
+// SetTokenAccountInfo stamps the account email and ID onto a pooled token entry.
+func (p *Pool) SetTokenAccountInfo(index int, email, accountID string) {
+	toks := p.toks.Load()
+	if toks != nil && index >= 0 && index < len(*toks) {
+		(*toks)[index].SetEmail(email)
+		(*toks)[index].SetAccountID(accountID)
+	}
 }
 
 // quarantineState is the terminal account state that permanently removes one
@@ -692,14 +730,23 @@ func (p *Pool) buildTokenEntry(idx int, token string) (*tokenEntry, error) {
 	sess.SetAdmissionProbeTTL(cfg.SessionProbeCacheTTL)
 	sess.SetModelUnavailableCacheTTL(cfg.ModelUnavailableCacheTTL)
 	sess.SetScarceModels(cfg.ScarceSessionModels)
-	return &tokenEntry{
+	entry := &tokenEntry{
 		session: sess,
 		runs:    runs.NewRunManagerOpts(client, sess, runOptions(cfg)),
 		client:  client,
 		token:   token,
-	}, nil
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		email, id, err := client.FetchAccountInfo(ctx)
+		if err == nil && email != "" {
+			entry.SetEmail(email)
+			entry.SetAccountID(id)
+		}
+	}()
+	return entry, nil
 }
-
 // isPooledToken reports whether raw matches one of the fixed AUTH_TOKENS
 // entries (exact string compare against the pool's own in-memory copies).
 func (p *Pool) isPooledToken(raw string) bool {

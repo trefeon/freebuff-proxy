@@ -61,6 +61,8 @@ type upstreamFile struct {
 
 type tokenCard struct {
 	Index               int     `json:"index"`
+	Email               string  `json:"email,omitempty"`
+	AccountID           string  `json:"account_id,omitempty"`
 	SessionStatus       string  `json:"session_status"`
 	QueuePosition       int     `json:"queue_position"`
 	QueueDepth          int     `json:"queue_depth"`

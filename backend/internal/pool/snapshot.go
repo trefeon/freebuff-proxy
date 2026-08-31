@@ -147,6 +147,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 
 		out = append(out, TokenSnapshot{
 			Token:                   i,
+			Email:                   tok.Email(),
+			AccountID:               tok.AccountID(),
 			CooldownUntil:           rs.CooldownUntil,
 			ActiveRuns:              rs.ActiveRuns,
 			Requests:                rs.Requests,
