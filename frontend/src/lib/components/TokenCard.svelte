@@ -130,7 +130,7 @@
   </td>
   <td>
     {#if token.session_instance}
-      <code class="fp-num text-xs text-[var(--fp-muted)]">{token.session_instance}</code>
+      <code class="fp-num text-xs text-[var(--fp-muted)] break-all select-all">{token.session_instance}</code>
     {:else}
       <span class="text-xs text-[var(--fp-dim)]">—</span>
     {/if}
@@ -302,7 +302,7 @@
             {/if}
           </div>
         {/if}
-        {#if !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
+        {#if !devToolsEnabled && !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
           <p class="text-xs text-[var(--fp-dim)] italic">
             {$tr('No active session or run for this auth token.')}
           </p>

@@ -333,7 +333,7 @@
         {/snippet}
         <div class="text-xs text-[var(--fp-muted)] space-y-2">
           <p>
-            <strong class="text-[var(--fp-text)]">{$tr('Bridge Mode (Active):')}</strong> {$tr('Clients can send requests using their own FreeBuff token (cb_…) as the Bearer or x-api-key credential.')}
+            <strong class="text-[var(--fp-text)]">{$tr('Bridge Mode (Active):')}</strong> {$tr('Clients can send requests using their own FreeBuff token as the Bearer or x-api-key credential.')}
           </p>
           <p>
             <strong class="text-[var(--fp-text)]">{$tr('Pooled Mode (Ready):')}</strong> {$tr('Add FreeBuff accounts in Tokens (via Device Login or pasting tokens) to enable shared pool rotation, admission coercion, and Client API Key routing.')}
