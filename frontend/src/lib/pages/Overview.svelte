@@ -33,6 +33,7 @@
   let generatedKey = $state('');
   let deletingKey = $state('');
   let showGeneratedModal = $state(false);
+  let visibleKeys = $state({});
 
   function toggleKeyVisibility(key) {
     visibleKeys = { ...visibleKeys, [key]: !visibleKeys[key] };
