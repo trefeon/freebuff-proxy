@@ -60,8 +60,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.CostMode != "free" {
 		t.Errorf("CostMode = %q, want free (default: omission routes requests as paid -> 402)", cfg.CostMode)
 	}
-	if cfg.SessionPersist {
-		t.Error("SessionPersist = true, want false (default: persistence opt-in)")
+	if !cfg.SessionPersist {
+		t.Error("SessionPersist = false, want true (default: persistence enabled)")
 	}
 	if cfg.SessionStateFile != ".freebuff-session-state.json" {
 		t.Errorf("SessionStateFile = %q, want %q", cfg.SessionStateFile, ".freebuff-session-state.json")

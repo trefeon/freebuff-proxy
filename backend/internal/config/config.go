@@ -392,7 +392,7 @@ func defaultRawConfig() rawConfig {
 		RequestJitter:                    "",          // "" = disabled (unset → SAFE_MODE preset may fill)
 		CLIVersion:                       "0.10.7",
 		TransientRetries:                 nil,   // nil = 1 (one retry after a transient transport failure; 0 disables)
-		SessionPersist:                   false, // opt-in: persist session state across restarts
+		SessionPersist:                   true,  // session persistence on by default: restart resumes unexpired sessions
 		SessionStateFile:                 ".freebuff-session-state.json",
 		HTTP2Upstream:                    true,        // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
 		SessionCreateMaxParallelGlobal:   ptrInt(128), // #86: concurrent session admissions cap

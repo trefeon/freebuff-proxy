@@ -478,21 +478,27 @@ func TestCORSAllowedOrigin(t *testing.T) {
 }
 
 // TestSessionPersist pins the SESSION_PERSIST env parsing: an unrecognized
-// boolean value is silently ignored (the default stays false — no error),
-// and "true" enables persistence with the configured state file path. The
-// SESSION_PERSIST=true + empty SESSION_STATE_FILE validation error is only
-// reachable through the JSON/struct path (an env value of "" is treated as
-// unset and leaves the default), so it is pinned in TestValidate.
+// boolean value is silently ignored (the default stays true — no error),
+// "false" disables persistence, and "true" explicitly enables it.
 func TestSessionPersist(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok-1")
 
-	// garbage value is silently ignored, default (false) stands
+	// garbage value is silently ignored, default (true) stands
 	t.Setenv("SESSION_PERSIST", "garbage")
 	if cfg, err := Load(""); err != nil {
 		t.Fatalf("Load (garbage): %v", err)
+	} else if !cfg.SessionPersist {
+		t.Error("SessionPersist = false for SESSION_PERSIST=garbage, want true (unrecognized value ignored)")
+	}
+	t.Setenv("SESSION_PERSIST", "")
+
+	// recognized false value disables persistence
+	t.Setenv("SESSION_PERSIST", "false")
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (false): %v", err)
 	} else if cfg.SessionPersist {
-		t.Error("SessionPersist = true for SESSION_PERSIST=garbage, want false (unrecognized value ignored)")
+		t.Error("SessionPersist = true for SESSION_PERSIST=false, want false")
 	}
 	t.Setenv("SESSION_PERSIST", "")
 

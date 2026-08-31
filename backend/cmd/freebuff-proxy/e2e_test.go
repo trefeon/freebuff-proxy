@@ -315,7 +315,7 @@ func TestE2EServeAndDrain(t *testing.T) {
 	bin := proxyInDir(t, dir)
 	cmd := exec.Command(bin)
 	cmd.Dir = dir
-	cmd.Env = e2eEnv(t, "AUTO_DISCOVER_TOKEN=false")
+	cmd.Env = e2eEnv(t, "AUTO_DISCOVER_TOKEN=false", "SESSION_PERSIST=false")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	startProcess(t, cmd)

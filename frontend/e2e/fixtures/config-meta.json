@@ -314,10 +314,10 @@
     "key": "SESSION_PERSIST",
     "group": "pool",
     "kind": "bool",
-    "default": "false",
+    "default": "true",
     "restart_only": true,
     "secret": false,
-    "description": "Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (new daily slot / re-START).",
+    "description": "Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (default true). Set to false to disable.",
     "essential": false
   },
   {
