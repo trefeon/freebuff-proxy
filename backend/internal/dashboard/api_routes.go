@@ -92,6 +92,7 @@ var AdminRoutes = [...]AdminRoute{
 	{Method: "POST", Path: "/admin/tokens/test-all", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/add", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/remove", Auth: AuthSensitive},
+	{Method: "POST", Path: "/admin/tokens/swap", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/mode", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/diag", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/api/change-password", Auth: AuthSensitive},

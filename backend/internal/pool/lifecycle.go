@@ -312,6 +312,58 @@ func (p *Pool) RemoveTokenAt(idx int) error {
 	return nil
 }
 
+// SwapTokens swaps the token entries at index i and j in the fixed-token list.
+// Active in-flight requests on any token refuse the swap to avoid race hazards.
+func (p *Pool) SwapTokens(i, j int) error {
+	toks := p.toks.Load()
+	if toks == nil {
+		return errors.New("pool: no tokens configured")
+	}
+	if i < 0 || i >= len(*toks) || j < 0 || j >= len(*toks) {
+		return errors.New("pool: token index out of range")
+	}
+	if i == j {
+		return nil
+	}
+	for _, t := range *toks {
+		if t.runs.InflightCount() > 0 {
+			return errors.New("pool: active requests in flight; retry once they finish")
+		}
+	}
+	next := make([]*tokenEntry, len(*toks))
+	copy(next, *toks)
+	next[i], next[j] = next[j], next[i]
+	p.toks.Store(&next)
+
+	p.usageMu.Lock()
+	if i < len(p.msgsPerToken) && j < len(p.msgsPerToken) {
+		p.msgsPerToken[i], p.msgsPerToken[j] = p.msgsPerToken[j], p.msgsPerToken[i]
+	}
+	p.usageMu.Unlock()
+
+	p.spendMu.Lock()
+	if i < len(p.spendPerToken) && j < len(p.spendPerToken) {
+		p.spendPerToken[i], p.spendPerToken[j] = p.spendPerToken[j], p.spendPerToken[i]
+	}
+	p.spendMu.Unlock()
+	p.mismatchMu.Lock()
+	m1, ok1 := p.mismatch[i+1]
+	m2, ok2 := p.mismatch[j+1]
+	if ok1 {
+		p.mismatch[j+1] = m1
+	} else {
+		delete(p.mismatch, j+1)
+	}
+	if ok2 {
+		p.mismatch[i+1] = m2
+	} else {
+		delete(p.mismatch, i+1)
+	}
+	p.mismatchMu.Unlock()
+
+	return nil
+}
+
 // session (mirrors RemoveAllTokens' run finish plus the session end that
 // removal previously skipped), bounded by the per-token shutdown timeout so
 // a hung upstream cannot block the dashboard action. guarded by

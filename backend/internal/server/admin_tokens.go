@@ -416,6 +416,88 @@ func (s *Server) handleTokenRemove(w http.ResponseWriter, r *http.Request) {
 	s.dash.RenderConfigResult(w, r, true, msg)
 }
 
+func (s *Server) handleTokenSwap(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	s.adminSaveMu.Lock()
+	defer s.adminSaveMu.Unlock()
+
+	cfg := s.cfg.Load()
+	if len(cfg.AuthTokens) != s.pool.TokenCount() {
+		s.dash.RenderConfigResult(w, r, false, "AUTH_TOKENS in .env differs from the live pool — reconcile in the Config editor or restart.")
+		return
+	}
+
+	fromIdx := -1
+	toIdx := -1
+
+	var req struct {
+		I    *int   `json:"i"`
+		J    *int   `json:"j"`
+		From *int   `json:"from"`
+		To   *int   `json:"to"`
+		Idx  *int   `json:"index"`
+		Dir  string `json:"direction"`
+	}
+	body, _ := io.ReadAll(r.Body)
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &req)
+	}
+
+	if req.I != nil && req.J != nil {
+		fromIdx = *req.I
+		toIdx = *req.J
+	} else if req.From != nil && req.To != nil {
+		fromIdx = *req.From
+		toIdx = *req.To
+	} else if req.Idx != nil {
+		fromIdx = *req.Idx
+		if req.Dir == "up" {
+			toIdx = fromIdx - 1
+		} else if req.Dir == "down" {
+			toIdx = fromIdx + 1
+		} else if req.To != nil {
+			toIdx = *req.To
+		}
+	} else if rawFrom := r.URL.Query().Get("from"); rawFrom != "" {
+		fromIdx, _ = strconv.Atoi(rawFrom)
+		toIdx, _ = strconv.Atoi(r.URL.Query().Get("to"))
+	} else if rawIdx := r.URL.Query().Get("index"); rawIdx != "" {
+		fromIdx, _ = strconv.Atoi(rawIdx)
+		dir := r.URL.Query().Get("direction")
+		if dir == "up" {
+			toIdx = fromIdx - 1
+		} else if dir == "down" {
+			toIdx = fromIdx + 1
+		}
+	}
+
+	if fromIdx < 0 || fromIdx >= len(cfg.AuthTokens) || toIdx < 0 || toIdx >= len(cfg.AuthTokens) {
+		s.dash.RenderConfigResult(w, r, false, "Invalid token index or target out of range.")
+		return
+	}
+	if fromIdx == toIdx {
+		s.dash.RenderConfigResult(w, r, true, "Tokens already in requested order.")
+		return
+	}
+
+	if err := s.pool.SwapTokens(fromIdx, toIdx); err != nil {
+		s.dash.RenderConfigResult(w, r, false, err.Error())
+		return
+	}
+
+	tokens := append([]string{}, cfg.AuthTokens...)
+	tokens[fromIdx], tokens[toIdx] = tokens[toIdx], tokens[fromIdx]
+
+	if err := s.syncTokensAfterMutation(tokens); err != nil {
+		_ = s.pool.SwapTokens(fromIdx, toIdx) // rollback pool order
+		s.logger.Warn("dashboard token swap rolled back", "remote", remoteHost(r), "err", err)
+		s.dash.RenderConfigResult(w, r, false, err.Error())
+		return
+	}
+	s.logger.Info("dashboard tokens swapped", "remote", remoteHost(r), "from", fromIdx, "to", toIdx)
+	s.dash.RenderConfigResult(w, r, true, fmt.Sprintf("Token #%d and Token #%d swapped and prioritized in .env.", fromIdx, toIdx))
+}
+
 func (s *Server) handleModeSwitch(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before FormValue: ParseForm would otherwise slurp the
 	// entire request into memory before the JSON fallback's 4KB cap applies.

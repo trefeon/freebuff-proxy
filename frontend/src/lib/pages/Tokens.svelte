@@ -161,6 +161,10 @@
     return triggerAction(tokenActions.finish(idx), {}, $tr('Finish active runs on token #{idx}?', { idx }));
   }
 
+  function handleSwap(from, to) {
+    triggerAction(adminActions.tokenSwap, { from, to });
+  }
+
   async function startOAuthLogin() {
     oauthStarting = true;
     oauthStatus = { message: $tr('Starting headless login flow…'), type: 'info' };
@@ -474,6 +478,7 @@
               <TokenCard
                 {token}
                 {idx}
+                totalTokens={(data?.tokens ?? []).length}
                 expanded={expandedToken === idx}
                 bind:spawnModel={spawnModels[idx]}
                 {actionPending}
@@ -483,6 +488,7 @@
                 onAction={(action) => handleTokenAction(token, idx, action)}
                 onSpawn={(model) => handleSpawn(idx, model)}
                 onRefresh={(action) => handleRefresh(idx, action)}
+                onSwap={handleSwap}
               />
             {/each}
           </tbody>

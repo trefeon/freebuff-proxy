@@ -552,12 +552,29 @@ func (p *Pool) SetConfig(cfg *config.Config) {
 	}
 	var changes []slotChange
 	changed := false
+
+	// Map available base entries so swapped/reordered tokens reuse their
+	// existing client/session/run-manager triple without tear-down or rebuild.
+	available := make(map[string]*tokenEntry, len(base))
+	for _, e := range base {
+		if e != nil && e.token != "" {
+			available[e.token] = e
+		}
+	}
+
 	for i := range cfg.AuthTokens {
-		if i < len(base) && base[i].token == cfg.AuthTokens[i] {
+		tokVal := cfg.AuthTokens[i]
+		if i < len(base) && base[i].token == tokVal {
 			rebuilt = append(rebuilt, base[i])
+			delete(available, tokVal)
 			continue
 		}
-		entry, err := p.buildTokenEntry(i, cfg.AuthTokens[i])
+		if existing, ok := available[tokVal]; ok {
+			rebuilt = append(rebuilt, existing)
+			delete(available, tokVal)
+			continue
+		}
+		entry, err := p.buildTokenEntry(i, tokVal)
 		if err != nil {
 			// Keep serving the previous entry for this slot; log the
 			// failure so the operator sees the reload did not fully apply.

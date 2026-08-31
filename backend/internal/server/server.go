@@ -261,6 +261,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.handleTokenAdd)
 	case "POST /admin/tokens/remove":
 		return http.HandlerFunc(s.handleTokenRemove)
+	case "POST /admin/tokens/swap":
+		return http.HandlerFunc(s.handleTokenSwap)
 	case "POST /admin/mode":
 		return http.HandlerFunc(s.handleModeSwitch)
 	case "POST /admin/diag":

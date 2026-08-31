@@ -9,6 +9,8 @@
     RefreshCw,
     Check,
     ExternalLink,
+    ArrowUp,
+    ArrowDown,
   } from '@lucide/svelte';
   import Button from './Button.svelte';
   import StatusBadge from './StatusBadge.svelte';
@@ -20,6 +22,7 @@
   let {
     token,
     idx,
+    totalTokens = 1,
     expanded,
     spawnModel = $bindable(''),
     actionPending,
@@ -29,6 +32,7 @@
     onAction,
     onSpawn,
     onRefresh,
+    onSwap,
   } = $props();
 
   let modelOptions = $state(fallbackModelOptions);
@@ -146,6 +150,34 @@
   </td>
   <td class="text-right">
     <div class="inline-flex items-center gap-1.5 justify-end">
+      {#if totalTokens > 1}
+        {#if idx > 0}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={actionPending}
+            title={$tr('Move Up / Prioritize this token')}
+            aria-label={$tr('Move Up')}
+            onclick={() => onSwap?.(idx, idx - 1)}
+          >
+            <ArrowUp size={13} />
+            <span>{$tr('Up')}</span>
+          </Button>
+        {/if}
+        {#if idx < totalTokens - 1}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={actionPending}
+            title={$tr('Move Down in pool order')}
+            aria-label={$tr('Move Down')}
+            onclick={() => onSwap?.(idx, idx + 1)}
+          >
+            <ArrowDown size={13} />
+            <span>{$tr('Down')}</span>
+          </Button>
+        {/if}
+      {/if}
       {#if token.cooldown_active}
         <Button
           variant="ghost"
