@@ -160,6 +160,11 @@
                 {:else}
                   <p class="text-xs text-[var(--fp-dim)] italic">{$tr('No quota data available for this session.')}</p>
                 {/if}
+                {#if token.unserved_models?.length}
+                  <p class="mt-2 text-[11px] text-[var(--fp-dim)]">
+                    {$tr('+ {count} upstream web-only model(s) not served by this gateway: {models}', { count: token.unserved_models.length, models: token.unserved_models.join(', ') })}
+                  </p>
+                {/if}
               </div>
             </div>
           </Card>

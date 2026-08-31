@@ -6,8 +6,6 @@ import (
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/registry"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -32,6 +30,7 @@ type tokenDetail struct {
 	Quota                   []quotaRow                 `json:"quota"`
 	HasQuota                bool                       `json:"has_quota"`
 	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	UnservedModels          []string                   `json:"unserved_models,omitempty"`
 }
 
 type quotaRow struct {
@@ -128,11 +127,7 @@ func (d *Dashboard) tokensData() tokensData {
 		}
 		if len(upstreamOnly) > 0 {
 			sort.Strings(upstreamOnly)
-			detail.Quota = append(detail.Quota, quotaRow{
-				Model:     "+ " + strconv.Itoa(len(upstreamOnly)) + " upstream-only (not served): " + strings.Join(upstreamOnly, ", "),
-				Pool:      "upstream",
-				PoolLabel: "upstream",
-			})
+			detail.UnservedModels = upstreamOnly
 		}
 		// Scarcity/promo isolation (issue #178): the upstream glmPromo block
 		// ({dailySessions, endsAt}) grants a referral quota on scarce models
