@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -187,15 +188,36 @@ func TestCatalogSecretFlags(t *testing.T) {
 	}
 }
 
-func TestConfigMetaFixtureSync(t *testing.T) {
+// TestConfigMetaFixtureParity asserts that the frontend e2e mock fixture
+// frontend/e2e/fixtures/config-meta.json stays byte-exact in sync with
+// Catalog(). Run with FP_REGEN_FIXTURE=1 to regenerate the fixture.
+func TestConfigMetaFixtureParity(t *testing.T) {
 	data, err := json.MarshalIndent(Catalog(), "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
 	data = append(data, '\n')
 	fixturePath := filepath.Join("..", "..", "..", "frontend", "e2e", "fixtures", "config-meta.json")
-	if _, err := os.Stat(fixturePath); err == nil {
-		_ = os.WriteFile(fixturePath, data, 0o644)
+
+	if os.Getenv("FP_REGEN_FIXTURE") != "" {
+		if err := os.WriteFile(fixturePath, data, 0o644); err != nil {
+			t.Fatalf("write fixture: %v", err)
+		}
+		t.Logf("regenerated %s", fixturePath)
+		return
+	}
+
+	existing, err := os.ReadFile(fixturePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("fixture does not exist; skipping parity check")
+		}
+		t.Fatal(err)
+	}
+	normExisting := strings.ReplaceAll(string(existing), "\r\n", "\n")
+	normData := string(data)
+	if normExisting != normData {
+		t.Errorf("frontend e2e fixture %s is out of date with Catalog(); re-run with FP_REGEN_FIXTURE=1 to regenerate", fixturePath)
 	}
 }
 
