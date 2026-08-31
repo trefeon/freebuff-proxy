@@ -239,10 +239,12 @@ code, pre, .font-mono, .fp-mono {
 }
 
 .fp-btn-sm {
-  padding: 0.5rem 0.75rem;
-  min-height: 44px;
-  min-width: 44px;
+  padding: 0.25rem 0.625rem;
+  height: 32px;
+  min-height: 32px;
+  min-width: auto;
   font-size: 12px;
+  gap: 5px;
 }
 
 /* ── Inputs ───────────────────────────────────────────────────── */
