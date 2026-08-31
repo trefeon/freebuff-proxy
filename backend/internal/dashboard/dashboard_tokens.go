@@ -30,7 +30,6 @@ type tokenDetail struct {
 	Quota                   []quotaRow                 `json:"quota"`
 	HasQuota                bool                       `json:"has_quota"`
 	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
-	UnservedModels          []string                   `json:"unserved_models,omitempty"`
 }
 
 type quotaRow struct {
@@ -74,18 +73,11 @@ func (d *Dashboard) tokensData() tokensData {
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
 			PremiumQuota:            t.PremiumQuota,
 		}
-		var upstreamOnly []string
 		for model, q := range t.QuotaByModel {
 			if !registry.IsServedModel(model) {
-				// The admission ledger meters models beyond the gateway's
-				// served catalog: god-only/eval rows (crof/kimi-k3-eco,
-				// openai/gpt-5.6-luna-es) and upstream-Web models
-				// (meta/muse-spark-1.2-contributor). Same philosophy as the
-				// served gate in registry.go — a model no client can reach
-				// is dashboard noise — so the table lists only served
-				// models and collapses the rest into one summary row that
-				// keeps live-wire drift visible.
-				upstreamOnly = append(upstreamOnly, model)
+				// Only reverse-engineer and display models the official CLI
+				// truly serves. Unserved web models in upstream's ledger
+				// (kimi-k3-eco, muse-spark, luna-es) are ignored.
 				continue
 			}
 			rem := float64(0)
@@ -125,10 +117,7 @@ func (d *Dashboard) tokensData() tokensData {
 			}
 			detail.Quota = append(detail.Quota, row)
 		}
-		if len(upstreamOnly) > 0 {
-			sort.Strings(upstreamOnly)
-			detail.UnservedModels = upstreamOnly
-		}
+
 		// Scarcity/promo isolation (issue #178): the upstream glmPromo block
 		// ({dailySessions, endsAt}) grants a referral quota on scarce models
 		// like GLM/Luna/Pro. Synthesize a dashboard row for z-ai/glm-5.2 so
