@@ -308,15 +308,14 @@
       {#snippet actions()}
         <Button
           variant="secondary"
-          size="sm"
           onclick={startOAuthLogin}
           disabled={oauthStarting}
         >
           {#if oauthStarting}
-            <RefreshCw size={14} class="animate-spin" />
+            <RefreshCw size={15} class="animate-spin" />
             <span>{$tr('Authorizing…')}</span>
           {:else}
-            <LogIn size={14} />
+            <LogIn size={15} />
             <span>{$tr('Device Login')}</span>
           {/if}
         </Button>
