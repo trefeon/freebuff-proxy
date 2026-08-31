@@ -37,10 +37,10 @@
     "group": "general",
     "kind": "bool",
     "default": "true",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
-    "description": "Serve the embedded admin dashboard at /admin (false disables all /admin routes with 404)."
+    "description": "Serve the embedded admin dashboard at /admin (false disables all /admin routes with 404). Restart-only: /admin routes are registered once at boot and cannot be torn down at runtime."
   },
   {
     "key": "DEBUG_DUMP",

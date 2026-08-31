@@ -317,6 +317,7 @@ var restartOnlyConfigKeys = []string{
 	"RUN_FINISH_INLINE_TIMEOUT",
 	"RUNS_DRAIN_QUEUE_CAP",
 	"RUNS_DRAIN_TTL",
+	"DASHBOARD_ENABLED",
 }
 
 // changedRestartOnlyKeys returns the subset of restartOnlyConfigKeys whose
@@ -441,8 +442,7 @@ func effectiveConfigKV(cfg *config.Config) map[string]string {
 		"SESSION_PERSIST":                       strconv.FormatBool(cfg.SessionPersist),
 		"SESSION_STATE_FILE":                    cfg.SessionStateFile,
 		"HTTP2_UPSTREAM":                        strconv.FormatBool(cfg.HTTP2Upstream),
-		"SESSION_CREATE_MAX_PARALLEL_GLOBAL":    strconv.Itoa(cfg.SessionCreateMaxParallelGlobal),
-		"SESSION_CREATE_MAX_PARALLEL_PER_MODEL": strconv.Itoa(cfg.SessionCreateMaxParallelPerModel),
+		"DASHBOARD_ENABLED":                     strconv.FormatBool(cfg.DashboardEnabled),
 		"RUN_FINISH_QUEUE_SIZE":                 strconv.Itoa(cfg.RunFinishQueueSize),
 		"RUN_FINISH_INLINE_TIMEOUT":             cfg.RunFinishInlineTimeout.String(),
 		"RUNS_DRAIN_QUEUE_CAP":                  strconv.Itoa(cfg.RunsDrainQueueCap),

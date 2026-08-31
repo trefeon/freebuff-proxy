@@ -580,6 +580,7 @@
                       oninput={(e) => setField(entry.key, e.currentTarget.value)}
                       aria-label={entry.key}
                       spellcheck="false"
+                      placeholder={entry.default || $tr('unset — default applies')}
                     />
                   {/if}
                 </div>
