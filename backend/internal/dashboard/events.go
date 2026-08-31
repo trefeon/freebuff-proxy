@@ -168,7 +168,7 @@ func (d *Dashboard) HandleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "retry: 3000\n\n")
+	_, _ = fmt.Fprint(w, "retry: 3000\n\n")
 	flusher.Flush()
 
 	ch, cancel, first := d.events.subscribe(d)
@@ -176,16 +176,16 @@ func (d *Dashboard) HandleEvents(w http.ResponseWriter, r *http.Request) {
 
 	send := func(msg eventMsg) bool {
 		if msg.event == "ping" {
-			fmt.Fprint(w, ": ping\n\n")
+			_, _ = fmt.Fprint(w, ": ping\n\n")
 		} else {
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.event, msg.data)
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.event, msg.data)
 		}
 		flusher.Flush()
 		return true
 	}
 
 	// First snapshot: full tokensData so the SPA paints immediately.
-	fmt.Fprintf(w, "event: tokens\ndata: %s\n\n", first)
+	_, _ = fmt.Fprintf(w, "event: tokens\ndata: %s\n\n", first)
 	flusher.Flush()
 
 	rc := http.NewResponseController(w)
