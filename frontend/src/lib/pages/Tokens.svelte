@@ -15,7 +15,7 @@
   import PageHeader from '../components/PageHeader.svelte';
   import TokenCard from '../components/TokenCard.svelte';
   import BridgeTokenCard from '../components/BridgeTokenCard.svelte';
-  import { fetchAPI, postAPI, csrfHeader } from '../api/client.js';
+  import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
   import { tr } from '../i18n.js';
@@ -48,11 +48,7 @@
       const newContent = match
         ? envContent.replace(regex, `TOKEN_ROTATION=${newMode}`)
         : (envContent ? `${envContent}\nTOKEN_ROTATION=${newMode}` : `TOKEN_ROTATION=${newMode}`);
-      const save = await fetch(adminActions.configSave, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...csrfHeader('POST') },
-        body: new URLSearchParams({ content: newContent }),
-      });
+      const save = await postForm(adminActions.configSave, { content: newContent });
       if (save.ok) {
         tokenRotation = newMode;
       }
