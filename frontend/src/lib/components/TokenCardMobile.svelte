@@ -36,8 +36,8 @@
     now,
     onToggle,
     onAction,
-    onSpawn,
     onRefresh,
+    onDropSession,
     onSwap,
   } = $props();
 
@@ -148,6 +148,7 @@
         {devToolsEnabled}
         {onSpawn}
         {onRefresh}
+        {onDropSession}
         {sessionRemaining}
       />
     </div>

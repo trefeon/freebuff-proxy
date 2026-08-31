@@ -421,6 +421,27 @@ func (p *Pool) FinishTokenRuns(ctx context.Context, token int) error {
 	return nil
 }
 
+// DropTokenSession forcibly ends the active session and finishes all runs for token (dashboard action).
+// Unlike the scarce-session protection in Acquire, this explicitly drops the premium session
+// so the operator can change model or free the scarce allocation. It logs the drop and clears
+// the session snapshot so the next request re-admits fresh.
+func (p *Pool) DropTokenSession(ctx context.Context, token int) error {
+	toks := p.toks.Load()
+	if token < 0 || token >= len(*toks) {
+		return fmt.Errorf("pool: token %d out of range", token)
+	}
+	entry := (*toks)[token]
+	snap := entry.session.Snapshot()
+	p.logger.Info("pool: dropping session", "token", token, "model", snap.Model, "instance", snap.InstanceID)
+	entry.runs.FinishAllRuns(ctx)
+	if err := entry.session.EndSession(ctx); err != nil {
+		p.logger.Warn("pool: drop session EndSession failed", "token", token, "err", err)
+		return err
+	}
+	p.logger.Info("pool: session dropped", "token", token, "model", snap.Model)
+	return nil
+}
+
 // Shutdown stops the background jobs and drains every token: FINISH all
 // runs, end the sessions, bounded by a 10s force deadline per token. Cached
 // bridge entries (bridge mode) are drained best-effort the same way after

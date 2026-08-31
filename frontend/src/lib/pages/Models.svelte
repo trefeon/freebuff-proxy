@@ -7,10 +7,10 @@
   import Alert from '../components/Alert.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import Button from '../components/Button.svelte';
+  import CopyButton from '../components/CopyButton.svelte';
   import { fetchAPI } from '../api/client.js';
   import { adminApi } from '../api/paths.js';
   import { tr } from '../i18n.js';
-
   let data = $state(null);
   let loading = $state(true);
   let error = $state('');
@@ -75,14 +75,19 @@
                 <th scope="col">{$tr('Model ID')}</th>
                 <th scope="col">{$tr('Served')}</th>
                 <th scope="col">{$tr('Agent')}</th>
-                <th scope="col">{$tr('Quota')}</th>
+                <th scope="col">{$tr('Premium Quota')}</th>
               </tr>
             </thead>
             <tbody>
               {#each data.models as m}
                 {@const bound = Boolean(m.agent)}
                 <tr>
-                  <td><span class="fp-num">{m.id}</span></td>
+                  <td>
+                    <div class="flex items-center gap-1.5">
+                      <span class="fp-num flex-1 min-w-0 truncate" title={$tr('Click copy button to copy model ID')}>{m.id}</span>
+                      <CopyButton text={m.id} label={$tr('Copy model ID')} />
+                    </div>
+                  </td>
                   <td>
                     <StatusBadge
                       status={bound ? $tr('served') : $tr('unbound')}
@@ -96,7 +101,7 @@
                       <span class="text-[var(--fp-dim)]">—</span>
                     {/if}
                   </td>
-                  <td><span class="fp-num text-xs text-[var(--fp-muted)]">{m.quota || 'unmetered'}</span></td>
+                  <td><span class="fp-num text-xs text-[var(--fp-muted)]">{m.quota || 'unlimited session'}</span></td>
                 </tr>
               {/each}
             </tbody>

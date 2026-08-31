@@ -63,6 +63,7 @@ export const tokenActions = {
   unlockLock: (idx) => `/admin/tokens/${idx}/unlock-lock`,
   lock: (idx) => `/admin/tokens/${idx}/lock`,
   finish: (idx) => `/admin/tokens/${idx}/finish`,
+  dropSession: (idx) => `/admin/tokens/${idx}/drop-session`,
   test: (idx) => `/admin/tokens/${idx}/test`,
   session: (idx) => `/admin/tokens/${idx}/session`,
 };

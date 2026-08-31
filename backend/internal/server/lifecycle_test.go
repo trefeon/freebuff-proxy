@@ -403,7 +403,7 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if md.Count != 6 || len(md.Models) != 6 {
 			t.Fatalf("models API count = %d/%d, want 6", md.Count, len(md.Models))
 		}
-		allowed := map[string]bool{"unmetered": true, "shared premium pool": true, "referral +1/day": true, "5/day shared premium": true}
+		allowed := map[string]bool{"unlimited session": true, "5 premium quota": true, "referral +1/day": true, "unmetered": true, "shared premium pool": true, "5/day shared premium": true}
 		for _, m := range md.Models {
 			if m.ID == "" || m.Agent == "" || !allowed[m.Quota] {
 				t.Errorf("model row %+v: id/agent/quota must be populated from the catalog", m)

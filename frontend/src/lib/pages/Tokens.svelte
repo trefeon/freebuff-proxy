@@ -14,7 +14,6 @@
   import CopyButton from '../components/CopyButton.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import TokenCard from '../components/TokenCard.svelte';
-  import TokenCardMobile from '../components/TokenCardMobile.svelte';
   import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
@@ -160,6 +159,14 @@
     }
     return triggerAction(tokenActions.finish(idx), {}, $tr('Finish active runs on token #{idx}?', { idx }));
   }
+  function handleDropSession(idx) {
+    return triggerAction(
+      tokenActions.dropSession(idx),
+      {},
+      $tr('Drop active session on token #{idx}? This will end the current premium session (e.g. luna) and free the scarce slot — the next request will admit a fresh session. Only drop if you need to switch models immediately.', { idx })
+    );
+  }
+
 
   function handleSwap(from, to) {
     triggerAction(adminActions.tokenSwap, { from, to });
@@ -433,14 +440,13 @@
       </div>
     </Card>
 
-    <!-- Token table -->
+    <!-- Pool Tokens — friendly card grid (replaces dense table) -->
     <Card
       title={$tr('Pool Tokens')}
-      description={data ? $tr('{count} pooled token(s)', { count: data.token_count || 0 }) : ''}
-      pad="none"
+      description={data ? $tr('{count} pooled token(s) · Tap a card to see session & quota details', { count: data.token_count || 0 }) : $tr('Tap a card to see session & quota details')}
     >
       {#if loading}
-        <div class="p-4 flex flex-col gap-3">
+        <div class="flex flex-col gap-3">
           <div class="skeleton skeleton-text w-1/3"></div>
           <div class="skeleton skeleton-line"></div>
           <div class="skeleton skeleton-line"></div>
@@ -464,46 +470,10 @@
           description={$tr('Add one above or use Device Login to generate credentials via browser.')}
         />
       {:else}
-        <!-- Desktop: table (md+) -->
-        <div class="hidden md:block overflow-x-auto">
-          <table class="fp-table w-full min-w-[640px]">
-            <thead>
-              <tr>
-                <th class="w-8"></th>
-                <th>{$tr('Token')}</th>
-                <th>{$tr('Status')}</th>
-                <th>{$tr('Instance')}</th>
-                <th class="num">{$tr('Cooldown')}</th>
-                <th class="text-right">{$tr('Actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each data.tokens as token, i (token.index ?? i)}
-                {@const idx = token.index ?? i}
-                <TokenCard
-                  {token}
-                  {idx}
-                  totalTokens={(data?.tokens ?? []).length}
-                  expanded={expandedToken === idx}
-                  bind:spawnModel={spawnModels[idx]}
-                  {actionPending}
-                  {now}
-                  {devToolsEnabled}
-                  onToggle={() => toggleExpand(idx)}
-                  onAction={(action) => handleTokenAction(token, idx, action)}
-                  onSpawn={(model) => handleSpawn(idx, model)}
-                  onRefresh={(action) => handleRefresh(idx, action)}
-                  onSwap={handleSwap}
-                />
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        <!-- Mobile: stacked cards (< md) — no horizontal scrolling -->
-        <div class="md:hidden flex flex-col gap-3 p-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {#each data.tokens as token, i (token.index ?? i)}
             {@const idx = token.index ?? i}
-            <TokenCardMobile
+            <TokenCard
               {token}
               {idx}
               totalTokens={(data?.tokens ?? []).length}
@@ -516,10 +486,14 @@
               onAction={(action) => handleTokenAction(token, idx, action)}
               onSpawn={(model) => handleSpawn(idx, model)}
               onRefresh={(action) => handleRefresh(idx, action)}
+              onDropSession={() => handleDropSession(idx)}
               onSwap={handleSwap}
             />
           {/each}
         </div>
+        <p class="mt-3 text-[11px] text-[var(--fp-dim)]">
+          {$tr('Tip: Primary (#0) is tried first. Use the up/down arrows to reprioritize. Pause keeps a token in the pool but skips it for new requests.')}
+        </p>
       {/if}
     </Card>
     {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}

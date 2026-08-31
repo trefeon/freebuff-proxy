@@ -77,6 +77,21 @@ func (s *Server) handleTokenFinish(w http.ResponseWriter, r *http.Request) {
 	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" runs finished.")
 }
 
+func (s *Server) handleTokenDropSession(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		err = s.pool.DropTokenSession(ctx, id)
+	}
+	if err != nil {
+		s.dash.RenderConfigResult(w, r, false, "Drop session failed: "+err.Error())
+		return
+	}
+	s.logger.Info("dashboard token session dropped", "token", id)
+	s.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" session dropped — next request will re-admit fresh.")
+}
+
 func (s *Server) handleTokenSpawnSession(w http.ResponseWriter, r *http.Request) {
 	id, err := tokenActionID(r)
 	if err != nil {

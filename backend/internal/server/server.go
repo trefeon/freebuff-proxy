@@ -251,6 +251,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.handleBridgeTokenUnlock)
 	case "POST /admin/tokens/{id}/finish":
 		return http.HandlerFunc(s.handleTokenFinish)
+	case "POST /admin/tokens/{id}/drop-session":
+		return http.HandlerFunc(s.handleTokenDropSession)
 	case "POST /admin/tokens/{id}/test":
 		return http.HandlerFunc(s.handleTokenTest)
 	case "POST /admin/tokens/{id}/session":

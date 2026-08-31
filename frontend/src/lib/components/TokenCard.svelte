@@ -6,10 +6,16 @@
     Unlock,
     Lock,
     Trash2,
+    Mail,
+    Fingerprint,
+    Clock,
+    Copy,
   } from '@lucide/svelte';
   import Button from './Button.svelte';
+  import CopyButton from './CopyButton.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import TokenDetailsDrawer from './TokenDetailsDrawer.svelte';
+  import { copyToClipboard } from '../utils/clipboard.js';
   import { formatLocalDate } from '../utils/format.js';
   import { tr } from '../i18n.js';
 
@@ -26,6 +32,7 @@
     onAction,
     onSpawn,
     onRefresh,
+    onDropSession,
     onSwap,
   } = $props();
 
@@ -53,9 +60,9 @@
   }
 
   function cooldownLabel(token) {
-    if (!token.cooldown_active || !token.cooldown_until) return '—';
+    if (!token.cooldown_active || !token.cooldown_until) return '';
     const ms = new Date(token.cooldown_until).getTime() - now;
-    if (ms <= 0) return 'expiring';
+    if (ms <= 0) return $tr('expiring');
     const s = Math.floor(ms / 1000);
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
@@ -72,12 +79,6 @@
     return 'default';
   }
 
-
-  // Live session countdown (freebuff TUI parity): the tokens poll refreshes
-  // session_remaining_seconds every ~10s; between polls this ticks locally
-  // from the last server-anchor (expiresAt = fetch time + remaining), so the
-  // readout moves every second instead of stepping in poll-sized chunks.
-  // Each poll re-anchors to the fresh server value, correcting drift.
   let nowTick = $state(Date.now());
   $effect(() => {
     const t = setInterval(() => {
@@ -92,25 +93,64 @@
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    if (h > 0) return `${h}h ${m}m ${s}s remaining`;
-    return `${m}m ${s}s remaining`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    return `${m}m ${s}s`;
   }
 
   const st = $derived(statusFor(token));
+  const initial = $derived((token.email || token.account_id || `#${idx}`)[0]?.toUpperCase() || '?');
+  const displayEmail = $derived(token.email || token.account_id || $tr('Unknown account'));
+  const shortInstance = $derived(token.session_instance ? `${token.session_instance.slice(0, 8)}…${token.session_instance.slice(-6)}` : '');
+  const isPrimary = $derived(idx === 0);
+  const cooldownText = $derived(cooldownLabel(token));
+  const hasCooldown = $derived(token.cooldown_active);
+  const cooldownIsWarn = $derived(cooldownTone(token) === 'warn');
 </script>
 
-<tr>
-  <td class="w-14">
-    <div class="inline-flex items-center gap-0.5">
+<div class="group flex flex-col gap-0 rounded-xl border bg-[var(--fp-surface)] overflow-hidden transition-colors {expanded ? 'border-[var(--fp-border-bright)] shadow-sm' : 'border-[var(--fp-border)] hover:border-[var(--fp-border-bright)]'}">
+  <!-- Header: identity + status + reorder -->
+  <div class="flex items-start justify-between gap-3 px-4 pt-4">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <!-- Avatar -->
+      <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold border {isPrimary ? 'bg-[var(--fp-accent)] text-white border-[var(--fp-accent)]' : 'bg-[var(--fp-surface-2)] text-[var(--fp-text)] border-[var(--fp-border)]'}">
+        {initial}
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-semibold text-[var(--fp-text)]">#{idx}</span>
+          {#if isPrimary}
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-amber-500/15 text-amber-600 border border-amber-500/30 dark:text-amber-400">
+              {$tr('Primary')}
+            </span>
+          {/if}
+          <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+        </div>
+        <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
+          <Mail size={12} class="shrink-0 text-[var(--fp-dim)]" />
+          <span class="text-xs text-[var(--fp-muted)] truncate" title={displayEmail}>{displayEmail}</span>
+          <button
+            type="button"
+            class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded hover:bg-[var(--fp-surface-2)] text-[var(--fp-dim)] hover:text-[var(--fp-text)] transition-colors"
+            title={$tr('Copy email')}
+            aria-label={$tr('Copy email')}
+            onclick={async () => await copyToClipboard(displayEmail)}
+          >
+            <Copy size={12} />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-1 shrink-0">
       {#if totalTokens > 1}
-        <div class="flex flex-col shrink-0 -my-1">
+        <div class="hidden sm:flex flex-col -my-1 mr-1">
           <button
             type="button"
             disabled={actionPending || idx === 0}
             title={$tr('Move Up / Prioritize')}
             aria-label={$tr('Move Up')}
             onclick={() => onSwap?.(idx, idx - 1)}
-            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronUp size={14} />
           </button>
@@ -120,7 +160,7 @@
             title={$tr('Move Down')}
             aria-label={$tr('Move Down')}
             onclick={() => onSwap?.(idx, idx + 1)}
-            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronDown size={14} />
           </button>
@@ -131,113 +171,88 @@
         onclick={onToggle}
         aria-expanded={expanded}
         aria-label={expanded ? `Collapse details for token ${idx}` : `Expand details for token ${idx}`}
-        class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] transition-colors"
+        class="inline-flex items-center justify-center w-8 h-8 rounded-lg border text-[var(--fp-muted)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] transition-colors {expanded ? 'border-[var(--fp-border-bright)] bg-[var(--fp-surface-2)]' : 'border-[var(--fp-border)] bg-transparent'}"
       >
-        {#if expanded}
-          <ChevronDown size={16} />
-        {:else}
+        <span class="transition-transform {expanded ? 'rotate-90' : ''}">
           <ChevronRight size={16} />
-        {/if}
+        </span>
       </button>
     </div>
-  </td>
-  <td>
-    <div class="flex flex-col gap-0.5">
-      <div class="flex items-center gap-1.5">
-        <span class="fp-num text-xs font-semibold text-[var(--fp-text)]">#{idx}</span>
-        {#if idx === 0}
-          <span class="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30">
-            {$tr('Primary')}
+  </div>
+
+  <!-- Key facts grid: Instance + Cooldown/Session -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 px-4 pt-3">
+    <div class="flex flex-col gap-1 min-w-0">
+      <span class="text-[10px] font-semibold tracking-widest uppercase text-[var(--fp-dim)] flex items-center gap-1">
+        <Fingerprint size={10} /> {$tr('Instance')}
+      </span>
+      {#if token.session_instance}
+        <div class="flex items-center gap-1.5 min-w-0">
+          <code class="fp-num text-xs text-[var(--fp-text)] truncate flex-1" title={token.session_instance}>{shortInstance}</code>
+          <CopyButton text={token.session_instance} label={$tr('Copy instance ID')} />
+        </div>
+        {#if token.session_remaining_seconds > 0 && token.session_model}
+          <span class="text-[11px] text-[var(--fp-accent)]">
+            {token.session_model} · {fmtCountdown(sessionRemaining)} {$tr('remaining')}
+          </span>
+        {:else if token.session_remaining_seconds > 0}
+          <span class="text-[11px] text-[var(--fp-muted)]">
+            {fmtCountdown(sessionRemaining)} {$tr('remaining')}
           </span>
         {/if}
-      </div>
-      {#if token.email || token.account_id}
-        <span class="text-[11px] text-[var(--fp-muted)] truncate max-w-[160px]" title={token.email || token.account_id}>
-          {token.email || token.account_id}
-        </span>
+      {:else}
+        <span class="text-xs text-[var(--fp-dim)] italic">{$tr('No active session')}</span>
       {/if}
     </div>
-  </td>
-  <td>
-    <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
-  </td>
-  <td>
-    {#if token.session_instance}
-      <code class="fp-num text-xs text-[var(--fp-muted)] break-all select-all">{token.session_instance}</code>
-    {:else}
-      <span class="text-xs text-[var(--fp-dim)]">—</span>
-    {/if}
-  </td>
-  <td class="num">
-    {#if token.cooldown_active}
-      <span class="fp-num text-xs {cooldownTone(token) === 'warn' ? 'text-[var(--fp-warning)]' : 'text-[var(--fp-text)]'}">
-        {cooldownLabel(token)}
-      </span>
-    {:else}
-      <span class="fp-num text-xs text-[var(--fp-dim)]">—</span>
-    {/if}
-  </td>
-  <td class="text-right">
-    <div class="inline-flex items-center gap-1.5 justify-end">
 
-      {#if token.cooldown_active}
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={actionPending}
-          onclick={() => onAction('clear')}
-        >
-          <Unlock size={13} />
-          <span>{$tr('Clear')}</span>
+    <div class="flex flex-col gap-1">
+      <span class="text-[10px] font-semibold tracking-widest uppercase text-[var(--fp-dim)] flex items-center gap-1">
+        <Clock size={10} /> {$tr('Cooldown')}
+      </span>
+      {#if hasCooldown}
+        <span class="inline-flex items-center gap-1.5 fp-num text-sm font-medium {cooldownIsWarn ? 'text-[var(--fp-warning)]' : 'text-[var(--fp-text)]'}">
+          <span class="w-1.5 h-1.5 rounded-full {cooldownIsWarn ? 'bg-[var(--fp-warning)] animate-pulse' : 'bg-[var(--fp-warning)]'}"></span>
+          {cooldownText}
+        </span>
+        <span class="text-[11px] text-[var(--fp-muted)]">{$tr('Resets')} {formatLocalDate(token.cooldown_until)}</span>
+      {:else}
+        <span class="inline-flex items-center gap-1.5 text-sm text-[var(--fp-success)] font-medium">
+          <span class="w-1.5 h-1.5 rounded-full bg-[var(--fp-success)]"></span>
+          {$tr('Available — no cooldown')}
+        </span>
+        <span class="text-[11px] text-[var(--fp-dim)]">{$tr('Ready to take requests')}</span>
+      {/if}
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex items-center justify-between gap-2 px-4 py-3 mt-1 bg-[var(--fp-bg)]/40 border-t border-[var(--fp-border)]">
+    <div class="flex items-center gap-1.5">
+      {#if hasCooldown}
+        <Button variant="ghost" size="sm" disabled={actionPending} onclick={() => onAction('clear')}>
+          <Unlock size={13} /> <span>{$tr('Clear cooldown')}</span>
         </Button>
       {/if}
       {#if token.locked}
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={actionPending}
-          onclick={() => onAction('unlock')}
-        >
-          <Unlock size={13} />
-          <span>{$tr('Unlock')}</span>
+        <Button variant="secondary" size="sm" disabled={actionPending} onclick={() => onAction('unlock')}>
+          <Unlock size={13} /> <span>{$tr('Unlock')}</span>
         </Button>
       {:else}
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={actionPending}
-          onclick={() => onAction('lock')}
-        >
-          <Lock size={13} />
-          <span>{$tr('Lock')}</span>
+        <Button variant="ghost" size="sm" disabled={actionPending} onclick={() => onAction('lock')} title={$tr('Pause this token from receiving requests')}>
+          <Lock size={13} /> <span>{$tr('Pause')}</span>
         </Button>
       {/if}
-      <Button
-        variant="danger"
-        size="sm"
-        disabled={actionPending}
-        onclick={() => onAction('remove')}
-      >
-        <Trash2 size={13} />
-        <span>{$tr('Remove')}</span>
-      </Button>
     </div>
-  </td>
-</tr>
-{#if expanded}
-  <tr>
-    <td colspan="6" class="!p-0">
-      <div class="m-2">
-        <TokenDetailsDrawer
-          {token}
-          bind:spawnModel
-          {actionPending}
-          {devToolsEnabled}
-          {onSpawn}
-          {onRefresh}
-          {sessionRemaining}
-        />
+    <Button variant="danger" size="sm" disabled={actionPending} onclick={() => onAction('remove')} title={$tr('Remove token from pool')}>
+      <Trash2 size={13} /> <span>{$tr('Remove')}</span>
+    </Button>
+  </div>
+
+  {#if expanded}
+    <div class="border-t border-[var(--fp-border)] bg-[var(--fp-surface)]">
+      <div class="p-3">
+        <TokenDetailsDrawer {token} bind:spawnModel {actionPending} {devToolsEnabled} {onSpawn} {onRefresh} {onDropSession} {sessionRemaining} />
       </div>
-    </td>
-  </tr>
-{/if}
+    </div>
+  {/if}
+</div>

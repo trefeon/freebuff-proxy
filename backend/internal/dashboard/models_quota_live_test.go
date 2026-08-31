@@ -16,11 +16,12 @@ import (
 )
 
 // quotaFor prefers the LIVE wire snapshot (rateLimitsByModel mirrored per
-// token) over static catalog copy, rendering the CLI's fractional unit
-// display ("1.6 of 5 used"). The premium pool's recentCount legitimately
-// includes the active session's 1.0-unit reservation and settles to the
-// elapsed fraction (floored at 0.1) when a session ends — fractional counts
-// are normal wire state, not a bug (devdocs/tui-wire-facts-2026-08-31.md §1).
+// token) over static catalog copy. For premium pool models it renders
+// "<limit> premium quota" (e.g. "5 premium quota"), using Limit only — the
+// catalog view shows the model-level quota, not per-token usage; per-token
+// usage remains in the Tokens → per-token quota table. Fractional limits
+// are formatted via formatSessionUnits ("5", "1.6"). Non-premium rows still
+// render "1.6 of 5 used" when they gain live data.
 func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	cfg := &config.Config{
 		AuthTokens:         []string{"tok-0"},
@@ -77,7 +78,7 @@ func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	for _, m := range data.Models {
 		quotaBy[m.ID] = m.Quota
 	}
-	if got, want := quotaBy["openai/gpt-5.6-luna"], "1.6 of 5 used"; got != want {
-		t.Errorf("live quota label = %q, want %q (fractional session units)", got, want)
+	if got, want := quotaBy["openai/gpt-5.6-luna"], "5 premium quota"; got != want {
+		t.Errorf("live quota label = %q, want %q (premium quota, limit only)", got, want)
 	}
 }

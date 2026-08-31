@@ -87,6 +87,7 @@ var AdminRoutes = [...]AdminRoute{
 	{Method: "POST", Path: "/admin/bridge-tokens/{key}/lock", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/bridge-tokens/{key}/unlock", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/{id}/finish", Auth: AuthSensitive},
+	{Method: "POST", Path: "/admin/tokens/{id}/drop-session", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/{id}/test", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/{id}/session", Auth: AuthSensitive},
 	{Method: "POST", Path: "/admin/tokens/test-all", Auth: AuthSensitive},

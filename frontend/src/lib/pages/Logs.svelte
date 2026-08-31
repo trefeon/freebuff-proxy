@@ -23,7 +23,7 @@
   let hideAdmin = $state(true);
   let autoPoll = $state(true);
   let page = $state(0);
-  const PAGE_SIZE = 50;
+  let pageSize = $state(10);
 
   let entries = $derived.by(() => data?.entries || []);
   let filteredEntries = $derived.by(() => {
@@ -34,15 +34,18 @@
     });
   });
   let pagedEntries = $derived.by(() => {
-    const start = page * PAGE_SIZE;
-    return filteredEntries.slice(start, start + PAGE_SIZE);
+    const start = page * pageSize;
+    return filteredEntries.slice(start, start + pageSize);
   });
-  let totalPages = $derived.by(() => Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE)));
+  let totalPages = $derived.by(() => Math.max(1, Math.ceil(filteredEntries.length / pageSize)));
   let hasActiveFilter = $derived.by(
     () => filterLevel !== 'info' || filterMsg.trim() !== '' || !hideAdmin
   );
-  let rangeStart = $derived.by(() => (filteredEntries.length === 0 ? 0 : page * PAGE_SIZE + 1));
-  let rangeEnd = $derived.by(() => Math.min((page + 1) * PAGE_SIZE, filteredEntries.length));
+  let rangeStart = $derived.by(() => (filteredEntries.length === 0 ? 0 : page * pageSize + 1));
+  let rangeEnd = $derived.by(() => Math.min((page + 1) * pageSize, filteredEntries.length));
+  $effect(() => {
+    if (page >= totalPages) page = Math.max(0, totalPages - 1);
+  });
   async function fetchLogs() {
     try {
       const query = new URLSearchParams();
@@ -51,7 +54,7 @@
       const res = await fetchAPI(`${adminApi.logs}?${query.toString()}`);
       data = res;
       error = '';
-      const tp = Math.ceil((res?.entries?.length || 0) / PAGE_SIZE);
+      const tp = Math.ceil((res?.entries?.length || 0) / pageSize);
       if (page > tp - 1) page = 0;
     } catch (e) {
       error = e.message
@@ -273,10 +276,25 @@
       </div>
       {/if}
       {#snippet footer()}
-        <div class="flex items-center justify-between gap-3 px-4 py-3">
-          <span class="fp-num text-xs text-[var(--fp-muted)]">
-            {rangeStart}–{rangeEnd} of {filteredEntries.length}
-          </span>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3">
+          <div class="flex items-center gap-3">
+            <span class="fp-num text-xs text-[var(--fp-muted)]">
+              {rangeStart}–{rangeEnd} of {filteredEntries.length}
+            </span>
+            <label class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-muted)]" for="logs-page-size">
+              {$tr('Rows per page')}
+              <select
+                id="logs-page-size"
+                class="fp-input !h-8 !w-auto !py-1 !px-2 text-xs"
+                value={pageSize}
+                onchange={(e) => { pageSize = Number(e.currentTarget.value); page = 0; }}
+              >
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+          </div>
           <div class="flex items-center gap-2">
             <Button
               variant="secondary"
@@ -288,7 +306,7 @@
               <ChevronLeft size={14} />
               {$tr('Prev')}
             </Button>
-            <span class="fp-num text-xs text-[var(--fp-muted)]">
+            <span class="fp-num text-xs text-[var(--fp-muted)] whitespace-nowrap">
               {$tr('Page {current} / {total}', { current: page + 1, total: totalPages })}
             </span>
             <Button

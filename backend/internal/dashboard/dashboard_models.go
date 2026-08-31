@@ -43,32 +43,61 @@ type aliasRow struct {
 	Real  string `json:"real"`
 }
 
-// quotaFor returns the daily session-quota label for a model row. The label
-// prefers the LIVE wire snapshot (rateLimitsByModel mirrored per token) —
-// the server-computed limit moves with trust-level/streak/referral bonuses,
-// so a static number goes stale (the old copy said 5/day while the wire
-// limit is base 4 plus bonuses). With no live data it falls back to catalog
-// copy: shared premium pool (luna, solar-pro4), the referral reward (GLM
-// 5.2), else unmetered.
+// quotaFor returns the daily session-quota label for a model row. For premium
+// pool models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
+// (rateLimitsByModel mirrored per token — server-computed, moves with trust/
+// streak/referral bonuses) rendered as "<limit> premium quota", falling back
+// to the static "5 premium quota" when no live data exists (5 = default
+// entitlement: modelcat.PremiumSessionLimit is the floor 4, but the runtime
+// default entitlement is 5/day — floor 4 only with trust levels enforced;
+// see modelcat.PremiumSessionLimit comment). Referral GLM 5.2 keeps
+// "referral +1/day", and all other served rows are "unlimited session".
+// The old live copy "1 of 5 used" was per-single-token usage, which confused
+// the catalog view (the table should show the model-level quota, not one
+// token's used count); "unmetered" is now "unlimited session" per UX request.
 func (d *Dashboard) quotaFor(id string) string {
+	if modelcat.IsPremium(id) {
+		if live := d.livePremiumQuotaLabel(id); live != "" {
+			return live
+		}
+		return fmt.Sprintf("%s premium quota", formatSessionUnits(float64(modelcat.PremiumSessionLimit+1)))
+	}
 	if d.pool != nil {
 		if live := d.liveQuotaLabel(id); live != "" {
 			return live
 		}
 	}
-	if modelcat.IsPremium(id) {
-		return "shared premium pool"
-	}
 	if id == modelcat.Glm52ModelID {
 		return "referral +1/day"
 	}
-	return "unmetered"
+	return "unlimited session"
+}
+
+// livePremiumQuotaLabel renders "<limit> premium quota" from the first token
+// quota snapshot carrying an entry for the premium model ("5 premium quota").
+// "" when no token has live data for the model. Uses Limit only (not
+// RecentCount) — the catalog view shows the model-level quota, not per-token
+// usage; per-token usage remains in the Tokens → per-token quota table.
+func (d *Dashboard) livePremiumQuotaLabel(id string) string {
+	if d.pool == nil {
+		return ""
+	}
+	for _, t := range d.pool.Snapshot() {
+		if q, ok := t.QuotaByModel[id]; ok && q.Limit > 0 {
+			return fmt.Sprintf("%s premium quota", formatSessionUnits(q.Limit))
+		}
+	}
+	return ""
 }
 
 // liveQuotaLabel renders "used of limit" from the first token quota snapshot
 // carrying an entry for the model ("1.6 of 5 used" — the CLI's fractional
-// unit display). "" when no token has live data for the model.
+// unit display). "" when no token has live data for the model. Kept for
+// non-premium rows (e.g. referral GLM 5.2 promo after it gains live data).
 func (d *Dashboard) liveQuotaLabel(id string) string {
+	if d.pool == nil {
+		return ""
+	}
 	for _, t := range d.pool.Snapshot() {
 		if q, ok := t.QuotaByModel[id]; ok && q.Limit > 0 {
 			return fmt.Sprintf("%s of %s used", formatSessionUnits(q.RecentCount), formatSessionUnits(q.Limit))

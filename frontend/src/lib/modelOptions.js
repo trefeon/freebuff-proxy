@@ -5,21 +5,21 @@ import { adminApi } from './api/paths.js';
 // before the gateway is up). Kept in sync with the catalog by the CI embed
 // gate — the live /admin/api/models payload supersedes it whenever present.
 export const fallbackModelOptions = [
-  { id: 'openai/gpt-5.6-luna', label: 'openai/gpt-5.6-luna (shared premium pool)', tag: 'premium' },
-  { id: 'upstage/solar-pro4', label: 'upstage/solar-pro4 (shared premium pool)', tag: 'premium' },
-  { id: 'mimo/mimo-v2.5', label: 'mimo/mimo-v2.5 (unmetered entry)', tag: 'unmetered' },
-  { id: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash (unmetered)', tag: 'unmetered' },
-  { id: 'deepseek/deepseek-v4-flash', label: 'deepseek/deepseek-v4-flash (unmetered)', tag: 'unmetered' },
+  { id: 'openai/gpt-5.6-luna', label: 'openai/gpt-5.6-luna (5 premium quota)', tag: 'premium' },
+  { id: 'upstage/solar-pro4', label: 'upstage/solar-pro4 (5 premium quota)', tag: 'premium' },
+  { id: 'mimo/mimo-v2.5', label: 'mimo/mimo-v2.5 (unlimited session)', tag: 'unmetered' },
+  { id: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash (unlimited session)', tag: 'unmetered' },
+  { id: 'deepseek/deepseek-v4-flash', label: 'deepseek/deepseek-v4-flash (unlimited session)', tag: 'unmetered' },
   { id: 'z-ai/glm-5.2', label: 'z-ai/glm-5.2 (referral promo)', tag: 'referral' },
 ];
 
 // tag derives from the server-side quota label so the chips track the
-// catalog automatically (quotaFor: shared premium pool / referral / unmetered).
+// catalog automatically (quotaFor: 5 premium quota / referral / unlimited session).
 function tagFor(quota) {
   if (!quota) return '';
   if (quota.includes('premium')) return 'premium';
   if (quota.includes('referral')) return 'referral';
-  if (quota.includes('unmetered')) return 'unmetered';
+  if (quota.includes('unmetered') || quota.includes('unlimited')) return 'unmetered';
   return '';
 }
 

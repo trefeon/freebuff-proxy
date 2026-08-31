@@ -360,10 +360,11 @@ func TestAdminRoutesParity(t *testing.T) {
 
 // TestModelsPageQuota pins the /admin/api/models quota column fallback
 // contract (no live pool quota in this fixture): premium pool rows carry
-// the shared-pool label, GLM 5.2 the referral label, and every other
-// served row is unmetered. With live quota data the column instead shows
-// "used of limit" from the wire snapshot (quotaFor prefers it).
-// Contract: glm-5.3-flash == "unmetered" when no live data exists.
+// the "5 premium quota" label, GLM 5.2 the referral label, and every other
+// served row is "unlimited session". With live quota data the premium column
+// instead shows "<limit> premium quota" from the wire snapshot (quotaFor
+// prefers livePremiumQuotaLabel). Contract: glm-5.3-flash == "unlimited
+// session" when no live data exists.
 func TestModelsPageQuota(t *testing.T) {
 	ts := newDashboardForPages(t, false, "models")
 	resp, err := http.Get(ts.URL + "/models")
@@ -387,11 +388,11 @@ func TestModelsPageQuota(t *testing.T) {
 		quotaBy[id] = quota
 	}
 	want := map[string]string{
-		"z-ai/glm-5.3-flash":         "unmetered",
-		"deepseek/deepseek-v4-flash": "unmetered",
-		"mimo/mimo-v2.5":             "unmetered",
-		"openai/gpt-5.6-luna":        "shared premium pool",
-		"upstage/solar-pro4":         "shared premium pool",
+		"z-ai/glm-5.3-flash":         "unlimited session",
+		"deepseek/deepseek-v4-flash": "unlimited session",
+		"mimo/mimo-v2.5":             "unlimited session",
+		"openai/gpt-5.6-luna":        "5 premium quota",
+		"upstage/solar-pro4":         "5 premium quota",
 		"z-ai/glm-5.2":               "referral +1/day",
 	}
 	for id, wantQuota := range want {

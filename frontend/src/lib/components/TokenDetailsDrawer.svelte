@@ -26,9 +26,9 @@
     devToolsEnabled = false,
     onSpawn,
     onRefresh,
+    onDropSession,
     sessionRemaining,
   } = $props();
-
   let modelOptions = $state(fallbackModelOptions);
   onMount(() => {
     fetchModelOptions().then((rows) => (modelOptions = rows));
@@ -97,6 +97,19 @@
     <div class="mb-2 px-2 py-1 rounded bg-[var(--fp-accent)]/10 text-xs text-[var(--fp-accent)] flex items-center justify-between gap-2 flex-wrap">
       <span>{$tr('Active Session:')} <code class="fp-num">{token.session_model}</code></span>
       <span class="fp-num">{fmtCountdown(sessionRemaining)}</span>
+    </div>
+  {/if}
+  {#if token.session_remaining_seconds > 0}
+    <div class="mb-2 flex justify-end">
+      <Button
+        variant="danger"
+        size="sm"
+        class="!h-7 !text-xs !px-2"
+        disabled={actionPending}
+        onclick={() => onDropSession?.()}
+      >
+        <span>{$tr('Drop Session')}</span>
+      </Button>
     </div>
   {/if}
   {#if token.has_standing}
