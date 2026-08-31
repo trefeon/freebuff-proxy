@@ -380,14 +380,14 @@ test.describe('operator UX journey (hermetic mocks)', () => {
     await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
     const input = page.locator('#add-token-input');
-    await input.fill('cb_short');
+    await input.fill('short');
     // Client-side validation error + disabled submit (no server round trip possible).
-    await expect(page.getByText('Token must match cb_… with at least 20 characters')).toBeVisible();
+    await expect(page.getByText('Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add Token' })).toBeDisabled();
 
     // Enter in the form reaches the submit guard too — still no POST.
     await input.press('Enter');
-    await expect(page.locator('#add-token-input')).toHaveValue('cb_short');
+    await expect(page.locator('#add-token-input')).toHaveValue('short');
     expect(addPosts).toBe(0);
   });
 
@@ -407,8 +407,8 @@ test.describe('operator UX journey (hermetic mocks)', () => {
         body: JSON.stringify({ ok: true, message: 'Token added to pool and saved to .env.' }),
       });
     });
-    // Boundary-friendly valid token: cb_ + 20 chars.
-    const validToken = 'cb_' + 'x'.repeat(20);
+    // Real-world UUID / session token format.
+    const validToken = '550e8400-e29b-41d4-a716-446655440000';
 
     await page.goto('http://127.0.0.1:4173/admin/#tokens');
     await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();

@@ -75,7 +75,9 @@
   const tokenValid = $derived(
     newToken.trim() === ''
       ? null
-      : /^cb_[A-Za-z0-9_-]{20,}$/.test(newToken.trim())
+      : !newToken.trim().toLowerCase().startsWith('bearer ') &&
+        !/[,\s]/.test(newToken.trim()) &&
+        newToken.trim().length >= 10
   );
 
   async function fetchData() {
@@ -297,7 +299,7 @@
     <!-- Add token form -->
     <Card
       title={$tr('Add Token to Pool')}
-      description={$tr('Paste a FreeBuff auth token (cb_…) to add it to the shared pool and save it to .env. Adding burns no quota.')}
+      description={$tr('Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.')}
     >
       {#snippet actions()}
         <Button
@@ -319,15 +321,15 @@
         <div class="flex-1 w-full">
           <Field
             label={$tr('Token')}
-            hint={tokenValid === true ? $tr('Valid format') : tokenValid === false ? $tr('Invalid format') : $tr('Format: cb_…')}
-            error={tokenValid === false ? $tr('Token must match cb_… with at least 20 characters') : ''}
+            hint={tokenValid === true ? $tr('Valid format') : tokenValid === false ? $tr('Invalid format') : $tr('UUID or session token from ~/.config/codebuff/credentials.json')}
+            error={tokenValid === false ? $tr('Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix') : ''}
             id="add-token-input"
           >
             <input
               id="add-token-input"
               type="text"
               bind:value={newToken}
-              placeholder="cb_…"
+              placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
               autocomplete="off"
               spellcheck="false"
               class="fp-input fp-num w-full"
