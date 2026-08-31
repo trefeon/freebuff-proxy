@@ -461,7 +461,7 @@
           type="text"
           bind:value={searchQuery}
           placeholder={$tr('Search settings by key or description…')}
-          class="fp-input pl-8 pr-7 py-1.5 text-xs w-full"
+          class="fp-input !pl-8 !pr-8 !py-1.5 !text-xs !w-full"
         />
         <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] pointer-events-none" />
         {#if searchQuery}
