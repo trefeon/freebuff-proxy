@@ -17,9 +17,20 @@ services:
     # produces freebuff-proxy:v1.7.0 and rolls back by re-running an older tag.
     image: freebuff-proxy:${VERSION:-latest}
     container_name: freebuff-proxy
-    env_file: .env
     environment:
+      # env beats the mounted .env file: guarantees the container listens on
+      # the mapped port even when the host .env carries a loopback LISTEN_ADDR.
       - LISTEN_ADDR=:3457
+    volumes:
+      # The dashboard's device-login wizard and token add/remove persist to
+      # this file. A bind mount (NOT env_file) is required so those writes:
+      #   1. survive container recreates (docker compose up -d --build), and
+      #   2. actually activate — config precedence is env > .env, so an
+      #      env_file-injected AUTH_TOKENS= (even empty) makes every dashboard
+      #      token mutation fail with "overridden by environment".
+      # The file must exist and be writable by the container's uid 100:
+      #   touch .env && chmod 666 .env    (or: chown 100:100 .env)
+      - ./.env:/app/.env
     ports:
       # ⚠️ 0.0.0.0 default: /healthz and /metrics are ALWAYS unauthenticated by
       # design (monitoring). Exposing this port beyond localhost publishes them
