@@ -227,7 +227,12 @@ func (d *Dashboard) configData() configData {
 		case "CLI_VERSION":
 			return cfg.CLIVersion, false
 		case "MODEL_ALIASES":
-			return fmt.Sprintf("%d alias(es)", len(cfg.ModelAliases)), true
+			var pairs []string
+			for k, v := range cfg.ModelAliases {
+				pairs = append(pairs, k+":"+v)
+			}
+			sort.Strings(pairs)
+			return strings.Join(pairs, ","), false
 		case "MODELS_ALLOW":
 			return strings.Join(cfg.ModelsAllow, ","), false
 		case "MODELS_HIDE_UNAVAILABLE":
