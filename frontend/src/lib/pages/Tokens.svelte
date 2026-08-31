@@ -14,7 +14,7 @@
   import CopyButton from '../components/CopyButton.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import TokenCard from '../components/TokenCard.svelte';
-  import BridgeTokenCard from '../components/BridgeTokenCard.svelte';
+  import TokenCardMobile from '../components/TokenCardMobile.svelte';
   import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
@@ -464,39 +464,61 @@
           description={$tr('Add one above or use Device Login to generate credentials via browser.')}
         />
       {:else}
-        <div class="overflow-x-auto">
-        <table class="fp-table w-full min-w-[640px]">
-          <thead>
-            <tr>
-              <th class="w-8"></th>
-              <th>{$tr('Token')}</th>
-              <th>{$tr('Status')}</th>
-              <th>{$tr('Instance')}</th>
-              <th class="num">{$tr('Cooldown')}</th>
-              <th class="text-right">{$tr('Actions')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each data.tokens as token, i (token.index ?? i)}
-              {@const idx = token.index ?? i}
-              <TokenCard
-                {token}
-                {idx}
-                totalTokens={(data?.tokens ?? []).length}
-                expanded={expandedToken === idx}
-                bind:spawnModel={spawnModels[idx]}
-                {actionPending}
-                {now}
-                {devToolsEnabled}
-                onToggle={() => toggleExpand(idx)}
-                onAction={(action) => handleTokenAction(token, idx, action)}
-                onSpawn={(model) => handleSpawn(idx, model)}
-                onRefresh={(action) => handleRefresh(idx, action)}
-                onSwap={handleSwap}
-              />
-            {/each}
-          </tbody>
-        </table>
+        <!-- Desktop: table (md+) -->
+        <div class="hidden md:block overflow-x-auto">
+          <table class="fp-table w-full min-w-[640px]">
+            <thead>
+              <tr>
+                <th class="w-8"></th>
+                <th>{$tr('Token')}</th>
+                <th>{$tr('Status')}</th>
+                <th>{$tr('Instance')}</th>
+                <th class="num">{$tr('Cooldown')}</th>
+                <th class="text-right">{$tr('Actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each data.tokens as token, i (token.index ?? i)}
+                {@const idx = token.index ?? i}
+                <TokenCard
+                  {token}
+                  {idx}
+                  totalTokens={(data?.tokens ?? []).length}
+                  expanded={expandedToken === idx}
+                  bind:spawnModel={spawnModels[idx]}
+                  {actionPending}
+                  {now}
+                  {devToolsEnabled}
+                  onToggle={() => toggleExpand(idx)}
+                  onAction={(action) => handleTokenAction(token, idx, action)}
+                  onSpawn={(model) => handleSpawn(idx, model)}
+                  onRefresh={(action) => handleRefresh(idx, action)}
+                  onSwap={handleSwap}
+                />
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <!-- Mobile: stacked cards (< md) — no horizontal scrolling -->
+        <div class="md:hidden flex flex-col gap-3 p-4">
+          {#each data.tokens as token, i (token.index ?? i)}
+            {@const idx = token.index ?? i}
+            <TokenCardMobile
+              {token}
+              {idx}
+              totalTokens={(data?.tokens ?? []).length}
+              expanded={expandedToken === idx}
+              bind:spawnModel={spawnModels[idx]}
+              {actionPending}
+              {now}
+              {devToolsEnabled}
+              onToggle={() => toggleExpand(idx)}
+              onAction={(action) => handleTokenAction(token, idx, action)}
+              onSpawn={(model) => handleSpawn(idx, model)}
+              onRefresh={(action) => handleRefresh(idx, action)}
+              onSwap={handleSwap}
+            />
+          {/each}
         </div>
       {/if}
     </Card>

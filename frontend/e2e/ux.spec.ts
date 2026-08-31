@@ -459,7 +459,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
     // Waits before the trigger: the refetch after removal races nothing.
     await page.goto('http://127.0.0.1:4173/admin/#tokens');
     await expect(page.locator('table tbody tr')).toHaveCount(3);
-    await expect(page.getByText('#1', { exact: true })).toBeVisible();
+    await expect(page.locator('table tbody tr').filter({ hasText: '#1' })).toBeVisible();
 
     const removeReq = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('/admin/tokens/remove'));
     const refetch = page.waitForResponse((r) => r.url().includes('/admin/api/tokens') && r.status() === 200);
@@ -474,8 +474,8 @@ test.describe('operator UX journey (hermetic mocks)', () => {
     await expect(page.getByText('Token 1 removed from the pool and .env.')).toBeVisible();
     await expect(page.locator('table tbody tr')).toHaveCount(2);
     // The middle row is gone; the previously-last token (index 2) remains.
-    await expect(page.getByText('#1', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('#2', { exact: true })).toBeVisible();
+    await expect(page.locator('table tbody tr').filter({ hasText: '#1' })).toHaveCount(0);
+    await expect(page.locator('table tbody tr').filter({ hasText: '#2' })).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------

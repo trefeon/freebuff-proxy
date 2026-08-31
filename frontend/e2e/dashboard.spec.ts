@@ -237,14 +237,15 @@ test.describe('dashboard hermetic mocks', () => {
 
     await page.goto('http://127.0.0.1:4173/admin/#tokens');
     await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
-    await expect(page.getByText('#0')).toBeVisible({ timeout: 10000 });
-    const expandBtn = page.locator('button[aria-label*="Expand details"]').first();
+    const table = page.locator('table.fp-table');
+    await expect(table.getByText('#0')).toBeVisible({ timeout: 10000 });
+    const expandBtn = table.locator('button[aria-label*="Expand details"]').first();
     await expect(expandBtn).toBeVisible();
     await expandBtn.click();
     // Without DEVTOOLS_ENABLED the Dev Session toolbar stays hidden; the
     // expanded row keeps the active-session line.
     await expect(page.getByText('Dev Session:')).not.toBeVisible();
-    await expect(page.getByText('Active Session:')).toBeVisible();
+    await expect(table.getByText('Active Session:')).toBeVisible();
 
     // With DEVTOOLS_ENABLED=true the toolbar appears (per-token session spawn).
     await page.unroute('**/admin/api/config');
@@ -260,8 +261,8 @@ test.describe('dashboard hermetic mocks', () => {
     });
     await page.reload();
     await page.waitForResponse((r) => r.url().includes('/admin/api/tokens') && r.status() === 200, { timeout: 5000 }).catch(() => {});
-    await page.locator('button[aria-label*="Expand details"]').first().click();
-    await expect(page.getByText('Dev Session:')).toBeVisible();
+    await table.locator('button[aria-label*="Expand details"]').first().click();
+    await expect(table.getByText('Dev Session:')).toBeVisible();
   });
 
   test('Quota Tracker shows premium pool and per-model session quota', async ({ page }) => {
