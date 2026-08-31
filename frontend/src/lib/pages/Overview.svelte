@@ -432,9 +432,8 @@
         </Card>
       </div>
 
-      <!-- Token Rotation Scheme Selector (when pool has tokens) -->
-      {#if data.has_tokens}
-        <div class="mt-4">
+      <!-- Token Rotation Scheme Selector (Always Available) -->
+      <div class="mt-4">
           <Card
             title={$tr('Token Rotation Scheme')}
             description={$tr('Policy used by the gateway to select upstream accounts for model requests.')}
@@ -512,8 +511,6 @@
             </div>
           </Card>
         </div>
-      {/if}
-
       <!-- Client API-key management (Always Available) -->
       <div class="mt-4">
         <Card

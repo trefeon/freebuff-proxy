@@ -33,6 +33,35 @@
   // the operator enables DEVTOOLS_ENABLED=true in .env (same gate as the
   // sidebar's Dev Tools tab and the server-side DevTools route).
   let devToolsEnabled = $state(false);
+  // Token rotation strategy (TOKEN_ROTATION in .env)
+  let tokenRotation = $state('drain');
+  let savingRotation = $state(false);
+
+  async function setTokenRotation(newMode) {
+    if (savingRotation || tokenRotation === newMode) return;
+    savingRotation = true;
+    try {
+      const cfgRes = await fetchAPI(adminApi.config);
+      const envContent = cfgRes?.env_content || '';
+      const regex = /^\s*TOKEN_ROTATION=(.*)$/m;
+      const match = envContent.match(regex);
+      const newContent = match
+        ? envContent.replace(regex, `TOKEN_ROTATION=${newMode}`)
+        : (envContent ? `${envContent}\nTOKEN_ROTATION=${newMode}` : `TOKEN_ROTATION=${newMode}`);
+      const save = await fetch(adminActions.configSave, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...csrfHeader('POST') },
+        body: new URLSearchParams({ content: newContent }),
+      });
+      if (save.ok) {
+        tokenRotation = newMode;
+      }
+    } catch (e) {
+      console.warn('Failed to update token rotation', e);
+    } finally {
+      savingRotation = false;
+    }
+  }
 
   // Device login flow
   let oauthStarting = $state(false);
@@ -200,8 +229,13 @@
       const m = envContent.match(/^\s*DEVTOOLS_ENABLED=(.*)$/m);
       const val = m ? m[1].trim().toLowerCase() : '';
       devToolsEnabled = val === 'true' || val === '1';
+
+      const mRot = envContent.match(/^\s*TOKEN_ROTATION=(.*)$/m);
+      const rotVal = mRot ? mRot[1].trim().toLowerCase() : 'drain';
+      tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
     } catch {
       devToolsEnabled = false;
+      tokenRotation = 'drain';
     }
   });
 
@@ -304,6 +338,84 @@
           <span>{$tr('Add Token')}</span>
         </Button>
       </form>
+    </Card>
+
+    <!-- Token Rotation Scheme & Handling Policy Card -->
+    <Card
+      title={$tr('Token Rotation & Handling Policy')}
+      description={$tr('Strategy used by the gateway to select upstream accounts for model requests.')}
+    >
+      {#snippet actions()}
+        <span class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]">
+          <span class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"></span>
+          <span class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]">{tokenRotation}</span>
+        </span>
+      {/snippet}
+
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={$tr('Token Rotation Policy')}>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={tokenRotation === 'drain'}
+            disabled={savingRotation}
+            onclick={() => setTokenRotation('drain')}
+            class="fp-btn {tokenRotation === 'drain' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+          >
+            {$tr('Drain (Safest)')}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={tokenRotation === 'round_robin'}
+            disabled={savingRotation}
+            onclick={() => setTokenRotation('round_robin')}
+            class="fp-btn {tokenRotation === 'round_robin' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+          >
+            {$tr('Round Robin (1:1)')}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={tokenRotation === 'least_used'}
+            disabled={savingRotation}
+            onclick={() => setTokenRotation('least_used')}
+            class="fp-btn {tokenRotation === 'least_used' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+          >
+            {$tr('Least Used (Max Quota)')}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={tokenRotation === 'random'}
+            disabled={savingRotation}
+            onclick={() => setTokenRotation('random')}
+            class="fp-btn {tokenRotation === 'random' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+          >
+            {$tr('Random (Stochastic)')}
+          </button>
+        </div>
+
+        <div class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2">
+          {#if tokenRotation === 'drain'}
+            <p class="leading-relaxed">
+              <strong class="text-[var(--fp-text)]">{$tr('Drain Mode (Default & Recommended):')}</strong> {$tr('Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.')}
+            </p>
+          {:else if tokenRotation === 'round_robin'}
+            <p class="leading-relaxed text-[var(--fp-warning)]">
+              <strong class="text-[var(--fp-text)]">{$tr('Round-Robin Mode:')}</strong> {$tr('Rotates to the next token on every single session (1:1). Warning: rapid alternating requests across healthy accounts may trigger upstream anomaly detection.')}
+            </p>
+          {:else if tokenRotation === 'least_used'}
+            <p class="leading-relaxed">
+              <strong class="text-[var(--fp-text)]">{$tr('Least-Used Mode:')}</strong> {$tr('Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.')}
+            </p>
+          {:else if tokenRotation === 'random'}
+            <p class="leading-relaxed">
+              <strong class="text-[var(--fp-text)]">{$tr('Random Mode:')}</strong> {$tr('Selects an available healthy token at random per request. Provides stochastic load balancing.')}
+            </p>
+          {/if}
+        </div>
+      </div>
     </Card>
 
     <!-- Token table -->
