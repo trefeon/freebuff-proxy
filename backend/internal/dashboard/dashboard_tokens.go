@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
+	"freebuff-proxy/backend/internal/registry"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -72,7 +75,20 @@ func (d *Dashboard) tokensData() tokensData {
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
 			PremiumQuota:            t.PremiumQuota,
 		}
+		var upstreamOnly []string
 		for model, q := range t.QuotaByModel {
+			if !registry.IsServedModel(model) {
+				// The admission ledger meters models beyond the gateway's
+				// served catalog: god-only/eval rows (crof/kimi-k3-eco,
+				// openai/gpt-5.6-luna-es) and upstream-Web models
+				// (meta/muse-spark-1.2-contributor). Same philosophy as the
+				// served gate in registry.go — a model no client can reach
+				// is dashboard noise — so the table lists only served
+				// models and collapses the rest into one summary row that
+				// keeps live-wire drift visible.
+				upstreamOnly = append(upstreamOnly, model)
+				continue
+			}
 			rem := float64(0)
 			if q.Limit > 0 {
 				rem = q.Limit - q.RecentCount
@@ -109,6 +125,14 @@ func (d *Dashboard) tokensData() tokensData {
 				row.HasEntitlement = true
 			}
 			detail.Quota = append(detail.Quota, row)
+		}
+		if len(upstreamOnly) > 0 {
+			sort.Strings(upstreamOnly)
+			detail.Quota = append(detail.Quota, quotaRow{
+				Model:     "+ " + strconv.Itoa(len(upstreamOnly)) + " upstream-only (not served): " + strings.Join(upstreamOnly, ", "),
+				Pool:      "upstream",
+				PoolLabel: "upstream",
+			})
 		}
 		// Scarcity/promo isolation (issue #178): the upstream glmPromo block
 		// ({dailySessions, endsAt}) grants a referral quota on scarce models
