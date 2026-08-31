@@ -210,7 +210,6 @@ test.describe('dashboard hermetic mocks', () => {
   test('Overview polls every 15s and shows token risk cards', async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
-
     // Track overview requests
     let overviewCount = 0;
     page.on('response', (res) => {
