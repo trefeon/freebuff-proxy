@@ -1,5 +1,6 @@
 <script>
   import {
+    ChevronUp,
     ChevronDown,
     ChevronRight,
     Unlock,
@@ -9,8 +10,6 @@
     RefreshCw,
     Check,
     ExternalLink,
-    ArrowUp,
-    ArrowDown,
   } from '@lucide/svelte';
   import Button from './Button.svelte';
   import StatusBadge from './StatusBadge.svelte';
@@ -111,23 +110,56 @@
 </script>
 
 <tr>
-  <td class="w-8">
-    <button
-      type="button"
-      onclick={onToggle}
-      aria-expanded={expanded}
-      aria-label={expanded ? `Collapse details for token ${idx}` : `Expand details for token ${idx}`}
-      class="inline-flex items-center justify-center w-6 h-6 text-[var(--fp-dim)] hover:text-[var(--fp-text)]"
-    >
-      {#if expanded}
-        <ChevronDown size={16} />
-      {:else}
-        <ChevronRight size={16} />
+  <td class="w-14">
+    <div class="inline-flex items-center gap-0.5">
+      {#if totalTokens > 1}
+        <div class="flex flex-col shrink-0">
+          <button
+            type="button"
+            disabled={actionPending || idx === 0}
+            title={$tr('Move Up / Prioritize')}
+            aria-label={$tr('Move Up')}
+            onclick={() => onSwap?.(idx, idx - 1)}
+            class="p-0.5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronUp size={12} />
+          </button>
+          <button
+            type="button"
+            disabled={actionPending || idx >= totalTokens - 1}
+            title={$tr('Move Down')}
+            aria-label={$tr('Move Down')}
+            onclick={() => onSwap?.(idx, idx + 1)}
+            class="p-0.5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronDown size={12} />
+          </button>
+        </div>
       {/if}
-    </button>
+      <button
+        type="button"
+        onclick={onToggle}
+        aria-expanded={expanded}
+        aria-label={expanded ? `Collapse details for token ${idx}` : `Expand details for token ${idx}`}
+        class="inline-flex items-center justify-center w-6 h-6 text-[var(--fp-dim)] hover:text-[var(--fp-text)]"
+      >
+        {#if expanded}
+          <ChevronDown size={16} />
+        {:else}
+          <ChevronRight size={16} />
+        {/if}
+      </button>
+    </div>
   </td>
   <td>
-    <span class="fp-num text-xs text-[var(--fp-text)]">#{idx}</span>
+    <div class="flex items-center gap-1.5">
+      <span class="fp-num text-xs font-semibold text-[var(--fp-text)]">#{idx}</span>
+      {#if idx === 0}
+        <span class="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30">
+          {$tr('Primary')}
+        </span>
+      {/if}
+    </div>
   </td>
   <td>
     <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
@@ -150,34 +182,7 @@
   </td>
   <td class="text-right">
     <div class="inline-flex items-center gap-1.5 justify-end">
-      {#if totalTokens > 1}
-        {#if idx > 0}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={actionPending}
-            title={$tr('Move Up / Prioritize this token')}
-            aria-label={$tr('Move Up')}
-            onclick={() => onSwap?.(idx, idx - 1)}
-          >
-            <ArrowUp size={13} />
-            <span>{$tr('Up')}</span>
-          </Button>
-        {/if}
-        {#if idx < totalTokens - 1}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={actionPending}
-            title={$tr('Move Down in pool order')}
-            aria-label={$tr('Move Down')}
-            onclick={() => onSwap?.(idx, idx + 1)}
-          >
-            <ArrowDown size={13} />
-            <span>{$tr('Down')}</span>
-          </Button>
-        {/if}
-      {/if}
+
       {#if token.cooldown_active}
         <Button
           variant="ghost"
