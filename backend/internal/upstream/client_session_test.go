@@ -45,6 +45,24 @@ func TestSessionControlCalls(t *testing.T) {
 	}
 }
 
+func TestSessionParseAccessTier(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := client.CreateSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.AccessTier != "limited" {
+		t.Fatalf("AccessTier = %q, want limited", st.AccessTier)
+	}
+}
+
 // TestProbeAccount verifies the zero-cost token probe: a GET
 // /api/v1/freebuff/session with NO instance header that claims no session
 // slot, returns the live per-model quota, and classifies

@@ -145,12 +145,16 @@ func (s *Server) handleModelRetrieve(w http.ResponseWriter, r *http.Request) {
 	snaps := s.pool.Snapshot()
 	available, status := modelAvailability(model, snaps)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	row := map[string]any{
 		"id":        modelName,
 		"object":    "model",
 		"created":   created,
 		"owned_by":  "freebuff",
 		"available": available,
 		"status":    status,
-	})
+	}
+	if tier := currentAccessTier(snaps); tier != "" {
+		row["current_access_tier"] = tier
+	}
+	_ = json.NewEncoder(w).Encode(row)
 }

@@ -153,7 +153,8 @@ type Manager struct {
 	// invalidation/re-admission cycles, mirroring savedQuota (issue #178):
 	// the GLM promo quota row must stay visible while the session is
 	// between quota-carrying responses.
-	savedGlmPromo string
+	savedGlmPromo   string
+	savedAccessTier string
 
 	// adopt is the issue #97 CLI-session adoption mode (ADOPT_CLI_SESSION):
 	// nil (default) = create sessions normally. When set, the manager adopts
@@ -199,6 +200,7 @@ type cachedState struct {
 	status             string
 	instanceID         string
 	model              string
+	accessTier         string
 	expiresAt          time.Time
 	gracePeriodEndsAt  time.Time
 	position           int
@@ -300,6 +302,9 @@ func (m *Manager) commit(cs *cachedState) {
 		if m.state.referral != nil {
 			m.savedReferral = m.state.referral
 		}
+		if m.state.accessTier != "" {
+			m.savedAccessTier = m.state.accessTier
+		}
 	}
 	// Restore the previously-seen quota map when the new state omits
 	// rateLimitsByModel (the upstream intermittently drops the field on
@@ -315,6 +320,9 @@ func (m *Manager) commit(cs *cachedState) {
 	}
 	// Restore the countdown and referral the same way when the new state
 	// omits them.
+	if cs != nil && cs.accessTier == "" && m.savedAccessTier != "" {
+		cs.accessTier = m.savedAccessTier
+	}
 	if cs != nil && cs.remainingMs == 0 && m.savedRemainingMs > 0 {
 		cs.remainingMs = m.savedRemainingMs
 	}
@@ -566,6 +574,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			GlmPromo:     m.savedGlmPromo,
 			RemainingMs:  m.savedRemainingMs,
 			Referral:     m.savedReferral,
+			AccessTier:   m.savedAccessTier,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -590,6 +599,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Status:             m.state.status,
 		InstanceID:         m.state.instanceID,
 		Model:              m.state.model,
+		AccessTier:         m.state.accessTier,
 		QueuePosition:      m.state.position,
 		QueueDepth:         m.state.queueDepth,
 		Refreshing:         m.refreshing,
@@ -688,6 +698,12 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 			m.state.referral = st.Referral
 		}
 	}
+	if st.AccessTier != "" {
+		m.savedAccessTier = st.AccessTier
+		if m.state != nil {
+			m.state.accessTier = st.AccessTier
+		}
+	}
 }
 
 // Invalidate drops the cached session so the next EnsureSession re-creates
@@ -774,6 +790,20 @@ func (m *Manager) SetSessionStateForTest(status, instanceID, model string, expir
 		status:            status,
 		instanceID:        instanceID,
 		model:             model,
+		expiresAt:         expiresAt,
+		gracePeriodEndsAt: graceEndsAt,
+	})
+}
+
+// SetSessionStateWithTierForTest sets cached session state with an access tier for tests.
+func (m *Manager) SetSessionStateWithTierForTest(status, instanceID, model, accessTier string, expiresAt, graceEndsAt time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.commit(&cachedState{
+		status:            status,
+		instanceID:        instanceID,
+		model:             model,
+		accessTier:        accessTier,
 		expiresAt:         expiresAt,
 		gracePeriodEndsAt: graceEndsAt,
 	})

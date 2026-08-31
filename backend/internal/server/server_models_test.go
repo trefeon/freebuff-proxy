@@ -1314,3 +1314,180 @@ func TestMetricsFamiliesContract(t *testing.T) {
 		}
 	})
 }
+
+// TestModelsEndpointLimitedTier verifies that when upstream reports accessTier: "limited",
+// /v1/models annotates each row with current_access_tier: "limited", marks mimo/mimo-v2.5
+// available: true, and marks models outside the limited-tier allowlist available: false,
+// status: "region_limited".
+func TestModelsEndpointLimitedTier(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+	ts, _ := newTestServer(t, nil, mock)
+
+	// Execute a chat to admit a session and populate the pool snapshot with AccessTier: "limited".
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("mimo/mimo-v2.5"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", resp.StatusCode, data)
+	}
+
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID                string `json:"id"`
+			Available         bool   `json:"available"`
+			Status            string `json:"status"`
+			CurrentAccessTier string `json:"current_access_tier"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal /v1/models: %v", err)
+	}
+	if len(out.Data) == 0 {
+		t.Fatal("empty models data")
+	}
+	for _, m := range out.Data {
+		if m.CurrentAccessTier != "limited" {
+			t.Errorf("model %s current_access_tier = %q, want limited", m.ID, m.CurrentAccessTier)
+		}
+		if m.ID == "mimo/mimo-v2.5" {
+			if !m.Available {
+				t.Errorf("mimo available = false, want true on limited tier")
+			}
+		} else {
+			if m.Available {
+				t.Errorf("model %s available = true, want false on limited tier", m.ID)
+			}
+			if m.Status != "region_limited" {
+				t.Errorf("model %s status = %q, want region_limited", m.ID, m.Status)
+			}
+		}
+	}
+}
+
+// TestModelsEndpointLimitedTierHideUnavailable verifies that MODELS_HIDE_UNAVAILABLE=true
+// prunes region_limited models on the limited tier, returning only the limited-allowed models.
+func TestModelsEndpointLimitedTierHideUnavailable(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+	ts, _ := newTestServerCfg(t, nil, func(cfg *config.Config) {
+		cfg.ModelsHideUnavailable = true
+	}, mock)
+
+	// Admit session so AccessTier is known.
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("mimo/mimo-v2.5"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", resp.StatusCode, data)
+	}
+
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/v1/models", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal /v1/models: %v", err)
+	}
+	if len(out.Data) != 1 || out.Data[0].ID != "mimo/mimo-v2.5" {
+		t.Errorf("got models %+v, want only [mimo/mimo-v2.5]", out.Data)
+	}
+}
+
+// TestModelRetrieveLimitedTier verifies that single model retrieval /v1/models/{model...}
+// returns the current_access_tier and region_limited annotations.
+func TestModelRetrieveLimitedTier(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+	ts, _ := newTestServer(t, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("mimo/mimo-v2.5"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", resp.StatusCode, data)
+	}
+
+	// Non-limited model
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/v1/models/z-ai/glm-5.3-flash", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get glm-5.3-flash status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var glm struct {
+		ID                string `json:"id"`
+		Available         bool   `json:"available"`
+		Status            string `json:"status"`
+		CurrentAccessTier string `json:"current_access_tier"`
+	}
+	if err := json.Unmarshal(data, &glm); err != nil {
+		t.Fatalf("unmarshal glm: %v", err)
+	}
+	if glm.Available || glm.Status != "region_limited" || glm.CurrentAccessTier != "limited" {
+		t.Errorf("glm row = %+v, want available=false, status=region_limited, current_access_tier=limited", glm)
+	}
+
+	// Limited model
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/v1/models/mimo/mimo-v2.5", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get mimo status = %d, want 200: %s", resp.StatusCode, data)
+	}
+	var mimo struct {
+		ID                string `json:"id"`
+		Available         bool   `json:"available"`
+		Status            string `json:"status"`
+		CurrentAccessTier string `json:"current_access_tier"`
+	}
+	if err := json.Unmarshal(data, &mimo); err != nil {
+		t.Fatalf("unmarshal mimo: %v", err)
+	}
+	if !mimo.Available || mimo.CurrentAccessTier != "limited" {
+		t.Errorf("mimo row = %+v, want available=true, current_access_tier=limited", mimo)
+	}
+}
+
+// TestChatRoutingLogsServedModelOnCoercion verifies issue #230: when upstream coerces
+// the session to a different model (e.g. mimo), the INFO routing log line explicitly
+// includes served_model and the response carries X-FreeBuff-Served-Model.
+func TestChatRoutingLogsServedModelOnCoercion(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-coerced","accessTier":"limited","model":"mimo/mimo-v2.5","expiresAt":"2030-01-01T00:00:00Z"}`)
+	}
+
+	ring := logring.NewHandler(slog.NewTextHandler(io.Discard, nil), 500)
+	ts, _ := newTestServerWithLogger(t, nil, slog.New(ring), ring, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody("z-ai/glm-5.3-flash"), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200: %s", resp.StatusCode, data)
+	}
+
+	if servedHeader := resp.Header.Get("X-FreeBuff-Served-Model"); servedHeader != "mimo/mimo-v2.5" {
+		t.Errorf("X-FreeBuff-Served-Model header = %q, want mimo/mimo-v2.5", servedHeader)
+	}
+
+	var routingEntry *logring.Entry
+	for _, e := range ring.Recent(500) {
+		if e.Message == "chat routing" {
+			routingEntry = &e
+			break
+		}
+	}
+	if routingEntry == nil {
+		t.Fatal("missing 'chat routing' entry in log ring")
+	}
+	if gotModel := entryField(*routingEntry, "model"); gotModel != "z-ai/glm-5.3-flash" {
+		t.Errorf("routing model = %q, want z-ai/glm-5.3-flash", gotModel)
+	}
+	if gotServed := entryField(*routingEntry, "served_model"); gotServed != "mimo/mimo-v2.5" {
+		t.Errorf("routing served_model = %q, want mimo/mimo-v2.5 (upstream coercion logged)", gotServed)
+	}
+}

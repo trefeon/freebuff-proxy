@@ -398,6 +398,7 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			Locked:        e.locked.Load(),
 			CooldownUntil: cooldownUntil,
 			SessionActive: sess.Status == "active",
+			AccessTier:    sess.AccessTier,
 			Model:         model,
 			QuotaByModel:  quotaByModel,
 			SpendDay:      float64(spend.Day),

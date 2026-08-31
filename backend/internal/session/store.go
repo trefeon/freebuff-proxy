@@ -34,6 +34,7 @@ type persistedState struct {
 	PollAt             time.Time                 `json:"poll_at"`
 	CountryCode        string                    `json:"country_code"`
 	CountryBlockReason string                    `json:"country_block_reason"`
+	AccessTier         string                    `json:"access_tier,omitempty"`
 	QuotaByModel       map[string]persistedQuota `json:"quota_by_model,omitempty"`
 	// GlmPromo is the raw upstream glmPromo block ({dailySessions,
 	// endsAt}); "" when absent (issue #178).
@@ -225,6 +226,7 @@ func (s *Store) Load(key string) *cachedState {
 		pollAt:             ps.PollAt,
 		countryCode:        ps.CountryCode,
 		countryBlockReason: ps.CountryBlockReason,
+		accessTier:         ps.AccessTier,
 		glmPromo:           ps.GlmPromo,
 	}
 	if len(ps.QuotaByModel) > 0 {
@@ -277,6 +279,7 @@ func (s *Store) Save(key string, cs *cachedState) {
 		PollAt:             cs.pollAt,
 		CountryCode:        cs.countryCode,
 		CountryBlockReason: cs.countryBlockReason,
+		AccessTier:         cs.accessTier,
 		GlmPromo:           cs.glmPromo,
 	}
 	if len(cs.quotaByModel) > 0 {

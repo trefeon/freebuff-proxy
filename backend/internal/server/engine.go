@@ -319,6 +319,12 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	if fallbackReason != "" {
 		w.Header().Set("X-FreeBuff-Fallback", fallbackReason)
 		routingAttrs = append(routingAttrs, "served_model", servedModel)
+	} else if servedModel != model {
+		// Issue #230: upstream coercion transparency. When upstream binds the
+		// session to a different model (e.g. limited-tier token coerced to mimo),
+		// surface served_model in the INFO routing log so operators immediately
+		// see the requested->served redirection.
+		routingAttrs = append(routingAttrs, "served_model", servedModel)
 	}
 	s.logger.Info(kind+" routing", routingAttrs...)
 

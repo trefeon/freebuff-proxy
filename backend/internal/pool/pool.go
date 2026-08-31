@@ -157,6 +157,9 @@ type TokenSnapshot struct {
 	// annotation and healthz.
 	CountryCode        string
 	CountryBlockReason string
+	// AccessTier is the upstream access tier from the last session admission
+	// ("full", "limited", "free"); "" until reported.
+	AccessTier string `json:"access_tier,omitempty"`
 	// SessionActiveUsersForIP is the last known distinct-user count on the
 	// token's egress IP (upstream activeUsersForIp); zero when the session
 	// response did not carry it.

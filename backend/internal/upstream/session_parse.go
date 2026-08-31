@@ -23,6 +23,7 @@ type SessionState struct {
 	Model              string
 	CurrentModel       string
 	RequestedModel     string
+	AccessTier         string
 	ExpiresAt          time.Time
 	AdmittedAt         time.Time
 	RemainingMs        int64
@@ -343,6 +344,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		PollAt                 any                      `json:"pollAt"`
 		CountryCode            string                   `json:"countryCode"`
 		CountryBlockReason     string                   `json:"countryBlockReason"`
+		AccessTier             string                   `json:"accessTier"`
 		IpPrivacySignals       []string                 `json:"ipPrivacySignals"`
 		ActiveUsersForIP       int                      `json:"activeUsersForIp"`
 		Limit                  float64                  `json:"limit"`
@@ -372,6 +374,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			CountryCode:        raw.CountryCode,
 			CountryBlockReason: raw.CountryBlockReason,
 			IpPrivacySignals:   raw.IpPrivacySignals,
+			AccessTier:         raw.AccessTier,
 			ActiveUsersForIP:   raw.ActiveUsersForIP,
 			Limit:              raw.Limit,
 			RecentCount:        raw.RecentCount,

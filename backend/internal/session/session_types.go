@@ -20,7 +20,10 @@ type SessionSnapshot struct {
 	RemainingMs int64
 	// Refreshing reports whether a session admission or pre-emptive re-admit
 	// is currently in flight for this manager.
-	Refreshing         bool
+	Refreshing bool
+	// AccessTier is the upstream access tier ("full", "limited", "free") from
+	// the last session admission; "" until reported.
+	AccessTier         string
 	CountryCode        string
 	CountryBlockReason string
 	// ActiveUsersForIP is the last known distinct-user count on the token's

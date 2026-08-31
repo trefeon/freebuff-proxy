@@ -432,6 +432,7 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				quotaByModel:       st.RateLimitsByModel,
 				glmPromo:           st.GlmPromo,
 				standing:           st.Standing,
+				accessTier:         st.AccessTier,
 			})
 			// Issue #60: the successful admission refreshes the probe cache
 			// window — subsequent session poll GETs within the TTL are
@@ -483,6 +484,7 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				queueDepth: st.QueueDepth,
 				pollAt:     pollAt,
 				glmPromo:   st.GlmPromo,
+				accessTier: st.AccessTier,
 			})
 			m.mu.Unlock()
 			slog.Debug("session queued", "instance_id", st.InstanceID, "model", model,

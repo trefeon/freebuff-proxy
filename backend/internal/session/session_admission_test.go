@@ -713,6 +713,20 @@ func TestCacheRecordsUpstreamServedModel(t *testing.T) {
 	}
 }
 
+func TestSessionSnapshotAccessTier(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.AccessTier = "limited"
+	mgr := newTestManager(t, mock)
+
+	if _, err := mgr.EnsureSessionForModel(context.Background(), "mimo/mimo-v2.5"); err != nil {
+		t.Fatal(err)
+	}
+	if snap := mgr.Snapshot(); snap.AccessTier != "limited" {
+		t.Fatalf("snapshot AccessTier = %q, want limited", snap.AccessTier)
+	}
+}
+
 // TestActiveSessionWithoutModelServesAnyModel pins the leniency: a
 // session created via the default-model path (cached model "") is reused for
 // ANY requested model — the cache-hit check treats "" as a wildcard. The

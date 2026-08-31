@@ -99,6 +99,16 @@ const DefaultModelID = "z-ai/glm-5.3-flash"
 // be mimo, never the premium picker lead.
 const FallbackModelID = "mimo/mimo-v2.5"
 
+// LimitedModelID mirrors upstream LIMITED_FREEBUFF_MODEL_ID: the model
+// guaranteed available on the limited tier.
+const LimitedModelID = "mimo/mimo-v2.5"
+
+// IsLimitedTierAllowed reports whether the model is available on the limited tier
+// without requiring special referral grants.
+func IsLimitedTierAllowed(id string) bool {
+	return id == LimitedModelID
+}
+
 // Glm52ModelID is the referral-reward model, metered by its own promo pool
 // rather than the shared premium pool.
 const Glm52ModelID = "z-ai/glm-5.2"

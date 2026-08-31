@@ -136,6 +136,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 	codexReq := codexClientVersion(r)
 	hideUnavailable := s.cfg.Load().ModelsHideUnavailable
+	tier := currentAccessTier(snaps)
 	data := make([]map[string]any, 0, len(models))
 	listed := make([]string, 0, len(models))
 	for _, id := range models {
@@ -153,14 +154,18 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			// variants stay invisible on the catalog surface.
 			continue
 		}
-		data = append(data, map[string]any{
+		row := map[string]any{
 			"id":        id,
 			"object":    "model",
 			"created":   created,
 			"owned_by":  "freebuff",
 			"available": available,
 			"status":    status,
-		})
+		}
+		if tier != "" {
+			row["current_access_tier"] = tier
+		}
+		data = append(data, row)
 		listed = append(listed, id)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -285,9 +290,50 @@ func codexModelRow(id string) codexModelInfo {
 	}
 }
 
+// currentAccessTier resolves the effective access tier across the pool snapshots.
+// Returns "full", "limited", "free", or "" if no token has reported an access tier yet.
+func currentAccessTier(snaps []pool.TokenSnapshot) string {
+	hasLimited := false
+	for _, snap := range snaps {
+		switch snap.AccessTier {
+		case "full":
+			return "full"
+		case "free":
+			return "free"
+		case "limited":
+			hasLimited = true
+		}
+	}
+	if hasLimited {
+		return "limited"
+	}
+	return ""
+}
+
+// isModelAllowedForTier reports whether id can be served under tier.
+// On limited tier, only limited-tier models (mimo-v2.5) or GLM 5.2 with active referral quota
+// can be admitted.
+func isModelAllowedForTier(id, tier string, snaps []pool.TokenSnapshot) bool {
+	if tier != "limited" {
+		return true
+	}
+	if modelcat.IsLimitedTierAllowed(id) {
+		return true
+	}
+	if id == modelcat.Glm52ModelID {
+		for _, snap := range snaps {
+			if q, ok := snap.QuotaByModel[id]; ok && q.Limit > 0 && q.RecentCount < q.Limit {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // modelAvailability derives the advisory per-model annotation from the pool
 // token snapshots. The snapshot does not carry the model of a live session,
-// so the signal set is: quotaByModel presence (the session admitted this
+// so the signal set is: accessTier (limited tier marks non-mimo models as
+// region_limited), quotaByModel presence (the session admitted this
 // model), quota exhaustion (recent >= limit), and session-level locks.
 // available defaults to true when no signal exists, so a working model is
 // never hidden.
@@ -297,6 +343,7 @@ func modelAvailability(id string, snaps []pool.TokenSnapshot) (available bool, s
 	quotaHit := false
 	quotaExhausted := false
 	locked := false
+	tier := currentAccessTier(snaps)
 	for _, snap := range snaps {
 		switch snap.SessionStatus {
 		case "model_locked", "disabled":
@@ -310,6 +357,9 @@ func modelAvailability(id string, snaps []pool.TokenSnapshot) (available bool, s
 		}
 	}
 	switch {
+	case tier == "limited" && !isModelAllowedForTier(id, tier, snaps):
+		available = false
+		status = "region_limited"
 	case quotaExhausted:
 		status = "quota_exhausted"
 	case locked:

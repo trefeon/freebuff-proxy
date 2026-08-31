@@ -81,6 +81,9 @@ type MockUpstream struct {
 	// tests can exercise region reporting end-to-end.
 	CountryCode        string
 	CountryBlockReason string
+	// AccessTier, when non-empty, is embedded in the active/probe session body
+	// ("full", "limited", "free") so tests can exercise access tier annotations.
+	AccessTier string
 
 	// Standing, when non-empty, is embedded in the session create/poll
 	// response body's "standing" key (issue #96) so dashboard e2e tests can
@@ -361,6 +364,7 @@ func (m *MockUpstream) handleSession(w http.ResponseWriter, r *http.Request) {
 	limits := m.RateLimitsByModel
 	glmPromo := m.GlmPromo
 	countryCode, countryBlockReason := m.CountryCode, m.CountryBlockReason
+	accessTier := m.AccessTier
 	standing := m.Standing
 	m.mu.Unlock()
 
@@ -385,6 +389,9 @@ func (m *MockUpstream) handleSession(w http.ResponseWriter, r *http.Request) {
 		}
 		if countryBlockReason != "" {
 			body["countryBlockReason"] = countryBlockReason
+		}
+		if accessTier != "" {
+			body["accessTier"] = accessTier
 		}
 		if len(standing) > 0 {
 			body["standing"] = standing
@@ -453,6 +460,7 @@ func (m *MockUpstream) handleProbe(w http.ResponseWriter) {
 	limits := m.RateLimitsByModel
 	glmPromo := m.GlmPromo
 	countryCode, countryBlockReason := m.CountryCode, m.CountryBlockReason
+	accessTier := m.AccessTier
 	m.mu.Unlock()
 	if len(limits) == 0 {
 		limits = defaultProbeQuota
@@ -473,6 +481,9 @@ func (m *MockUpstream) handleProbe(w http.ResponseWriter) {
 	}
 	if countryBlockReason != "" {
 		body["countryBlockReason"] = countryBlockReason
+	}
+	if accessTier != "" {
+		body["accessTier"] = accessTier
 	}
 	writeJSON(w, 200, body)
 }

@@ -18,6 +18,7 @@ type BridgeTokenSnapshot struct {
 	CooldownUntil time.Time                        `json:"cooldown_until"`
 	SessionActive bool                             `json:"session_active"`
 	Model         string                           `json:"model"`
+	AccessTier    string                           `json:"access_tier,omitempty"`
 	QuotaByModel  map[string]session.QuotaSnapshot `json:"quota_by_model,omitempty"`
 	// PremiumQuota mirrors TokenSnapshot's premium view (quota_tracker.go).
 	// Nil when the bridge entry has no premium quota.
@@ -161,6 +162,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			SessionRemainingSeconds: sessionRemaining,
 			CountryCode:             countryCode,
 			CountryBlockReason:      countryReason,
+			AccessTier:              ss.AccessTier,
 			SessionActiveUsersForIP: ss.ActiveUsersForIP,
 			QuotaByModel:            ss.QuotaByModel,
 			PremiumQuota:            premium,
