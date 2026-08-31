@@ -63,6 +63,7 @@ var AdminRoutes = [...]AdminRoute{
 	{Method: "GET", Path: "/admin/api/metrics", Auth: AuthDashboard},
 	{Method: "GET", Path: "/admin/api/version", Auth: AuthDashboard},
 	{Method: "GET", Path: "/admin/api/upstream-drift", Auth: AuthDashboard},
+	{Method: "GET", Path: "/admin/api/events", Auth: AuthDashboard},
 	{Method: "GET", Path: "/admin/api/auth/status", Auth: AuthDashboard},
 
 	{Method: "GET", Path: "/admin", Auth: AuthDashboard},

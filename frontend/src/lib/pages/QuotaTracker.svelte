@@ -10,6 +10,8 @@
   import { fetchAPI } from '../api/client.js';
   import { adminApi } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
+  import { useEventStream } from '../utils/events.js';
+  import { onMount } from 'svelte';
   import { tr } from '../i18n.js';
   import { formatLocalDate } from '../utils/format.js';
 
@@ -31,10 +33,21 @@
     }
   }
 
+  let unsubEvents = null;
+  onMount(() => {
+    unsubEvents = useEventStream({
+      onTokens: (freshData) => {
+        data = freshData;
+        loading = false;
+        error = '';
+      },
+    });
+  });
   usePolling(fetchData, 10000);
   const tick = setInterval(() => { now = Date.now(); }, 1000);
 
   onDestroy(() => {
+    unsubEvents?.();
     clearInterval(tick);
   });
 

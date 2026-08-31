@@ -18,11 +18,13 @@
   import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
+  import { useEventStream } from '../utils/events.js';
   import { tr } from '../i18n.js';
 
   let data = $state(null);
   let loading = $state(true);
   let error = $state('');
+  let unsubEvents = null;
 
   // Add-token form
   let newToken = $state('');
@@ -219,6 +221,13 @@
   usePolling(fetchData, 10000);
   const tick = setInterval(() => { now = Date.now(); }, 1000);
   onMount(async () => {
+    unsubEvents = useEventStream({
+      onTokens: (freshData) => {
+        data = freshData;
+        loading = false;
+        error = '';
+      },
+    });
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
@@ -236,6 +245,7 @@
   });
 
   onDestroy(() => {
+    unsubEvents?.();
     clearInterval(oauthTimer);
     clearInterval(tick);
   });

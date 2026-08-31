@@ -25,6 +25,7 @@ type Dashboard struct {
 	cfg     func() *config.Config // returns the current (hot-reloadable) config
 	pool    *pool.Pool
 	reg     *registry.Registry
+	events  *eventStreamHub
 	logger  *slog.Logger
 	logs    *logring.Handler // dashboard log viewer source (nil = disabled)
 	started time.Time
@@ -65,7 +66,7 @@ func New(cfg func() *config.Config, p *pool.Pool, reg *registry.Registry, logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	d := &Dashboard{cfg: cfg, pool: p, reg: reg, logger: logger, started: time.Now(), logs: logs}
+	d := &Dashboard{cfg: cfg, pool: p, reg: reg, logger: logger, started: time.Now(), logs: logs, events: newEventStreamHub()}
 	for _, opt := range opts {
 		opt(d)
 	}
