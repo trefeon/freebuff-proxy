@@ -68,7 +68,7 @@ func (d *Dashboard) tokensData() tokensData {
 	for _, t := range d.pool.Snapshot() {
 		detail := tokenDetail{
 			tokenCard:               cardFromSnapshot(t),
-			SessionInstance:         shortID(t.SessionInstanceID),
+			SessionInstance:         t.SessionInstanceID,
 			SessionModel:            t.SessionModel,
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
 			PremiumQuota:            t.PremiumQuota,

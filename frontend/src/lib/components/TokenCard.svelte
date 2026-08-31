@@ -12,7 +12,6 @@
   } from '@lucide/svelte';
   import Button from './Button.svelte';
   import StatusBadge from './StatusBadge.svelte';
-  import CopyButton from './CopyButton.svelte';
   import { formatLocalDate } from '../utils/format.js';
   import { fallbackModelOptions, fetchModelOptions } from '../modelOptions.js';
   import { tr } from '../i18n.js';
@@ -131,10 +130,7 @@
   </td>
   <td>
     {#if token.session_instance}
-      <span class="inline-flex items-center gap-2">
-        <code class="fp-num text-xs text-[var(--fp-muted)]">{token.session_instance}</code>
-        <CopyButton text={token.session_instance} label="Copy" />
-      </span>
+      <code class="fp-num text-xs text-[var(--fp-muted)]">{token.session_instance}</code>
     {:else}
       <span class="text-xs text-[var(--fp-dim)]">—</span>
     {/if}
@@ -305,6 +301,11 @@
               </ul>
             {/if}
           </div>
+        {/if}
+        {#if !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
+          <p class="text-xs text-[var(--fp-dim)] italic">
+            {$tr('No active session or run for this auth token.')}
+          </p>
         {/if}
       </div>
     </td>
