@@ -15,8 +15,8 @@ import (
 	"freebuff-proxy/backend/internal/testutil"
 )
 
-// TestAcquireScarceModelSessionStickiness verifies Issue #191:
-// When multiple tokens are configured, multi-turn requests for a scarce model
+// TestAcquireScarceModelSessionStickiness verifies session stickiness:
+// When multiple tokens are configured, multi-turn requests for one model
 // (e.g. deepseek/deepseek-v4-pro) must stick to the active session on Token 0
 // and must NOT trigger a second session creation on Token 1.
 func TestAcquireScarceModelSessionStickiness(t *testing.T) {
@@ -28,7 +28,7 @@ func TestAcquireScarceModelSessionStickiness(t *testing.T) {
 	p := newTestPool(t, mock0, mock1)
 	const scarceModel = "deepseek/deepseek-v4-pro"
 
-	// Request 1: cold pool admits scarce session on Token 0.
+	// Request 1: cold pool admits the model session on Token 0.
 	lease1, err := p.Acquire(context.Background(), scarceModel)
 	if err != nil {
 		t.Fatalf("first acquire failed: %v", err)
@@ -45,7 +45,7 @@ func TestAcquireScarceModelSessionStickiness(t *testing.T) {
 		t.Fatalf("mock1 session creates = %d, want 0", mock1.SessionCreates)
 	}
 
-	// Requests 2..6: successive turns for the same scarce model must reuse Token 0.
+	// Requests 2..6: successive turns for the same model must reuse Token 0.
 	for i := range 5 {
 		lease, err := p.Acquire(context.Background(), scarceModel)
 		if err != nil {
@@ -59,7 +59,7 @@ func TestAcquireScarceModelSessionStickiness(t *testing.T) {
 
 	// Token 1 must never have had a session created.
 	if mock1.SessionCreates != 0 {
-		t.Errorf("mock1 session creates = %d, want 0 (scarce session must not leak to second token)", mock1.SessionCreates)
+		t.Errorf("mock1 session creates = %d, want 0 (session must not leak to second token)", mock1.SessionCreates)
 	}
 	if mock0.SessionCreates != 1 {
 		t.Errorf("mock0 session creates = %d, want 1 (session reused across all turns)", mock0.SessionCreates)

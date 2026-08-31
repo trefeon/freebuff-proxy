@@ -269,8 +269,6 @@ func (d *Dashboard) configData() configData {
 			}
 			sort.Strings(pairs)
 			return strings.Join(pairs, ","), false
-		case "SCARCE_SESSION_MODELS":
-			return strings.Join(cfg.ScarceSessionModels, ","), false
 		case "SESSION_IDLE_END":
 			return cfg.SessionIdleEnd.String(), false
 		case "SESSION_PROBE_CACHE_TTL":

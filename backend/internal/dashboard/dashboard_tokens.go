@@ -119,7 +119,7 @@ func (d *Dashboard) tokensData() tokensData {
 		}
 
 		// Scarcity/promo isolation (issue #178): the upstream glmPromo block
-		// ({dailySessions, endsAt}) grants a referral quota on scarce models
+		// ({dailySessions, endsAt}) grants a referral quota on limited models
 		// like GLM/Luna/Pro. Synthesize a dashboard row for z-ai/glm-5.2 so
 		// the promo is visible even though no per-model quota was admitted;
 		// a real rateLimitsByModel entry for the model wins over the promo.

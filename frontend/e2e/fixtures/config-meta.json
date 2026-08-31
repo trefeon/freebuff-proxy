@@ -463,16 +463,6 @@
     "description": "Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs)."
   },
   {
-    "key": "SCARCE_SESSION_MODELS",
-    "group": "quota",
-    "kind": "list",
-    "default": "openai/gpt-5.6-luna",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "1-session/day models to keep alive for their full session (never idle-evict or DELETE on shutdown while active)."
-  },
-  {
     "key": "COST_MODE",
     "group": "upstream",
     "kind": "select",

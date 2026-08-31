@@ -153,10 +153,6 @@ type Config struct {
 	// muse→deepseek-v4-pro target mirrors the upstream
 	// MUSE_SPARK_FALLBACK_MODEL_ID.
 	FallbackModels map[string]string
-	// ScarceSessionModels lists the irreplaceable 1-session/day models the proxy
-	// keeps alive for their full hour (SCARCE_SESSION_MODELS; comma-separated).
-	// Default: ["deepseek/deepseek-v4-pro", "openai/gpt-5.6-luna"].
-	ScarceSessionModels []string
 	// QuotaFallbackModels maps a model to its fallback model when its session
 	// quota is exhausted or unentitled (QUOTA_FALLBACK_MODELS; comma-separated k=v pairs).
 	// Default: {"deepseek/deepseek-v4-flash": "mimo/mimo-v2.5", "z-ai/glm-5.2": "deepseek/deepseek-v4-flash", "openai/gpt-5.6-luna": "deepseek/deepseek-v4-flash"}.
@@ -292,7 +288,6 @@ type rawConfig struct {
 	SessionReAdmitLead               string                  `json:"SESSION_RE_ADMIT_LEAD"`
 	SessionProbeCacheTTL             string                  `json:"SESSION_PROBE_CACHE_TTL"`
 	ModelUnavailableCacheTTL         string                  `json:"MODEL_UNAVAILABLE_CACHE_TTL"`
-	ScarceSessionModels              scarceSessionModelsList `json:"SCARCE_SESSION_MODELS"`
 	QuotaFallbackModels              quotaFallbackModelsList `json:"QUOTA_FALLBACK_MODELS"`
 	WebhookURL                       string                  `json:"WEBHOOK_URL"`
 	FallbackAfter                    string                  `json:"FALLBACK_AFTER_MS"`
@@ -327,23 +322,6 @@ func (m *modelsAllowList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// scarceSessionModelsList is the raw SCARCE_SESSION_MODELS value (issue #155):
-// env is a comma-separated list, JSON may be a string or an array of strings.
-type scarceSessionModelsList string
-
-func (s *scarceSessionModelsList) UnmarshalJSON(data []byte) error {
-	var v string
-	if err := json.Unmarshal(data, &v); err == nil {
-		*s = scarceSessionModelsList(v)
-		return nil
-	}
-	var arr []string
-	if err := json.Unmarshal(data, &arr); err == nil {
-		*s = scarceSessionModelsList(strings.Join(arr, ","))
-		return nil
-	}
-	return fmt.Errorf("SCARCE_SESSION_MODELS must be a comma-separated string or an array of strings, got: %s", data)
-}
 
 // quotaFallbackModelsList is the raw QUOTA_FALLBACK_MODELS value (issue #155):
 // env is a comma-separated list of k=v pairs, JSON may be a string or a map.
@@ -424,7 +402,7 @@ func defaultFallbackModels() map[string]string {
 // when a model's session quota is exhausted (all 4 premium sessions used for
 // luna, or unentitled referral-only GLM 5.2), the proxy falls back to an
 // available model (flash for GLM/luna, mimo for flash). Luna fallback (#203)
-// reduces retry pressure on an exhausted scarce model that upstream flags as
+// reduces retry pressure on an exhausted quota model that upstream flags as
 // abuse when hammered.
 func defaultQuotaFallbackModels() map[string]string {
 	return map[string]string{
@@ -434,15 +412,6 @@ func defaultQuotaFallbackModels() map[string]string {
 	}
 }
 
-// defaultScarceSessionModels returns the SCARCE_SESSION_MODELS defaults (issue #155):
-// the 4-session/day premium model kept alive for its full session.
-// deepseek-v4-pro left this list with its pause (2026-08-26): a paused model
-// is refused before a lease is acquired, so keeping its slot warm is dead work.
-func defaultScarceSessionModels() []string {
-	return []string{
-		"openai/gpt-5.6-luna",
-	}
-}
 
 // EnvFileCandidates returns the ordered candidate paths for the .env file
 // (issue #39). The working directory wins (./.env), matching the historic

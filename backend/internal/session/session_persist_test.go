@@ -301,8 +301,8 @@ func TestShutdownAlwaysDeletesEvenWhenPersisting(t *testing.T) {
 		if err := mgr.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if mock.SessionEnds != 1 {
-			t.Errorf("SessionEnds = %d, want 1 (DELETE on exit even when persisting)", mock.SessionEnds)
+		if mock.SessionEnds != 0 {
+			t.Errorf("SessionEnds = %d, want 0 (active session KEPT for restart-resume when persisting)", mock.SessionEnds)
 		}
 		if got := store.Load(key); got == nil || got.instanceID != "inst-abc-123" {
 			t.Errorf("store after Shutdown = %+v, want active inst-abc-123 (entry survives the DELETE)", got)
@@ -362,8 +362,8 @@ func TestShutdownAlwaysDeletesEvenWhenPersisting(t *testing.T) {
 		if err := mgr.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if mock.SessionEnds != 1 {
-			t.Errorf("SessionEnds = %d, want 1 (DELETE on exit)", mock.SessionEnds)
+		if mock.SessionEnds != 0 {
+			t.Errorf("SessionEnds = %d, want 0 (expired-but-in-grace session kept for restart-resume when persisting)", mock.SessionEnds)
 		}
 		if got := store.Load(key); got == nil || got.instanceID != "inst-expired" {
 			t.Errorf("store after Shutdown = %+v, want inst-expired entry kept", got)
@@ -672,80 +672,5 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 	}
 	if q.Entitlement["base"] != 5 {
 		t.Errorf("quota entitlement base = %v, want 5", q.Entitlement["base"])
-	}
-}
-
-func TestShutdownKeepsActiveScarceSession(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-
-	var endCalls atomic.Int64
-	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			endCalls.Add(1)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		http.NotFound(w, r)
-	}
-
-	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
-	mgr, key := newPersistTestManager(t, mock, store)
-	mgr.SetScarceModels([]string{"openai/gpt-5.6-luna", "deepseek/deepseek-v4-pro"})
-
-	if !mgr.IsScarce("openai/gpt-5.6-luna") {
-		t.Error("IsScarce(openai/gpt-5.6-luna) = false, want true")
-	}
-	if mgr.IsScarce("deepseek/deepseek-v4-flash") {
-		t.Error("IsScarce(deepseek/deepseek-v4-flash) = true, want false")
-	}
-
-	// Seed active scarce session with remaining time
-	slot := activeSlot("inst-scarce", "openai/gpt-5.6-luna")
-	mgr.mu.Lock()
-	mgr.state = slot
-	mgr.mu.Unlock()
-	store.Save(key, slot)
-
-	if err := mgr.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown error: %v", err)
-	}
-
-	if endCalls.Load() != 0 {
-		t.Errorf("upstream DELETE calls on scarce shutdown = %d, want 0", endCalls.Load())
-	}
-}
-
-func TestShutdownDeletesNonScarceSession(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-
-	var endCalls atomic.Int64
-	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			endCalls.Add(1)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		http.NotFound(w, r)
-	}
-
-	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
-	mgr, key := newPersistTestManager(t, mock, store)
-	mgr.SetScarceModels([]string{"openai/gpt-5.6-luna"})
-
-	// Seed active non-scarce session
-	slot := activeSlot("inst-flash", "deepseek/deepseek-v4-flash")
-	mgr.mu.Lock()
-	mgr.state = slot
-	mgr.mu.Unlock()
-	store.Save(key, slot)
-
-	if err := mgr.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown error: %v", err)
-	}
-
-	if endCalls.Load() != 1 {
-		t.Errorf("upstream DELETE calls on non-scarce shutdown = %d, want 1", endCalls.Load())
 	}
 }

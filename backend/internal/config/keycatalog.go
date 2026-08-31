@@ -188,9 +188,6 @@ var keyCatalog = []KeyDef{
 	{Key: "QUOTA_FALLBACK_MODELS", Group: GroupQuota, Kind: "list", Essential: true,
 		Default:     "deepseek/deepseek-v4-flash=mimo/mimo-v2.5,z-ai/glm-5.2=deepseek/deepseek-v4-flash,openai/gpt-5.6-luna=deepseek/deepseek-v4-flash",
 		Description: `Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs).`},
-	{Key: "SCARCE_SESSION_MODELS", Group: GroupQuota, Kind: "list",
-		Default:     "openai/gpt-5.6-luna",
-		Description: `1-session/day models to keep alive for their full session (never idle-evict or DELETE on shutdown while active).`},
 
 	// ── upstream ─────────────────────────────────────────────────────────
 	{Key: "COST_MODE", Group: GroupUpstream, Kind: "select", Enum: []string{"free"}, RestartOnly: true, Hidden: true,

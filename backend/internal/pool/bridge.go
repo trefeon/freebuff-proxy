@@ -116,12 +116,6 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		p.logger.Debug("pool: bridge entry daily message limit", "limit", cfg.MaxMessagesPerDay)
 		return nil, p.bridgeDailyLimitError(entry)
 	}
-	// Issue #155: scarce-model session protection in bridge mode.
-	scarceSet := scarceModelSet(cfg.ScarceSessionModels)
-	if snap := entry.session.Snapshot(); scarceHeld(snap, model, scarceSet) {
-		return nil, &ScarceSessionError{Model: snap.Model, ExpiresAt: snap.ExpiresAt}
-	}
-
 	// Issue #155: quota-exhaustion fallback in bridge mode.
 	fellBack := false
 	if bridgeQuotaCapped(entry, model) {

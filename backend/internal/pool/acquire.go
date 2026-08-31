@@ -167,9 +167,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	var countryBlocked []*upstream.CountryBlockedError
 	var modelLimited []*upstream.LimitedIpError
 	var dailyLimited []*upstream.RateLimitError
-	var scarceUntil time.Time
-	var scarceModel string
-	scarceSet := scarceModelSet(cfg.ScarceSessionModels)
 	for _, idx := range order {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -299,22 +296,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			p.logger.Debug("pool: token skipped (daily message limit)", "token", idx+1, "limit", cfg.MaxMessagesPerDay)
 			continue
 		}
-		// Issue #155: scarce-model session protection. If the token holds an
-		// active scarce session (pro/luna) with > 1 minute remaining, do not
-		// switch away from it to serve a different model — that would burn
-		// the irreplaceable 1-session/day allocation.
-		if snap := tok.session.Snapshot(); scarceHeld(snap, model, scarceSet) {
-			exp := snap.ExpiresAt
-			// Remember the session that expires first: it is the one the
-			// caller can retry against, and its model names the refusal.
-			if scarceModel == "" || exp.Before(scarceUntil) {
-				scarceUntil, scarceModel = exp, snap.Model
-			}
-			errs = append(errs, fmt.Sprintf("%s: scarce session (%s) in use until %s", name, snap.Model, exp.Format(time.RFC3339)))
-			p.logger.Debug("pool: token skipped (scarce session in use)", "token", idx+1, "model", snap.Model, "until", exp.Format(time.RFC3339))
-			continue
-		}
-
 		// Issue #85: session-quota-capped token for the requested model.
 		// The hot path excludes these in acquireOrder (their rate-limit
 		// reasons ride back in quotaLimited); the no-hot round-robin path
@@ -689,9 +670,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	}
 	if len(ipCapped) > 0 {
 		return nil, ipCapped[0]
-	}
-	if scarceModel != "" {
-		return nil, &ScarceSessionError{Model: scarceModel, ExpiresAt: scarceUntil}
 	}
 	if len(waiting) > 0 {
 		wr := bestWaitingRoom(waiting)

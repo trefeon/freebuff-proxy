@@ -64,6 +64,9 @@ type SessionState struct {
 	// Referral is the upstream referral block (FreebuffReferralInfo), parsed
 	// from the session response's "referral" field; nil when omitted.
 	Referral *SessionReferral
+	// Freebucks is the upstream Freebucks allowance block (issue #232),
+	// parsed from the session response's "freebucks" field; nil when omitted.
+	Freebucks *FreebucksInfo
 }
 
 // SessionReferral mirrors the upstream FreebuffReferralInfo wire block.
@@ -74,6 +77,25 @@ type SessionReferral struct {
 	WeeklySessionsRemaining int
 	ResetAt                 time.Time
 	GithubLinked            bool
+}
+
+// FreebucksWindow is one window of a Freebucks allowance.
+type FreebucksWindow struct {
+	Limit     float64   `json:"limit"`
+	Spent     float64   `json:"spent"`
+	Remaining float64   `json:"remaining"`
+	ResetAt   time.Time `json:"resetAt"`
+}
+
+// FreebucksInfo is the caller's Freebucks position (issue #232).
+type FreebucksInfo struct {
+	Balance       float64                  `json:"balance"`
+	Daily         FreebucksWindow          `json:"daily"`
+	Weekly        FreebucksWindow          `json:"weekly"`
+	Monthly       FreebucksWindow          `json:"monthly"`
+	BindingWindow string                   `json:"bindingWindow"`
+	PlanDaily     *float64                 `json:"planDaily,omitempty"`
+	Prices        map[string]float64       `json:"prices"`
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -308,10 +330,35 @@ type rawStandingStep struct {
 	Href   string  `json:"href"`
 }
 
+type rawFreebucksWindow struct {
+	Limit     float64 `json:"limit"`
+	Spent     float64 `json:"spent"`
+	Remaining float64 `json:"remaining"`
+	ResetAt   any     `json:"resetAt"`
+}
+
+type rawFreebucks struct {
+	Balance       float64                    `json:"balance"`
+	Daily         rawFreebucksWindow         `json:"daily"`
+	Weekly        rawFreebucksWindow         `json:"weekly"`
+	Monthly       rawFreebucksWindow         `json:"monthly"`
+	BindingWindow string                     `json:"bindingWindow"`
+	PlanDaily     *float64                   `json:"planDaily"`
+	Prices        map[string]float64         `json:"prices"`
+}
+
 // parseSessionResponse decodes a session control response body into a
 // SessionState: the 404 create/poll mapping, JSON decode, quota/standing/
 // availability-window parsing, and the passive ban-risk feed (#64). Errors
 // are classified through the standard matrix.
+func windowFromRaw(w rawFreebucksWindow) FreebucksWindow {
+	out := FreebucksWindow{Limit: w.Limit, Spent: w.Spent, Remaining: w.Remaining}
+	if t, err := parseFlexTime(w.ResetAt); err == nil {
+		out.ResetAt = t
+	}
+	return out
+}
+
 func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, body string) (*SessionState, error) {
 
 	if resp.StatusCode == 404 {
@@ -358,6 +405,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		RateLimitsByModel      map[string]rawModelQuota `json:"rateLimitsByModel"`
 		Standing               *rawStanding             `json:"standing"`
 		Referral               *rawReferral             `json:"referral"`
+		Freebucks              *rawFreebucks            `json:"freebucks"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -418,6 +466,18 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				ref.ResetAt = time.Time{}
 			}
 			state.Referral = ref
+		}
+		if raw.Freebucks != nil {
+			fb := &FreebucksInfo{
+				Balance:       raw.Freebucks.Balance,
+				BindingWindow: raw.Freebucks.BindingWindow,
+				PlanDaily:     raw.Freebucks.PlanDaily,
+				Prices:        raw.Freebucks.Prices,
+			}
+			fb.Daily = windowFromRaw(raw.Freebucks.Daily)
+			fb.Weekly = windowFromRaw(raw.Freebucks.Weekly)
+			fb.Monthly = windowFromRaw(raw.Freebucks.Monthly)
+			state.Freebucks = fb
 		}
 		if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
 			state.ExpiresAt = time.Time{}

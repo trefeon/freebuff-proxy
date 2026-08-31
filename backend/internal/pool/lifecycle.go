@@ -422,9 +422,8 @@ func (p *Pool) FinishTokenRuns(ctx context.Context, token int) error {
 }
 
 // DropTokenSession forcibly ends the active session and finishes all runs for token (dashboard action).
-// Unlike the scarce-session protection in Acquire, this explicitly drops the premium session
-// so the operator can change model or free the scarce allocation. It logs the drop and clears
-// the session snapshot so the next request re-admits fresh.
+// Forcibly ends the active session so the operator can change model immediately;
+// the next request re-admits fresh.
 func (p *Pool) DropTokenSession(ctx context.Context, token int) error {
 	toks := p.toks.Load()
 	if token < 0 || token >= len(*toks) {

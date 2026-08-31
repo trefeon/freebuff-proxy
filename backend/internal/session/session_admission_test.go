@@ -464,8 +464,8 @@ func TestModelLockedReleasesOldSlot(t *testing.T) {
 	if got := creates.Load(); got != 3 {
 		t.Errorf("creates = %d, want 3 (model/A + locked model/B + retry model/B)", got)
 	}
-	if got := ends.Load(); got != 1 {
-		t.Errorf("ends = %d, want 1 (old model/A slot released on model lock)", got)
+	if got := ends.Load(); got != 2 {
+		t.Errorf("ends = %d, want 2 (live-switch pre-release + model_locked branch release, both idempotent DELETEs)", got)
 	}
 	if snap := mgr.Snapshot(); snap.InstanceID != "inst-B" {
 		t.Errorf("final instance = %q, want inst-B", snap.InstanceID)
@@ -618,13 +618,12 @@ func TestQueuedZeroPollAtClamp(t *testing.T) {
 	}
 }
 
-// TestLiveModelSwitchDoesNotReleaseOldSlot pins the doc-vs-code
-// divergence: EnsureSessionForModel's doc claims a live model switch
-// "releases the previous slot", but the live-refresh path only creates for
-// the new model — the old upstream slot is never DELETE'd (only the
-// model_locked branch releases). The CURRENT behavior (creates==2, ends==0)
-// is pinned here; do not change it without also changing the doc.
-func TestLiveModelSwitchDoesNotReleaseOldSlot(t *testing.T) {
+// TestLiveModelSwitchReleasesOldSlot pins the session-redesign contract:
+// a live model switch MUST release the previous slot upstream (DELETE) before
+// admitting the new model — otherwise the old session row holds the account's
+// slot until expiry and every new-model admission gets 409/model_locked or
+// blocks. Behavior: creates==2 (A then B), ends==1 (A released).
+func TestLiveModelSwitchReleasesOldSlot(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mgr := newTestManager(t, mock)
@@ -667,8 +666,8 @@ func TestLiveModelSwitchDoesNotReleaseOldSlot(t *testing.T) {
 	if got := creates.Load(); got != 2 {
 		t.Errorf("creates = %d, want 2", got)
 	}
-	if got := ends.Load(); got != 0 {
-		t.Errorf("ends = %d, want 0 (current code does NOT release the old slot on live model switch)", got)
+	if got := ends.Load(); got != 1 {
+		t.Errorf("ends = %d, want 1 (old model/A slot released on live model switch)", got)
 	}
 }
 

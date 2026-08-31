@@ -1,76 +1,14 @@
-// scarce.go — scarce-model allocation and session-quota protection (issue #155).
+// quotaerr.go — quota-exhaustion classification and bridge quota helpers
+// (issue #85/#178). Premium scarce-session protection was removed in the
+// session redesign: model switches release the previous slot instead of
+// holding it (see session.EnsureSessionForModel).
 package pool
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
-	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/upstream"
 )
-
-// scarceSwitchLead is how long before a scarce session expires that a request
-// for a DIFFERENT model is allowed to switch away from it. A request arriving
-// earlier than this leaves the scarce session running so the irreplaceable
-// 1-session/day allocation is not burned.
-const scarceSwitchLead = time.Minute
-
-// ScarceSessionError is returned when all eligible tokens are busy running
-// active scarce-model sessions (deepseek-v4-pro, gpt-5.6-luna) for a different
-// model that cannot be released without burning irreplaceable daily quota.
-// Surfaced as 503 Service Unavailable with Retry-After matching the earliest
-// expiry time.
-type ScarceSessionError struct {
-	// Model is the scarce model the HELD session runs, not the model that
-	// was requested — that one is in the request log line.
-	Model     string
-	ExpiresAt time.Time
-}
-
-func (e *ScarceSessionError) Error() string {
-	return fmt.Sprintf("scarce session (%s) in use until %s", e.Model, e.ExpiresAt.Format(time.RFC3339))
-}
-
-// scarceHeld reports whether the token's cached session is an active scarce
-// model with more than scarceSwitchLead remaining — a request for a different
-// model must not evict or switch away from it.
-func scarceHeld(snap session.SessionSnapshot, requested string, scarce map[string]bool) bool {
-	if !snap.Usable() || snap.Model == "" || snap.MatchesModel(requested) {
-		return false
-	}
-	if !scarce[snap.Model] {
-		return false
-	}
-	return !snap.ExpiresAt.IsZero() && time.Until(snap.ExpiresAt) > scarceSwitchLead
-}
-
-// scarceActive reports whether the token's cached session is an active scarce
-// model with any remaining lifetime (greater than 0). Used by bridge idle
-// eviction and shutdown teardown to keep the session alive.
-func scarceActive(snap session.SessionSnapshot, scarce map[string]bool) bool {
-	if !snap.Usable() || snap.Model == "" {
-		return false
-	}
-	if !scarce[snap.Model] {
-		return false
-	}
-	return !snap.ExpiresAt.IsZero() && time.Until(snap.ExpiresAt) > 0
-}
-
-// scarceModelSet builds a fast lookup map from the configured scarce models.
-func scarceModelSet(models []string) map[string]bool {
-	if len(models) == 0 {
-		return nil
-	}
-	out := make(map[string]bool, len(models))
-	for _, m := range models {
-		if m != "" {
-			out[m] = true
-		}
-	}
-	return out
-}
 
 // isQuotaExhaustedError reports whether rle represents a session quota exhaustion
 // (recentCount >= limit or local session quota error) as opposed to a transient rate limit.

@@ -83,11 +83,11 @@ func TestStoreDropsExpiredGrace(t *testing.T) {
 	}
 }
 
-// TestShutdownDeletesEvenWhenPersist verifies that shutdown DELETEs the
-// upstream slot even with persistence enabled, while the store entry
-// survives the DELETE for restart-resume (pollPersisted re-adopts when the
-// DELETE did not take effect, or drops the dead entry and re-POSTs fresh).
-func TestShutdownDeletesEvenWhenPersist(t *testing.T) {
+// TestShutdownKeepsActiveWhenPersist verifies the session-redesign contract:
+// with persistence enabled, shutdown KEEPS the active upstream slot (no
+// DELETE) so a restart resumes it via pollPersisted instead of burning a
+// fresh premium slot. The store entry survives for the resume.
+func TestShutdownKeepsActiveWhenPersist(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
@@ -103,8 +103,8 @@ func TestShutdownDeletesEvenWhenPersist(t *testing.T) {
 	if err := mgr.Shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if mock.SessionEnds != 1 {
-		t.Errorf("SessionEnds = %d, want 1 (DELETE on exit even when persisting)", mock.SessionEnds)
+	if mock.SessionEnds != 0 {
+		t.Errorf("SessionEnds = %d, want 0 (active session kept for restart-resume when persisting)", mock.SessionEnds)
 	}
 	if got := store.Load(mgr.key); got == nil || got.instanceID != "inst-abc-123" {
 		t.Errorf("store after Shutdown = %+v, want active inst-abc-123", got)

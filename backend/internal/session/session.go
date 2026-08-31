@@ -162,11 +162,6 @@ type Manager struct {
 	// while the CLI process is alive.
 	adopt *CLIAdoption
 
-	// scarce tracks which models are scarce (issue #155): a scarce model
-	// session is kept on Shutdown instead of DELETEing upstream so the slot
-	// survives a restart via pollPersisted. Guarded by mu.
-	scarce map[string]bool
-
 	// now returns the current time; injectable in tests to drive the
 	// re-admit storm detector deterministically. Defaults to time.Now.
 	now func() time.Time
@@ -433,7 +428,8 @@ func (m *Manager) EnsureSessionForModel(ctx context.Context, model string) (stri
 					return instance, nil
 				}
 				// Usability exhausted (past grace) or model mismatch — fall
-				// through to refresh.
+				// through to refresh; refresh releases the old slot before
+				// the new admission (see releaseHeldSlotForTarget).
 			case "disabled":
 				m.mu.Unlock()
 				return "", nil

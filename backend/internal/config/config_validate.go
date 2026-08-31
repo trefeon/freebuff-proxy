@@ -52,11 +52,6 @@ func (c Config) Validate() error {
 	case c.RateLimitBurst < 0:
 		return errors.New("RATE_LIMIT_BURST cannot be negative")
 	}
-	for _, m := range c.ScarceSessionModels {
-		if strings.TrimSpace(m) == "" {
-			return errors.New("SCARCE_SESSION_MODELS cannot contain empty model IDs")
-		}
-	}
 	for src, target := range c.QuotaFallbackModels {
 		if strings.TrimSpace(src) == "" || strings.TrimSpace(target) == "" {
 			return errors.New("QUOTA_FALLBACK_MODELS cannot contain empty model IDs")

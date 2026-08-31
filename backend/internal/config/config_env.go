@@ -89,7 +89,6 @@ func Load(configPath string) (Config, error) {
 	overrideString(&raw.SessionReAdmitLead, "SESSION_RE_ADMIT_LEAD")
 	overrideString(&raw.SessionProbeCacheTTL, "SESSION_PROBE_CACHE_TTL")
 	overrideString(&raw.ModelUnavailableCacheTTL, "MODEL_UNAVAILABLE_CACHE_TTL")
-	overrideString((*string)(&raw.ScarceSessionModels), "SCARCE_SESSION_MODELS")
 	overrideString((*string)(&raw.QuotaFallbackModels), "QUOTA_FALLBACK_MODELS")
 	overrideString(&raw.WebhookURL, "WEBHOOK_URL")
 	overrideString(&raw.FallbackAfter, "FALLBACK_AFTER_MS")
@@ -329,12 +328,6 @@ func Load(configPath string) (Config, error) {
 		fallbackModels = defaultFallbackModels()
 	}
 
-	// SCARCE_SESSION_MODELS defaults (issue #155): irreplaceable 1-session/day
-	// models kept alive for their full 1 hour window.
-	scarceSessionModels := splitList(string(raw.ScarceSessionModels))
-	if len(scarceSessionModels) == 0 && string(raw.ScarceSessionModels) == "" {
-		scarceSessionModels = defaultScarceSessionModels()
-	}
 
 	// QUOTA_FALLBACK_MODELS defaults (issue #155): when a model's session
 	// quota is exhausted, fall back to an unlimited model (flash → mimo).
@@ -427,7 +420,6 @@ func Load(configPath string) (Config, error) {
 		FallbackAfter:                    fallbackAfter,
 		FallbackModels:                   fallbackModels,
 		AdoptCLISession:                  raw.AdoptCLISession,
-		ScarceSessionModels:              dedupeStrings(scarceSessionModels),
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -630,7 +622,6 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.SessionProbeCacheTTL, get, "SESSION_PROBE_CACHE_TTL")
 	overrideStringFrom(&raw.ModelUnavailableCacheTTL, get, "MODEL_UNAVAILABLE_CACHE_TTL")
 	overrideStringFrom(&raw.WebhookURL, get, "WEBHOOK_URL")
-	overrideStringFrom((*string)(&raw.ScarceSessionModels), get, "SCARCE_SESSION_MODELS")
 	overrideStringFrom((*string)(&raw.QuotaFallbackModels), get, "QUOTA_FALLBACK_MODELS")
 	overrideStringFrom(&raw.FallbackAfter, get, "FALLBACK_AFTER_MS")
 	overrideStringFrom(&raw.FallbackModels, get, "FALLBACK_MODEL")

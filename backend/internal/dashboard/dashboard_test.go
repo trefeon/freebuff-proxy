@@ -564,7 +564,7 @@ func TestTokensPageQuotaRows(t *testing.T) {
 
 // TestTokensDataGlmPromoSynthesis pins the synthesized z-ai/glm-5.2 promo
 // quota row (issue #178): the upstream glmPromo block ({dailySessions,
-// endsAt}) grants a referral quota on scarce models like GLM, so the
+// endsAt}) grants a referral quota on limited models like GLM, so the
 // dashboard renders it even when no rateLimitsByModel entry was admitted.
 func TestTokensDataGlmPromoSynthesis(t *testing.T) {
 	ts := quotaPageServer(t, func(m *testutil.MockUpstream) {

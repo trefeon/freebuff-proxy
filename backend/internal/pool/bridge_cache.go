@@ -155,7 +155,6 @@ func (p *Pool) bridgeEntryFor(clientToken string) (*bridgeEntry, error) {
 	entry.session.SetReAdmitLead(cfg.SessionReAdmitLead)
 	entry.session.SetAdmissionProbeTTL(cfg.SessionProbeCacheTTL)
 	entry.session.SetModelUnavailableCacheTTL(cfg.ModelUnavailableCacheTTL)
-	entry.session.SetScarceModels(cfg.ScarceSessionModels)
 	entry.runs = runs.NewRunManagerOpts(client, entry.session, runOptions(cfg))
 	entry.lastUsed = time.Now()
 
@@ -246,7 +245,6 @@ func (p *Pool) bridgeEvictLocked(keep *bridgeEntry) []*bridgeEntry {
 		// the idle sweep (bridgeMaintain) once their leases drain; when
 		// every entry is busy, nothing is evicted this pass.
 		evicted := false
-		scarceSet := scarceModelSet(p.cfg.Load().ScarceSessionModels)
 		for i := 0; i < len(p.bridgeOrder); {
 			oldest := p.bridgeOrder[i]
 			entry, ok := p.bridge[oldest]
@@ -258,11 +256,6 @@ func (p *Pool) bridgeEvictLocked(keep *bridgeEntry) []*bridgeEntry {
 				i++
 				continue
 			}
-			// Prefer evicting non-scarce entries first.
-			if scarceActive(entry.session.Snapshot(), scarceSet) {
-				i++
-				continue
-			}
 			victims = append(victims, entry)
 			p.bridgeRecordSurvivorLocked(entry, time.Now())
 			delete(p.bridge, oldest)
@@ -270,28 +263,6 @@ func (p *Pool) bridgeEvictLocked(keep *bridgeEntry) []*bridgeEntry {
 			p.logger.Debug("pool: bridge entry evicted (cache full)", "bridge_entries", len(p.bridge))
 			evicted = true
 			break
-		}
-		if !evicted {
-			// Fallback: if every idle entry is scarce-active, evict the oldest anyway.
-			for i := 0; i < len(p.bridgeOrder); {
-				oldest := p.bridgeOrder[i]
-				entry, ok := p.bridge[oldest]
-				if !ok {
-					p.bridgeOrder = removeBridgeOrder(p.bridgeOrder, oldest)
-					continue
-				}
-				if entry == keep || entry.runs.InflightCount() > 0 {
-					i++
-					continue
-				}
-				victims = append(victims, entry)
-				p.bridgeRecordSurvivorLocked(entry, time.Now())
-				delete(p.bridge, oldest)
-				p.bridgeOrder = removeBridgeOrder(p.bridgeOrder, oldest)
-				p.logger.Debug("pool: bridge entry evicted (cache full, scarce fallback)", "bridge_entries", len(p.bridge))
-				evicted = true
-				break
-			}
 		}
 		if !evicted {
 			break
@@ -487,14 +458,6 @@ func (p *Pool) bridgeMaintain(ctx context.Context, idle bool) {
 			continue
 		}
 		if now.Sub(entry.lastUsed) > idleEvict {
-			// Issue #155: do not evict bridge entries that still hold an active
-			// scarce-model session with remaining lifetime (> 0).
-			scarceSet := scarceModelSet(cfg.ScarceSessionModels)
-			if scarceActive(entry.session.Snapshot(), scarceSet) {
-				toMaintain = append(toMaintain, entry)
-				p.logger.Debug("pool: bridge entry idle eviction skipped (active scarce session)", "token_label", bridgeTokenLabel(entry))
-				continue
-			}
 			toEvict = append(toEvict, entry)
 			p.bridgeRecordSurvivorLocked(entry, now)
 			delete(p.bridge, token)

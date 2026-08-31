@@ -193,7 +193,6 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 	var cbe *upstream.CountryBlockedError
 	var ce *upstream.CreditsError
 	var cde *upstream.CapacityDeferredError
-	var scse *pool.ScarceSessionError
 	switch {
 	case errors.As(err, &be):
 		status, code = http.StatusForbidden, "account_banned"
@@ -295,19 +294,6 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 			message = "session superseded"
 		}
 		retryAfter = 1 // retry in 1s
-	case errors.As(err, &scse):
-		// Issue #155: scarce session in use (pro/luna). Return 503 + Retry-After
-		// matching the active session's expiry time so 9router / clients back off
-		// or retry another account instead of burning the scarce slot.
-		status, code = http.StatusServiceUnavailable, "scarce_session_in_use"
-		message = scse.Error()
-		if !scse.ExpiresAt.IsZero() {
-			resetAt = scse.ExpiresAt
-			retryAfter = time.Until(scse.ExpiresAt)
-			if retryAfter < 0 {
-				retryAfter = 0
-			}
-		}
 	case errors.As(err, &cde):
 		// #105 (server half): the client's capacity-deferred retry budget
 		// (TRANSIENT_RETRIES) is exhausted, so the free tier's transient

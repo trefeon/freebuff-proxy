@@ -161,7 +161,7 @@ func TestFallbackTransparencyQueueTimeout(t *testing.T) {
 
 // quotaExhaustionMock wires a mock whose session create 429s with a
 // quota-exhausted body for the requested model and succeeds for the
-// QUOTA_FALLBACK_MODELS target (mirrors scarce_test.go's pool-level setup,
+// QUOTA_FALLBACK_MODELS target (mirrors the pool-level quota setup,
 // exercised end-to-end through the HTTP surface here).
 func quotaExhaustionMock(t *testing.T) *testutil.MockUpstream {
 	t.Helper()

@@ -473,7 +473,7 @@ func TestTerminalEventReasons(t *testing.T) {
 		}
 	})
 
-	t.Run("shutdown carries reason shutdown", func(t *testing.T) {
+	t.Run("shutdown with persistence keeps active session", func(t *testing.T) {
 		mock := testutil.NewMock()
 		defer mock.Close()
 		store := NewStore(filepath.Join(t.TempDir(), "state.json"))
@@ -488,8 +488,10 @@ func TestTerminalEventReasons(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := buf.String()
-		if !strings.Contains(got, `msg="session ended on shutdown"`) || !strings.Contains(got, "reason=shutdown") {
-			t.Errorf("shutdown log missing reason=shutdown:\n%s", got)
+		// Session redesign: persistence keeps the active slot for restart
+		// resume — no "ended on shutdown" log, no upstream DELETE.
+		if !strings.Contains(got, `msg="session kept on shutdown (persistence, restart resumes)"`) {
+			t.Errorf("shutdown log missing keep message:\n%s", got)
 		}
 	})
 
