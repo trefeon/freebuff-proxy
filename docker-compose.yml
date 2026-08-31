@@ -21,16 +21,23 @@ services:
       # env beats the mounted .env file: guarantees the container listens on
       # the mapped port even when the host .env carries a loopback LISTEN_ADDR.
       - LISTEN_ADDR=:3457
+    # The process cwd IS the mount, so every cwd-relative path the dashboard
+    # and config loader touch persists on the host: ./.env (device-login and
+    # add/remove-token writes), ./.freebuff-session-state.json (SESSION_PERSIST),
+    # and any LOG_FILE under ./logs/. A directory mount — not a single-file
+    # bind — is REQUIRED: writeFileAtomic() commits via rename() inside the
+    # cwd, and rename over a single-file bind mount fails with EBUSY
+    # ("device or resource busy"), which 500s every dashboard save.
+    # The directory and its contents must be writable by the container's
+    # uid 100 (alpine "app" user):
+    #   touch .env && chmod 777 .    (or: chown 100:100 .)
+    # rename() only needs write on the DIRECTORY, so .env itself can stay 644.
+    # The container image is stateless; do NOT set AUTH_TOKENS via compose
+    # environment — config precedence (env > .env) would make every
+    # dashboard token mutation fail with "overridden by environment".
+    working_dir: /app/state
     volumes:
-      # The dashboard's device-login wizard and token add/remove persist to
-      # this file. A bind mount (NOT env_file) is required so those writes:
-      #   1. survive container recreates (docker compose up -d --build), and
-      #   2. actually activate — config precedence is env > .env, so an
-      #      env_file-injected AUTH_TOKENS= (even empty) makes every dashboard
-      #      token mutation fail with "overridden by environment".
-      # The file must exist and be writable by the container's uid 100:
-      #   touch .env && chmod 666 .env    (or: chown 100:100 .env)
-      - ./.env:/app/.env
+      - .:/app/state
     ports:
       # ⚠️ 0.0.0.0 default: /healthz and /metrics are ALWAYS unauthenticated by
       # design (monitoring). Exposing this port beyond localhost publishes them

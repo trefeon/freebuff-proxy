@@ -140,19 +140,19 @@ irm https://raw.githubusercontent.com/trefeon/freebuff-proxy/main/scripts/instal
 ### Option C: Docker Compose
 
 ```bash
-cp .env.example .env && chmod 666 .env   # seed + make writable by the container (uid 100)
+cp .env.example .env && chmod 777 .    # container (uid 100) rewrites .env via atomic rename
 # Leave AUTH_TOKENS empty to add accounts via the dashboard device-login
 # wizard (Admin UI → Tokens → Device login), or paste a token directly.
 git fetch --tags 2>/dev/null || true
 VERSION=$(git describe --tags 2>/dev/null || echo dev) docker compose up -d --build
 ```
 
-> **Dashboard tokens persist:** the compose file bind-mounts `./.env` into the
-> container, so tokens added via the dashboard (device login or add-token)
-> survive container recreates. The chmod 666 is required — the container runs
-> as uid 100 and rewrites this file on every token mutation. The on-disk
-> session state file (`SESSION_PERSIST`) remains ephemeral unless you point
-> it inside a mounted volume — see the Docker note in `.env.example`.
+> **Dashboard state persists:** the compose file mounts the project directory
+> at the process cwd (`/app/state`), so tokens added via the dashboard (device
+> login or add-token), the changed admin password, and the session state file
+> all survive container recreates. The directory chmod is required — the
+> container commits config changes with an atomic rename inside its working
+> directory, which needs write permission on the directory itself.
 
 ---
 
