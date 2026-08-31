@@ -170,9 +170,11 @@ code, pre, .font-mono, .fp-mono {
   line-height: 1;
   border-radius: var(--fp-radius-sm);
   border: 1px solid transparent;
-  padding: 0.5rem 0.875rem;
-  min-height: 44px;
-  min-width: 44px;
+  padding: 0.5rem 1rem;
+  height: 38px;
+  min-height: 38px;
+  min-width: auto;
+  box-sizing: border-box;
   cursor: pointer;
   transition: background-color var(--fp-duration) var(--fp-ease),
               border-color var(--fp-duration) var(--fp-ease),
@@ -249,16 +251,17 @@ code, pre, .font-mono, .fp-mono {
   gap: 5px;
 }
 
-/* ── Inputs ───────────────────────────────────────────────────── */
 .fp-input {
   width: 100%;
+  height: 38px;
+  box-sizing: border-box;
   background: var(--fp-input-bg);
   border: 1px solid var(--fp-border-bright);
   border-radius: var(--fp-radius-sm);
   color: var(--fp-text);
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.75rem;
   transition: border-color var(--fp-duration) var(--fp-ease);
 }
 
@@ -275,6 +278,7 @@ code, pre, .font-mono, .fp-mono {
 .fp-input:disabled { opacity: 0.45; cursor: not-allowed; }
 
 textarea.fp-input {
+  height: auto;
   resize: vertical;
   line-height: 1.6;
 }

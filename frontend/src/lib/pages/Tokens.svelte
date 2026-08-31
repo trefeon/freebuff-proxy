@@ -321,34 +321,38 @@
           {/if}
         </Button>
       {/snippet}
-      <form onsubmit={addToken} class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div class="flex-1 w-full">
-          <Field
-            label={$tr('Token')}
-            hint={tokenValid === true ? $tr('Valid format') : tokenValid === false ? $tr('Invalid format') : $tr('UUID or session token from ~/.config/codebuff/credentials.json')}
-            error={tokenValid === false ? $tr('Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix') : ''}
+      <form onsubmit={addToken} class="flex flex-col gap-1.5">
+        <label for="add-token-input" class="text-xs font-medium text-[var(--fp-muted)]">{$tr('Token')}</label>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <input
             id="add-token-input"
+            type="text"
+            bind:value={newToken}
+            placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
+            autocomplete="off"
+            spellcheck="false"
+            class="fp-input fp-num flex-1"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={adding || !newToken.trim() || tokenValid === false}
+            loading={adding}
+            class="shrink-0"
           >
-            <input
-              id="add-token-input"
-              type="text"
-              bind:value={newToken}
-              placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
-              autocomplete="off"
-              spellcheck="false"
-              class="fp-input fp-num w-full"
-            />
-          </Field>
+            <Plus size={15} />
+            <span>{$tr('Add Token')}</span>
+          </Button>
         </div>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={adding || !newToken.trim() || tokenValid === false}
-          loading={adding}
-        >
-          <Plus size={16} />
-          <span>{$tr('Add Token')}</span>
-        </Button>
+        {#if tokenValid === false}
+          <p class="text-[11px] text-[var(--fp-error)]" role="alert">
+            {$tr('Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix')}
+          </p>
+        {:else}
+          <p class="text-[11px] text-[var(--fp-dim)]">
+            {tokenValid === true ? $tr('Valid format') : $tr('UUID or session token from ~/.config/codebuff/credentials.json')}
+          </p>
+        {/if}
       </form>
     </Card>
 
