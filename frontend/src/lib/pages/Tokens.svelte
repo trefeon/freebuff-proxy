@@ -417,8 +417,8 @@
               <strong class="text-[var(--fp-text)]">{$tr('Drain Mode (Default & Recommended):')}</strong> {$tr('Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.')}
             </p>
           {:else if tokenRotation === 'round_robin'}
-            <p class="leading-relaxed text-[var(--fp-warning)]">
-              <strong class="text-[var(--fp-text)]">{$tr('Round-Robin Mode:')}</strong> {$tr('Rotates to the next token on every single session (1:1). Warning: rapid alternating requests across healthy accounts may trigger upstream anomaly detection.')}
+            <p class="leading-relaxed">
+              <strong class="text-[var(--fp-text)]">{$tr('Round-Robin Mode:')}</strong> {$tr('Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.')}
             </p>
           {:else if tokenRotation === 'least_used'}
             <p class="leading-relaxed">
