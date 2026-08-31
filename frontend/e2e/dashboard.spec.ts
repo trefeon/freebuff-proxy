@@ -397,9 +397,8 @@ test.describe('dashboard hermetic mocks', () => {
     await expect(logLevel).toContainText('trace');
     await logLevel.selectOption('warn');
 
-    // Keys absent from the effective config render as disabled 'not set'.
-    await expect(page.getByText('not set', { exact: true }).first()).toBeVisible();
-
+    // Keys using default values render the 'default' badge.
+    await expect(page.getByText('default', { exact: true }).first()).toBeVisible();
     // Advanced raw editor mirrors the form edit and still validates.
     await page.getByText('Advanced: raw .env editor').click();
     const editor = page.locator('#config-env');

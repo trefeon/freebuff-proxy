@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -176,29 +177,145 @@ func (d *Dashboard) configData() configData {
 	} else {
 		cd.EnvContent = defaultEnvTemplate
 	}
-	cd.Effective = []configKV{
-		{Key: "LISTEN_ADDR", Value: cfg.ListenAddr},
-		{Key: "UPSTREAM_BASE_URL", Value: cfg.UpstreamBaseURL},
-		{Key: "AUTH_TOKENS", Value: fmt.Sprintf("%d token(s)", len(cfg.AuthTokens)), Secret: true},
-		{Key: "API_KEYS", Value: fmt.Sprintf("%d key(s)", len(cfg.APIKeys)), Secret: true},
-		{Key: "ADMIN_TOKEN", Value: boolWord(cfg.AdminToken != ""), Secret: true},
-		{Key: "ROTATION_INTERVAL", Value: cfg.RotationInterval.String()},
-		{Key: "REQUEST_TIMEOUT", Value: cfg.RequestTimeout.String()},
-		{Key: "SESSION_CALL_TIMEOUT", Value: cfg.SessionCallTimeout.String()},
-		{Key: "COST_MODE", Value: cfg.CostMode},
-		{Key: "TLS_FINGERPRINT", Value: cfg.TLSFingerprint},
-		{Key: "REGISTRY_REFRESH", Value: cfg.RegistryRefresh.String()},
-		{Key: "DEBUG_DUMP", Value: strconv.FormatBool(cfg.DebugDump)},
-		{Key: "LOG_FILE", Value: cfg.LogFile},
-		{Key: "LOG_LEVEL", Value: cfg.LogLevel},
-		{Key: "MAX_MESSAGES_PER_DAY", Value: strconv.Itoa(cfg.MaxMessagesPerDay)},
-		{Key: "IDLE_ROTATION_TIMEOUT", Value: cfg.IdleRotationTimeout.String()},
-		{Key: "SAFE_MODE", Value: strconv.FormatBool(cfg.SafeMode)},
-		{Key: "REQUEST_JITTER", Value: cfg.RequestJitter.String()},
-		{Key: "CLI_VERSION", Value: cfg.CLIVersion},
-		{Key: "MODEL_ALIASES", Value: fmt.Sprintf("%d alias(es)", len(cfg.ModelAliases)), Secret: true},
-		{Key: "MODELS_ALLOW", Value: strings.Join(cfg.ModelsAllow, ",")},
-		{Key: "TRANSIENT_RETRIES", Value: strconv.Itoa(cfg.TransientRetries)},
+	// Format map from Config fields
+	formatKey := func(key string) (val string, secret bool) {
+		switch key {
+		case "LISTEN_ADDR":
+			return cfg.ListenAddr, false
+		case "UPSTREAM_BASE_URL":
+			return cfg.UpstreamBaseURL, false
+		case "AUTH_TOKENS":
+			return fmt.Sprintf("%d token(s)", len(cfg.AuthTokens)), true
+		case "API_KEYS":
+			return fmt.Sprintf("%d key(s)", len(cfg.APIKeys)), true
+		case "ADMIN_TOKEN":
+			return boolWord(cfg.AdminToken != ""), true
+		case "ROTATION_INTERVAL":
+			return cfg.RotationInterval.String(), false
+		case "REQUEST_TIMEOUT":
+			return cfg.RequestTimeout.String(), false
+		case "SESSION_CALL_TIMEOUT":
+			return cfg.SessionCallTimeout.String(), false
+		case "COST_MODE":
+			return cfg.CostMode, false
+		case "TLS_FINGERPRINT":
+			return cfg.TLSFingerprint, false
+		case "REGISTRY_REFRESH":
+			return cfg.RegistryRefresh.String(), false
+		case "DEBUG_DUMP":
+			return strconv.FormatBool(cfg.DebugDump), false
+		case "LOG_FILE":
+			return cfg.LogFile, false
+		case "LOG_LEVEL":
+			return cfg.LogLevel, false
+		case "LOG_FORMAT":
+			return cfg.LogFormat, false
+		case "LOG_ACCESS":
+			return strconv.FormatBool(cfg.LogAccess), false
+		case "LOG_RING_SIZE":
+			return strconv.Itoa(cfg.LogRingSize), false
+		case "MAX_MESSAGES_PER_DAY":
+			return strconv.Itoa(cfg.MaxMessagesPerDay), false
+		case "MAX_SPEND_PER_DAY":
+			return strconv.FormatInt(cfg.MaxSpendPerDay, 10), false
+		case "IDLE_ROTATION_TIMEOUT":
+			return cfg.IdleRotationTimeout.String(), false
+		case "SAFE_MODE":
+			return strconv.FormatBool(cfg.SafeMode), false
+		case "REQUEST_JITTER":
+			return cfg.RequestJitter.String(), false
+		case "CLI_VERSION":
+			return cfg.CLIVersion, false
+		case "MODEL_ALIASES":
+			return fmt.Sprintf("%d alias(es)", len(cfg.ModelAliases)), true
+		case "MODELS_ALLOW":
+			return strings.Join(cfg.ModelsAllow, ","), false
+		case "MODELS_HIDE_UNAVAILABLE":
+			return strconv.FormatBool(cfg.ModelsHideUnavailable), false
+		case "TRANSIENT_RETRIES":
+			return strconv.Itoa(cfg.TransientRetries), false
+		case "DASHBOARD_ENABLED":
+			return strconv.FormatBool(cfg.DashboardEnabled), false
+		case "SESSION_PERSIST":
+			return strconv.FormatBool(cfg.SessionPersist), false
+		case "SESSION_STATE_FILE":
+			return cfg.SessionStateFile, false
+		case "TOKEN_ROTATION":
+			return cfg.TokenRotation, false
+		case "BRIDGE_ENABLED":
+			return strconv.FormatBool(cfg.BridgeEnabled), false
+		case "BRIDGE_IDLE_EVICT":
+			return cfg.BridgeIdleEvict.String(), false
+		case "BRIDGE_DAILY_LIMIT":
+			return strconv.Itoa(cfg.BridgeDailyLimit), false
+		case "FALLBACK_AFTER_MS":
+			return strconv.Itoa(int(cfg.FallbackAfter.Milliseconds())), false
+		case "FALLBACK_MODEL":
+			var pairs []string
+			for k, v := range cfg.FallbackModels {
+				pairs = append(pairs, k+"="+v)
+			}
+			sort.Strings(pairs)
+			return strings.Join(pairs, ","), false
+		case "QUOTA_FALLBACK_MODELS":
+			var pairs []string
+			for k, v := range cfg.QuotaFallbackModels {
+				pairs = append(pairs, k+"="+v)
+			}
+			sort.Strings(pairs)
+			return strings.Join(pairs, ","), false
+		case "SCARCE_SESSION_MODELS":
+			return strings.Join(cfg.ScarceSessionModels, ","), false
+		case "SESSION_IDLE_END":
+			return cfg.SessionIdleEnd.String(), false
+		case "SESSION_PROBE_CACHE_TTL":
+			return cfg.SessionProbeCacheTTL.String(), false
+		case "SESSION_RE_ADMIT_LEAD":
+			return cfg.SessionReAdmitLead.String(), false
+		case "SESSION_CREATE_MAX_PARALLEL_GLOBAL":
+			return strconv.Itoa(cfg.SessionCreateMaxParallelGlobal), false
+		case "SESSION_CREATE_MAX_PARALLEL_PER_MODEL":
+			return strconv.Itoa(cfg.SessionCreateMaxParallelPerModel), false
+		case "RUN_FINISH_QUEUE_SIZE":
+			return strconv.Itoa(cfg.RunFinishQueueSize), false
+		case "RUN_FINISH_INLINE_TIMEOUT":
+			return cfg.RunFinishInlineTimeout.String(), false
+		case "RUNS_DRAIN_QUEUE_CAP":
+			return strconv.Itoa(cfg.RunsDrainQueueCap), false
+		case "RUNS_DRAIN_TTL":
+			return cfg.RunsDrainTTL.String(), false
+		case "MODEL_UNAVAILABLE_CACHE_TTL":
+			return cfg.ModelUnavailableCacheTTL.String(), false
+		case "RATE_LIMIT_PER_IP":
+			return strconv.FormatFloat(cfg.RateLimitPerIP, 'f', -1, 64), false
+		case "RATE_LIMIT_BURST":
+			return strconv.Itoa(cfg.RateLimitBurst), false
+		case "CORS_ALLOWED_ORIGIN":
+			return cfg.CORSAllowedOrigin, false
+		case "WEBHOOK_URL":
+			return cfg.WebhookURL, true
+		case "HTTP2_UPSTREAM":
+			return strconv.FormatBool(cfg.HTTP2Upstream), false
+		case "AUTO_DISCOVER_TOKEN":
+			return "true", false
+		case "DEVTOOLS_ENABLED":
+			return strconv.FormatBool(cfg.DevToolsEnabled), false
+		case "ADOPT_CLI_SESSION":
+			return strconv.FormatBool(cfg.AdoptCLISession), false
+		case "WAITING_ROOM_CHAIN":
+			return strconv.FormatBool(cfg.WaitingRoomChain), false
+		default:
+			return "", false
+		}
+	}
+
+	for _, def := range config.Catalog() {
+		val, sec := formatKey(def.Key)
+		cd.Effective = append(cd.Effective, configKV{
+			Key:    def.Key,
+			Value:  val,
+			Secret: sec || def.Secret,
+		})
 	}
 	return cd
 }

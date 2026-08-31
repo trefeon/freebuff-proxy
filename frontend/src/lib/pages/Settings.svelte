@@ -101,10 +101,6 @@
     const env = parseEnv(content);
     const vals = {};
     for (const entry of meta) {
-      if (unsetKeys.has(entry.key)) {
-        vals[entry.key] = '';
-        continue;
-      }
       let raw = env[entry.key];
       if (raw === undefined) {
         raw = effectiveMap.get(entry.key)?.value ?? entry.default ?? '';
@@ -133,7 +129,7 @@
       } else if (changedKeys.has(entry.key)) {
         formValues[entry.key] = '';
       } else {
-        formValues[entry.key] = unsetKeys.has(entry.key) ? '' : (effectiveMap.get(entry.key)?.value ?? entry.default ?? '');
+        formValues[entry.key] = displayFor(entry, effectiveMap.get(entry.key)?.value ?? entry.default ?? '');
       }
     }
   }
@@ -493,8 +489,8 @@
                     {#if entry.secret}
                       <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">{$tr('secret')}</span>
                     {/if}
-                    {#if unsetKeys.has(entry.key)}
-                      <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border-bright)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0">{$tr('not set')}</span>
+                    {#if !parseEnv(rawText)[entry.key]}
+                      <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0">{$tr('default')}</span>
                     {/if}
                   </div>
                   {#if entry.description}
@@ -504,7 +500,7 @@
 
                 <div class="md:col-span-6 min-w-0">
                   {#if entry.kind === 'bool'}
-                    <label class="inline-flex items-center gap-2 cursor-pointer select-none {unsetKeys.has(entry.key) ? 'opacity-45' : ''}">
+                    <label class="inline-flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         class="fp-checkbox"
