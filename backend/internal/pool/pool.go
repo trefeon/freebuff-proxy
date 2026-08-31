@@ -516,12 +516,22 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 		sess.SetAdmissionProbeTTL(cfg.SessionProbeCacheTTL)
 		sess.SetModelUnavailableCacheTTL(cfg.ModelUnavailableCacheTTL)
 		sess.SetScarceModels(cfg.ScarceSessionModels)
-		toks = append(toks, &tokenEntry{
+		entry := &tokenEntry{
 			session: sess,
 			runs:    runs.NewRunManagerOpts(clients[i], sess, runOptions(cfg)),
 			client:  clients[i],
 			token:   cfg.AuthTokens[i],
-		})
+		}
+		go func(e *tokenEntry) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			email, id, err := e.client.FetchAccountInfo(ctx)
+			if err == nil && email != "" {
+				e.SetEmail(email)
+				e.SetAccountID(id)
+			}
+		}(entry)
+		toks = append(toks, entry)
 	}
 	p.toks.Store(&toks)
 	return p, nil
