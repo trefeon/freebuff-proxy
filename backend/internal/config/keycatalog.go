@@ -110,7 +110,7 @@ var keyCatalog = []KeyDef{
 		Description: `In-memory log ring capacity behind the dashboard log viewer (50-5000).`},
 	{Key: "SAFE_MODE", Group: GroupGeneral, Kind: "bool", Essential: true,
 		Default:     "true",
-		Description: `Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms, browser TLS fingerprint auto. Keep on.`},
+		Description: `Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms. TLS is CLI-faithful (plain Go/Bun baseline; set TLS_FINGERPRINT=auto for browser-evasion on datacenter IPs). Keep on.`},
 
 	// ── pool ─────────────────────────────────────────────────────────────
 	{Key: "ADOPT_CLI_SESSION", Group: GroupPool, Kind: "bool", RestartOnly: true, Hidden: true,
@@ -242,8 +242,8 @@ var keyCatalog = []KeyDef{
 		Description: `Session call timeout.`},
 	{Key: "TLS_FINGERPRINT", Group: GroupUpstream, Kind: "select",
 		Enum:        []string{"auto", "chrome120", "chrome126", "safari17", "safari18", "firefox120", "firefox128", "edge126", "random"},
-		RestartOnly: true, Default: "auto", Hidden: true,
-		Description: `Browser TLS fingerprint for upstream egress (auto picks a browser-like fingerprint per request; empty = plain Go transport).`},
+		RestartOnly: true, Default: "", Hidden: true,
+		Description: `TLS fingerprint for upstream egress (empty = plain Go/Bun baseline, CLI-faithful; auto/browser values use utls to mimic browser JA3 for WAF evasion on datacenter IPs).`},
 	{Key: "TRANSIENT_RETRIES", Group: GroupUpstream, Kind: "int", RestartOnly: true,
 		Default:     "1",
 		Description: `Max additional attempts after a transient transport failure (never retries 429/403/401; 0 disables).`},

@@ -293,8 +293,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `REGISTRY_REFRESH` | `6h` | Model catalog refresh interval |
 | `COST_MODE` | `free` | `free` (default) or unset; any other value fails startup validation |
 | `ACTING_USER_ID` | `""` | Optional FreeBuff account id; sent on every chat call as `x-freebuff-acting-user-id`. BAN RISK: only the token's own account id is safe (the CLI derives it from `GET /api/v1/me`; the server honors the header only for the FreeBuff Web service account) — any other value impersonates another user. Pre-rename name `USER_ID` still works. Empty = header omitted |
-| `TLS_FINGERPRINT` | `auto` | `auto`, `chrome120`, `chrome126`, `safari17`, `safari18`, `firefox120`, `firefox128`, `edge126`, `random` |
-| `DEBUG_DUMP` | `false` | Persist redacted traffic dumps to `./dump/` (mode 0600) |
+| `TLS_FINGERPRINT` | `""` | `""` (plain Go/Bun baseline, CLI-faithful), or `auto`, `chrome120`, `chrome126`, `safari17`, `safari18`, `firefox120`, `firefox128`, `edge126`, `random` for browser JA3 evasion |
 | `DASHBOARD_ENABLED` | `true` | Serve the embedded admin dashboard at `/admin` (`false` disables all `/admin` routes with 404) |
 | `DEVTOOLS_ENABLED` | `false` | Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default **off** — it is a manual testing surface that hammers `/v1/*` and is not for public dashboards. |
 | `LOG_FILE` | `""` | Append log lines to a file (e.g. `./logs/proxy.log`) |
@@ -349,7 +348,10 @@ The raw token is never written, and the file is created with mode
 `SAFE_MODE=true` is the **default** for all setups (set `SAFE_MODE=false` to
 opt out). It enables essential anti-ban protections and presets:
 
-- **JA3 TLS Stealth**: Mimics real browser handshakes (Chrome 120/126, Safari 17/18, Firefox 120/128, Edge 126) via `uTLS` to prevent WAF / CDN bot detection.
+- **TLS: CLI-faithful** — plain Go/Bun baseline, no browser JA3 spoofing. What
+  CLI serves (`Bun/1.3.14` for session, `ai-sdk` for chat) we serve. Set
+  `TLS_FINGERPRINT=auto` (or `chrome126`/`safari18`...) only for browser JA3
+  evasion on datacenter IPs (e.g. SG).
 - **Proxy Header Sanitization**: Strips 25 proxy-identifying headers (`X-Forwarded-For`, `Via`, `CF-Connecting-IP`, etc.).
 - **Request Jitter**: Injects randomized 0-200ms delay jitter to break robotic, machine-like cadence (set `REQUEST_JITTER=0` for instant, or `REQUEST_JITTER=100ms` for minimal jitter).
 - **Idle Rotation**: Finishes runs after 30 minutes of inactivity.

@@ -38,8 +38,8 @@ func TestEnvExampleLoadsCleanly(t *testing.T) {
 	if cfg.ListenAddr != "127.0.0.1:3457" {
 		t.Errorf("ListenAddr = %q, want loopback default", cfg.ListenAddr)
 	}
-	if cfg.TLSFingerprint != "auto" {
-		t.Errorf("TLSFingerprint = %q, want auto", cfg.TLSFingerprint)
+	if cfg.TLSFingerprint != "" {
+		t.Errorf("TLSFingerprint = %q, want empty (CLI-faithful plain Go/Bun baseline)", cfg.TLSFingerprint)
 	}
 	if cfg.TransientRetries != 1 {
 		t.Errorf("TransientRetries = %d, want 1", cfg.TransientRetries)

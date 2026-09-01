@@ -145,7 +145,7 @@
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms, browser TLS fingerprint auto. Keep on."
+    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms. TLS is CLI-faithful (plain Go/Bun baseline; set TLS_FINGERPRINT=auto for browser-evasion on datacenter IPs). Keep on."
   },
   {
     "key": "ADOPT_CLI_SESSION",
@@ -606,12 +606,12 @@
       "edge126",
       "random"
     ],
-    "default": "auto",
+    "default": "",
     "restart_only": true,
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Browser TLS fingerprint for upstream egress (auto picks a browser-like fingerprint per request; empty = plain Go transport)."
+    "description": "TLS fingerprint for upstream egress (empty = plain Go/Bun baseline, CLI-faithful; auto/browser values use utls to mimic browser JA3 for WAF evasion on datacenter IPs)."
   },
   {
     "key": "TRANSIENT_RETRIES",

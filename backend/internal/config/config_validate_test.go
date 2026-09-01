@@ -131,8 +131,8 @@ func TestSafeMode(t *testing.T) {
 		if cfg.MaxMessagesPerDay != 0 {
 			t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited default, no SafeMode preset)", cfg.MaxMessagesPerDay)
 		}
-		if cfg.TLSFingerprint != "auto" {
-			t.Errorf("TLSFingerprint = %q, want auto under SafeMode", cfg.TLSFingerprint)
+		if cfg.TLSFingerprint != "" {
+			t.Errorf("TLSFingerprint = %q, want empty (CLI-faithful, no browser JA3) under SafeMode", cfg.TLSFingerprint)
 		}
 	})
 
@@ -600,11 +600,11 @@ func TestTLSFingerprint(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok")
 
-	// default: SAFE_MODE preset (auto) when unset
+	// default: CLI-faithful (empty, no browser JA3) when unset
 	if cfg, err := Load(""); err != nil {
 		t.Fatalf("Load (default): %v", err)
-	} else if cfg.TLSFingerprint != "auto" {
-		t.Errorf("TLSFingerprint = %q, want auto (SAFE_MODE default preset)", cfg.TLSFingerprint)
+	} else if cfg.TLSFingerprint != "" {
+		t.Errorf("TLSFingerprint = %q, want empty (CLI-faithful default, no browser JA3)", cfg.TLSFingerprint)
 	}
 
 	// SAFE_MODE=false leaves it empty

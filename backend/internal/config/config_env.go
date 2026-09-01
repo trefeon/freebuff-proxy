@@ -492,9 +492,9 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		if !requestJitterSet && cfg.RequestJitter == 0 {
 			cfg.RequestJitter = 200 * time.Millisecond
 		}
-		if cfg.TLSFingerprint == "" {
-			cfg.TLSFingerprint = "auto"
-		}
+		// TLS is CLI-faithful by default (plain Go/Bun baseline, no browser
+		// JA3 spoofing). Browser-evasion (TLS_FINGERPRINT=auto/chrome...) is
+		// opt-in for datacenter WAF evasion, not CLI parity.
 	}
 
 	if err := cfg.Validate(); err != nil {
