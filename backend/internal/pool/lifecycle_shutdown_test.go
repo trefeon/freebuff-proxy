@@ -84,12 +84,12 @@ func TestShutdownBridgeDrainOutsideBridgeMu(t *testing.T) {
 	}
 }
 
-// TestShutdownBridgeInflightRunFinishedOnRelease is the pool-level half of
-// the fix: a bridge entry with an outstanding lease at shutdown must not
-// lose its FINISH. FinishAllRuns defers the in-flight run (it stays
-// tracked); the last lease release re-queues the FINISH, so the upstream
-// agent run is not orphaned. Previously FinishAllRuns deleted the run from
-// both sets, leaving it unreachable and never FINISHed.
+// TestShutdownBridgeInflightRunFinishedOnRelease: bridge entries drain
+// through the same RunManager.Shutdown as fixed tokens (issue #233). An
+// outstanding lease is FINISHed by the shutdown drain itself (the HTTP
+// server already stopped accepting and the lease holder's connection is
+// gone by then), and the later lease release is a clean no-op — no orphaned
+// upstream run, no double FINISH.
 func TestShutdownBridgeInflightRunFinishedOnRelease(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -107,19 +107,21 @@ func TestShutdownBridgeInflightRunFinishedOnRelease(t *testing.T) {
 	if entry == nil {
 		t.Fatal("bridge entry missing after shutdown")
 	}
-	// The run is deferred, not orphaned: it must stay tracked so the last
-	// lease release can re-queue its FINISH.
-	if snap := entry.runs.Snapshot(); snap.ActiveRuns != 1 {
-		t.Fatalf("ActiveRuns after shutdown with in-flight lease = %d, want 1 (run deferred, not dropped)", snap.ActiveRuns)
-	}
-
-	p.LeaseRelease(lease)
-
-	eventually(t, "FINISH of deferred in-flight bridge run after release", func() bool {
+	// The run was drained by shutdown, not orphaned: FINISH must land with
+	// a completed status.
+	eventually(t, "FINISH of in-flight bridge run during shutdown", func() bool {
 		finished := mock.FinishedRunsSnapshot()
 		return len(finished) == 1 && finished[0].Status == "completed"
 	})
 	if snap := entry.runs.Snapshot(); snap.ActiveRuns != 0 {
-		t.Errorf("ActiveRuns after release + FINISH = %d, want 0", snap.ActiveRuns)
+		t.Errorf("ActiveRuns after shutdown = %d, want 0 (drained)", snap.ActiveRuns)
+	}
+
+	// The late release must be a no-op: the run is already gone.
+	p.LeaseRelease(lease)
+
+	finished := mock.FinishedRunsSnapshot()
+	if len(finished) != 1 {
+		t.Errorf("finished runs after late release = %d, want 1 (no double FINISH)", len(finished))
 	}
 }

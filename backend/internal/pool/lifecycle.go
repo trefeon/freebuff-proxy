@@ -489,15 +489,20 @@ func (p *Pool) Shutdown(ctx context.Context) {
 	p.bridgeMu.Unlock()
 
 	for _, entry := range entries {
+		// Runs.Shutdown is the same drain the fixed-token path uses: it
+		// stops the finish worker (shuttingDown), FINISHes queued runs and
+		// ends the session internally, so a bridge entry can no longer
+		// outlive Pool.Shutdown with jobs abandoned (issue #233).
 		entryCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
-		entry.runs.FinishAllRuns(entryCtx)
-		if snap := entry.runs.Snapshot(); snap.ActiveRuns > 0 {
-			errs = append(errs, fmt.Sprintf("bridge %s: %d runs left after shutdown", bridgeTokenLabel(entry), snap.ActiveRuns))
-		}
-		if err := entry.session.Shutdown(entryCtx); err != nil {
-			errs = append(errs, fmt.Sprintf("bridge %s: shutdown session: %v", bridgeTokenLabel(entry), err))
-		}
+		entry.runs.Shutdown(entryCtx)
 		cancel()
+		// With run persistence the runs are intentionally kept alive for
+		// restart-resume — not a drain failure.
+		if !entry.runs.KeptForPersistence() {
+			if snap := entry.runs.Snapshot(); snap.ActiveRuns > 0 {
+				errs = append(errs, fmt.Sprintf("bridge %s: %d runs left after shutdown", bridgeTokenLabel(entry), snap.ActiveRuns))
+			}
+		}
 	}
 
 	if len(errs) > 0 {
