@@ -13,8 +13,8 @@ package pool
 // usage (pool.RecordSpend, fed by the server's parsed usage blocks) and
 // surfaced next to Messages24h in the healthz token snapshot.
 //
-// The account's $15/$5/$0.50 daily spend ceilings (reference/freebuff
-// freebuff-spend-ceilings.ts) are SERVER-enforced at Pacific midnight, and
+// The account's daily spend ceilings (reference/freebuff
+// freebuff-spend-ceilings.ts: $15 full / $5 limited / $1 elevated [SG/CN cohort since 2026-09: was $5] / $0.50 restricted, plus $7 full / $3 limited paid floor for flagged reasons since 6341ef3) are SERVER-enforced at Pacific midnight, and
 // the proxy cannot know which cohort (full/limited/restricted) a token's
 // account sits in — so this ledger is a token-count heuristic, not an exact
 // USD accounting. Per-token granularity is the right level: one proxy token

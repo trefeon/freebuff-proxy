@@ -923,12 +923,11 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"deepseek/deepseek-v4-flash",
 		"openai/gpt-5.6-luna",
 		"upstage/solar-pro4",
-		"z-ai/glm-5.2",
 		"z-ai/glm-5.3-flash",
 		"mimo/mimo-v2.5",
 	}
-	if len(modelcat.ServedMap()) != 6 {
-		t.Fatalf("len(modelcat.ServedMap()) = %d, want exactly 6", len(modelcat.ServedMap()))
+	if len(modelcat.ServedMap()) != 5 {
+		t.Fatalf("len(modelcat.ServedMap()) = %d, want exactly 5", len(modelcat.ServedMap()))
 	}
 	for _, m := range wantModels {
 		if !modelcat.IsServed(m) {

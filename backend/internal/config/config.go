@@ -60,7 +60,7 @@ type Config struct {
 	// before the per-entry check so a flood of distinct client tokens cannot
 	// collectively exceed the operator's budget.
 	BridgeDailyLimit    int
-	MaxSpendPerDay      int64         // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $5 elevated [SG/CN cohort] / $0.50 restricted, compose by minimum, server-enforced; restricted reasons take a 2x HARD mid-session cut at FREEBUFF_SPEND_CEILING_HARD_MULTIPLIER) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
+	MaxSpendPerDay      int64         // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $1 elevated [SG/CN since 2026-09, was $5] / $0.50 restricted, plus $7 full / $3 limited paid floor for flagged email/egress reasons since 6341ef3, compose by minimum, server-enforced; restricted reasons take a 2x HARD mid-session cut at FREEBUFF_SPEND_CEILING_HARD_MULTIPLIER) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
 	IdleRotationTimeout time.Duration // 0 = disabled: pause rotation/refresh after this idle period
 	SessionIdleEnd      time.Duration // 0 = disabled: end upstream sessions after this idle period (SESSION_IDLE_END)
 	// BridgeEnabled gates bridge-mode traffic when AUTH_TOKENS are configured

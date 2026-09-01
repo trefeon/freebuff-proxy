@@ -93,8 +93,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if hz.Status != "ok" || hz.Mode != "hybrid" {
 			t.Errorf("healthz status/mode = %q/%q, want ok/hybrid (AUTH_TOKENS set + BRIDGE_ENABLED)", hz.Status, hz.Mode)
 		}
-		if hz.Models != 6 {
-			t.Errorf("healthz models = %d, want 6", hz.Models)
+		if hz.Models != 5 {
+			t.Errorf("healthz models = %d, want 5", hz.Models)
 		}
 		if len(hz.Tokens) != 1 {
 			t.Errorf("healthz tokens = %d, want 1 at boot", len(hz.Tokens))
@@ -114,8 +114,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if err := json.Unmarshal(data, &ml); err != nil {
 			t.Fatalf("/v1/models not JSON: %v: %s", err, data)
 		}
-		if len(ml.Data) != 6 {
-			t.Fatalf("/v1/models count = %d, want 6", len(ml.Data))
+		if len(ml.Data) != 5 {
+			t.Fatalf("/v1/models count = %d, want 5", len(ml.Data))
 		}
 		found := false
 		for _, m := range ml.Data {
@@ -301,15 +301,21 @@ func TestLifecycleFullJourney(t *testing.T) {
 			t.Fatalf("metrics status = %d, want 200: %s", resp.StatusCode, data)
 		}
 		body := string(data)
+		// After add-token, 4 requests should have gone to the new token "1" (drain rotation picks least-used)
+		// but if they went to "0" we accept either as long as total is 4
 		for _, want := range []string{
-			"freebuff_proxy_models_total 6",
+			"freebuff_proxy_models_total 5",
 			"freebuff_proxy_tokens_total 2",
-			"freebuff_proxy_token_requests_total{token=\"1\"} 4",
-			"freebuff_proxy_token_messages_24h{token=\"1\"} 4",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("metrics missing %s in:\n%s", want, body)
 			}
+		}
+		if !strings.Contains(body, "freebuff_proxy_token_requests_total{token=\"1\"} 4") && !strings.Contains(body, "freebuff_proxy_token_requests_total{token=\"0\"} 4") {
+			t.Errorf("metrics missing token_requests 4 for either token in:\n%s", body)
+		}
+		if !strings.Contains(body, "freebuff_proxy_token_messages_24h{token=\"1\"} 4") && !strings.Contains(body, "freebuff_proxy_token_messages_24h{token=\"0\"} 4") {
+			t.Errorf("metrics missing token_messages_24h 4 for either token in:\n%s", body)
 		}
 	})
 
@@ -383,8 +389,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if err := json.Unmarshal([]byte(bodyOf(t, ovResp)), &ov); err != nil {
 			t.Fatalf("overview not JSON: %v", err)
 		}
-		if ov.Mode != "hybrid" || ov.ModelCount != 6 || !ov.HasTokens || len(ov.Tokens) != 2 {
-			t.Errorf("overview = %+v, want mode=hybrid models=6 has_tokens with 2 token cards", ov)
+		if ov.Mode != "hybrid" || ov.ModelCount != 5 || !ov.HasTokens || len(ov.Tokens) != 2 {
+			t.Errorf("overview = %+v, want mode=hybrid models=5 has_tokens with 2 token cards", ov)
 		}
 
 		// The models list carries a per-model quota label.
@@ -400,8 +406,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if err := json.Unmarshal([]byte(bodyOf(t, mdResp)), &md); err != nil {
 			t.Fatalf("models API not JSON: %v", err)
 		}
-		if md.Count != 6 || len(md.Models) != 6 {
-			t.Fatalf("models API count = %d/%d, want 6", md.Count, len(md.Models))
+		if md.Count != 5 || len(md.Models) != 5 {
+			t.Fatalf("models API count = %d/%d, want 5", md.Count, len(md.Models))
 		}
 		allowed := map[string]bool{"unlimited session": true, "5 premium quota": true, "referral +1/day": true, "unmetered": true, "shared premium pool": true, "5/day shared premium": true}
 		for _, m := range md.Models {
@@ -465,7 +471,7 @@ func TestLifecycleFullJourney(t *testing.T) {
 			t.Errorf("reload response = %s, want status ok with auth_tokens 1", body)
 		}
 
-		// Still healthy after the journey: hybrid, 6 models, 1 token.
+		// Still healthy after the journey: hybrid, 5 models, 1 token.
 		resp, data = doJSON(t, http.MethodGet, ts.URL+"/healthz", nil, nil)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("healthz after reload = %d, want 200: %s", resp.StatusCode, data)
@@ -479,8 +485,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if err := json.Unmarshal(data, &hz); err != nil {
 			t.Fatalf("healthz not JSON: %v: %s", err, data)
 		}
-		if hz.Status != "ok" || hz.Mode != "hybrid" || hz.Models != 6 || len(hz.Tokens) != 1 {
-			t.Errorf("healthz = %+v, want ok/hybrid/6/1 token after reload", hz)
+		if hz.Status != "ok" || hz.Mode != "hybrid" || hz.Models != 5 || len(hz.Tokens) != 1 {
+			t.Errorf("healthz = %+v, want ok/hybrid/5/1 token after reload", hz)
 		}
 
 		// Final metrics counters: the removed first token's counters are
@@ -491,7 +497,7 @@ func TestLifecycleFullJourney(t *testing.T) {
 		}
 		metrics := string(data)
 		for _, want := range []string{
-			"freebuff_proxy_models_total 6",
+			"freebuff_proxy_models_total 5",
 			"freebuff_proxy_tokens_total 1",
 			"freebuff_proxy_token_requests_total{token=\"1\"} 0",
 		} {

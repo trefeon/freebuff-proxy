@@ -299,8 +299,8 @@ func TestOpenAIModelRetrieveEndpoint(t *testing.T) {
 
 	ts, _ := newTestServer(t, nil, mock)
 
-	// Existing model
-	resp, err := http.Get(ts.URL + "/v1/models/z-ai/glm-5.2")
+	// Existing model (glm-5.3-flash is served; glm-5.2 is paused since 2026-08-31)
+	resp, err := http.Get(ts.URL + "/v1/models/z-ai/glm-5.3-flash")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,8 +312,17 @@ func TestOpenAIModelRetrieveEndpoint(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&modelObj); err != nil {
 		t.Fatal(err)
 	}
-	if modelObj["id"] != "z-ai/glm-5.2" || modelObj["object"] != "model" {
-		t.Errorf("modelObj = %v, want id=z-ai/glm-5.2, object=model", modelObj)
+	if modelObj["id"] != "z-ai/glm-5.3-flash" || modelObj["object"] != "model" {
+		t.Errorf("modelObj = %v, want id=z-ai/glm-5.3-flash, object=model", modelObj)
+	}
+	// Paused model -> 404 with withdrawn copy (freebuff-models.ts FREEBUFF_PAUSED_FREE_MODEL_IDS)
+	respPaused, err := http.Get(ts.URL + "/v1/models/z-ai/glm-5.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = respPaused.Body.Close() }()
+	if respPaused.StatusCode != http.StatusNotFound {
+		t.Fatalf("paused model status = %d, want 404", respPaused.StatusCode)
 	}
 
 	// Unknown model -> 404

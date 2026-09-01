@@ -315,7 +315,6 @@ func TestCatalogFactsPinned(t *testing.T) {
 	wantServed := []string{
 		"openai/gpt-5.6-luna",
 		"upstage/solar-pro4",
-		"z-ai/glm-5.2",
 		"z-ai/glm-5.3-flash",
 		"deepseek/deepseek-v4-flash",
 		"mimo/mimo-v2.5",
@@ -345,6 +344,7 @@ func TestCatalogFactsPinned(t *testing.T) {
 		"stealth/ox-alpha":         DefaultModelID,
 		"deepseek/deepseek-v4-pro": DefaultModelID,
 		"minimax/minimax-m3":       DefaultModelID,
+		"z-ai/glm-5.2":             DefaultModelID,
 	}
 	if got := PausedMap(); !maps.Equal(got, wantPaused) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)
