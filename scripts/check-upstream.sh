@@ -90,10 +90,10 @@ REGISTRY_FILES=(
 # changes the answer to "what does the upstream wire look like" without
 # breaking the registry parity test. The drift workflow still flags them; a
 # human applies the change (every Phase 1+ fix in issue #140 used to live
-# here: freebuff-trust.ts, foreign-client-signals.ts, prompt-agent-stream.ts,
+# here: freebuff-standing.ts (renamed from freebuff-trust.ts), foreign-client-signals.ts, prompt-agent-stream.ts,
 # tools/constants.ts for cb_easp).
 WIRE_FILES=(
-	common/src/constants/freebuff-trust.ts
+	common/src/constants/freebuff-standing.ts
 	common/src/constants/foreign-client-signals.ts
 	common/src/constants/freebuff-spend-ceilings.ts
 	common/src/constants/freebuff-signup-block.ts
