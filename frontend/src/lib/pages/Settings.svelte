@@ -12,6 +12,7 @@
   import { adminApi, adminActions } from '../api/paths.js';
   import { tr } from '../i18n.js';
   import { formatTime } from '../utils/format.js';
+  import { parseEnv, setEnvValue as setEnvLine } from '../utils/env.js';
 
   // ---------------------------------------------------------------------------
   // State
@@ -50,31 +51,9 @@
     expandedGroups = next;
   }
   // ---------------------------------------------------------------------------
-  // .env parsing / merging (line-replace, comments preserved for untouched lines)
+  // .env parsing / merging — shared contract in ../utils/env.js (issue #234):
+  // line-replace, comments preserved for untouched lines.
   // ---------------------------------------------------------------------------
-  function parseEnv(content) {
-    const map = {};
-    for (const line of (content || '').split('\n')) {
-      const t = line.trim();
-      if (!t || t.startsWith('#')) continue;
-      const eq = t.indexOf('=');
-      if (eq === -1) continue;
-      map[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
-    }
-    return map;
-  }
-
-  function escapeRegex(s) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  function setEnvLine(content, key, value) {
-    const re = new RegExp(`^\\s*${escapeRegex(key)}=.*$`, 'm');
-    const line = `${key}=${value}`;
-    if (re.test(content)) return content.replace(re, line);
-    if (!content) return line;
-    return content.endsWith('\n') ? content + line : content + '\n' + line;
-  }
 
   function isTruthy(v) {
     return v === 'true' || v === '1' || v === 'on' || v === 'yes';

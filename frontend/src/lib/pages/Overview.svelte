@@ -21,6 +21,7 @@
   import { generateRandomApiKey } from '../utils/format.js';
   import { usePolling } from '../utils/polling.js';
   import { tr } from '../i18n.js';
+  import { getEnvValue, setEnvValue } from '../utils/env.js';
   let data = $state(null);
   let loading = $state(true);
   let error = $state('');
@@ -66,11 +67,9 @@
       const newKey = generateRandomApiKey();
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const regex = /^\s*API_KEYS=(.*)$/m;
-      const match = envContent.match(regex);
-      const existing = match ? match[1].trim() : '';
+      const existing = getEnvValue(envContent, 'API_KEYS') || '';
       const updated = existing ? `${existing},${newKey}` : newKey;
-      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
+      const newContent = setEnvValue(envContent, 'API_KEYS', updated);
       const save = await postForm(adminActions.configSave, { content: newContent });
       const result = await save.json();
       const isSaved = save.ok;
@@ -101,13 +100,11 @@
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const regex = /^\s*API_KEYS=(.*)$/m;
-      const match = envContent.match(regex);
-      const val = match ? match[1].trim() : '';
+      const val = getEnvValue(envContent, 'API_KEYS') || '';
       const keys = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
       const filtered = keys.filter((k) => k !== target);
       const updated = filtered.join(',');
-      const newContent = match ? envContent.replace(regex, `API_KEYS=${updated}`) : (envContent ? `${envContent}\nAPI_KEYS=${updated}` : `API_KEYS=${updated}`);
+      const newContent = setEnvValue(envContent, 'API_KEYS', updated);
       const save = await postForm(adminActions.configSave, { content: newContent });
       const result = await save.json();
       const isSaved = save.ok;

@@ -19,6 +19,7 @@
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
   import { usePolling } from '../utils/polling.js';
   import { useEventStream } from '../utils/events.js';
+  import { getEnvValue, setEnvValue } from '../utils/env.js';
   import { tr } from '../i18n.js';
 
   let data = $state(null);
@@ -45,11 +46,7 @@
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const regex = /^\s*TOKEN_ROTATION=(.*)$/m;
-      const match = envContent.match(regex);
-      const newContent = match
-        ? envContent.replace(regex, `TOKEN_ROTATION=${newMode}`)
-        : (envContent ? `${envContent}\nTOKEN_ROTATION=${newMode}` : `TOKEN_ROTATION=${newMode}`);
+      const newContent = setEnvValue(envContent, 'TOKEN_ROTATION', newMode);
       const save = await postForm(adminActions.configSave, { content: newContent });
       if (save.ok) {
         tokenRotation = newMode;
@@ -245,12 +242,10 @@
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const m = envContent.match(/^\s*DEVTOOLS_ENABLED=(.*)$/m);
-      const val = m ? m[1].trim().toLowerCase() : '';
+      const val = (getEnvValue(envContent, 'DEVTOOLS_ENABLED') || '').toLowerCase();
       devToolsEnabled = val === 'true' || val === '1';
 
-      const mRot = envContent.match(/^\s*TOKEN_ROTATION=(.*)$/m);
-      const rotVal = mRot ? mRot[1].trim().toLowerCase() : 'drain';
+      const rotVal = (getEnvValue(envContent, 'TOKEN_ROTATION') || 'drain').toLowerCase();
       tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
     } catch {
       devToolsEnabled = false;

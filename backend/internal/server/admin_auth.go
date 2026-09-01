@@ -658,7 +658,7 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	defer s.adminSaveMu.Unlock()
 
 	oldBytes, oldErr := os.ReadFile(".env")
-	_, err := updateEnvKeys([]envUpdate{{Key: "ADMIN_TOKEN", Value: req.NewPassword}})
+	_, err := updateEnvKeys([]config.EnvUpdate{{Key: "ADMIN_TOKEN", Value: req.NewPassword}})
 	if err != nil {
 		s.writeJSONError(w, http.StatusInternalServerError, "Failed to update .env: "+err.Error(), "internal_error", "env_write_failed", 0)
 		return

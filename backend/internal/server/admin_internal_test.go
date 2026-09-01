@@ -2,16 +2,13 @@ package server
 
 import (
 	"crypto/tls"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	"freebuff-proxy/backend/internal/testutil"
+	"freebuff-proxy/backend/internal/config"
 )
 
 func testIP(n int) string {
@@ -102,85 +99,6 @@ func TestAdminAuthLoginSlotBound(t *testing.T) {
 	}
 }
 
-// TestWriteFileAtomicRestoresBackupOnRenameFailure pins the backup-first safety
-// pattern: when rename-over-existing keeps failing (Windows transient
-// antivirus lock), writeFileAtomic moves the target to .bak first, retries,
-// and restores the original on every failure — the target is never removed
-// without a recoverable copy.
-func TestWriteFileAtomicRestoresBackupOnRenameFailure(t *testing.T) {
-	dir := t.TempDir()
-	// Drain before TempDir's own RemoveAll: Windows AV locks can leave a
-	// stray .bak behind (the injected-failure path restores it), failing
-	// the cleanup (see poll.go).
-	testutil.DrainStrayTempFiles(t, dir)
-	path := filepath.Join(dir, ".env")
-	if err := os.WriteFile(path, []byte("OLD\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	realRename := osRename
-	defer func() { osRename = realRename }()
-	// Fail every rename whose SOURCE is the temp file writeFileAtomic
-	// mints (".env.tmp*"); the .bak aside/restore renames still run real.
-	osRename = func(old, new string) error {
-		if strings.Contains(filepath.Base(old), ".env.tmp") {
-			return errors.New("injected rename failure")
-		}
-		return realRename(old, new)
-	}
-
-	if err := writeFileAtomic(path, []byte("NEW\n")); err == nil {
-		t.Fatal("writeFileAtomic succeeded under injected rename failures, want error")
-	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("target missing after failed write (data-loss window): %v", err)
-	}
-	if string(got) != "OLD\n" {
-		t.Errorf("target content after failed write = %q, want %q", got, "OLD\n")
-	}
-	if _, err := os.Stat(path + ".bak"); err == nil {
-		t.Error(".bak left behind after the original was restored")
-	}
-	assertNoTmpFiles(t, dir, ".env")
-}
-
-// TestWriteFileAtomicPreservesBackupWhenRestoreFails pins the
-// no-data-loss invariant: if BOTH the temp rename and the .bak restore fail,
-// the old content must still exist in .bak and the error must say so.
-func TestWriteFileAtomicPreservesBackupWhenRestoreFails(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, ".env")
-	if err := os.WriteFile(path, []byte("OLD\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	realRename := osRename
-	defer func() { osRename = realRename }()
-	osRename = func(old, new string) error {
-		if strings.Contains(filepath.Base(old), ".env.tmp") || new == path {
-			return errors.New("injected rename failure")
-		}
-		return realRename(old, new)
-	}
-
-	err := writeFileAtomic(path, []byte("NEW\n"))
-	if err == nil {
-		t.Fatal("writeFileAtomic succeeded under injected rename failures, want error")
-	}
-	if !strings.Contains(err.Error(), "restore") {
-		t.Errorf("error = %v, want it to mention the .bak restore failure", err)
-	}
-	bak, err := os.ReadFile(path + ".bak")
-	if err != nil {
-		t.Fatalf(".bak missing after total rename failure: %v", err)
-	}
-	if string(bak) != "OLD\n" {
-		t.Errorf(".bak content = %q, want %q (data must survive in .bak)", bak, "OLD\n")
-	}
-	assertNoTmpFiles(t, dir, ".env")
-}
-
 // TestUpdateEnvKeysRejectsNewline pins the .env writer guard: updateEnvKeys writes raw
 // Key=Value lines, so a value carrying a CR/LF would inject a second .env
 // line or shred CRLF endings; it must be rejected before any write.
@@ -190,7 +108,7 @@ func TestUpdateEnvKeysRejectsNewline(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"a\nb", "a\rb", "a\r\nb"} {
-		if _, err := updateEnvKeys([]envUpdate{{Key: "AUTH_TOKENS", Value: bad}}); err == nil {
+		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: bad}}); err == nil {
 			t.Errorf("updateEnvKeys(%q) = nil error, want rejection", bad)
 		}
 	}

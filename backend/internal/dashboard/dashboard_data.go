@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -171,7 +170,7 @@ type configKV struct {
 func (d *Dashboard) configData() configData {
 	cfg := d.cfg()
 	cd := configData{}
-	if raw, err := os.ReadFile(".env"); err == nil {
+	if _, raw, exists, err := config.EnvFileInfo(); err == nil && exists {
 		cd.HasEnvFile = true
 		cd.EnvContent = string(raw)
 	} else {

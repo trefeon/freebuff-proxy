@@ -554,7 +554,7 @@ func (s *Server) handleModeSwitch(w http.ResponseWriter, r *http.Request) {
 		// reload, verifying the effective config actually lands in bridge
 		// mode before touching the live pool. Roll the .env back on failure.
 		old, oldErr := os.ReadFile(".env")
-		if _, err := updateEnvKeys([]envUpdate{{Key: "AUTH_TOKENS", Value: ""}}); err != nil {
+		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: ""}}); err != nil {
 			s.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}
@@ -591,7 +591,7 @@ func (s *Server) handleModeSwitch(w http.ResponseWriter, r *http.Request) {
 		s.adminSaveMu.Lock()
 		defer s.adminSaveMu.Unlock()
 		old, oldErr := os.ReadFile(".env")
-		if _, err := updateEnvKeys([]envUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "0"}}); err != nil {
+		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "0"}}); err != nil {
 			s.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}
@@ -625,7 +625,7 @@ func (s *Server) handleModeSwitch(w http.ResponseWriter, r *http.Request) {
 		s.adminSaveMu.Lock()
 		defer s.adminSaveMu.Unlock()
 		old, oldErr := os.ReadFile(".env")
-		if _, err := updateEnvKeys([]envUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "1"}}); err != nil {
+		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "1"}}); err != nil {
 			s.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}

@@ -345,7 +345,7 @@ func TestUpdateEnvKeys(t *testing.T) {
 	if err := os.WriteFile(".env", []byte("SAFE_MODE=true\r\nAUTH_TOKENS=tok-a\r\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := updateEnvKeys([]envUpdate{
+	if _, err := updateEnvKeys([]config.EnvUpdate{
 		{Key: "AUTH_TOKENS", Value: ""},
 		{Key: "SAFE_MODE", Value: "false"},
 	}); err != nil {
@@ -362,7 +362,7 @@ func TestUpdateEnvKeys(t *testing.T) {
 	assertNoTmpFiles(t, ".", ".env")
 
 	// Flip SAFE_MODE back to true: in-place replace, no duplicate line.
-	if _, err := updateEnvKeys([]envUpdate{{Key: "SAFE_MODE", Value: "true"}}); err != nil {
+	if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "SAFE_MODE", Value: "true"}}); err != nil {
 		t.Fatal(err)
 	}
 	got, err = os.ReadFile(".env")
@@ -374,57 +374,7 @@ func TestUpdateEnvKeys(t *testing.T) {
 	}
 }
 
-// writeFileAtomic must atomically replace an existing file and clean up its
-// temp file, on every platform (no unconditional pre-remove on Windows).
-func TestWriteFileAtomicReplacesAndCleansUp(t *testing.T) {
-	dir := t.TempDir()
-	// Drain before TempDir's own RemoveAll: Windows AV locks can leave a
-	// stray .bak/.tmp behind that would fail the cleanup (see poll.go).
-	testutil.DrainStrayTempFiles(t, dir)
-	path := filepath.Join(dir, ".env")
-	if err := os.WriteFile(path, []byte("OLD\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeFileAtomic(path, []byte("NEW\n")); err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "NEW\n" {
-		t.Errorf("content after write = %q, want %q", got, "NEW\n")
-	}
-	assertNoTmpFiles(t, dir, ".env")
-}
 
-// On failure the target must be left exactly as it was and the temp file
-// cleaned up. A non-empty directory cannot be replaced by a rename on any
-// platform, so it doubles as a deterministic failure injection.
-func TestWriteFileAtomicFailurePreservesTarget(t *testing.T) {
-	dir := t.TempDir()
-	// Drain before TempDir's own RemoveAll: Windows AV locks can leave a
-	// stray .bak/.tmp behind that would fail the cleanup (see poll.go).
-	testutil.DrainStrayTempFiles(t, dir)
-	path := filepath.Join(dir, ".env")
-	if err := os.Mkdir(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	kept := filepath.Join(path, "keep.txt")
-	if err := os.WriteFile(kept, []byte("data"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeFileAtomic(path, []byte("NEW\n")); err == nil {
-		t.Fatal("writeFileAtomic over a non-empty directory succeeded, want error")
-	}
-	if st, err := os.Stat(path); err != nil || !st.IsDir() {
-		t.Errorf("target dir missing or not a dir after failed write: %v", err)
-	}
-	if _, err := os.Stat(kept); err != nil {
-		t.Errorf("target content lost after failed write: %v", err)
-	}
-	assertNoTmpFiles(t, dir, ".env")
-}
 
 // ── Wave 1 issue tests (#81, #82, #76) ───────────────────────────────────
 

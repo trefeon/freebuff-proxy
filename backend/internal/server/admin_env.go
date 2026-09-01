@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,63 +31,22 @@ func readBounded(r io.Reader, n int) ([]byte, error) {
 	return buf[:got], nil
 }
 
-type envUpdate struct {
-	Key   string
-	Value string
-}
-
-func updateEnvKeys(updates []envUpdate) ([]byte, error) {
-	content, err := os.ReadFile(".env")
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+// updateEnvKeys reads the resolved .env file, applies the line edits and
+// writes it back atomically — the single read-modify-write contract shared
+// with the dashboard (issue #234).
+func updateEnvKeys(updates []config.EnvUpdate) ([]byte, error) {
+	_, content, exists, err := config.EnvFileInfo()
+	if err != nil {
 		return nil, err
 	}
-	crlf := bytes.Contains(content, []byte("\r"))
-	lines := make([]string, 0, len(content)/8)
-	for _, l := range strings.Split(string(content), "\n") {
-		lines = append(lines, strings.TrimSuffix(l, "\r"))
+	if !exists {
+		content = nil
 	}
-	// A file ending with a newline has a trailing "" split element that is
-	// an artifact of that newline, not a real blank line; drop it so
-	// appended keys do not land after a spurious blank line.
-	trailingNL := len(content) > 0 && content[len(content)-1] == '\n'
-	if trailingNL {
-		if n := len(lines); n > 0 && lines[n-1] == "" {
-			lines = lines[:n-1]
-		}
+	out, err := config.ApplyEnvUpdates(content, updates)
+	if err != nil {
+		return nil, err
 	}
-	for _, u := range updates {
-		// A raw newline would inject a second .env line and a CR would
-		// shred the file's line endings; reject before writing.
-		if strings.ContainsAny(u.Value, "\r\n") {
-			return nil, fmt.Errorf("%s value must not contain newlines (a .env value is one line)", u.Key)
-		}
-		line := u.Key + "=" + u.Value
-		replaced := false
-		for i, l := range lines {
-			if strings.HasPrefix(strings.TrimSpace(l), u.Key+"=") {
-				lines[i] = line
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			if n := len(lines); n == 1 && lines[0] == "" {
-				// Empty (or missing) file: the new line is the whole file.
-				lines[0] = line
-			} else {
-				lines = append(lines, line)
-			}
-		}
-	}
-	eol := "\n"
-	if crlf {
-		eol = "\r\n"
-	}
-	out := []byte(strings.Join(lines, eol))
-	if trailingNL {
-		out = append(out, eol...)
-	}
-	if err := writeFileAtomic(".env", out); err != nil {
+	if err := config.WriteEnvFile(out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -104,15 +62,16 @@ func updateAuthTokensEnv(tokens []string) ([]byte, error) {
 			return nil, fmt.Errorf("AUTH_TOKENS entry %d contains a comma (AUTH_TOKENS is comma-separated in .env)", i+1)
 		}
 	}
-	return updateEnvKeys([]envUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(tokens, ",")}})
+	return updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(tokens, ",")}})
 }
 
 func restoreEnvFile(old []byte, oldErr error) {
+	path := config.EnvFileForWrite()
 	switch {
 	case oldErr == nil:
-		_ = writeFileAtomic(".env", old)
+		_ = config.WriteFileAtomic(path, old)
 	case errors.Is(oldErr, os.ErrNotExist):
-		_ = os.Remove(".env")
+		_ = os.Remove(path)
 	}
 }
 
@@ -197,7 +156,11 @@ func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
-	const envPath = ".env"
+	// Resolve ONCE at write time: the dashboard must write the same file the
+	// loader would read (cwd wins, else the platform config dir) — a stray
+	// ./.env with the defaults template silently becomes authoritative
+	// otherwise (issue #234).
+	envPath := config.EnvFileForWrite()
 	r.Body = http.MaxBytesReader(w, r.Body, maxEnvSize)
 
 	// The dashboard textarea posts application/x-www-form-urlencoded
@@ -235,7 +198,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	defer s.adminSaveMu.Unlock()
 
 	old, oldErr := os.ReadFile(envPath)
-	if err := writeFileAtomic(envPath, content); err != nil {
+	if err := config.WriteFileAtomic(envPath, content); err != nil {
 		s.dash.RenderConfigResult(w, r, false, "Failed to write .env: "+err.Error())
 		return
 	}
@@ -243,7 +206,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case oldErr == nil:
-			_ = writeFileAtomic(envPath, old)
+			_ = config.WriteFileAtomic(envPath, old)
 		case errors.Is(oldErr, os.ErrNotExist):
 			// The .env did not exist before the save: remove the rejected
 			// write so the state matches.
@@ -479,88 +442,4 @@ func changedConfigKeys(oldCfg, newCfg *config.Config) []string {
 	}
 	sort.Strings(changed)
 	return changed
-}
-
-// osRename is the rename seam used by writeFileAtomic so tests can inject
-// rename failures (Windows rename-over-existing fails transiently on
-// virus-scanned files; the seam reproduces it deterministically).
-var osRename = os.Rename
-
-func writeFileAtomic(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return err
-	}
-	// A directory at the target can never be replaced by a rename (every
-	// platform rejects it) and must not be moved aside: the .bak dance
-	// below would then "succeed" by renaming the directory away.
-	if st, err := os.Stat(path); err == nil && st.IsDir() {
-		_ = os.Remove(tmpName)
-		return fmt.Errorf("cannot replace %s: target is a directory", path)
-	}
-	// Rename-over-existing fails transiently on Windows when the target
-	// has a briefly-open handle (antivirus scanning the file we just
-	// wrote). Without retries, a transient lock turns into a rejected
-	// dashboard save or a lost token add (rollback after a failed .env
-	// write). The fallback renames the EXISTING target to path+".bak"
-	// first — never removes it — so a failure between the two renames
-	// cannot lose the old content: worst case the data sits in .bak and is
-	// restored on the next attempt (or recovered by hand).
-	const renameAttempts = 5
-	var lastErr error
-	for i := range renameAttempts {
-		if err := osRename(tmpName, path); err != nil {
-			lastErr = err
-		} else {
-			// Success; drop a stale .bak left by an interrupted run.
-			_ = os.Remove(path + ".bak")
-			return nil
-		}
-		if _, statErr := os.Stat(path); statErr == nil {
-			// The target exists but the rename-over failed: move it aside
-			// first (the target itself may be locked, so this too can
-			// fail — retried next round), then retry the temp rename.
-			if err := osRename(path, path+".bak"); err != nil {
-				lastErr = err
-			} else {
-				if err := osRename(tmpName, path); err != nil {
-					lastErr = err
-				} else {
-					_ = os.Remove(path + ".bak")
-					return nil
-				}
-			}
-		}
-		// After any failure the original content may now sit in .bak while
-		// the target is absent; restore it before the next attempt so the
-		// target never stays missing on a retryable error.
-		if _, statErr := os.Stat(path); statErr != nil {
-			if _, bakErr := os.Stat(path + ".bak"); bakErr == nil {
-				if err := osRename(path+".bak", path); err != nil {
-					lastErr = errors.Join(lastErr, fmt.Errorf("restore %s from %s: %w", path, path+".bak", err))
-				}
-			}
-		}
-		time.Sleep(time.Duration(i+1) * 20 * time.Millisecond)
-	}
-	// The temp file may itself be transiently locked (antivirus scan of a
-	// file we just wrote); retry its removal so a failed write cannot leak
-	// a .env.tmp* file into the directory.
-	for range 3 {
-		if os.Remove(tmpName) == nil {
-			return lastErr
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	return lastErr
 }

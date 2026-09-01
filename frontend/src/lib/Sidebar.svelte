@@ -10,6 +10,7 @@
    */
   let { activeTab = $bindable(), versionInfo } = $props();
   import { tr } from './i18n.js';
+  import { getEnvValue } from './utils/env.js';
   import { onMount } from 'svelte';
   import { fetchAPI } from './api/client.js';
   import { adminApi, adminRoot } from './api/paths.js';
@@ -34,8 +35,7 @@
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const m = envContent.match(/^\s*DEVTOOLS_ENABLED=(.*)$/m);
-      const val = m ? m[1].trim().toLowerCase() : '';
+      const val = (getEnvValue(envContent, 'DEVTOOLS_ENABLED') || '').toLowerCase();
       devToolsEnabled = val === 'true' || val === '1';
     } catch {
       devToolsEnabled = false;
