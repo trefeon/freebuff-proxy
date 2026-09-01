@@ -13,13 +13,29 @@ import (
 	"time"
 )
 
+// LoadOptions configures LoadOpts. DiscoverCLIToken, when non-nil, sources
+// an empty AUTH_TOKENS pool from the official CLI login files (issue #283);
+// the cmd entrypoint wires clicreds.DiscoverToken here. A nil value keeps
+// Load product-agnostic: the config package never reads product-specific
+// credential files.
+type LoadOptions struct {
+	DiscoverCLIToken func() (token, email, path string, ok bool)
+}
+
 // Load resolves configuration from the optional JSON file at configPath
 // ("" skips the file), the optional ./.env file (when present), and
 // environment overrides, then validates it. Precedence, lowest to highest:
 // built-in defaults < JSON file (-config) < ./.env < real environment
 // (.env is an environment file, so it follows the README rule that the
-// environment overrides the JSON config).
+// environment overrides the JSON config). Load never performs CLI credential
+// auto-discovery (issue #283): use LoadOpts with DiscoverCLIToken to source
+// an empty AUTH_TOKENS pool from the official CLI login files.
 func Load(configPath string) (Config, error) {
+	return LoadOpts(configPath, LoadOptions{})
+}
+
+// LoadOpts is Load with additional load-time options (issue #283).
+func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	raw, err := loadRaw(configPath)
 	if err != nil {
 		return Config{}, err
@@ -99,6 +115,13 @@ func Load(configPath string) (Config, error) {
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
 	overrideString(&raw.TokenRotation, "TOKEN_ROTATION")
 	overrideBool(&raw.DashboardEnabled, "DASHBOARD_ENABLED")
+	// Convert feature-translation modes (issue #277): COMPRESS_PROMPT,
+	// CACHE_CONTROL_INJECTION and REASONING_IN_CONTENT are resolved once
+	// here (so the dashboard config form and /admin/reload swaps apply) and
+	// handed to convert.Options at request time.
+	overrideString(&raw.CompressPrompt, "COMPRESS_PROMPT")
+	overrideString(&raw.CacheControlInjection, "CACHE_CONTROL_INJECTION")
+	overrideString(&raw.ReasoningInContent, "REASONING_IN_CONTENT")
 
 	parseDuration := func(raw, name string) (time.Duration, error) {
 		d, err := time.ParseDuration(strings.TrimSpace(raw))
@@ -424,30 +447,36 @@ func Load(configPath string) (Config, error) {
 		RateLimitPerIP:                   rateLimitPerIP,
 		RateLimitBurst:                   rateLimitBurst,
 		DashboardEnabled:                 raw.DashboardEnabled,
+		CompressPrompt:                   parseCompressPrompt(raw.CompressPrompt),
+		CacheControlInjection:            parseCacheControlInjection(raw.CacheControlInjection),
+		ReasoningInContent:               parseReasoningInContent(raw.ReasoningInContent),
 		EnvFile:                          envFileUsed,
 	}
 
-	// Auto-discover CLI token if no AUTH_TOKENS were explicitly configured
-	// and AUTO_DISCOVER_TOKEN is not disabled. ADOPT_CLI_SESSION (issue
-	// #97) also opts into discovery: the operator explicitly asked to run
-	// like the CLI, so AUTO_DISCOVER_TOKEN=false must not silently leave the
+	// Auto-discover CLI token if a discovery hook was wired (LoadOpts,
+	// issue #283) AND no AUTH_TOKENS were explicitly configured AND
+	// AUTO_DISCOVER_TOKEN is not disabled. ADOPT_CLI_SESSION (issue #97)
+	// also opts into discovery: the operator explicitly asked to run like
+	// the CLI, so AUTO_DISCOVER_TOKEN=false must not silently leave the
 	// pool empty.
-	autoDiscover := true
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_DISCOVER_TOKEN"))); v == "false" || v == "0" || v == "off" || v == "no" {
-		autoDiscover = false
-	}
-	if (autoDiscover || cfg.AdoptCLISession) && len(cfg.AuthTokens) == 0 && !raw.AuthTokensSet {
-		if token, email, srcPath, ok := discoverCLIToken(); ok {
-			cfg.AuthTokens = []string{token}
-			cfg.DiscoveredSource = srcPath
-			cfg.DiscoveredEmail = email
-			// An operator running without AUTH_TOKENS intends bridge mode;
-			// auto-discovery silently flipping to pooled mode is surprising,
-			// so warn loudly and name the off switch.
-			slog.Warn("auto-discovery filled empty AUTH_TOKENS from CLI login: bridge mode switched to pooled mode",
-				"file", srcPath,
-				"email", email,
-				"hint", "set AUTO_DISCOVER_TOKEN=false to disable auto-discovery")
+	if opts.DiscoverCLIToken != nil {
+		autoDiscover := true
+		if v := strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_DISCOVER_TOKEN"))); v == "false" || v == "0" || v == "off" || v == "no" {
+			autoDiscover = false
+		}
+		if (autoDiscover || cfg.AdoptCLISession) && len(cfg.AuthTokens) == 0 && !raw.AuthTokensSet {
+			if token, email, srcPath, ok := opts.DiscoverCLIToken(); ok {
+				cfg.AuthTokens = []string{token}
+				cfg.DiscoveredSource = srcPath
+				cfg.DiscoveredEmail = email
+				// An operator running without AUTH_TOKENS intends bridge
+				// mode; auto-discovery silently flipping to pooled mode is
+				// surprising, so warn loudly and name the off switch.
+				slog.Warn("auto-discovery filled empty AUTH_TOKENS from CLI login: bridge mode switched to pooled mode",
+					"file", srcPath,
+					"email", email,
+					"hint", "set AUTO_DISCOVER_TOKEN=false to disable auto-discovery")
+			}
 		}
 	}
 
@@ -473,49 +502,6 @@ func Load(configPath string) (Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// discoverCLIToken auto-discovers FreeBuff credentials from official CLI login files.
-func discoverCLIToken() (string, string, string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return "", "", "", false
-	}
-	candidates := []string{
-		filepath.Join(home, ".config", "manicode", "credentials.json"),
-		filepath.Join(home, ".config", "codebuff", "credentials.json"),
-	}
-	for _, path := range candidates {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		// Strip a leading UTF-8 BOM (Windows credential writers can add one)
-		// or json.Unmarshal fails and auto-discovery silently skips the file.
-		data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
-		var parsed map[string]any
-		if err := json.Unmarshal(data, &parsed); err != nil {
-			continue
-		}
-		acct, ok := parsed["default"].(map[string]any)
-		if !ok {
-			for _, v := range parsed {
-				if m, ok := v.(map[string]any); ok && m["authToken"] != nil {
-					acct = m
-					break
-				}
-			}
-		}
-		if acct != nil {
-			token, _ := acct["authToken"].(string)
-			email, _ := acct["email"].(string)
-			token = strings.TrimSpace(token)
-			if token != "" {
-				return token, email, path, true
-			}
-		}
-	}
-	return "", "", "", false
 }
 
 func loadRaw(configPath string) (rawConfig, error) {
@@ -629,17 +615,100 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
 	overrideBoolFrom(&raw.DashboardEnabled, get, "DASHBOARD_ENABLED")
+	// Convert feature-translation modes (issue #277), mirroring Load.
+	overrideStringFrom(&raw.CompressPrompt, get, "COMPRESS_PROMPT")
+	overrideStringFrom(&raw.CacheControlInjection, get, "CACHE_CONTROL_INJECTION")
+	overrideStringFrom(&raw.ReasoningInContent, get, "REASONING_IN_CONTENT")
 	return nil
 }
 
+// override applies envName from get to target through parse. An unset or
+// unparseable value leaves the file/default value untouched, so a single
+// generic helper replaces the five typed override methods (issue #282).
+func override[T any](target *T, get func(string) string, envName string, parse func(string) (T, bool)) {
+	if value := strings.TrimSpace(get(envName)); value != "" {
+		if parsed, ok := parse(value); ok {
+			*target = parsed
+		}
+	}
+}
+
+// parseString returns the trimmed value unchanged (used by overrideString).
+func parseString(s string) (string, bool) { return s, true }
+
+// parseBool accepts "1"/"true"/"yes"/"on" and "0"/"false"/"no"/"off".
+func parseBool(s string) (bool, bool) {
+	switch strings.ToLower(s) {
+	case "1", "true", "yes", "on":
+		return true, true
+	case "0", "false", "no", "off":
+		return false, true
+	}
+	return false, false
+}
+
+// parseCSV splits a comma-separated value via splitList.
+func parseCSV(s string) ([]string, bool) { return splitList(s), true }
+
+// parseIntPtr parses an int; blank or unparseable values yield ok=false.
+func parseIntPtr(s string) (*int, bool) {
+	if parsed, err := strconv.Atoi(s); err == nil {
+		return &parsed, true
+	}
+	return nil, false
+}
+
+// parseFloatPtr parses a float64; blank or unparseable values yield ok=false.
+func parseFloatPtr(s string) (*float64, bool) {
+	if parsed, err := strconv.ParseFloat(s, 64); err == nil {
+		return &parsed, true
+	}
+	return nil, false
+}
+
+// parseCompressPrompt reports whether optional prompt & context compression
+// is enabled (COMPRESS_PROMPT=true, default off), matching the convert
+// package's historical env semantics (issue #277).
+func parseCompressPrompt(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// parseCacheControlInjection reports whether DeepSeek prompt-cache
+// cache_control injection is enabled (CACHE_CONTROL_INJECTION, default on;
+// false disables), matching the convert package's default-on semantics.
+func parseCacheControlInjection(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "0", "false", "off", "no", "disabled":
+		return false
+	}
+	return true
+}
+
+// parseReasoningInContent returns the think-tag label used to fold reasoning
+// into message content (REASONING_IN_CONTENT, default "" = off); an explicit
+// tag word ("thinking") is returned verbatim, lowercased.
+func parseReasoningInContent(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	switch v {
+	case "", "0", "false", "off", "no", "disabled":
+		return ""
+	case "1", "true", "yes", "on":
+		return "think"
+	}
+	return v
+}
+
+// overrideString sets target from a string env var.
 func overrideString(target *string, envName string) {
-	overrideStringFrom(target, os.Getenv, envName)
+	override(target, os.Getenv, envName, parseString)
 }
 
 func overrideStringFrom(target *string, get func(string) string, envName string) {
-	if value := strings.TrimSpace(get(envName)); value != "" {
-		*target = value
-	}
+	override(target, get, envName, parseString)
 }
 
 // overrideStringAlias overrides target from source get, preferring the
@@ -659,55 +728,41 @@ func overrideStringAlias(target *string, get func(string) string, primary, alias
 	}
 }
 
+// overrideCSV sets target from a comma-separated env var.
 func overrideCSV(target *[]string, envName string) {
-	overrideCSVFrom(target, os.Getenv, envName)
+	override(target, os.Getenv, envName, parseCSV)
 }
 
 func overrideCSVFrom(target *[]string, get func(string) string, envName string) {
-	if value := strings.TrimSpace(get(envName)); value != "" {
-		*target = splitList(value)
-	}
+	override(target, get, envName, parseCSV)
 }
 
 // overrideBool sets target from DEBUG_DUMP-style env vars; unset or
 // unrecognized values leave the file/default value untouched.
 func overrideBool(target *bool, envName string) {
-	overrideBoolFrom(target, os.Getenv, envName)
+	override(target, os.Getenv, envName, parseBool)
 }
 
 func overrideBoolFrom(target *bool, get func(string) string, envName string) {
-	switch strings.ToLower(strings.TrimSpace(get(envName))) {
-	case "1", "true", "yes", "on":
-		*target = true
-	case "0", "false", "no", "off":
-		*target = false
-	}
+	override(target, get, envName, parseBool)
 }
 
 // overrideInt sets target from MAX_MESSAGES_PER_DAY-style env vars; unset or
 // unparseable values leave the file/default value untouched.
 func overrideInt(target **int, envName string) {
-	overrideIntFrom(target, os.Getenv, envName)
+	override(target, os.Getenv, envName, parseIntPtr)
 }
 
 func overrideIntFrom(target **int, get func(string) string, envName string) {
-	if value := strings.TrimSpace(get(envName)); value != "" {
-		if parsed, err := strconv.Atoi(value); err == nil {
-			*target = &parsed
-		}
-	}
+	override(target, get, envName, parseIntPtr)
 }
 
 // overrideFloat sets target from RATE_LIMIT_PER_IP-style env vars; unset or
 // unparseable values leave the file/default value untouched.
 func overrideFloat(target **float64, envName string) {
-	overrideFloatFrom(target, os.Getenv, envName)
+	override(target, os.Getenv, envName, parseFloatPtr)
 }
 
 func overrideFloatFrom(target **float64, get func(string) string, envName string) {
-	if value := strings.TrimSpace(get(envName)); value != "" {
-		if parsed, err := strconv.ParseFloat(value, 64); err == nil {
-			*target = &parsed
-		}
-	}
+	override(target, get, envName, parseFloatPtr)
 }

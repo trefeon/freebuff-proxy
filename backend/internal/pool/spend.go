@@ -321,18 +321,11 @@ func (l *spendLedger) rolling24h(now time.Time) int64 {
 
 // --- pool wiring ---
 
-// recordSpend adds tokens to token's ledger (fixed-token index path).
+// recordSpend adds tokens to the entry at token's ledger (fixed-token index
+// path). The ledger travels with the entry, so the roster's single mutex
+// guards it (issue #263).
 func (p *Pool) recordSpend(token int, tokens int64) {
-	toks := p.toks.Load()
-	if token < 0 || token >= len(*toks) {
-		return
-	}
-	p.spendMu.Lock()
-	defer p.spendMu.Unlock()
-	if token < 0 || token >= len(p.spendPerToken) {
-		return
-	}
-	p.spendPerToken[token].add(tokens, time.Now())
+	p.roster.recordSpend(token, tokens)
 	p.logSpendBuckets(tokens)
 }
 
@@ -348,24 +341,11 @@ func (p *Pool) logSpendBuckets(tokens int64) {
 
 // recordSpendEntry adds tokens to the lease's backing entry's ledger by
 // pointer (mirrors recordChatEntry: after a concurrent RemoveLastToken+
-// AddToken, the lease's Token index may target a different token).
+// AddToken, the lease's Token index may target a different token). The entry
+// is the authoritative owner of its ledger, so no index lookup is needed.
 func (p *Pool) recordSpendEntry(entry *tokenEntry, tokens int64) {
-	if entry == nil {
-		return
-	}
-	p.spendMu.Lock()
-	defer p.spendMu.Unlock()
-	for idx, tok := range *p.toks.Load() {
-		if tok != entry {
-			continue
-		}
-		if idx < 0 || idx >= len(p.spendPerToken) {
-			return
-		}
-		p.spendPerToken[idx].add(tokens, time.Now())
-		p.logSpendBuckets(tokens)
-		return
-	}
+	p.roster.recordSpendEntry(entry, tokens)
+	p.logSpendBuckets(tokens)
 }
 
 // bridgeRecordSpend adds tokens to a bridge entry's ledger.
@@ -375,7 +355,7 @@ func (p *Pool) bridgeRecordSpend(entry *bridgeEntry, tokens int64) {
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	entry.spend.add(tokens, time.Now())
+	entry.ledger.recordSpend(tokens, time.Now())
 	p.logSpendBuckets(tokens)
 }
 
@@ -393,16 +373,7 @@ type spendView struct {
 
 // spendSnapshot returns the fixed-token ledger view (index path).
 func (p *Pool) spendSnapshot(token int) spendView {
-	toks := p.toks.Load()
-	if token < 0 || token >= len(*toks) {
-		return spendView{}
-	}
-	p.spendMu.Lock()
-	defer p.spendMu.Unlock()
-	if token < 0 || token >= len(p.spendPerToken) {
-		return spendView{}
-	}
-	return ledgerView(p.spendPerToken[token])
+	return p.roster.spendSnapshot(token)
 }
 
 // bridgeSpendSnapshot returns the bridge entry's ledger view.
@@ -412,7 +383,7 @@ func (p *Pool) bridgeSpendSnapshot(entry *bridgeEntry) spendView {
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	return ledgerView(entry.spend)
+	return entry.ledger.spendSnapshot()
 }
 
 // ledgerView snapshots a ledger under its guard.
@@ -433,13 +404,10 @@ func ledgerView(l *spendLedger) spendView {
 	}
 }
 
-// recordSpendLimited marks one upstream spend_limited refusal on the
-// fixed-token ledger (issue #122). Caller holds Pool.spendMu.
+// recordSpendLimited marks one upstream spend_limited refusal on the entry
+// at token's ledger (issue #122). The roster's single mutex guards it.
 func (p *Pool) recordSpendLimited(token int) {
-	if token < 0 || token >= len(p.spendPerToken) {
-		return
-	}
-	p.spendPerToken[token].spendLimited++
+	p.roster.recordSpendLimited(token)
 }
 
 // bridgeRecordSpendLimited marks one upstream spend_limited refusal on a
@@ -448,12 +416,7 @@ func (p *Pool) bridgeRecordSpendLimited(entry *bridgeEntry) {
 	if entry == nil {
 		return
 	}
-	entry.spend.spendLimited++
+	entry.ledger.recordSpendLimited()
 }
 
-func unixToTime(sec int64) time.Time {
-	if sec == 0 {
-		return time.Time{}
-	}
-	return time.Unix(sec, 0).UTC()
-}
+func unixToTime(sec int64) time.Time { return time.Unix(sec, 0) }

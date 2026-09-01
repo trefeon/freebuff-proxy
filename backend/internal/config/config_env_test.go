@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"freebuff-proxy/backend/internal/clicreds"
 )
 
 func TestDotenv(t *testing.T) {
@@ -157,9 +159,9 @@ func TestEnvEmptyAuthTokensBridgeMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load("")
+	cfg, err := LoadOpts("", LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadOpts: %v", err)
 	}
 	if len(cfg.AuthTokens) != 0 {
 		t.Errorf("AuthTokens = %v, want empty (explicit bridge mode, not refilled by discovery)", cfg.AuthTokens)
@@ -232,9 +234,9 @@ func TestEnvEmptyAuthTokensClearsDotenv(t *testing.T) {
 	}
 	t.Setenv("AUTH_TOKENS", "")
 
-	cfg, err := Load("")
+	cfg, err := LoadOpts("", LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadOpts: %v", err)
 	}
 	if len(cfg.AuthTokens) != 0 {
 		t.Errorf("AuthTokens = %v, want empty (empty env AUTH_TOKENS clears .env tokens)", cfg.AuthTokens)

@@ -15,12 +15,6 @@ import (
 // proxy-freebuff's normalizeSchemaMap, which resolves with depth 12.
 const maxSchemaDepth = 12
 
-// maxSchemaNodes is the total-node budget for one request's schema
-// normalization: beyond it, remaining structure is returned unchanged. A
-// pathological schema would otherwise be re-copied at every ancestor up to
-// maxSchemaDepth (12x memory amplification). Tests may shrink it.
-var maxSchemaNodes = 100_000
-
 // capHint returns a+b for use as a make() size hint, or 0 when the sum would
 // overflow int. An unguarded len(a)+len(b) hint can wrap negative and panic
 // the runtime (makeslice: "cap out of range" / "len out of range"; makemap
@@ -46,13 +40,13 @@ func capHint(a, b int) int {
 // schema cache (#67): the raw schema JSON hash + starting node budget key a
 // bounded, mutex-guarded LRU, so repeated tool-call loops re-send identical
 // context without re-running normalization.
-func normalizeToolSchemas(payload map[string]any) {
+func normalizeToolSchemas(payload map[string]any, opts Options) {
 	tools, _ := payload["tools"].([]any)
 	if len(tools) == 0 {
 		return
 	}
 	// One node budget per request, shared across tools.
-	budget := maxSchemaNodes
+	budget := opts.MaxSchemaNodes
 	hasEndTurn := false
 	for _, t := range tools {
 		tool, ok := t.(map[string]any)

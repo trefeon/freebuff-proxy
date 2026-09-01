@@ -231,17 +231,17 @@ jobs:
           mkdir -p "$FREEBUFF_REFERENCE_DIR"
           git clone --depth 50 https://github.com/CodebuffAI/freebuff.git "$FREEBUFF_REFERENCE_DIR"
           git -C "$FREEBUFF_REFERENCE_DIR" fetch --unshallow || true
-
       - name: Classify wire drift
         id: classify
         env:
           FREEBUFF_REFERENCE_DIR: ${{ runner.temp }}/freebuff-ref
+          FREEBUFF_REVIEW_END_REF: ${{ needs.drift.outputs.upstream_sha }}
         run: |
           out="$(bash scripts/review-wire-drift.sh || true)"
           {
-            echo "classification<<EOF"
-            echo "$out"
-            echo "EOF"
+          echo "classification<<EOF"
+          echo "$out"
+          echo "EOF"
           } >>"$GITHUB_OUTPUT"
 
       - name: Open or update needs-port issue

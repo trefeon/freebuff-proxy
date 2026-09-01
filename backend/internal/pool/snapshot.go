@@ -50,7 +50,7 @@ func banView(ban *upstream.BanError, until time.Time) (string, time.Time) {
 
 // Snapshot returns the per-token healthz view.
 func (p *Pool) Snapshot() []TokenSnapshot {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	out := make([]TokenSnapshot, 0, len(*toks))
 	dailyLimit := p.cfg.Load().MaxMessagesPerDay
 	spendLimit := p.cfg.Load().MaxSpendPerDay
@@ -217,7 +217,7 @@ type PoolSnapshot struct {
 // PoolSnapshot returns the pool-wide snapshot with aggregate counters.
 func (p *Pool) PoolSnapshot() PoolSnapshot {
 	ps := PoolSnapshot{Tokens: p.Snapshot(), RequestsServed: p.requestsServed.Load()}
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	for _, tok := range *toks {
 		ps.TransientRetries += tok.client.TransientRetries()
 		ps.FingerprintRotations += tok.client.FingerprintRotations()

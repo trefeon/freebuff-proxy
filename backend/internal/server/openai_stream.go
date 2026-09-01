@@ -7,19 +7,17 @@ package server
 // helpers shared with the Responses relay live in openai_stream_rewrite.go.
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
 	"freebuff-proxy/backend/internal/convert"
 	"freebuff-proxy/backend/internal/phasetiming"
-	"freebuff-proxy/backend/internal/reasoningcache"
 )
 
 // relayStream forwards sanitized upstream SSE lines to the client with
@@ -28,112 +26,48 @@ import (
 // and an error chunk (then DONE) when the upstream stream dies while the
 // client context is still live.
 func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Reader, stats *relayStats, chatStart time.Time) {
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("X-Accel-Buffering", "no")
-
-	flusher, ok := w.(http.Flusher)
+	flusher, keepalive, lines, lastWrite, ok := newStreamRelay(ctx, w, r)
 	if !ok {
 		s.logger.Warn("response writer does not support flushing")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-
-	// The official CLI client treats a ": connecting" comment as the signal
-	// that headers have flushed and the stream is live (grace flush): write
-	// it before relaying anything so a client-side timeout can never fire
-	// during a long upstream admission pause. Comment frames are ignored by
-	// SSE parsers.
-	_, _ = io.WriteString(w, ": connecting\n\n")
-	flusher.Flush()
-
-	keepalive := time.NewTicker(keepaliveInterval)
 	defer keepalive.Stop()
 
-	lines := make(chan lineChunk)
-	go relayReadLoop(ctx, r, lines)
-
-	// lastWrite is when the relay last wrote a frame to the CLIENT. The
-	// keepalive condition keys on it so a liveness signal is emitted after
-	// any client-write silence, even when upstream comment/junk lines keep
-	// arriving (they are dropped, never relayed, and must not count as
-	// liveness — #161).
-	lastWrite := time.Now()
-	first := true
-	var reasoningParts []string
-	var contentParts []string
 	// Issue #164: the stream's model identity is the proxy's served model
 	// (lease.Model, fallbacks included) — synthetic XML-flush chunks and the
 	// reasoning cache key on it. The upstream chunk echo only fills the
 	// field when no lease drove the relay (direct unit-test calls).
-	streamModel := stats.servedModel
-	toolIDsMap := make(map[string]bool)
-	// streamToolCalls accumulates the per-index tool-call fragments observed
-	// in the upstream chunk stream (P2-5 canonical tool-calls binding): the
-	// first fragment carries the id and function name, later fragments
-	// append argument bytes. Index-ordered at finalize, so the canonical key
-	// matches the tool_calls array the client will reconstruct.
-	streamToolCalls := make(map[int]*streamToolAcc)
-	var toolIDs []string
-	endTurnCallIndexes := make(map[int]bool)
-	seenRealToolCalls := false
-	// lastFinishReason records the last finish_reason actually relayed to
-	// the client (read after the rewrites below): tool calls flushed from
-	// an unclosed XML block arrive AFTER the terminal chunk, so the
-	// in-loop stop→tool_calls flip cannot fire for them and the flush
-	// path must repair the stream's terminal reason itself.
-	lastFinishReason := ""
-	// Streaming XML tool-call extraction: models like MiMo/Hermes/Qwen
-	// emit tool calls as XML/fenced blocks inside delta.content instead of
-	// native delta.tool_calls. One extractor per stream (not concurrency
-	// safe); extracted calls are relayed as native fragments with
-	// sequential synthetic indexes so they can never collide with native
-	// tool_calls fragments.
-	xmlExtractor := &convert.XMLToolCallExtractor{}
-	xmlCallIndex := 0
-	xmlCallsSeen := false
-	xmlStreamID := ""
-	// roleSent tracks whether the first relayed chunk carried (or was given)
-	// delta.role — the OpenAI spec stamps the role on the first chunk, and
-	// some clients build message.role from it (ensureChatChunkRole).
-	roleSent := false
+	//
+	// All per-chunk rewrite state lives in the chunk pipeline (issue #249):
+	// one unmarshal, a chain of map-level rewrites, one marshal, with the
+	// byte-preserving fast path for untouched chunks.
+	rw := newChunkRewriter(stats)
 
 	// emitXMLFlush releases anything the XML extractor still holds at
 	// stream end (Flush) as one synthetic chunk through the normal frame
 	// path: completed calls inside a never-closed block still become native
 	// fragments, and dangling tags are scrubbed from the released text.
 	emitXMLFlush := func() {
-		ft, fc := xmlExtractor.Flush()
-		if len(ft) == 0 && len(fc) == 0 {
+		ft, frags := drainXMLToolCalls(rw.xmlExtractor, &rw.xmlCallIndex)
+		if ft == "" && len(frags) == 0 {
 			return
 		}
 		delta := make(map[string]any, 2)
-		if !roleSent {
+		if !rw.roleSent {
 			// A flush chunk may be the stream's first frame (upstream sent
 			// no relayable chunk before EOF): it must open with the role.
 			delta["role"] = "assistant"
-			roleSent = true
+			rw.roleSent = true
 		}
-		if len(ft) > 0 {
+		if ft != "" {
 			delta["content"] = ft
-			contentParts = append(contentParts, ft)
+			rw.contentParts = append(rw.contentParts, ft)
 		}
-		if len(fc) > 0 {
-			tcs := make([]any, 0, len(fc))
-			for _, tc := range fc {
-				if tc.Function.Name == "end_turn" {
-					continue // never relay the proxy-injected pseudo-tool
-				}
-				tcs = append(tcs, convert.ToolCallDeltaFragment(xmlCallIndex, tc))
-				xmlCallIndex++
-			}
-			if len(tcs) > 0 {
-				delta["tool_calls"] = tcs
-				xmlCallsSeen = true
-			}
+		if len(frags) > 0 {
+			delta["tool_calls"] = frags
+			rw.xmlCallsSeen = true
 		}
-		streamID := xmlStreamID
+		streamID := rw.xmlStreamID
 		if streamID == "" {
 			streamID = "chatcmpl-flush"
 		}
@@ -141,7 +75,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			"id":      streamID,
 			"object":  "chat.completion.chunk",
 			"created": time.Now().Unix(),
-			"model":   streamModel,
+			"model":   rw.streamModel,
 			"choices": []any{map[string]any{"index": 0, "delta": delta}},
 		}
 		// Restore client tool names (#140): the synthetic flush chunk carries
@@ -163,7 +97,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			}
 			stats.chunks++
 			stats.bytes += len(frame)
-			lastWrite = time.Now()
+			*lastWrite = time.Now()
 			flusher.Flush()
 			return true
 		}
@@ -171,7 +105,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			return
 		}
 		// Tool calls flushed from an unclosed XML block arrive AFTER the
-		// terminal chunk, so the in-loop stop→tool_calls flip (keyed on
+		// terminal chunk, so the in-loop stop->tool_calls flip (keyed on
 		// xmlCallsSeen at terminal time) never fired for them: the client
 		// already saw finish_reason "stop" and would end a turn that
 		// carried fully-delivered extracted calls. Append a synthetic
@@ -180,27 +114,24 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 		// calls are the sole delivery (no native tool-call fragments,
 		// mirroring relayJSON's guard) and the upstream reason was "stop"
 		// ("length" stays honest).
-		if xmlCallsSeen && lastFinishReason == "stop" && !seenRealToolCalls {
+		if rw.xmlCallsSeen && rw.lastFinishReason == "stop" && !rw.seenRealToolCalls {
 			writeFrame(map[string]any{
 				"id":      streamID,
 				"object":  "chat.completion.chunk",
 				"created": time.Now().Unix(),
-				"model":   streamModel,
+				"model":   rw.streamModel,
 				"choices": []any{map[string]any{"index": 0, "delta": map[string]any{}, "finish_reason": "tool_calls"}},
 			})
 		}
 	}
 
+	first := true
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			if time.Since(lastWrite) >= keepaliveInterval {
-				_, _ = io.WriteString(w, ": keepalive\n\n")
-				lastWrite = time.Now()
-				flusher.Flush()
-			}
+			maybeKeepalive(w, flusher, lastWrite, ": keepalive\n\n")
 		case lc := <-lines:
 			if lc.err != nil {
 				if ctx.Err() == nil {
@@ -210,7 +141,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 					_, _ = w.Write(convert.DONE)
 					flusher.Flush()
 				}
-				s.ingestStreamReasoning(streamModel, reasoningParts, contentParts, toolIDs, streamToolCalls)
+				s.ingestStreamReasoning(rw.streamModel, rw.reasoningParts, rw.contentParts, rw.toolIDs, rw.streamToolCalls)
 				return
 			}
 			if lc.done {
@@ -218,10 +149,10 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 				emitXMLFlush()
 				_, _ = w.Write(convert.DONE)
 				flusher.Flush()
-				s.ingestStreamReasoning(streamModel, reasoningParts, contentParts, toolIDs, streamToolCalls)
+				s.ingestStreamReasoning(rw.streamModel, rw.reasoningParts, rw.contentParts, rw.toolIDs, rw.streamToolCalls)
 				return
 			}
-			clean, drop := convert.SanitizeChunk(lc.line)
+			clean, drop := convert.SanitizeChunkOpts(lc.line, s.convertOptions())
 			if drop {
 				// Non-chunk lines (upstream comments, junk frames) are never
 				// relayed and must NOT advance the keepalive timer: the
@@ -230,199 +161,12 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 				// indefinitely (#161).
 				continue
 			}
-			// Track tool-call indexes BEFORE any strip: StripEndTurnToolCalls
-			// deletes end_turn entries, so tracking after the strip would
-			// never see the name (the recorded indexes feed the
-			// continuation-fragment drop below, and any real named call
-			// flips seenRealToolCalls so the terminal finish_reason rewrite
-			// never downgrades a genuine tool-call turn).
-			trackToolCallIndexes(clean, endTurnCallIndexes, &seenRealToolCalls)
-			// Strip Codebuff end_turn pseudo-tool-calls (issue #140).
-			// The proxy injects end_turn into every upstream request to pass
-			// foreign_toolset validation; the model calls it when done. We
-			// must not relay it to clients that never declared it.
-			if bytes.Contains(clean, []byte(`"end_turn"`)) {
-				var chunk map[string]any
-				if json.Unmarshal(clean, &chunk) == nil {
-					convert.StripEndTurnToolCalls(chunk)
-					if b, err := json.Marshal(chunk); err == nil {
-						clean = b
-					}
-				}
-			}
-			// Drop continuation fragments for already-stripped end_turn
-			// indexes. This runs on EVERY chunk carrying tool_calls, not
-			// only chunks containing the "end_turn" name: a later
-			// arguments-only fragment for a stripped index has an empty
-			// name, so only its index identifies it (issue #169).
-			clean = dropEndTurnContinuations(clean, endTurnCallIndexes)
-			// Extract XML-embedded tool calls from delta.content (streaming
-			// parity with the accumulator's Finish): feed each content
-			// fragment through the extractor, withhold text inside a
-			// candidate block, and relay completed calls as native
-			// tool_calls fragments appended after any native ones. Only
-			// re-marshal when the chunk actually changed so untouched
-			// frames keep their exact bytes.
-			clean = streamChatContentToToolCalls(clean, xmlExtractor, &xmlCallIndex, &xmlCallsSeen)
-			// Restore client tool names (#140): the request renamed
-			// mapped client tools to official signature names, so fragments
-			// carrying those names must read the CLIENT's name on the wire.
-			if stats.toolMap.Len() > 0 && bytes.Contains(clean, []byte(`"tool_calls"`)) {
-				var chunk map[string]any
-				if json.Unmarshal(clean, &chunk) == nil && stats.toolMap.FromUpstreamChunk(chunk) {
-					if b, merr := json.Marshal(chunk); merr == nil {
-						clean = b
-					}
-				}
-			}
-			// Rewrite finish_reason for the terminal chunk when ALL tool calls
-			// in this stream were end_turn. The terminal chunk carries no
-			// "end_turn" string (only finish_reason: "tool_calls"), so the
-			// block above is skipped. Without this, finish_reason: "tool_calls"
-			// leaks to clients that never declared end_turn.
-			if !seenRealToolCalls && len(endTurnCallIndexes) > 0 {
-				if bytes.Contains(clean, []byte(`"finish_reason":"tool_calls"`)) {
-					var chunk map[string]any
-					if json.Unmarshal(clean, &chunk) == nil {
-						if rawChoices, ok := chunk["choices"].([]any); ok {
-							for _, raw := range rawChoices {
-								if choice, ok := raw.(map[string]any); ok {
-									if fr, ok := choice["finish_reason"].(string); ok && fr == "tool_calls" {
-										choice["finish_reason"] = "stop"
-									}
-								}
-							}
-						}
-						if b, err := json.Marshal(chunk); err == nil {
-							clean = b
-						}
-					}
-				}
-			}
-			// finish_reason parity for extracted XML calls: upstream models
-			// that emit XML tool calls in content terminate with
-			// finish_reason: "stop" (they never emit native tool_calls).
-			// Flip it so clients see a complete tool-call turn. This runs
-			// after the end_turn rewrite above, so an extracted call wins
-			// over the end_turn-only flip (a "tool_calls" rewritten to
-			// "stop" becomes "tool_calls" again).
-			if xmlCallsSeen && bytes.Contains(clean, []byte(`"finish_reason":"stop"`)) {
-				var chunk map[string]any
-				if json.Unmarshal(clean, &chunk) == nil {
-					if rawChoices, ok := chunk["choices"].([]any); ok {
-						for _, raw := range rawChoices {
-							if choice, ok := raw.(map[string]any); ok {
-								if fr, ok := choice["finish_reason"].(string); ok && fr == "stop" {
-									choice["finish_reason"] = "tool_calls"
-								}
-							}
-						}
-					}
-					if b, err := json.Marshal(chunk); err == nil {
-						clean = b
-					}
-				}
-			}
-			// Record the finish_reason the client actually sees (after the
-			// two flips above) for the XML-flush terminal repair. Cheap
-			// substring probe: only the terminal chunk unmarshals.
-			if bytes.Contains(clean, []byte(`"finish_reason"`)) {
-				var fr struct {
-					Choices []struct {
-						FinishReason string `json:"finish_reason"`
-					} `json:"choices"`
-				}
-				if json.Unmarshal(clean, &fr) == nil {
-					for _, c := range fr.Choices {
-						if c.FinishReason != "" {
-							lastFinishReason = c.FinishReason
-						}
-					}
-				}
-			}
-			// The final chunk carries the usage block (or a usage-only
-			// chunk when stream_options.include_usage is set); capture its
-			// total for the spend ledger (#122). Cheap substring probe, so
-			// the per-chunk path only pays for an unmarshal on the usage
-			// chunk itself.
-			if bytes.Contains(clean, []byte(`"usage"`)) {
-				var u struct {
-					Usage any `json:"usage"`
-				}
-				// Only adopt the total when the chunk actually carries a
-				// usage block: a trailing "usage":null or a content chunk
-				// merely mentioning the word must not zero the ledger.
-				if json.Unmarshal(clean, &u) == nil && u.Usage != nil {
-					stats.usageTokens = usageTotalTokens(u.Usage)
-				}
-			}
-			if bytes.Contains(clean, []byte(`"choices"`)) {
-				var chunk struct {
-					Model   string `json:"model"`
-					ID      string `json:"id"`
-					Choices []struct {
-						Delta struct {
-							Content          *string `json:"content"`
-							ReasoningContent *string `json:"reasoning_content"`
-							Reasoning        *string `json:"reasoning"`
-							Thinking         *string `json:"thinking"`
-							ToolCalls        []struct {
-								Index    int    `json:"index"`
-								ID       string `json:"id"`
-								Function struct {
-									Name      string `json:"name"`
-									Arguments string `json:"arguments"`
-								} `json:"function"`
-							} `json:"tool_calls"`
-						} `json:"delta"`
-					} `json:"choices"`
-				}
-				if json.Unmarshal(clean, &chunk) == nil {
-					if chunk.Model != "" && streamModel == "" {
-						streamModel = chunk.Model
-					}
-					if chunk.ID != "" {
-						xmlStreamID = chunk.ID
-					}
-					if len(chunk.Choices) > 0 {
-						delta := chunk.Choices[0].Delta
-						if delta.ReasoningContent != nil && *delta.ReasoningContent != "" {
-							reasoningParts = append(reasoningParts, *delta.ReasoningContent)
-						} else if delta.Reasoning != nil && *delta.Reasoning != "" {
-							reasoningParts = append(reasoningParts, *delta.Reasoning)
-						} else if delta.Thinking != nil && *delta.Thinking != "" {
-							reasoningParts = append(reasoningParts, *delta.Thinking)
-						}
-						if delta.Content != nil && *delta.Content != "" {
-							contentParts = append(contentParts, *delta.Content)
-						}
-						for _, tc := range delta.ToolCalls {
-							if tc.ID != "" && !toolIDsMap[tc.ID] {
-								toolIDsMap[tc.ID] = true
-								toolIDs = append(toolIDs, tc.ID)
-							}
-							acc := streamToolCalls[tc.Index]
-							if acc == nil {
-								acc = &streamToolAcc{}
-								streamToolCalls[tc.Index] = acc
-							}
-							if tc.ID != "" && acc.id == "" {
-								acc.id = tc.ID
-							}
-							if acc.name == "" {
-								acc.name = tc.Function.Name
-							}
-							acc.args.WriteString(tc.Function.Arguments)
-						}
-					}
-				}
-			}
-			// Issue #164: stamp the served model onto every relayed chunk so
-			// the streamed response identifies the model that actually
-			// served it (fallbacks included). No-op when the chunk already
-			// carries the served model or no lease drove the relay.
-			clean = rewriteChatChunkModel(clean, stats.servedModel)
-			clean = ensureChatChunkRole(clean, &roleSent)
+			// The whole per-chunk rewrite gauntlet (end_turn track/strip,
+			// continuation drop, XML feed, tool-name restore, both finish
+			// flips, model/id/reasoning capture, usage capture, model
+			// stamp, role ensure) runs as one parse-mutate-marshal
+			// pipeline (issue #249).
+			clean = rw.rewrite(clean)
 			if first {
 				first = false
 				phasetiming.FromContext(ctx).Since(phasetiming.UpstreamTTFBMS, chatStart)
@@ -434,7 +178,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			}
 			stats.chunks++
 			stats.bytes += len(frame)
-			lastWrite = time.Now()
+			*lastWrite = time.Now()
 			flusher.Flush()
 		}
 	}
@@ -467,20 +211,12 @@ func (s *Server) ingestStreamReasoning(model string, reasoningParts, contentPart
 // calls whose id actually arrived are included, matching the toolIDs list
 // that is put alongside the key.
 func canonicalStreamToolKey(calls map[int]*streamToolAcc) string {
-	indexes := make([]int, 0, len(calls))
-	for i := range calls {
-		indexes = append(indexes, i)
-	}
-	sort.Ints(indexes)
-	triples := make([][3]string, 0, len(indexes))
-	for _, i := range indexes {
-		acc := calls[i]
-		if acc.id == "" {
-			continue
+	return buildCanonicalToolKey(calls, func(acc *streamToolAcc) (string, string, string) {
+		if acc == nil {
+			return "", "", ""
 		}
-		triples = append(triples, [3]string{acc.id, acc.name, acc.args.String()})
-	}
-	return reasoningcache.CanonicalToolKey(triples)
+		return acc.id, acc.name, acc.args.String()
+	})
 }
 
 // relayJSON drains the upstream SSE stream through the accumulator and
@@ -488,15 +224,12 @@ func canonicalStreamToolKey(calls map[int]*streamToolAcc) string {
 // nothing is written and a 502 is returned (the client asked for a single
 // response; a partial one would be worse than none).
 func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Reader, stats *relayStats, chatStart time.Time) {
-	acc := convert.NewAccumulator()
+	acc := convert.NewAccumulatorOpts(s.convertOptions())
 	// Override the upstream model in the response with the served model
 	// (which is the requested model, not necessarily what upstream returned).
 	if stats.servedModel != "" {
 		acc.SetRequestedModel(stats.servedModel)
 	}
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), maxStreamLine)
-	first := true
 	// Track whether the upstream stream carried any native delta.tool_calls
 	// fragment: when it did, the accumulator skips XML extraction, so the
 	// delivered tool_calls are native and an upstream "stop" is deliberate.
@@ -505,28 +238,18 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 	// TestChatNonStream). When NO native fragment was seen, delivered calls
 	// can only be extracted ones, which pair with an upstream "stop".
 	sawNativeToolCalls := false
-	for scanner.Scan() {
-		if bytes.Contains(scanner.Bytes(), []byte(`"tool_calls":[{`)) {
+	probe := func(line []byte) {
+		if bytes.Contains(line, []byte(`"tool_calls":[{`)) {
 			sawNativeToolCalls = true
 		}
-		if ctx.Err() != nil {
-			return
-		}
-		if first {
-			first = false
-			phasetiming.FromContext(ctx).Since(phasetiming.UpstreamTTFBMS, chatStart)
-		}
-		if err := acc.Add(scanner.Bytes()); err != nil {
-			s.writeJSONError(w, http.StatusBadGateway,
-				"failed to decode upstream stream: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
-			return
-		}
-		stats.chunks++
 	}
-	if err := scanner.Err(); err != nil {
-		if ctx.Err() == nil {
+	if err := drainUpstream(ctx, r, acc, stats, chatStart, probe); err != nil {
+		if errors.Is(err, errDrainUpstreamDecode) {
 			s.writeJSONError(w, http.StatusBadGateway,
-				"upstream stream error: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
+				"failed to decode upstream stream: "+errDrainCause(err), "upstream_error", "upstream_unavailable", 0)
+		} else {
+			s.writeJSONError(w, http.StatusBadGateway,
+				"upstream stream error: "+errDrainCause(err), "upstream_error", "upstream_unavailable", 0)
 		}
 		return
 	}
@@ -641,4 +364,10 @@ func (s *Server) relayJSON(ctx context.Context, w http.ResponseWriter, r io.Read
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(out)
+}
+
+// errDrainCause strips the drainUpstream sentinel wrapper so relays build
+// their protocol envelope from the underlying accumulator/scanner error.
+func errDrainCause(err error) string {
+	return strings.TrimPrefix(err.Error(), errDrainUpstreamDecode.Error()+": ")
 }

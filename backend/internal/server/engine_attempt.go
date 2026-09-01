@@ -9,8 +9,120 @@ import (
 
 	"freebuff-proxy/backend/internal/convert"
 	"freebuff-proxy/backend/internal/pool"
+	"freebuff-proxy/backend/internal/runs"
+	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/upstream"
 )
+
+// chatBackend abstracts the acquire/chat/invalidate/cooldown/lease hooks the
+// retry-once recovery loop needs, so the pooled (fixed-token) and bridge
+// paths share one chatAttempt implementation (issue #255). Each adapter
+// maps the pool's token-indexed (pooled) or lease-based (bridge) methods onto
+// this uniform surface.
+type chatBackend interface {
+	Acquire(ctx context.Context, model string) (*pool.Lease, error)
+	Chat(ctx context.Context, lease *pool.Lease, opts upstream.ChatOptions, body []byte) (io.ReadCloser, error)
+	InvalidateSession(lease *pool.Lease)
+	InvalidateSessionSuperseded(lease *pool.Lease)
+	InvalidateRun(lease *pool.Lease, agentID string)
+	CooldownAuth(lease *pool.Lease)
+	CooldownBan(lease *pool.Lease, be *upstream.BanError)
+	CooldownRateLimit(lease *pool.Lease, rle *upstream.RateLimitError)
+	CooldownIpCapped(lease *pool.Lease, ice *upstream.IpCappedError)
+	CooldownCountry(lease *pool.Lease, cbe *upstream.CountryBlockedError)
+	LeaseRelease(lease *pool.Lease)
+	LeaseAbandon(lease *pool.Lease)
+	MarkRunFailed(lease *pool.Lease)
+	RecordRunStep(lease *pool.Lease, messageID string)
+	RecordSpend(lease *pool.Lease, tokens int64)
+}
+
+// pooledBackend adapts the pool's fixed-token methods. The lease carries the
+// token index, so token-indexed calls take it from the lease.
+type pooledBackend struct{ p *pool.Pool }
+
+func (b pooledBackend) Acquire(ctx context.Context, model string) (*pool.Lease, error) {
+	return b.p.Acquire(ctx, model)
+}
+func (b pooledBackend) Chat(ctx context.Context, lease *pool.Lease, opts upstream.ChatOptions, body []byte) (io.ReadCloser, error) {
+	return b.p.Chat(ctx, lease, opts, body)
+}
+func (b pooledBackend) InvalidateSession(lease *pool.Lease) {
+	b.p.InvalidateSession(lease.Token, lease.SessionInstanceID)
+}
+func (b pooledBackend) InvalidateSessionSuperseded(lease *pool.Lease) {
+	b.p.InvalidateSessionWithReason(lease.Token, lease.SessionInstanceID, session.ReasonSuperseded, http.StatusConflict)
+}
+func (b pooledBackend) InvalidateRun(lease *pool.Lease, agentID string) {
+	b.p.InvalidateRun(lease.Token, agentID)
+}
+func (b pooledBackend) CooldownAuth(lease *pool.Lease) {
+	b.p.CooldownToken(lease.Token, runs.DefaultCooldown)
+}
+func (b pooledBackend) CooldownBan(lease *pool.Lease, be *upstream.BanError) {
+	b.p.CooldownTokenBan(lease.Token, be)
+}
+func (b pooledBackend) CooldownRateLimit(lease *pool.Lease, rle *upstream.RateLimitError) {
+	b.p.CooldownTokenRateLimit(lease.Token, rle)
+}
+func (b pooledBackend) CooldownIpCapped(lease *pool.Lease, ice *upstream.IpCappedError) {
+	b.p.CooldownTokenIpCapped(lease.Token, ice)
+}
+func (b pooledBackend) CooldownCountry(lease *pool.Lease, cbe *upstream.CountryBlockedError) {
+	b.p.CooldownTokenCountryBlocked(lease.Token, cbe)
+}
+func (b pooledBackend) LeaseRelease(lease *pool.Lease)  { b.p.LeaseRelease(lease) }
+func (b pooledBackend) LeaseAbandon(lease *pool.Lease)  { b.p.LeaseAbandon(lease) }
+func (b pooledBackend) MarkRunFailed(lease *pool.Lease) { b.p.MarkRunFailed(lease) }
+func (b pooledBackend) RecordRunStep(lease *pool.Lease, mid string) {
+	b.p.RecordRunStep(lease, mid)
+}
+func (b pooledBackend) RecordSpend(lease *pool.Lease, tokens int64) { b.p.RecordSpend(lease, tokens) }
+
+// bridgeBackend adapts the pool's lease-based bridge methods. It carries the
+// client token used for the bridge Acquire.
+type bridgeBackend struct {
+	p     *pool.Pool
+	token string
+}
+
+func (b bridgeBackend) Acquire(ctx context.Context, model string) (*pool.Lease, error) {
+	return b.p.AcquireBridge(ctx, b.token, model)
+}
+func (b bridgeBackend) Chat(ctx context.Context, lease *pool.Lease, opts upstream.ChatOptions, body []byte) (io.ReadCloser, error) {
+	return b.p.Chat(ctx, lease, opts, body)
+}
+func (b bridgeBackend) InvalidateSession(lease *pool.Lease) {
+	b.p.InvalidateBridgeSession(lease)
+}
+func (b bridgeBackend) InvalidateSessionSuperseded(lease *pool.Lease) {
+	b.p.InvalidateBridgeSessionWithReason(lease, session.ReasonSuperseded, http.StatusConflict)
+}
+func (b bridgeBackend) InvalidateRun(lease *pool.Lease, agentID string) {
+	b.p.InvalidateBridgeRun(lease, agentID)
+}
+func (b bridgeBackend) CooldownAuth(lease *pool.Lease) {
+	b.p.CooldownBridge(lease, runs.DefaultCooldown)
+}
+func (b bridgeBackend) CooldownBan(lease *pool.Lease, be *upstream.BanError) {
+	b.p.CooldownBridgeBan(lease, be)
+}
+func (b bridgeBackend) CooldownRateLimit(lease *pool.Lease, rle *upstream.RateLimitError) {
+	b.p.CooldownBridgeRateLimit(lease, rle)
+}
+func (b bridgeBackend) CooldownIpCapped(lease *pool.Lease, ice *upstream.IpCappedError) {
+	b.p.CooldownBridgeIpCapped(lease, ice)
+}
+func (b bridgeBackend) CooldownCountry(lease *pool.Lease, cbe *upstream.CountryBlockedError) {
+	b.p.CooldownBridgeCountryBlocked(lease, cbe)
+}
+func (b bridgeBackend) LeaseRelease(lease *pool.Lease)  { b.p.LeaseRelease(lease) }
+func (b bridgeBackend) LeaseAbandon(lease *pool.Lease)  { b.p.LeaseAbandon(lease) }
+func (b bridgeBackend) MarkRunFailed(lease *pool.Lease) { b.p.MarkRunFailed(lease) }
+func (b bridgeBackend) RecordRunStep(lease *pool.Lease, mid string) {
+	b.p.RecordRunStep(lease, mid)
+}
+func (b bridgeBackend) RecordSpend(lease *pool.Lease, tokens int64) { b.p.RecordSpend(lease, tokens) }
 
 // chatAttempt runs the retry-once recovery loop for one chat request: chat
 // through the leased token; on session-invalid / run-invalid the lease is
@@ -20,27 +132,12 @@ import (
 // this request (#159); on auth-reject / ban / rate-limit / ip-capped the
 // token is cooled down (ip_capped bounded to its retryAfterMs — never the
 // Pacific-midnight lock) and the error returned for writeError. The
-// acquire/chat/invalidate/cooldown hooks are closures so the pooled
-// (fixed-token) and bridge paths share the exact same recovery semantics.
-// On success the returned body reader and final lease belong to the caller:
-// close the body and release the lease via Pool.LeaseRelease when done.
-func (s *Server) chatAttempt(
-	ctx context.Context,
-	model string,
-	normalized []byte,
-	st *chatTraceState,
-	acquire func(context.Context, string) (*pool.Lease, error),
-	chat func(context.Context, *pool.Lease, upstream.ChatOptions, []byte) (io.ReadCloser, error),
-	invalidateSession func(*pool.Lease),
-	invalidateSessionSuperseded func(*pool.Lease),
-	invalidateRun func(*pool.Lease, string),
-	cooldownAuth func(*pool.Lease),
-	cooldownBan func(*pool.Lease, *upstream.BanError),
-	cooldownRate func(*pool.Lease, *upstream.RateLimitError),
-	cooldownIpCapped func(*pool.Lease, *upstream.IpCappedError),
-	cooldownCountry func(*pool.Lease, *upstream.CountryBlockedError),
-) (io.ReadCloser, *pool.Lease, error) {
-	lease, err := acquire(ctx, model)
+// acquire/chat/invalidate/cooldown hooks are behind the chatBackend
+// interface so the pooled (fixed-token) and bridge paths share one recovery
+// implementation. On success the returned body reader and final lease belong
+// to the caller: close the body and release the lease via LeaseRelease.
+func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byte, st *chatTraceState, backend chatBackend) (io.ReadCloser, *pool.Lease, error) {
+	lease, err := backend.Acquire(ctx, model)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,10 +194,10 @@ func (s *Server) chatAttempt(
 				// not keep an abandoned agent run alive until the 6h
 				// rotation. Plain releasing here left the run active for
 				// the full duration, then wasted it.
-				s.pool.LeaseAbandon(lease)
+				backend.LeaseAbandon(lease)
 				return
 			}
-			s.pool.LeaseRelease(lease)
+			backend.LeaseRelease(lease)
 		}
 	}
 	defer release()
@@ -115,7 +212,7 @@ func (s *Server) chatAttempt(
 	var transientErr error
 	for {
 		chatStart := time.Now()
-		up, err = chat(ctx, lease, opts, normalized)
+		up, err = backend.Chat(ctx, lease, opts, normalized)
 		attempts++
 		st.attempts = attempts
 		if err == nil {
@@ -166,7 +263,7 @@ func (s *Server) chatAttempt(
 			}
 		case errors.Is(err, upstream.ErrSessionInvalid):
 			release()
-			invalidateSession(lease)
+			backend.InvalidateSession(lease)
 			if attempts > 1 {
 				return nil, nil, err
 			}
@@ -179,7 +276,7 @@ func (s *Server) chatAttempt(
 			// the error; the WAITING_ROOM_CHAIN fires before the next
 			// create). Never loops — a single reacquire, then surface.
 			release()
-			invalidateSession(lease)
+			backend.InvalidateSession(lease)
 			if attempts > 1 {
 				return nil, nil, err
 			}
@@ -196,29 +293,29 @@ func (s *Server) chatAttempt(
 			// the client cancelled ~59s). Auto-takeover is the other
 			// instance's to resolve; the next client request re-joins.
 			release()
-			invalidateSessionSuperseded(lease)
+			backend.InvalidateSessionSuperseded(lease)
 			return nil, nil, err
 		case errors.Is(err, upstream.ErrRunInvalid):
 			release()
-			invalidateRun(lease, lease.AgentID)
+			backend.InvalidateRun(lease, lease.AgentID)
 			if attempts > 1 {
 				return nil, nil, err
 			}
 		case errors.Is(err, upstream.ErrAuthRejected):
-			cooldownAuth(lease)
+			backend.CooldownAuth(lease)
 			release()
 			return nil, nil, err
 		case errors.Is(err, upstream.ErrBanned):
 			var be *upstream.BanError
 			if errors.As(err, &be) {
-				cooldownBan(lease, be)
+				backend.CooldownBan(lease, be)
 			}
 			release()
 			return nil, nil, err
 		case errors.Is(err, upstream.ErrRateLimited):
 			var rle *upstream.RateLimitError
 			if errors.As(err, &rle) {
-				cooldownRate(lease, rle)
+				backend.CooldownRateLimit(lease, rle)
 			}
 			release()
 			return nil, nil, err
@@ -231,7 +328,7 @@ func (s *Server) chatAttempt(
 			// invalidate the session (existing sessions keep running).
 			var ice *upstream.IpCappedError
 			if errors.As(err, &ice) {
-				cooldownIpCapped(lease, ice)
+				backend.CooldownIpCapped(lease, ice)
 			}
 			release()
 			return nil, nil, err
@@ -241,7 +338,7 @@ func (s *Server) chatAttempt(
 			// every request re-hits upstream run-start inside the window.
 			var cbe *upstream.CountryBlockedError
 			if errors.As(err, &cbe) {
-				cooldownCountry(lease, cbe)
+				backend.CooldownCountry(lease, cbe)
 			}
 			release()
 			return nil, nil, err
@@ -273,7 +370,7 @@ func (s *Server) chatAttempt(
 			}
 			transientErr = err
 		}
-		lease, err = acquire(ctx, effectiveModel)
+		lease, err = backend.Acquire(ctx, effectiveModel)
 		if err != nil {
 			return nil, nil, err
 		}

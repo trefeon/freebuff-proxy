@@ -1,5 +1,10 @@
 package dashboard
 
+import (
+	_ "embed"
+	"encoding/json"
+)
+
 // AdminRoute is one row of the admin route table: the HTTP method and the
 // Go 1.22 mux path pattern the gateway registers, plus the auth level the
 // server wraps around its handler. Path may carry single-segment wildcards
@@ -45,59 +50,90 @@ const (
 //     factory default.
 //   - adminToken: /admin/reload is a curl/automation endpoint, so it takes
 //     the Bearer ADMIN_TOKEN gate instead of the session cookie.
-var AdminRoutes = [...]AdminRoute{
-	{Method: "POST", Path: "/admin/reload", Auth: AuthAdminToken},
-	{Method: "GET", Path: "/admin/login", Auth: AuthNone},
-	{Method: "POST", Path: "/admin/login", Auth: AuthNone},
-	{Method: "GET", Path: "/admin/logout", Auth: AuthNone},
-	{Method: "POST", Path: "/admin/logout", Auth: AuthNone},
+//
+//go:embed admin_manifest.json
+var adminManifestRaw []byte
 
-	{Method: "GET", Path: "/admin/api/overview", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/tokens", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/models", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/traces", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/setup", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/config", Auth: AuthSensitive},
-	{Method: "GET", Path: "/admin/api/config/meta", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/logs", Auth: AuthSensitive},
-	{Method: "GET", Path: "/admin/api/metrics", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/version", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/upstream-drift", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/events", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/api/auth/status", Auth: AuthDashboard},
+// AdminRoutes is the single enumeration of the admin HTTP surface, loaded
+// from the embedded manifest (issue #285): the manifest is the only source
+// of the method/path/auth contract and every other representation (the SPA
+// paths.js map, the dashboard dataFor switch, the server registration)
+// must agree with it — the parity test fails on disagreement.
+//
+// Auth semantics, matching the wiring this table replaced:
+//   - login/logout: no session required (login must be reachable without a
+//     cookie; logout must clear expired sessions). POST /admin/login still
+//     carries CSRF: a cross-origin POST with wrong tokens would otherwise
+//     burn the victim's per-IP login-attempt budget.
+//   - assets: public — the login page (served without a cookie) references
+//     them, so they must NOT sit behind dashboardAuth.
+//   - sensitive: raw .env read/write, logs, token management and
+//     automation; loopback-only while ADMIN_TOKEN is unset or still the
+//     factory default.
+//   - adminToken: /admin/reload is a curl/automation endpoint, so it takes
+//     the Bearer ADMIN_TOKEN gate instead of the session cookie.
+var AdminRoutes = mustAdminRoutes()
 
-	{Method: "GET", Path: "/admin", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/tokens", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/models", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/traces", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/setup", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/playground", Auth: AuthDashboard},
-	{Method: "GET", Path: "/admin/config", Auth: AuthSensitive},
-	{Method: "GET", Path: "/admin/logs", Auth: AuthSensitive},
-	{Method: "GET", Path: "/admin/metrics", Auth: AuthDashboard},
+// manifestRow is one raw manifest row.
+type manifestRow struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Auth   string `json:"auth"`
+	JS     *struct {
+		Export string `json:"export"`
+		Key    string `json:"key"`
+	} `json:"js"`
+}
 
-	{Method: "POST", Path: "/admin/playground/chat", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/login/start", Auth: AuthSensitive},
-	{Method: "GET", Path: "/admin/login/status", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/config", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/unlock", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/lock", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/unlock-lock", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/bridge-tokens/{key}/lock", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/bridge-tokens/{key}/unlock", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/finish", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/drop-session", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/test", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/{id}/session", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/test-all", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/add", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/remove", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/tokens/swap", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/mode", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/diag", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/api/change-password", Auth: AuthSensitive},
-	{Method: "POST", Path: "/admin/smoke", Auth: AuthSensitive},
+// AdminManifestEntry is one manifest row plus its SPA client binding: the
+// JS export map (adminApi / adminActions / adminShell / tokenActions) and
+// the member key the SPA addresses this endpoint by ("" when the SPA has
+// no client entry for the row).
+type AdminManifestEntry struct {
+	AdminRoute
+	JSExport string
+	JSKey    string
+}
 
-	{Method: "GET", Path: "/admin/assets/", Auth: AuthNone},
+// ParseAdminManifest decodes the embedded manifest. Exported for tests and
+// for tooling that needs the same contract the server registers.
+func ParseAdminManifest() ([]AdminRoute, error) {
+	entries, err := ParseAdminManifestEntries()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AdminRoute, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.AdminRoute)
+	}
+	return out, nil
+}
+
+// ParseAdminManifestEntries decodes the manifest WITH the SPA client
+// bindings (the parity test consumes these).
+func ParseAdminManifestEntries() ([]AdminManifestEntry, error) {
+	var rows []manifestRow
+	if err := json.Unmarshal(adminManifestRaw, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]AdminManifestEntry, 0, len(rows))
+	for _, row := range rows {
+		e := AdminManifestEntry{
+			AdminRoute: AdminRoute{Method: row.Method, Path: row.Path, Auth: row.Auth},
+		}
+		if row.JS != nil {
+			e.JSExport = row.JS.Export
+			e.JSKey = row.JS.Key
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func mustAdminRoutes() []AdminRoute {
+	routes, err := ParseAdminManifest()
+	if err != nil {
+		panic("dashboard: invalid embedded admin manifest: " + err.Error())
+	}
+	return routes
 }

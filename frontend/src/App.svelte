@@ -2,17 +2,8 @@
   import { onMount } from 'svelte';
   import Sidebar from './lib/Sidebar.svelte';
   import Footer from './lib/Footer.svelte';
-  import Overview from './lib/pages/Overview.svelte';
-  import Tokens from './lib/pages/Tokens.svelte';
-  import QuotaTracker from './lib/pages/QuotaTracker.svelte';
-  import Models from './lib/pages/Models.svelte';
-  import Settings from './lib/pages/Settings.svelte';
-  import Logs from './lib/pages/Logs.svelte';
-  import DevTools from './lib/pages/DevTools.svelte';
   import Login from './lib/pages/Login.svelte';
-  import Setup from './lib/pages/Setup.svelte';
-  import Metrics from './lib/pages/Metrics.svelte';
-  import Traces from './lib/pages/Traces.svelte';
+  import { pageComponentFor } from './lib/nav.js';
   import ChangePasswordModal from './lib/components/ChangePasswordModal.svelte';
   import Alert from './lib/components/Alert.svelte';
   import Button from './lib/components/Button.svelte';
@@ -41,6 +32,10 @@
   let versionInfo = $state(null);
   let isDefaultAdminToken = $state(false);
   let showChangePasswordModal = $state(false);
+
+  // Page mount resolved from the same nav registry the Sidebar filters
+  // (issue #290): one source of truth for the page set.
+  let pageComponent = $derived(pageComponentFor(activeTab));
 
   function syncTabFromURL() {
     activeTab = getInitialTab();
@@ -141,28 +136,9 @@
 
       {#key activeTab}
         <div class="page-enter">
-          {#if activeTab === 'overview'}
-            <Overview />
-          {:else if activeTab === 'tokens'}
-            <Tokens />
-          {:else if activeTab === 'quota'}
-            <QuotaTracker />
-          {:else if activeTab === 'models'}
-            <Models />
-          {:else if activeTab === 'settings'}
-            <Settings />
-          {:else if activeTab === 'logs'}
-            <Logs />
-          {:else if activeTab === 'devtools'}
-            <DevTools />
-          {:else if activeTab === 'playground'}
-            <DevTools />
-          {:else if activeTab === 'setup'}
-            <Setup />
-          {:else if activeTab === 'metrics'}
-            <Metrics />
-          {:else if activeTab === 'traces'}
-            <Traces />
+          {#if pageComponent}
+            {@const ActivePage = pageComponent}
+            <ActivePage />
           {:else if activeTab === 'login'}
             <Login />
           {:else}

@@ -15,24 +15,23 @@ func (p *Pool) LeaseRelease(lease *Lease) {
 	if lease == nil || lease.Run == nil {
 		return
 	}
-	if lease.Bridge != nil {
-		lease.Bridge.runs.Release(lease.Run)
-		return
+	t := lease.leaseTarget()
+	if t == nil {
+		return // synthetic lease without a backing entry or bridge
 	}
-	if lease.entry == nil {
-		return // synthetic lease without a backing entry
-	}
-	lease.entry.runs.Release(lease.Run)
+	t.runs.Release(lease.Run)
 	// A lease on a removed token (RemoveLastToken swapped the snapshot out
 	// from under a concurrent Acquire) releases through its own entry — the
 	// bounds-checked index path would no-op and leak the run's inflight, or
 	// mis-target a reused index. RemoveLastToken parked the entry undrained
 	// when it observed the slip; drain it once its last lease has released.
-	p.retiredMu.Lock()
-	_, parked := p.retired[lease.entry]
-	p.retiredMu.Unlock()
-	if parked && lease.entry.runs.InflightCount() == 0 {
-		p.drainRemovedToken(lease.entry)
+	if t.entry != nil {
+		p.retiredMu.Lock()
+		_, parked := p.retired[t.entry]
+		p.retiredMu.Unlock()
+		if parked && t.entry.runs.InflightCount() == 0 {
+			p.drainRemovedToken(t.entry)
+		}
 	}
 }
 
@@ -47,19 +46,11 @@ func (p *Pool) LeaseAbandon(lease *Lease) {
 	if lease == nil || lease.Run == nil {
 		return
 	}
-	if lease.Bridge != nil {
-		lease.Bridge.runs.ReleaseAbandoned(lease.Run)
+	t := lease.leaseTarget()
+	if t == nil {
 		return
 	}
-	if lease.entry != nil {
-		lease.entry.runs.ReleaseAbandoned(lease.Run)
-		return
-	}
-	toks := p.toks.Load()
-	if lease.Token < 0 || lease.Token >= len(*toks) {
-		return
-	}
-	(*toks)[lease.Token].runs.ReleaseAbandoned(lease.Run)
+	t.runs.ReleaseAbandoned(lease.Run)
 }
 
 // RecordRunStep records a completed chat step on the lease's run (issue
@@ -71,19 +62,11 @@ func (p *Pool) RecordRunStep(lease *Lease, messageID string) {
 	if lease == nil || lease.Run == nil {
 		return
 	}
-	if lease.Bridge != nil {
-		lease.Bridge.runs.RecordStep(lease.Run, messageID)
+	t := lease.leaseTarget()
+	if t == nil {
 		return
 	}
-	if lease.entry != nil {
-		lease.entry.runs.RecordStep(lease.Run, messageID)
-		return
-	}
-	toks := p.toks.Load()
-	if lease.Token < 0 || lease.Token >= len(*toks) {
-		return
-	}
-	(*toks)[lease.Token].runs.RecordStep(lease.Run, messageID)
+	t.runs.RecordStep(lease.Run, messageID)
 }
 
 // MarkRunFailed marks the lease's run as failed for its eventual FINISH
@@ -95,19 +78,11 @@ func (p *Pool) MarkRunFailed(lease *Lease) {
 	if lease == nil || lease.Run == nil {
 		return
 	}
-	if lease.Bridge != nil {
-		lease.Bridge.runs.MarkFailed(lease.Run)
+	t := lease.leaseTarget()
+	if t == nil {
 		return
 	}
-	if lease.entry != nil {
-		lease.entry.runs.MarkFailed(lease.Run)
-		return
-	}
-	toks := p.toks.Load()
-	if lease.Token < 0 || lease.Token >= len(*toks) {
-		return
-	}
-	(*toks)[lease.Token].runs.MarkFailed(lease.Run)
+	t.runs.MarkFailed(lease.Run)
 }
 
 // RecordSpend adds tokens to the lease's backing token spend ledger (issue
@@ -121,19 +96,15 @@ func (p *Pool) RecordSpend(lease *Lease, tokens int64) {
 	if lease == nil || tokens <= 0 {
 		return
 	}
-	if lease.Bridge != nil {
-		p.bridgeRecordSpend(lease.Bridge, tokens)
+	t := lease.leaseTarget()
+	if t == nil {
 		return
 	}
-	if lease.entry != nil {
-		p.recordSpendEntry(lease.entry, tokens)
-		return
+	if t.bridge != nil {
+		p.bridgeRecordSpend(t.bridge, tokens)
+	} else if t.entry != nil {
+		p.recordSpendEntry(t.entry, tokens)
 	}
-	toks := p.toks.Load()
-	if lease.Token < 0 || lease.Token >= len(*toks) {
-		return
-	}
-	p.recordSpend(lease.Token, tokens)
 }
 
 // InvalidateSession drops the cached free session of token so the next
@@ -152,7 +123,7 @@ func (p *Pool) InvalidateSession(token int, instanceID string) {
 // (#159) so the re-admit storm detector can attribute the invalidation; the
 // other session-invalid paths keep the generic instance_invalidated reason.
 func (p *Pool) InvalidateSessionWithReason(token int, instanceID, reason string, status int) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return
 	}
@@ -163,7 +134,7 @@ func (p *Pool) InvalidateSessionWithReason(token int, instanceID, reason string,
 // Acquire starts a fresh one (run-invalid recovery). Out-of-range tokens are
 // ignored.
 func (p *Pool) InvalidateRun(token int, agentID string) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return
 	}
@@ -176,7 +147,7 @@ func (p *Pool) InvalidateRun(token int, agentID string) {
 // re-surfacing the same waiting room. Returns how many queued caches were
 // cleared. Other states (active/disabled) are untouched.
 func (p *Pool) ClearQueuedCaches() int {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	cleared := 0
 	for _, tok := range *toks {
 		if tok.session.ClearQueued() {
@@ -219,7 +190,7 @@ func (p *Pool) InvalidateBridgeRun(lease *Lease, agentID string) {
 // that slips through the busy-check/swap race is released through the
 // retired map and drained once it releases.
 func (p *Pool) RemoveLastToken() error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if len(*toks) == 0 {
 		return errors.New("pool: no tokens to remove")
 	}
@@ -227,29 +198,20 @@ func (p *Pool) RemoveLastToken() error {
 	if last.runs.InflightCount() > 0 {
 		return errors.New("pool: token has in-flight requests; wait for them to finish")
 	}
-	next := append([]*tokenEntry{}, (*toks)[:len(*toks)-1]...)
-	p.toks.Store(&next)
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	p.msgsPerToken = p.msgsPerToken[:len(p.msgsPerToken)-1]
-	p.spendMu.Lock()
-	defer p.spendMu.Unlock()
-	p.spendPerToken = p.spendPerToken[:len(p.spendPerToken)-1]
-
-	// The removed slot's 1-based mismatch key is dropped: a later AddToken
-	// at the same slot must not inherit a stale escalation window.
-	p.mismatchMu.Lock()
-	delete(p.mismatch, len(next)+1)
-	p.mismatchMu.Unlock()
-
-	// The busy check above and the swap are TOCTOU: an Acquire that loaded
-	// the pre-removal snapshot can lease the removed token in between. Park
-	// the entry so that lease is still released (LeaseRelease bounds-checks
-	// the new snapshot and would otherwise no-op, leaking the run's
-	// inflight), then drain now when no lease slipped — finishing the
-	// removed token's run and ending its admitted session. A slipped lease
-	// keeps the entry parked; LeaseRelease drains it once the last lease
-	// releases.
+	// Pop the trailing entry through the roster (one mutation; the removed
+	// slot's 1-based mismatch key is dropped inside). The busy check above
+	// and the swap are TOCTOU: an Acquire that loaded the pre-removal
+	// snapshot can lease the removed token in between. Park the entry so
+	// that lease is still released (LeaseRelease bounds-checks the new
+	// snapshot and would otherwise no-op, leaking the run's inflight), then
+	// drain now when no lease slipped — finishing the removed token's run and
+	// ending its admitted session. A slipped lease keeps the entry parked;
+	// LeaseRelease drains it once the last lease releases.
+	removed, ok := p.roster.removeLast()
+	if !ok {
+		return errors.New("pool: no tokens to remove")
+	}
+	last = removed
 	slip := last.runs.InflightCount() > 0
 	p.retiredMu.Lock()
 	if p.retired == nil {
@@ -271,7 +233,7 @@ func (p *Pool) RemoveLastToken() error {
 // The removed entry is parked + drained exactly like RemoveLastToken; the
 // usage/spend/mismatch tracks are rebuilt index-aligned.
 func (p *Pool) RemoveTokenAt(idx int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if idx < 0 || idx >= len(*toks) {
 		return errors.New("pool: token index out of range")
 	}
@@ -280,28 +242,13 @@ func (p *Pool) RemoveTokenAt(idx int) error {
 			return errors.New("pool: active requests in flight; retry once they finish")
 		}
 	}
-	target := (*toks)[idx]
-	next := make([]*tokenEntry, 0, len(*toks)-1)
-	next = append(next, (*toks)[:idx]...)
-	next = append(next, (*toks)[idx+1:]...)
-	p.toks.Store(&next)
-	p.usageMu.Lock()
-	p.msgsPerToken = append(p.msgsPerToken[:idx], p.msgsPerToken[idx+1:]...)
-	p.usageMu.Unlock()
-	p.spendMu.Lock()
-	p.spendPerToken = append(p.spendPerToken[:idx], p.spendPerToken[idx+1:]...)
-	p.spendMu.Unlock()
-	p.mismatchMu.Lock()
-	for key, v := range p.mismatch {
-		switch {
-		case key == idx+1:
-			delete(p.mismatch, key)
-		case key > idx+1:
-			p.mismatch[key-1] = v
-			delete(p.mismatch, key)
-		}
+	// Remove the entry through the roster (single-mutated mutation; the
+	// usage/spend travel with the entry and the mismatch map is reindexed
+	// inside).
+	target, ok := p.roster.removeAt(idx)
+	if !ok {
+		return errors.New("pool: token index out of range")
 	}
-	p.mismatchMu.Unlock()
 	p.retiredMu.Lock()
 	if p.retired == nil {
 		p.retired = make(map[*tokenEntry]time.Time)
@@ -315,7 +262,7 @@ func (p *Pool) RemoveTokenAt(idx int) error {
 // SwapTokens swaps the token entries at index i and j in the fixed-token list.
 // Active in-flight requests on any token refuse the swap to avoid race hazards.
 func (p *Pool) SwapTokens(i, j int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if toks == nil {
 		return errors.New("pool: no tokens configured")
 	}
@@ -330,37 +277,11 @@ func (p *Pool) SwapTokens(i, j int) error {
 			return errors.New("pool: active requests in flight; retry once they finish")
 		}
 	}
-	next := make([]*tokenEntry, len(*toks))
-	copy(next, *toks)
-	next[i], next[j] = next[j], next[i]
-	p.toks.Store(&next)
-
-	p.usageMu.Lock()
-	if i < len(p.msgsPerToken) && j < len(p.msgsPerToken) {
-		p.msgsPerToken[i], p.msgsPerToken[j] = p.msgsPerToken[j], p.msgsPerToken[i]
+	// Swap the entries (and their 1-based mismatch keys) through the roster
+	// in one mutation — no more separate usageMu/spendMu/mismatchMu dances.
+	if !p.roster.swap(i, j) {
+		return errors.New("pool: token index out of range")
 	}
-	p.usageMu.Unlock()
-
-	p.spendMu.Lock()
-	if i < len(p.spendPerToken) && j < len(p.spendPerToken) {
-		p.spendPerToken[i], p.spendPerToken[j] = p.spendPerToken[j], p.spendPerToken[i]
-	}
-	p.spendMu.Unlock()
-	p.mismatchMu.Lock()
-	m1, ok1 := p.mismatch[i+1]
-	m2, ok2 := p.mismatch[j+1]
-	if ok1 {
-		p.mismatch[j+1] = m1
-	} else {
-		delete(p.mismatch, j+1)
-	}
-	if ok2 {
-		p.mismatch[i+1] = m2
-	} else {
-		delete(p.mismatch, i+1)
-	}
-	p.mismatchMu.Unlock()
-
 	return nil
 }
 
@@ -388,7 +309,7 @@ func (p *Pool) drainRemovedToken(entry *tokenEntry) {
 // (bridge-mode switch). In-flight leases on removed tokens no-op on release
 // (bounds-checked index access). Config must be updated separately.
 func (p *Pool) RemoveAllTokens(ctx context.Context) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	for _, t := range *toks {
 		t.runs.FinishAllRuns(ctx)
 		if err := t.session.EndSession(ctx); err != nil {
@@ -396,24 +317,14 @@ func (p *Pool) RemoveAllTokens(ctx context.Context) {
 				"err", err, "token_label", tokenEntryLabel(t))
 		}
 	}
-	empty := make([]*tokenEntry, 0)
-	p.toks.Store(&empty)
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	p.msgsPerToken = nil
-	p.spendMu.Lock()
-	defer p.spendMu.Unlock()
-	p.spendPerToken = nil
-	// Drop every pooled mismatch window: the pool is empty, so stale keys
-	// would only survive as debris (bridge entries use the shared key 0).
-	p.mismatchMu.Lock()
-	p.mismatch = make(map[int]mismatchEscalation)
-	p.mismatchMu.Unlock()
+	// Clear the roster (entries, per-entry ledgers, and the mismatch map)
+	// through the single mutation entry point.
+	p.roster.clear()
 }
 
 // FinishTokenRuns finishes all active runs of token (dashboard action).
 func (p *Pool) FinishTokenRuns(ctx context.Context, token int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}
@@ -425,7 +336,7 @@ func (p *Pool) FinishTokenRuns(ctx context.Context, token int) error {
 // Forcibly ends the active session so the operator can change model immediately;
 // the next request re-admits fresh.
 func (p *Pool) DropTokenSession(ctx context.Context, token int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}
@@ -457,7 +368,7 @@ func (p *Pool) Shutdown(ctx context.Context) {
 	p.wg.Wait()
 
 	var errs []string
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	for i, tok := range *toks {
 		tokCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 		tok.runs.Shutdown(tokCtx)

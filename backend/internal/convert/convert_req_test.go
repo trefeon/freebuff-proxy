@@ -642,18 +642,12 @@ func TestNormalizeRequestEffortClamp(t *testing.T) {
 // Issue #58 — optional prompt & context compression.
 // ---------------------------------------------------------------------------
 func TestCompressMessages(t *testing.T) {
-	shrinkBudget := func(t *testing.T, keepLast int) {
-		t.Helper()
-		old := compressKeepLast
-		compressKeepLast = keepLast
-		t.Cleanup(func() { compressKeepLast = old })
-	}
 	msg := func(role, content string) map[string]any {
 		return map[string]any{"role": role, "content": content}
 	}
 
 	t.Run("budget enforcement with marker", func(t *testing.T) {
-		shrinkBudget(t, 4)
+		opts := Options{CompressKeepLast: 4}
 		msgs := []any{
 			msg("system", "sys"),
 			msg("user", "u1"),
@@ -664,7 +658,7 @@ func TestCompressMessages(t *testing.T) {
 			msg("assistant", "a3"),
 			msg("user", "u4"),
 		}
-		got, dropped := compressMessages(msgs)
+		got, dropped := compressMessages(msgs, opts)
 		if dropped != 3 {
 			t.Fatalf("dropped = %d, want 3 (u1, a1, u2)", dropped)
 		}
@@ -688,7 +682,7 @@ func TestCompressMessages(t *testing.T) {
 	})
 
 	t.Run("tool messages never dropped", func(t *testing.T) {
-		shrinkBudget(t, 4)
+		opts := Options{CompressKeepLast: 4}
 		toolMsg := msg("tool", "result")
 		assistantCall := map[string]any{
 			"role":       "assistant",
@@ -704,7 +698,7 @@ func TestCompressMessages(t *testing.T) {
 			msg("assistant", "a1"),
 			msg("user", "u3"),
 		}
-		got, dropped := compressMessages(msgs)
+		got, dropped := compressMessages(msgs, opts)
 		if dropped != 1 {
 			t.Fatalf("dropped = %d, want 1 (only u1; tool call/result survive)", dropped)
 		}
@@ -731,7 +725,7 @@ func TestCompressMessages(t *testing.T) {
 	})
 
 	t.Run("last message never dropped or truncated", func(t *testing.T) {
-		shrinkBudget(t, 3)
+		opts := Options{CompressKeepLast: 3}
 		long := strings.Repeat("x", 4096)
 		msgs := []any{
 			msg("system", "sys"),
@@ -740,7 +734,7 @@ func TestCompressMessages(t *testing.T) {
 			msg("user", long),
 			msg("user", long),
 		}
-		got, _ := compressMessages(msgs)
+		got, _ := compressMessages(msgs, opts)
 		last := got[len(got)-1].(map[string]any)
 		if last["content"] != long {
 			t.Error("last (current) message was truncated")
@@ -748,18 +742,14 @@ func TestCompressMessages(t *testing.T) {
 	})
 
 	t.Run("content cap with marker", func(t *testing.T) {
-		shrinkBudget(t, 10) // no middle drops; capping still applies
-		oldBytes := compressMaxContentBytes
-		compressMaxContentBytes = 16
-		t.Cleanup(func() { compressMaxContentBytes = oldBytes })
-
+		opts := Options{CompressKeepLast: 10, CompressMaxContentBytes: 16}
 		long := strings.Repeat("x", 100)
 		msgs := []any{
 			msg("system", "sys"),
 			msg("user", long),
 			msg("user", long), // the last message: never truncated
 		}
-		got, dropped := compressMessages(msgs)
+		got, dropped := compressMessages(msgs, opts)
 		if dropped != 0 {
 			t.Fatalf("dropped = %d, want 0", dropped)
 		}
@@ -776,9 +766,9 @@ func TestCompressMessages(t *testing.T) {
 	})
 
 	t.Run("short conversation untouched", func(t *testing.T) {
-		shrinkBudget(t, 4)
+		opts := Options{CompressKeepLast: 4}
 		msgs := []any{msg("system", "sys"), msg("user", "u1"), msg("assistant", "a1")}
-		got, dropped := compressMessages(msgs)
+		got, dropped := compressMessages(msgs, opts)
 		if dropped != 0 || len(got) != len(msgs) {
 			t.Fatalf("short conversation changed: dropped=%d len=%d", dropped, len(got))
 		}
@@ -791,10 +781,7 @@ func TestCompressMessages(t *testing.T) {
 }
 
 func TestNormalizeRequestCompression(t *testing.T) {
-	old := compressKeepLast
-	compressKeepLast = 4
-	t.Cleanup(func() { compressKeepLast = old })
-
+	opts := Options{CompressKeepLast: 4}
 	body := map[string]any{
 		"model":    "m",
 		"messages": []any{},
@@ -808,10 +795,10 @@ func TestNormalizeRequestCompression(t *testing.T) {
 			map[string]any{"role": role, "content": fmt.Sprintf("msg-%d", i)})
 	}
 
-	t.Setenv("COMPRESS_PROMPT", "true")
-	out, err := NormalizeRequest(mustJSON(t, body), "")
+	opts.CompressPrompt = true
+	out, err := NormalizeRequestOpts(mustJSON(t, body), "", opts)
 	if err != nil {
-		t.Fatalf("NormalizeRequest: %v", err)
+		t.Fatalf("NormalizeRequestOpts: %v", err)
 	}
 	got := decode(t, out)
 	msgs := got["messages"].([]any)
@@ -825,13 +812,13 @@ func TestNormalizeRequestCompression(t *testing.T) {
 		t.Errorf("marker missing: %v", msgs[0])
 	}
 
-	t.Setenv("COMPRESS_PROMPT", "false")
-	out, err = NormalizeRequest(mustJSON(t, body), "")
+	opts.CompressPrompt = false
+	out, err = NormalizeRequestOpts(mustJSON(t, body), "", opts)
 	if err != nil {
-		t.Fatalf("NormalizeRequest: %v", err)
+		t.Fatalf("NormalizeRequestOpts: %v", err)
 	}
 	if got := decode(t, out); len(got["messages"].([]any)) != 8 {
-		t.Errorf("COMPRESS_PROMPT=false still compressed: %d messages", len(got["messages"].([]any)))
+		t.Errorf("compression on=false still compressed: %d messages", len(got["messages"].([]any)))
 	}
 }
 
@@ -1062,9 +1049,7 @@ func TestNormalizeRequest_LeakedThinkTagExtraction(t *testing.T) {
 }
 
 func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
-	defer SetReasoningLookup(nil)
-
-	SetReasoningLookup(func(toolID string, content, toolCallsJSON string) (string, string, bool) {
+	lookup := func(toolID string, content, toolCallsJSON string) (string, string, bool) {
 		if toolID == "call_abc123" {
 			return "restored reasoning for call_abc123", "sig_123", true
 		}
@@ -1072,7 +1057,7 @@ func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
 			return "restored reasoning via json", "sig_json", true
 		}
 		return "", "", false
-	})
+	}
 
 	t.Run("restores reasoning_content by tool call id", func(t *testing.T) {
 		body := map[string]any{
@@ -1094,7 +1079,7 @@ func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
 				},
 			},
 		}
-		out, err := NormalizeRequest(mustJSON(t, body), "")
+		out, err := NormalizeRequestOpts(mustJSON(t, body), "", Options{ReasoningLookup: lookup})
 		if err != nil {
 			t.Fatalf("NormalizeRequest: %v", err)
 		}
@@ -1129,7 +1114,7 @@ func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
 				},
 			},
 		}
-		out, err := NormalizeRequest(mustJSON(t, body), "")
+		out, err := NormalizeRequestOpts(mustJSON(t, body), "", Options{ReasoningLookup: lookup})
 		if err != nil {
 			t.Fatalf("NormalizeRequest: %v", err)
 		}
@@ -1161,7 +1146,7 @@ func TestNormalizeRequest_ReasoningLookupRestoration(t *testing.T) {
 				},
 			},
 		}
-		out, err := NormalizeRequest(mustJSON(t, body), "")
+		out, err := NormalizeRequestOpts(mustJSON(t, body), "", Options{ReasoningLookup: lookup})
 		if err != nil {
 			t.Fatalf("NormalizeRequest: %v", err)
 		}

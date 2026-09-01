@@ -106,9 +106,9 @@ func (c *Client) requestAds(ctx context.Context, provider string) error {
 	// chat ai-sdk UA newRequest set — the CLI's ads POST carries exactly
 	// this product UA (#124).
 	req.Header.Set("User-Agent", freebuffCliUA)
-	resp, cancel, err := c.do(req, c.sessionCallTimeout)
-	if err != nil {
-		return err
+	resp, cancel, classErr := c.do(req, c.sessionCallTimeout)
+	if classErr != nil && resp == nil {
+		return classErr
 	}
 	// do() returns a nil cancel when the context already carried a deadline
 	// (the chain's own timeout), so guard the defer.
@@ -116,7 +116,9 @@ func (c *Client) requestAds(ctx context.Context, provider string) error {
 		defer cancel()
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 400 {
+	if classErr != nil {
+		// do() classified a >=400 response once; the ads path keeps its own
+		// descriptive error from the (already-read) body.
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxAdResponseRead))
 		return fmt.Errorf("ads status %d: %s", resp.StatusCode, truncate(string(raw), 200))
 	}
@@ -190,15 +192,15 @@ func (c *Client) getStreak(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	resp, cancel, err := c.do(req, c.sessionCallTimeout)
-	if err != nil {
-		return err
+	resp, cancel, classErr := c.do(req, c.sessionCallTimeout)
+	if classErr != nil && resp == nil {
+		return classErr
 	}
 	if cancel != nil {
 		defer cancel()
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 400 {
+	if classErr != nil {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxAdResponseRead))
 		return fmt.Errorf("streak status %d: %s", resp.StatusCode, truncate(string(raw), 200))
 	}

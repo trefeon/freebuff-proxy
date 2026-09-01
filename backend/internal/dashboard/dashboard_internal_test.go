@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/registry"
 	"freebuff-proxy/backend/internal/upstream"
@@ -173,12 +174,12 @@ func TestMetricsDataRepeatedSampling(t *testing.T) {
 // report the same count as /v1/models and /admin/overview.
 func TestMetricsModelCountServedGate(t *testing.T) {
 	d := testDashboard(t)
-	if d.reg.ModelCount() <= len(registry.SupportedModelIDs) {
+	if d.reg.ModelCount() <= len(modelcat.ServedIDs()) {
 		t.Fatalf("precondition: fallback registry should exceed the served set (got %d)", d.reg.ModelCount())
 	}
 	md := d.metricsData()
-	if md.Models != len(registry.SupportedModelIDs) {
-		t.Errorf("metrics Models = %d, want %d (served set)", md.Models, len(registry.SupportedModelIDs))
+	if md.Models != len(modelcat.ServedIDs()) {
+		t.Errorf("metrics Models = %d, want %d (served set)", md.Models, len(modelcat.ServedIDs()))
 	}
 }
 
@@ -311,16 +312,16 @@ func TestModelsDataServedGateOnly(t *testing.T) {
 	}
 	reg := registry.New(cfg, nil)
 	reg.LoadFallback()
-	if reg.ModelCount() <= len(registry.SupportedModelIDs) {
+	if reg.ModelCount() <= len(modelcat.ServedIDs()) {
 		t.Fatalf("precondition: fallback registry should exceed the served set (got %d)", reg.ModelCount())
 	}
 	d := New(func() *config.Config { return cfg }, nil, reg, nil, nil)
 	md := d.modelsData()
-	if md.Count != len(registry.SupportedModelIDs) {
-		t.Errorf("Count = %d, want %d (served set)", md.Count, len(registry.SupportedModelIDs))
+	if md.Count != len(modelcat.ServedIDs()) {
+		t.Errorf("Count = %d, want %d (served set)", md.Count, len(modelcat.ServedIDs()))
 	}
 	for _, row := range md.Models {
-		if !registry.IsServedModel(row.ID) {
+		if !modelcat.IsServed(row.ID) {
 			t.Errorf("models view contains unserved model %q", row.ID)
 		}
 	}

@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { RefreshCw } from '@lucide/svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import Card from '../components/Card.svelte';
@@ -7,11 +7,7 @@
   import Button from '../components/Button.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import PremiumQuotaBar from '../components/PremiumQuotaBar.svelte';
-  import { fetchAPI } from '../api/client.js';
-  import { adminApi } from '../api/paths.js';
-  import { usePolling } from '../utils/polling.js';
-  import { useEventStream } from '../utils/events.js';
-  import { onMount } from 'svelte';
+  import { tokensData, tokensError, ensureTokensStore, refreshTokens } from '../stores/tokens.js';
   import { tr } from '../i18n.js';
   import { formatLocalDate } from '../utils/format.js';
 
@@ -22,33 +18,33 @@
   // reset cells re-render "resets in" against this clock every second.
   let now = $state(Date.now());
 
-  async function fetchData() {
-    try {
-      data = await fetchAPI(adminApi.tokens);
-      error = '';
-    } catch (e) {
-      error = e.message || $tr('Failed to load quota data');
-    } finally {
-      loading = false;
-    }
-  }
-
-  let unsubEvents = null;
+  let unsubStore = null;
+  let unsubErr = null;
+  let tick = null;
   onMount(() => {
-    unsubEvents = useEventStream({
-      onTokens: (freshData) => {
-        data = freshData;
+    // One shared tokens store: the page renders from the cached snapshot and
+    // the store owns the poll + SSE subscription (issue #292).
+    const release = ensureTokensStore();
+    unsubStore = tokensData.subscribe((v) => {
+      if (v) {
+        data = v;
         loading = false;
         error = '';
-      },
+      }
     });
-  });
-  usePolling(fetchData, 10000);
-  const tick = setInterval(() => { now = Date.now(); }, 1000);
-
-  onDestroy(() => {
-    unsubEvents?.();
-    clearInterval(tick);
+    unsubErr = tokensError.subscribe((err) => {
+      if (err) {
+        error = err;
+        loading = false;
+      }
+    });
+    tick = setInterval(() => { now = Date.now(); }, 1000);
+    return () => {
+      release();
+      unsubStore?.();
+      unsubErr?.();
+      clearInterval(tick);
+    };
   });
 
   // Bridge entries are owned by the Tokens page; this page only reports the
@@ -61,7 +57,7 @@
 <div class="space-y-6 page-enter">
   <PageHeader title={$tr('Quota Tracker')} description={$tr('Live per-model session quota and premium pool usage across pooled tokens')}>
     {#snippet actions()}
-      <Button variant="ghost" onclick={fetchData}>
+      <Button variant="ghost" onclick={refreshTokens}>
         <RefreshCw size={15} />
         {$tr('Refresh')}
       </Button>
@@ -78,7 +74,7 @@
   {:else if error}
     <div class="space-y-4">
       <Alert tone="error">{error}</Alert>
-      <Button variant="secondary" onclick={fetchData}>
+      <Button variant="secondary" onclick={refreshTokens}>
         <RefreshCw size={15} />
         {$tr('Retry')}
       </Button>

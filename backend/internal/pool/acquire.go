@@ -61,7 +61,7 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		return nil, errors.New("pool: shutting down")
 	}
 
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	cfg := p.cfg.Load()
 	if len(*toks) == 0 {
 		return nil, errors.New("pool: no auth tokens configured")
@@ -335,7 +335,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// entry's freshly-created session would leak upstream. The
 		// post-admission check below stays: the removal can still land
 		// during the create.
-		if cur := p.toks.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
+		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
 			permit.Release()
 			p.admissionsMu.Lock()
 			if p.admissions != nil && (p.admissions[model] == idx || p.admissions[model] == -1) {
@@ -363,8 +363,8 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		p.admissionsMu.Unlock()
 		phasetiming.FromContext(ctx).Since(phasetiming.SessionRefreshMS, sessionStart)
 		if err != nil {
-			if errors.Is(err, upstream.ErrAuthRejected) {
-				tok.runs.Cooldown(runs.DefaultCooldown)
+			c := p.classifyAndCooldown(tok.runs, err)
+			if c.authRejected {
 				p.logger.Debug("pool: token cooling down", "token", idx+1, "duration", runs.DefaultCooldown.String())
 				p.quarantineToken(tok, "invalid", err)
 			}
@@ -372,7 +372,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			if errors.As(err, &wr) {
 				waiting = append(waiting, wr)
 			}
-			if rle := asRateLimit(err); rle != nil {
+			if rle := c.rateLimited; rle != nil {
 				// Issue #178: tag the refusal with the requested model when
 				// the upstream body omits it, so the remembered cooldown can
 				// be isolated per model — a quota cap on one model (glm-5.2,
@@ -380,42 +380,19 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				if rle.Model == "" {
 					rle.Model = model
 				}
-				tok.runs.CooldownRateLimit(rle)
-				dup := false
-				for _, existing := range rateLimited {
-					if existing.Error() == rle.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					rateLimited = append(rateLimited, rle)
-				}
+				rateLimited = appendRateLimit(rateLimited, rle)
 				// Issue #122: the fresh-admission spend ceiling is the
 				// upstream's primary spend gate, so an admission-path
 				// spend_limited counts on the ledger too (same counter as
 				// the chat-path refusal in CooldownTokenRateLimit).
-				if rle.Status == "spend_limited" {
-					p.spendMu.Lock()
+				if c.spendLimited {
 					p.recordSpendLimited(idx)
-					p.spendMu.Unlock()
 				}
 			}
-			if ice := asIpCapped(err); ice != nil {
-				tok.runs.CooldownIpCapped(ice)
-				dup := false
-				for _, existing := range ipCapped {
-					if existing.Error() == ice.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					ipCapped = append(ipCapped, ice)
-				}
+			if ice := c.ipCapped; ice != nil {
+				ipCapped = appendIpCapped(ipCapped, ice)
 			}
-			if be := asBan(err); be != nil {
-				tok.runs.CooldownBan(be)
+			if be := c.banned; be != nil {
 				p.notifyBan(idx+1, model)
 				// Quarantine only while the ban is still live after
 				// CooldownBan (hard, or a future resumes_at): an expired
@@ -424,32 +401,13 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				if tok.runs.BanError() != nil {
 					p.quarantineToken(tok, "banned", err)
 				}
-				dup := false
-				for _, existing := range banned {
-					if existing.Error() == be.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					banned = append(banned, be)
-				}
+				banned = appendBan(banned, be)
 			}
-			if cbe := asCountryBlocked(err); cbe != nil {
-				tok.runs.CooldownCountryBlocked(cbe)
+			if cbe := c.countryBlocked; cbe != nil {
 				p.quarantineToken(tok, "country_blocked", err)
-				dup := false
-				for _, existing := range countryBlocked {
-					if existing.Error() == cbe.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					countryBlocked = append(countryBlocked, cbe)
-				}
+				countryBlocked = appendCountryBlock(countryBlocked, cbe)
 			}
-			if lie := asLimitedIp(err); lie != nil {
+			if lie := c.limitedIp; lie != nil {
 				// Issue #74: the egress IP cannot serve this model
 				// (limited_ip). The session row is fine — it stays bound to
 				// its admitted model — so nothing is invalidated or cooled
@@ -477,7 +435,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// the lease's own entry, but the run would belong to a drained,
 		// retiring manager — so skip instead (the removal path drains the
 		// retired entry once it observes the slip).
-		if cur := p.toks.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
+		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
 			continue
 		}
 		ss := tok.session.Snapshot()
@@ -502,12 +460,12 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		run, err := tok.runs.Acquire(ctx, effectiveAgentID)
 		phasetiming.FromContext(ctx).Since(phasetiming.RunAcquireMS, runStart)
 		if err != nil {
-			if errors.Is(err, upstream.ErrAuthRejected) {
-				tok.runs.Cooldown(runs.DefaultCooldown)
+			c := p.classifyAndCooldown(tok.runs, err)
+			if c.authRejected {
 				p.logger.Debug("pool: token cooling down", "token", idx+1, "duration", runs.DefaultCooldown.String())
 				p.quarantineToken(tok, "invalid", err)
 			}
-			if rle := asRateLimit(err); rle != nil {
+			if rle := c.rateLimited; rle != nil {
 				// Issue #178: tag the refusal with the requested model when
 				// the upstream body omits it, so the remembered cooldown can
 				// be isolated per model — a quota cap on one model (glm-5.2,
@@ -515,40 +473,17 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				if rle.Model == "" {
 					rle.Model = model
 				}
-				tok.runs.CooldownRateLimit(rle)
-				dup := false
-				for _, existing := range rateLimited {
-					if existing.Error() == rle.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					rateLimited = append(rateLimited, rle)
-				}
+				rateLimited = appendRateLimit(rateLimited, rle)
 				// Issue #122: count run-start spend_limited refusals on the
 				// ledger (same counter as the chat-path refusal).
-				if rle.Status == "spend_limited" {
-					p.spendMu.Lock()
+				if c.spendLimited {
 					p.recordSpendLimited(idx)
-					p.spendMu.Unlock()
 				}
 			}
-			if ice := asIpCapped(err); ice != nil {
-				tok.runs.CooldownIpCapped(ice)
-				dup := false
-				for _, existing := range ipCapped {
-					if existing.Error() == ice.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					ipCapped = append(ipCapped, ice)
-				}
+			if ice := c.ipCapped; ice != nil {
+				ipCapped = appendIpCapped(ipCapped, ice)
 			}
-			if be := asBan(err); be != nil {
-				tok.runs.CooldownBan(be)
+			if be := c.banned; be != nil {
 				p.notifyBan(idx+1, model)
 				// Quarantine only while the ban is still live after
 				// CooldownBan (hard, or a future resumes_at): an expired
@@ -557,34 +492,17 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				if tok.runs.BanError() != nil {
 					p.quarantineToken(tok, "banned", err)
 				}
-				dup := false
-				for _, existing := range banned {
-					if existing.Error() == be.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					banned = append(banned, be)
-				}
+				banned = appendBan(banned, be)
 			}
-			if cbe := asCountryBlocked(err); cbe != nil {
-				tok.runs.CooldownCountryBlocked(cbe)
+			if cbe := c.countryBlocked; cbe != nil {
 				p.quarantineToken(tok, "country_blocked", err)
-				dup := false
-				for _, existing := range countryBlocked {
-					if existing.Error() == cbe.Error() {
-						dup = true
-						break
-					}
-				}
-				if !dup {
-					countryBlocked = append(countryBlocked, cbe)
-				}
+				countryBlocked = appendCountryBlock(countryBlocked, cbe)
 			}
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
 			continue
 		}
+		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
+			"country", ss.CountryCode)
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
 		// Track the activity and end any idle-maintenance pause: the next

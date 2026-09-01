@@ -68,7 +68,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if v, ok := raw["stream"].(bool); ok {
 		stream = v
 	}
-	normalized, _, err := convert.NormalizeRequestMapped(body, model)
+	normalized, _, err := convert.NormalizeRequestMappedOpts(body, model, s.convertOptions())
 	if err != nil {
 		s.writeJSONError(w, http.StatusBadRequest,
 			"request body must be a valid JSON object: "+err.Error(), "invalid_request_error", "invalid_json", 0)

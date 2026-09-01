@@ -8,9 +8,12 @@ import (
 	cryptoRand "crypto/rand"
 	"encoding/binary"
 	"errors"
+	"log/slog"
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/registry"
+	"freebuff-proxy/backend/internal/runs"
 	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/upstream"
 )
@@ -46,6 +49,63 @@ const (
 // grace exists to cover an Acquire that loaded the pre-removal snapshot and
 // is still mid-admission when the park happens (see RemoveLastToken).
 const retiredDrainGrace = 2 * time.Minute
+
+// maintainToken runs one token/entry's per-pass maintenance work (issue
+// #264): the cooldown/ban gate, runs.Maintain, the in-flight queued-session
+// EnsureSession, and the run Precreate when the queue advances. It is the
+// shared body behind maintainTick's per-token loop and bridgeMaintain's
+// per-entry loop, so rotation/queued-advance semantics cannot drift between
+// the two modes.
+func maintainToken(ctx context.Context, sess *session.Manager, runsMgr *runs.RunManager, reg *registry.Registry, cfg *config.Config, label any, logger *slog.Logger) {
+	// Same cooldown/ban gate as the poll loop: no queued-session
+	// EnsureSession, no rotation while cooling down — and the same live-ban
+	// skip so a hard-banned token stops Maintain/rotate traffic (its cooldown
+	// deadline is zero until an operator acts).
+	if !runsMgr.MaintenanceEligible() {
+		return
+	}
+	mCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
+	runsMgr.Maintain(mCtx)
+	// Same in-flight gate as the poll loop: skip the queued-session GET while
+	// a chat is in flight so it cannot kick the active session
+	// (reference/freebuff-proxy-hengxin session-manager.js:37-49, 259-260).
+	// Active-session liveness polls run on the jittered poll schedule
+	// (sessionPollTick / bridgeSessionPollTick) instead.
+	if runsMgr.InflightCount() == 0 {
+		snap := sess.Snapshot()
+		if snap.Status == "queued" {
+			if _, err := sess.EnsureSession(mCtx); err != nil {
+				logger.Debug("pool: maintain session not ready", "token", label, "err", err)
+			} else {
+				// Issue #90a: pre-create the run for the session's model
+				// agent so the first request on this session does not pay the
+				// START latency.
+				after := sess.Snapshot()
+				if agentID, err := reg.AgentForModel(after.Model); err == nil && agentID != "" {
+					_ = runsMgr.Precreate(mCtx, agentID)
+				}
+			}
+		}
+	}
+	cancel()
+}
+
+// pollSession runs one session-liveness poll for a token/entry's session
+// manager (issue #264) and computes the next poll schedule: 20s→300s backoff
+// on failure (honoring the server's Retry-After floor), the jittered success
+// cadence otherwise. failCount is the current consecutive-failure counter; it
+// returns the updated counter, the delay to the next poll, and the poll error
+// (nil on success) so the caller logs with the same detail as before.
+func pollSession(ctx context.Context, sess *session.Manager, cfg *config.Config, failCount int) (int, time.Duration, error) {
+	mCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
+	err := sess.Poll(mCtx)
+	cancel()
+	if err != nil {
+		failCount++
+		return failCount, sessionPollBackoffDelay(failCount, sessionPollRetryAfter(err)), err
+	}
+	return 0, sessionPollSuccessDelay(sess.Snapshot()), nil
+}
 
 // Start launches the 60s maintain loop (rotate aged runs + advance queued
 // sessions). It stops when ctx is canceled; Pool.Shutdown cancels.
@@ -97,7 +157,7 @@ func (p *Pool) accountBackfillLoop(ctx context.Context) {
 		case <-first.C:
 		case <-ticker.C:
 		}
-		for _, tok := range *p.toks.Load() {
+		for _, tok := range *p.roster.Load() {
 			if tok.email.Load() == nil {
 				p.asyncAccountInfoFetch(tok)
 			}
@@ -181,7 +241,7 @@ func (p *Pool) endIdleSessions(ctx context.Context, cfg *config.Config, toks *[]
 	for i, tok := range *toks {
 		// Upstream calls during a cooldown read as abuse (maintain-pass
 		// policy); skip silently and keep the session.
-		if time.Now().Before(tok.runs.CooldownUntil()) || tok.runs.BanError() != nil {
+		if !tok.runs.MaintenanceEligible() {
 			continue
 		}
 		// Re-checked immediately before the DELETE: an Acquire can land
@@ -246,7 +306,7 @@ func (p *Pool) maintainLoop(ctx context.Context) {
 // maintainLoop so tests can drive a pass without waiting for the
 // minute-long ticker.
 func (p *Pool) maintainTick(ctx context.Context) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	cfg := p.cfg.Load()
 	// Drop retired tokens that never saw a slipped lease (their runs were
 	// drained at removal). Entries still carrying a lease stay until
@@ -290,39 +350,7 @@ func (p *Pool) maintainTick(ctx context.Context) {
 		// rotation/poll pool instead of staying excluded until an operator
 		// unlocks it.
 		p.clearLiftedQuarantine(tok)
-		// Cooldown: skip all per-token maintain work (rotate, draining
-		// FINISH, queued-session advance). Upstream calls during a cooldown
-		// look like abuse; the skip is silent — the cooldown itself is
-		// already surfaced elsewhere (Acquire logs the skip).
-		if time.Now().Before(tok.runs.CooldownUntil()) || tok.runs.BanError() != nil {
-			continue
-		}
-		mCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
-		tok.runs.Maintain(mCtx)
-		// Advance queued sessions (GET poll). Skipped while a chat is in
-		// flight: the upstream allows one client per account at a time, and
-		// a poll GET that lands mid-chat can kick the active session (428
-		// waiting_room). Mirror the reference session manager's in-flight
-		// gate (reference/freebuff-proxy-hengxin session-manager.js:37-49,
-		// 259-260). Active-session liveness polls are NOT part of this pass
-		// — they run on the jittered sessionPollTick schedule.
-		if tok.runs.InflightCount() == 0 {
-			snap := tok.session.Snapshot()
-			if snap.Status == "queued" {
-				if _, err := tok.session.EnsureSession(mCtx); err != nil {
-					p.logger.Debug("pool: maintain session not ready", "token", i+1, "err", err)
-				} else {
-					// Issue #90a: the queue advanced to active — pre-create
-					// the run for the session's model agent so the first
-					// request on this session does not pay the START latency.
-					after := tok.session.Snapshot()
-					if agentID, err := p.reg.AgentForModel(after.Model); err == nil && agentID != "" {
-						_ = tok.runs.Precreate(mCtx, agentID)
-					}
-				}
-			}
-		}
-		cancel()
+		maintainToken(ctx, tok.session, tok.runs, p.reg, cfg, i+1, p.logger)
 	}
 	p.sweepIdleSessions(ctx, cfg, toks)
 	// Bridge sweep: drop entries idle past the idle-eviction TTL (runs FINISHed
@@ -348,9 +376,9 @@ func (p *Pool) sessionPollTick(ctx context.Context) {
 		// maintain pass already FINISHed every run upstream).
 		return
 	}
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	for i, tok := range *toks {
-		if time.Now().Before(tok.runs.CooldownUntil()) || tok.runs.BanError() != nil {
+		if !tok.runs.MaintenanceEligible() {
 			// Cooldown: no session poll (same rule as maintainTick).
 			continue
 		}
@@ -364,19 +392,12 @@ func (p *Pool) sessionPollTick(ctx context.Context) {
 		if !tok.nextPollAt.IsZero() && now.Before(tok.nextPollAt) {
 			continue
 		}
-		mCtx, cancel := context.WithTimeout(ctx, cfg.RequestTimeout)
-		err := tok.session.Poll(mCtx)
-		cancel()
-		var delay time.Duration
+		failures, delay, err := pollSession(ctx, tok.session, cfg, tok.pollFailures)
 		if err != nil {
-			tok.pollFailures++
-			delay = sessionPollBackoffDelay(tok.pollFailures, sessionPollRetryAfter(err))
 			p.logger.Debug("pool: session poll failed", "token", i+1, "err", err, "retry_in", delay)
-		} else {
-			tok.pollFailures = 0
-			delay = sessionPollSuccessDelay(tok.session.Snapshot())
 		}
-		tok.nextPollAt = time.Now().Add(delay)
+		tok.pollFailures = failures
+		tok.nextPollAt = now.Add(delay)
 	}
 	p.bridgeSessionPollTick(ctx, cfg)
 }

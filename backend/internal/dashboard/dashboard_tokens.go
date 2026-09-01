@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
-	"freebuff-proxy/backend/internal/registry"
 	"sort"
 	"time"
 )
@@ -74,7 +73,7 @@ func (d *Dashboard) tokensData() tokensData {
 			PremiumQuota:            t.PremiumQuota,
 		}
 		for model, q := range t.QuotaByModel {
-			if !registry.IsServedModel(model) {
+			if !modelcat.IsServed(model) {
 				// Only reverse-engineer and display models the official CLI
 				// truly serves. Unserved web models in upstream's ledger
 				// (kimi-k3-eco, muse-spark, luna-es) are ignored.

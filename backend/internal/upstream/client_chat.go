@@ -152,13 +152,15 @@ func (c *Client) do(req *http.Request, timeout time.Duration) (*http.Response, c
 			if resp.StatusCode >= 400 {
 				// Wire transparency: error responses are read (2KB cap),
 				// logged as `upstream response` (redacted, ≤500 runes), and
-				// re-wrapped so the caller's classification parses the same
-				// body. Never logged as `upstream ok` — a transport-level
-				// 200 and an upstream 429 are different classes of event.
+				// classified ONCE here — the wrapper records the 428
+				// waiting-room flag and the rate-limit ledger — then the typed
+				// error is carried forward so callers never re-classify the
+				// same body (issue #305).
 				bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyRead))
 				_ = resp.Body.Close()
 				bodyText := telemetry.RedactSecrets(string(bodyBytes))
-				class := errClassName(classifyError(resp.StatusCode, bodyText, resp.Header))
+				classErr := c.classify(resp.StatusCode, bodyText, resp.Header)
+				class := errClassName(classErr)
 				attrs := []any{
 					"method", req.Method, "path", req.URL.Path,
 					"status", resp.StatusCode, "ms", time.Since(start).Milliseconds(),
@@ -170,7 +172,9 @@ func (c *Client) do(req *http.Request, timeout time.Duration) (*http.Response, c
 				}
 				slog.Debug("upstream response", attrs...)
 				resp.Body = io.NopCloser(strings.NewReader(bodyText))
-				return resp, cancel, nil
+				// resp != nil with a non-nil classErr marks a classified
+				// >=400 response (vs a transport failure, where resp is nil).
+				return resp, cancel, classErr
 			}
 			slog.Debug("upstream ok", "method", req.Method, "path", req.URL.Path,
 				"status", resp.StatusCode, "ms", time.Since(start).Milliseconds(),

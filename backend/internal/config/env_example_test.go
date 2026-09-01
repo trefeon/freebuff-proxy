@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"freebuff-proxy/backend/internal/testutil"
 )
 
 // TestEnvExampleLoadsCleanly proves the shipped .env.example is a valid,
@@ -21,7 +19,7 @@ func TestEnvExampleLoadsCleanly(t *testing.T) {
 	// (or LISTEN_ADDR etc.) outranks .env values and would break the
 	// BridgeMode()/ListenAddr assertions below. t.Chdir also keeps the .env
 	// lookup inside the test's temp dir.
-	testutil.UnsetConfigEnv(t)
+	unsetConfigEnv(t)
 	t.Chdir(t.TempDir())
 	if err := os.WriteFile(".env", data, 0o600); err != nil {
 		t.Fatal(err)

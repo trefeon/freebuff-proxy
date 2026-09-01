@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"freebuff-proxy/backend/internal/telemetry"
 )
 
 // discarding is a sink that accepts everything and keeps nothing.
@@ -190,15 +192,15 @@ func TestCapacityClamp(t *testing.T) {
 	}
 }
 
-// testLogValuer is a slog.LogValuer used to pin formatAttr's default branch.
+// testLogValuer is a slog.LogValuer used to pin FormatAttrValue's default branch.
 type testLogValuer struct{ s string }
 
 func (v testLogValuer) LogValue() slog.Value { return slog.StringValue(v.s) }
 
-// TestFormatAttrKinds pins the value renderer across slog kinds: strings
-// raw, numerics/bools via strconv, durations and times via their String /
-// RFC3339 forms, and the default branch (KindAny incl. LogValuer) via
-// slog.Value.String() — which does NOT resolve the LogValuer.
+// TestFormatAttrKinds pins the shared value renderer across slog kinds:
+// strings raw, numerics/bools via strconv, durations and times via their
+// String / RFC3339 forms, and the default branch (KindAny incl. LogValuer)
+// via slog.Value.String() — which does NOT resolve the LogValuer.
 func TestFormatAttrKinds(t *testing.T) {
 	utc := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
@@ -217,19 +219,20 @@ func TestFormatAttrKinds(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatAttr(tc.v); got != tc.want {
-				t.Errorf("formatAttr(%v) = %q, want %q", tc.v, got, tc.want)
+			if got := telemetry.FormatAttrValue(tc.v); got != tc.want {
+				t.Errorf("FormatAttrValue(%v) = %q, want %q", tc.v, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestFormatAttrQuotesControlChars pins the log-injection guard: a string
-// value containing a control character (e.g. a %0A/%0D-decoded URL path)
-// must be strconv.Quote'd so the ring entry cannot forge additional log
-// lines in /admin/logs, and the rendered output must never contain a raw
-// control character. Plain strings — including multi-word ones like "30
-// minutes" — stay unquoted (the TestFormatAttrKinds "abc" case).
+// TestFormatAttrQuotesControlChars pins the log-injection guard under the
+// shared telemetry quoting policy (issue #284): a string value containing a
+// control character, a space, or a quote (e.g. a %0A/%0D-decoded URL path)
+// is strconv.Quote'd so the ring entry cannot forge additional log lines in
+// /admin/logs, and the rendered output must never contain a raw control
+// character. The telemetry policy is deliberately WIDER than the old logring
+// one: spaces and quotes are escaped too, which is the safer direction.
 func TestFormatAttrQuotesControlChars(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -240,23 +243,23 @@ func TestFormatAttrQuotesControlChars(t *testing.T) {
 		{"carriage return", "path\rforged", true},
 		{"tab", "a\tb", true},
 		{"nul", "a\x00b", true},
-		{"space stays raw", "two words", false},
-		{"quote stays raw", `a"b`, false},
+		{"space", "two words", true},
+		{"quote", `a"b`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatAttr(slog.StringValue(tc.in))
+			got := telemetry.FormatAttrValue(slog.StringValue(tc.in))
 			if tc.wantQuot {
 				if got != strconv.Quote(tc.in) {
-					t.Errorf("formatAttr(%q) = %q, want %q", tc.in, got, strconv.Quote(tc.in))
+					t.Errorf("FormatAttrValue(%q) = %q, want %q", tc.in, got, strconv.Quote(tc.in))
 				}
 				for _, r := range got {
 					if r == '\n' || r == '\r' || unicode.IsControl(r) {
-						t.Errorf("formatAttr(%q) = %q contains a raw control character", tc.in, got)
+						t.Errorf("FormatAttrValue(%q) = %q contains a raw control character", tc.in, got)
 					}
 				}
 			} else if got != tc.in {
-				t.Errorf("formatAttr(%q) = %q, want the raw string", tc.in, got)
+				t.Errorf("FormatAttrValue(%q) = %q, want the raw string", tc.in, got)
 			}
 		})
 	}

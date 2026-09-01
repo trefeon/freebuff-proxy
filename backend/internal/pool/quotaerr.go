@@ -43,26 +43,3 @@ func isDailyCapReset(rle *upstream.RateLimitError) bool {
 	}
 	return rle.Limit > 0 && rle.RecentCount >= rle.Limit
 }
-
-// bridgeQuotaRemaining reports the bridge entry's session-quota state for
-// model from its last admission — the bridge mirror of quotaRemaining, both
-// delegating to quotaStateForSnapshot (quota.go).
-func bridgeQuotaRemaining(entry *bridgeEntry, model string) (known bool, remaining float64, capped bool) {
-	// Single window implementation shared with the pooled path
-	// (quotaStateForSnapshot in quota.go) — the two modes must agree on
-	// Pacific reset/fresh/capped semantics, and a duplicated body would
-	// drift.
-	return quotaStateForSnapshot(entry.session.Snapshot(), model)
-}
-
-// bridgeQuotaCapped reports whether the bridge entry's session quota is capped.
-func bridgeQuotaCapped(entry *bridgeEntry, model string) bool {
-	_, _, capped := bridgeQuotaRemaining(entry, model)
-	return capped
-}
-
-// bridgeQuotaLimitError builds the 429 RateLimitError for a quota-capped bridge entry.
-func bridgeQuotaLimitError(entry *bridgeEntry, model string) *upstream.RateLimitError {
-	// Same 429 body both modes surface (quotaLimitErrorForSnapshot).
-	return quotaLimitErrorForSnapshot(entry.session.Snapshot(), model)
-}

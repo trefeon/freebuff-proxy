@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"freebuff-proxy/backend/internal/phasetiming"
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/registry"
-	"freebuff-proxy/backend/internal/runs"
 	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/upstream"
 )
@@ -46,6 +46,61 @@ import (
 // frames. chatStart is when the upstream chat call returned; the first
 // relayed chunk records the upstream TTFB phase.
 type relayFunc func(ctx context.Context, w http.ResponseWriter, up io.Reader, stats *relayStats, chatStart time.Time)
+
+// timedBackend wraps a chatBackend so the token-acquisition phase is
+// recorded into the request's phasetiming accumulator, mirroring the
+// acquireTimed closure chatCore used to thread into chatAttempt.
+type timedBackend struct {
+	chatBackend
+	phases *phasetiming.Phases
+}
+
+func (b *timedBackend) Acquire(ctx context.Context, model string) (*pool.Lease, error) {
+	start := time.Now()
+	l, err := b.chatBackend.Acquire(ctx, model)
+	b.phases.Since(phasetiming.AcquireMS, start)
+	return l, err
+}
+
+// fallbackBackend wraps the pooled chatBackend with the issue #100 bounded
+// queue-time model fallback: when the requested model's acquire surfaces a
+// waiting-room delay of at least fallbackAfter, the SAME token is re-routed
+// to the fallback model instead of handing the client a 503. Conservative:
+// only when a fallback is configured; the switch is surfaced to the client
+// via the response header and the routing log line.
+type fallbackBackend struct {
+	chatBackend
+	p             *pool.Pool
+	model         string
+	fallbackModel string
+	fallbackAfter time.Duration
+	fallbackUsed  *bool
+	logger        *slog.Logger
+}
+
+func (b *fallbackBackend) Acquire(ctx context.Context, model string) (*pool.Lease, error) {
+	l, err := b.chatBackend.Acquire(ctx, model)
+	if err == nil || errors.Is(err, registry.ErrModelNotFound) {
+		return l, err
+	}
+	var wr *session.WaitingRoomError
+	if errors.As(err, &wr) && wr.RetryAfter >= b.fallbackAfter {
+		b.logger.Info("model fallback: waiting room exceeds FALLBACK_AFTER_MS; switching model",
+			"model", model, "fallback", b.fallbackModel, "retry_after", wr.RetryAfter.String())
+		// Drop the queued session caches so the fallback-model acquire can
+		// CREATE a fresh session instead of re-surfacing the same waiting
+		// room (issue #100).
+		if cleared := b.p.ClearQueuedCaches(); cleared > 0 {
+			b.logger.Debug("model fallback: cleared queued session caches", "cleared", cleared)
+		}
+		l2, err2 := b.chatBackend.Acquire(ctx, b.fallbackModel)
+		if err2 == nil {
+			*b.fallbackUsed = true
+		}
+		return l2, err2
+	}
+	return l, err
+}
 
 // handleChat is the OpenAI chat-completions entry point: sanitize the
 // chatCore is the shared acquire→relay core for every completion-style
@@ -117,15 +172,9 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	case cfg.HybridBridgeMode():
 		provided := clientToken(r)
 		if provided == "" && len(cfg.APIKeys) > 0 {
-			if isAnthropicRequest(r) {
-				s.writeAnthropicError(w, r, http.StatusUnauthorized,
-					"Authentication required: send a valid API key for pooled access, or your FreeBuff token for bridge mode",
-					"missing_bearer_token", 0)
-			} else {
-				s.writeJSONError(w, http.StatusUnauthorized,
-					"Authentication required: send a valid API key for pooled access, or your FreeBuff token for bridge mode",
-					"invalid_request_error", "missing_bearer_token", 0)
-			}
+			s.writeClientError(w, r, http.StatusUnauthorized,
+				"Authentication required: send a valid API key for pooled access, or your FreeBuff token for bridge mode",
+				"missing_bearer_token", 0)
 			return
 		}
 		if provided != "" && len(cfg.APIKeys) > 0 && !s.authorized(cfg, r) {
@@ -157,48 +206,21 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 			return
 		}
 	}
-	// Acquire is timed per call; on the retry-once path the last acquire
-	// wins (that is the lease-producing one, matching the pool's
-	// per-attempt session/run phases).
-	acquireTimed := func(acquire func(context.Context, string) (*pool.Lease, error)) func(context.Context, string) (*pool.Lease, error) {
-		return func(ctx context.Context, model string) (*pool.Lease, error) {
-			acquireStart := time.Now()
-			l, err := acquire(ctx, model)
-			phases.Since(phasetiming.AcquireMS, acquireStart)
-			return l, err
-		}
-	}
+	// The chatBackend abstracts the pooled-vs-bridge acquire/chat/invalidate/
+	// cooldown/lease hooks (issue #255); the timing and (pooled only) rate
+	// fallback wrappers decorate it.
 	var err error
+	var be chatBackend
 	if bridge {
 		if tok == "" {
-			if isAnthropicRequest(r) {
-				s.writeAnthropicError(w, r, http.StatusUnauthorized,
-					"bridge mode: send your FreeBuff token in Authorization: Bearer <token>, x-api-key, or anthropic-api-key",
-					"missing_bearer_token", 0)
-			} else {
-				s.writeJSONError(w, http.StatusUnauthorized,
-					"bridge mode: send your FreeBuff token as Authorization: Bearer <token> (no AUTH_TOKENS configured on the proxy)",
-					"invalid_request_error", "missing_bearer_token", 0)
-			}
+			s.writeClientError(w, r, http.StatusUnauthorized,
+				"bridge mode: send your FreeBuff token in Authorization: Bearer <token>, x-api-key, or anthropic-api-key",
+				"missing_bearer_token", 0)
 			return
 		}
-		up, lease, err = s.chatAttempt(ctx, model, normalized, st,
-			acquireTimed(func(ctx context.Context, model string) (*pool.Lease, error) {
-				return s.pool.AcquireBridge(ctx, tok, model)
-			}),
-			s.pool.Chat,
-			s.pool.InvalidateBridgeSession,
-			func(l *pool.Lease) {
-				s.pool.InvalidateBridgeSessionWithReason(l, session.ReasonSuperseded, http.StatusConflict)
-			},
-			s.pool.InvalidateBridgeRun,
-			func(l *pool.Lease) { s.pool.CooldownBridge(l, runs.DefaultCooldown) },
-			s.pool.CooldownBridgeBan,
-			s.pool.CooldownBridgeRateLimit,
-			s.pool.CooldownBridgeIpCapped,
-			s.pool.CooldownBridgeCountryBlocked,
-		)
+		be = bridgeBackend{p: s.pool, token: tok}
 	} else {
+		be = pooledBackend{p: s.pool}
 		// Issue #100: bounded queue-time model fallback. When the request's
 		// model has a configured fallback (FALLBACK_MODEL) and the pool
 		// surfaces a waiting-room/queue delay of at least FALLBACK_AFTER_MS,
@@ -207,58 +229,20 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 		// only when a fallback is configured; the switch is surfaced to the
 		// client via the X-FreeBuff-Fallback-Model response header and in
 		// the routing log line.
-		acquire := acquireTimed(func(ctx context.Context, model string) (*pool.Lease, error) { return s.pool.Acquire(ctx, model) })
 		fallbackModel := cfg.FallbackModels[model]
 		if cfg.FallbackAfter > 0 && fallbackModel != "" && fallbackModel != model {
-			wrapped := acquire
-			acquire = func(ctx context.Context, m string) (*pool.Lease, error) {
-				l, err := wrapped(ctx, m)
-				if err == nil || errors.Is(err, registry.ErrModelNotFound) {
-					return l, err
-				}
-				var wr *session.WaitingRoomError
-				if errors.As(err, &wr) && wr.RetryAfter >= cfg.FallbackAfter {
-					s.logger.Info("model fallback: waiting room exceeds FALLBACK_AFTER_MS; switching model",
-						"model", m, "fallback", fallbackModel, "retry_after", wr.RetryAfter.String())
-					// Drop the queued session caches so the fallback-model
-					// acquire can CREATE a fresh session instead of
-					// re-surfacing the same waiting room (issue #100).
-					if cleared := s.pool.ClearQueuedCaches(); cleared > 0 {
-						s.logger.Debug("model fallback: cleared queued session caches", "cleared", cleared)
-					}
-					l2, err2 := wrapped(ctx, fallbackModel)
-					if err2 == nil {
-						fallbackUsed = true
-					}
-					return l2, err2
-				}
-				return l, err
-			}
+			be = &fallbackBackend{chatBackend: be, p: s.pool, model: model, fallbackModel: fallbackModel, fallbackAfter: cfg.FallbackAfter, fallbackUsed: &fallbackUsed, logger: s.logger}
 		}
-		up, lease, err = s.chatAttempt(ctx, model, normalized, st,
-			acquire,
-			s.pool.Chat,
-			func(l *pool.Lease) { s.pool.InvalidateSession(l.Token, l.SessionInstanceID) },
-			func(l *pool.Lease) {
-				s.pool.InvalidateSessionWithReason(l.Token, l.SessionInstanceID, session.ReasonSuperseded, http.StatusConflict)
-			},
-			func(l *pool.Lease, agentID string) { s.pool.InvalidateRun(l.Token, agentID) },
-			func(l *pool.Lease) { s.pool.CooldownToken(l.Token, runs.DefaultCooldown) },
-			func(l *pool.Lease, be *upstream.BanError) { s.pool.CooldownTokenBan(l.Token, be) },
-			func(l *pool.Lease, rle *upstream.RateLimitError) { s.pool.CooldownTokenRateLimit(l.Token, rle) },
-			func(l *pool.Lease, ice *upstream.IpCappedError) { s.pool.CooldownTokenIpCapped(l.Token, ice) },
-			func(l *pool.Lease, cbe *upstream.CountryBlockedError) {
-				s.pool.CooldownTokenCountryBlocked(l.Token, cbe)
-			},
-		)
 	}
+	be = &timedBackend{chatBackend: be, phases: phases}
+	up, lease, err = s.chatAttempt(ctx, model, normalized, st, be)
 	if err != nil {
 		phases.Since(phasetiming.TotalMS, start)
 		s.traceChat(lease, model, time.Since(start).Milliseconds(), "error", chatErrClass(err), phases.All(), st)
 		// Issue #114: a chat that died on a terminal upstream error must
 		// not leave its run FINISHing as completed — report it honestly
 		// (nil-safe: an acquire failure leaves no lease).
-		s.pool.MarkRunFailed(lease)
+		be.MarkRunFailed(lease)
 		s.writeError(w, r, err, model, lease)
 		return
 	}
@@ -275,10 +259,10 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 		}
 		released = true
 		if r.Context().Err() != nil {
-			s.pool.LeaseAbandon(lease)
+			be.LeaseAbandon(lease)
 			return
 		}
-		s.pool.LeaseRelease(lease)
+		be.LeaseRelease(lease)
 	}
 	defer release()
 
@@ -335,11 +319,11 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	// batched in memory and sent WITH FINISH (the CLI has no /steps
 	// endpoint). The response message id is not extracted from the stream;
 	// the CLI step schema allows a null messageId.
-	s.pool.RecordRunStep(lease, "")
+	be.RecordRunStep(lease, "")
 	// Issue #122: feed the per-token spend ledger once per successful chat
 	// completion with the usage total observed by the relay (0 when the
 	// upstream stream carried none — RecordSpend ignores non-positive).
-	s.pool.RecordSpend(lease, stats.usageTokens)
+	be.RecordSpend(lease, stats.usageTokens)
 	phases.Since(phasetiming.TotalMS, start)
 	ms := time.Since(start).Milliseconds()
 	s.logger.Info(kind+" done", chatDoneAttrs(reqID, model, lease.AgentID, stream, ms, stats.chunks, stats.bytes, reasoningEffort)...)

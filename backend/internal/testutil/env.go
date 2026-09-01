@@ -3,31 +3,17 @@ package testutil
 import (
 	"os"
 	"testing"
+
+	"freebuff-proxy/backend/internal/config"
 )
 
-// configEnvKeys lists every environment variable backend/internal/config reads.
-// Ambient values from the developer's shell (e.g. AUTH_TOKENS exported for a
-// live proxy) leak into config.Load with HIGHER precedence than .env, which
-// breaks dashboard tests that assert on mode switches or token persistence.
-// Keep this in sync with every override* call in backend/internal/config/config.go.
-var configEnvKeys = []string{
-	"LISTEN_ADDR", "UPSTREAM_BASE_URL", "AUTH_TOKENS", "ROTATION_INTERVAL",
-	"REQUEST_TIMEOUT", "SESSION_CALL_TIMEOUT", "API_KEYS", "ADMIN_TOKEN",
-	"COST_MODE", "TLS_FINGERPRINT", "REGISTRY_REFRESH", "DEBUG_DUMP",
-	"LOG_FILE", "LOG_LEVEL", "LOG_FORMAT", "LOG_ACCESS", "LOG_RING_SIZE", "MAX_MESSAGES_PER_DAY", "IDLE_ROTATION_TIMEOUT",
-	"SAFE_MODE", "MODELS_HIDE_UNAVAILABLE", "MODELS_ALLOW", "REQUEST_JITTER",
-	"CLI_VERSION", "MODEL_ALIASES", "TRANSIENT_RETRIES", "SESSION_PERSIST",
-	"SESSION_STATE_FILE", "AUTO_DISCOVER_TOKEN", "HTTP2_UPSTREAM",
-	"MAX_SPEND_PER_DAY", "CORS_ALLOWED_ORIGIN", "SESSION_RE_ADMIT_LEAD",
-	"SESSION_PROBE_CACHE_TTL", "MODEL_UNAVAILABLE_CACHE_TTL", "SESSION_CREATE_MAX_PARALLEL_GLOBAL",
-	"SESSION_CREATE_MAX_PARALLEL_PER_MODEL", "RUN_FINISH_QUEUE_SIZE",
-	"RUN_FINISH_INLINE_TIMEOUT", "RUNS_DRAIN_QUEUE_CAP", "RUNS_DRAIN_TTL",
-	"WEBHOOK_URL", "FALLBACK_AFTER_MS", "FALLBACK_MODEL",
-	"QUOTA_FALLBACK_MODELS",
-	"ADOPT_CLI_SESSION", "WAITING_ROOM_CHAIN",
-	"ACTING_USER_ID",
-	"USER_ID", // legacy alias (pre-rename knob, #126)
-}
+// configEnvKeys is every environment variable backend/internal/config reads,
+// derived from config.ConfigEnvKeys() (the catalog plus the legacy USER_ID
+// alias). Ambient values from the developer's shell (e.g. AUTH_TOKENS
+// exported for a live proxy) leak into config.Load with HIGHER precedence
+// than .env, which breaks dashboard tests that assert on mode switches or
+// token persistence (issue #281).
+var configEnvKeys = config.ConfigEnvKeys()
 
 // UnsetConfigEnv removes every ambient freebuff-proxy config env var for the
 // duration of the test and restores them afterwards. Call it from tests that

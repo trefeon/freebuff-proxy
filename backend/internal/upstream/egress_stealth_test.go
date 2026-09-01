@@ -17,7 +17,6 @@ import (
 	"testing"
 
 	"freebuff-proxy/backend/internal/config"
-	"freebuff-proxy/backend/internal/stealth"
 	"freebuff-proxy/backend/internal/testutil"
 )
 
@@ -155,7 +154,8 @@ func TestStealthH2NoBundledConfigureLog(t *testing.T) {
 
 // TestSessionResponseFeedsRiskEngine guards the passive risk feed (issue
 // #64): a session response carrying ipPrivacySignals and ip_capped
-// activeUsersForIp/limit lands in the client's risk engine.
+// the parse surfaces ip_capped signals (the passice risk engine they used
+// to feed was removed in issue #275).
 func TestSessionResponseFeedsRiskEngine(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -168,24 +168,13 @@ func TestSessionResponseFeedsRiskEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := stealth.NewRiskEngine()
-	client.risk = engine // isolate from the shared DefaultRiskEngine
-
 	if _, err := client.CreateSession(context.Background()); err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
-	st := engine.Score()
-	if st.Score != 70 { // 40 signal floor + 30 near-cap (8/10)
-		t.Errorf("risk Score = %d, want 70", st.Score)
-	}
-	if st.Level != stealth.RiskHigh {
-		t.Errorf("risk Level = %q, want high", st.Level)
-	}
-	if len(st.Reasons) != 2 {
-		t.Errorf("Reasons = %v, want the signal + cap reasons", st.Reasons)
-	}
+	// The passive risk engine was removed (issue #275): the ip_capped parse
+	// surface above is the regression guard; the feed/Score half no longer
+	// exists in production.
 
-	// A clean response (no signals, no cap pressure) recovers the engine.
 	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-clean","model":"deepseek/deepseek-v4-flash"}`)
@@ -197,7 +186,5 @@ func TestSessionResponseFeedsRiskEngine(t *testing.T) {
 	// the ring) still drives the score — so assert the engine stays within
 	// bounds rather than a specific value (the retained-window semantics are
 	// tested in the stealth package).
-	if st := engine.Score(); st.Score < 0 || st.Score > 100 {
-		t.Errorf("risk Score out of bounds after clean sample: %+v", st)
-	}
+
 }

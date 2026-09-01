@@ -1,238 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-type Fixtures = {
-  overview: unknown;
-  tokens: unknown;
-  models: unknown;
-  config: unknown;
-  configMeta: unknown;
-  logs: { entries: Array<{ level: string; message: string; fields?: string }> } & Record<string, unknown>;
-  metrics: unknown;
-  setup: unknown;
-  traces: unknown;
-  version: unknown;
-  upstreamDrift: unknown;
-  authStatus: unknown;
-};
-
-function loadFixtures(): Fixtures {
-  const dir = join(__dirname, 'fixtures');
-  return {
-    overview: JSON.parse(readFileSync(join(dir, 'overview.json'), 'utf-8')),
-    tokens: JSON.parse(readFileSync(join(dir, 'tokens.json'), 'utf-8')),
-    models: JSON.parse(readFileSync(join(dir, 'models.json'), 'utf-8')),
-    config: JSON.parse(readFileSync(join(dir, 'config.json'), 'utf-8')),
-    configMeta: JSON.parse(readFileSync(join(dir, 'config-meta.json'), 'utf-8')),
-    logs: JSON.parse(readFileSync(join(dir, 'logs.json'), 'utf-8')),
-    metrics: JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf-8')),
-    setup: JSON.parse(readFileSync(join(dir, 'setup.json'), 'utf-8')),
-    traces: JSON.parse(readFileSync(join(dir, 'traces.json'), 'utf-8')),
-    version: JSON.parse(readFileSync(join(dir, 'version.json'), 'utf-8')),
-    upstreamDrift: JSON.parse(readFileSync(join(dir, 'upstream-drift.json'), 'utf-8')),
-    authStatus: JSON.parse(readFileSync(join(dir, 'auth-status.json'), 'utf-8')),
-  };
-}
-// The SPA shell served for /admin/* routes (same file serve-static.mjs
-// serves); the login-page mock below fulfills with it so it can also issue
-// the fb_csrf double-submit cookie like the real gateway does.
-const indexPath = join(__dirname, '../../backend/internal/dashboard/dist/index.html');
-function indexHtml(): string {
-  return readFileSync(indexPath, 'utf-8');
-}
-
-/**
- * Same proven mock harness as dashboard.spec.ts (rebuild of the tokens/
- * login fixtures per test via overrides, never shared mutation). One
- * intentional difference: the mocked successful login also sets the
- * non-HttpOnly fb_csrf double-submit cookie, mirroring the real server
- * (backend/internal/server/admin_auth.go: successful login sets fb_admin + fb_csrf).
- */
-async function mockDashboard(
-  page: Page,
-  fixtures: Fixtures,
-  overrides: Partial<Record<keyof Fixtures | 'configWithApiKeys', unknown>> = {}
-) {
-  // Helpers to pick overridden or base fixture
-  const pick = (key: keyof Fixtures) => (overrides[key] ?? (fixtures as Record<string, unknown>)[key]);
-
-  // Overview
-  await page.route('**/admin/api/overview', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('overview')),
-    });
-  });
-
-  // Tokens
-  await page.route('**/admin/api/tokens', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('tokens')),
-    });
-  });
-
-  // Models
-  await page.route('**/admin/api/models', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('models')),
-    });
-  });
-
-  // Traces
-  await page.route('**/admin/api/traces', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('traces')),
-    });
-  });
-
-  // Setup
-  await page.route('**/admin/api/setup', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('setup')),
-    });
-  });
-
-  // Config — Supports override that includes API_KEYS for Tokens parsing test.
-  await page.route(/\/admin\/api\/config(\?.*)?$/, async (route) => {
-    const cfg = overrides['configWithApiKeys'] ?? pick('config');
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(cfg),
-    });
-  });
-
-  // Config meta — the Settings page key catalog (JSON array from /admin/api/config/meta).
-  await page.route(/\/admin\/api\/config\/meta(\?.*)?$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('configMeta')),
-    });
-  });
-
-  // Logs — handles ?level= & ?msg= filtering like the real Go handler.
-  await page.route('**/admin/api/logs**', async (route) => {
-    const url = new URL(route.request().url());
-    const level = (url.searchParams.get('level') || '').toLowerCase();
-    const msg = (url.searchParams.get('msg') || '').trim();
-    const base = pick('logs');
-    const logsData = base as unknown as { entries: Array<{ level: string; message: string }> };
-    let entries: Array<{ level: string; message: string }> = logsData.entries || [];
-    if (level) {
-      entries = entries.filter((e) => (e.level || '').toLowerCase() === level);
-    }
-    if (msg) {
-      const low = msg.toLowerCase();
-      entries = entries.filter((e) => (e.message || '').toLowerCase().includes(low));
-    }
-    const body = JSON.stringify({
-      enabled: true,
-      level: level,
-      msg: msg,
-      has_filter: !!(level || msg),
-      entries,
-    });
-    await route.fulfill({ status: 200, contentType: 'application/json', body });
-  });
-
-  // Metrics
-  await page.route('**/admin/api/metrics', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('metrics')),
-    });
-  });
-
-  // Version
-  await page.route('**/admin/api/version', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('version')),
-    });
-  });
-
-  // Upstream drift
-  await page.route('**/admin/api/upstream-drift', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('upstreamDrift')),
-    });
-  });
-
-  // Auth status
-  await page.route('**/admin/api/auth/status', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(pick('authStatus')),
-    });
-  });
-
-  // /admin/login — default success; individual tests may override for 401 case.
-  // Login models the real gateway (backend/internal/server/admin_auth.go): the login
-  // PAGE response issues the non-HttpOnly fb_csrf double-submit cookie
-  // (setCSRFCookieIfAbsent runs on HTML responses), the login POST grants the
-  // fb_admin session cookie. Each response carries exactly ONE Set-Cookie:
-  // route.fulfill joins multiple values into a single broken cookie.
-  await page.route('**/admin/login', async (route) => {
-    if (route.request().method() === 'POST') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true }),
-        headers: { 'Set-Cookie': 'fb_admin=mock-token; Path=/; HttpOnly; SameSite=Strict' },
-      });
-    } else {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/html',
-        body: indexHtml(),
-        headers: { 'Set-Cookie': 'fb_csrf=mocknonce123; Path=/; SameSite=Strict' },
-      });
-    }
-  });
-
-  // POST /admin/api/change-password
-  await page.route('**/admin/api/change-password', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, message: 'Password changed' }),
-    });
-  });
-
-  // Also mock POST /admin/config save (Tokens add-token flow uses POST /admin/config with form)
-  await page.route(/\/admin\/config$/, async (route) => {
-    if (route.request().method() === 'POST') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true, message: 'Config saved' }),
-      });
-    } else {
-      await route.continue();
-    }
-  });
-}
+import { loadFixtures, mockDashboard } from './mocks.js';
 
 // ---------------------------------------------------------------------------
 // Fixture builders (per-test copies — never mutate shared fixtures)
@@ -299,7 +66,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('login: wrong admin token surfaces the server error and stays on login', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     // 401 with JSON error, like the real gateway.
     await page.unroute('**/admin/login');
@@ -338,7 +105,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('login: correct admin token signs in, sets cookies and renders the dashboard', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     // Register before triggering: the overview fetch can resolve during the
     // post-login navigation.
@@ -369,7 +136,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('tokens: add-token invalid format errors client-side and never POSTs', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     let addPosts = 0;
     page.on('request', (req) => {
@@ -396,7 +163,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('tokens: add-token valid format POSTs the token value and shows success', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     let postedBody = '';
     await page.route('**/admin/tokens/add', async (route) => {
@@ -436,7 +203,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('tokens: remove of a middle row posts its own index and keeps the last token (regression)', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     const state = { tokens: [tokenRow(0), tokenRow(1), tokenRow(2)] };
     await page.unroute('**/admin/api/tokens');
@@ -483,7 +250,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('tokens: lock and unlock post per-action endpoints and flip the row state', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     const state = { tokens: [tokenRow(0), tokenRow(1)] };
     await page.unroute('**/admin/api/tokens');
@@ -535,7 +302,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('tokens: device login starts the wizard, surfaces the login URL and copy button', async ({ page }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     const loginUrl = 'https://freebuff.app/device/login?code=fp-demo-0001';
     await page.route('**/admin/login/start', async (route) => {
@@ -585,7 +352,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
         { key: 'MAX_MESSAGES_PER_DAY', value: '0', secret: false },
       ],
     };
-    await mockDashboard(page, f, { configWithApiKeys: configWithContent });
+    await mockDashboard(page, f, { configWithApiKeys: configWithContent }, { loginPage: true });
 
     // Sign in first; the login response carries fb_admin + fb_csrf.
     await page.goto('http://127.0.0.1:4173/admin/login');
@@ -685,7 +452,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
   // ---------------------------------------------------------------------------
   test('session: logout POST clears the session and the app surfaces login recovery', async ({ page, context }) => {
     const f = loadFixtures();
-    await mockDashboard(page, f);
+    await mockDashboard(page, f, {}, { loginPage: true });
 
     // Establish a session (cookies the login flow would have granted).
     await context.addCookies([
@@ -757,7 +524,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
     // Two pooled tokens, neither carrying premium_quota (or session quota).
     await mockDashboard(page, f, {
       tokens: tokensPayload([tokenRow(0, { has_quota: true, quota: [] }), tokenRow(1, { has_quota: true, quota: [] })]),
-    });
+    }, { loginPage: true });
 
     await page.goto('http://127.0.0.1:4173/admin/#quota');
     await expect(page.getByRole('heading', { name: 'Quota Tracker', exact: true })).toBeVisible();
@@ -793,7 +560,7 @@ test.describe('operator UX journey (hermetic mocks)', () => {
         { key: 'MAX_MESSAGES_PER_DAY', value: '0', secret: false },
       ],
     };
-    await mockDashboard(page, f, { configWithApiKeys: configWithContent });
+    await mockDashboard(page, f, { configWithApiKeys: configWithContent }, { loginPage: true });
 
     const metaResp = page.waitForResponse((r) => r.url().includes('/admin/api/config/meta') && r.status() === 200);
     await page.goto('http://127.0.0.1:4173/admin/#settings');

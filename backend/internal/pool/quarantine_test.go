@@ -145,7 +145,7 @@ func TestQuarantineResetsOnConfigMemberChange(t *testing.T) {
 	if !p.Snapshot()[0].Quarantined {
 		t.Fatal("token not quarantined after a ban")
 	}
-	old := (*p.toks.Load())[0]
+	old := (*p.roster.Load())[0]
 
 	// Operator edits AUTH_TOKENS: replace the account at slot 0. Copy the
 	// config slice so the live pool config is untouched; rebuild the entry
@@ -156,7 +156,7 @@ func TestQuarantineResetsOnConfigMemberChange(t *testing.T) {
 	newCfg.UpstreamBaseURL = mock.URL()
 	p.SetConfig(&newCfg)
 
-	cur := (*p.toks.Load())[0]
+	cur := (*p.roster.Load())[0]
 	if cur == old {
 		t.Fatal("slot not rebuilt: same entry object after AUTH_TOKENS change")
 	}
@@ -196,7 +196,7 @@ func TestSetConfigRebuildsDrainsReplacedEntry(t *testing.T) {
 	if mock.SessionEnds != 0 {
 		t.Fatalf("session ends = %d before rebuild, want 0", mock.SessionEnds)
 	}
-	old := (*p.toks.Load())[0]
+	old := (*p.roster.Load())[0]
 
 	newCfg := *p.cfg.Load()
 	newCfg.AuthTokens = append([]string(nil), newCfg.AuthTokens...)
@@ -254,7 +254,7 @@ func TestSetConfigKeepsQuarantineWhenTokenUnchanged(t *testing.T) {
 	if !p.Snapshot()[0].Quarantined {
 		t.Error("quarantine cleared by an unchanged reload")
 	}
-	if cur := (*p.toks.Load())[0]; cur.token != "tok-0" {
+	if cur := (*p.roster.Load())[0]; cur.token != "tok-0" {
 		t.Errorf("entry token = %q, want tok-0 (unchanged reload must not rebuild)", cur.token)
 	}
 }

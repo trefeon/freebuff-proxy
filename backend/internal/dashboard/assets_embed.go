@@ -1,5 +1,3 @@
-//go:build dashboard
-
 package dashboard
 
 import (

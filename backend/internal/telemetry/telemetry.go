@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"freebuff-proxy/backend/internal/config"
 	"io"
 	"log/slog"
 	"math"
@@ -18,9 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
-
-	"freebuff-proxy/backend/internal/config"
 )
 
 // ANSI 4-color scheme: DEBUG gray, INFO green, WARN yellow, ERROR red.
@@ -235,6 +235,67 @@ func joinKey(prefix, key string) string {
 		return key
 	}
 	return prefix + "." + key
+}
+
+// FormatAttrValue renders an attribute value the way the text handler does,
+// applying the shared quoting policy: strings go through quoteMessage, so an
+// embedded newline/quote/space cannot forge an extra log line in any sink
+// that reuses this renderer (issue #284).
+func FormatAttrValue(v slog.Value) string {
+	switch v.Kind() {
+	case slog.KindString:
+		return quoteMessage(v.String())
+	case slog.KindBool:
+		return strconv.FormatBool(v.Bool())
+	case slog.KindInt64:
+		return strconv.FormatInt(v.Int64(), 10)
+	case slog.KindUint64:
+		return strconv.FormatUint(v.Uint64(), 10)
+	case slog.KindFloat64:
+		return strconv.FormatFloat(v.Float64(), 'g', -1, 64)
+	case slog.KindDuration:
+		return v.Duration().String()
+	case slog.KindTime:
+		return v.Time().Format(time.RFC3339)
+	default:
+		return v.String()
+	}
+}
+
+// FormatAttrPair renders one attribute as "key=value" with the shared
+// quoting policy. prefix is the dotted group prefix ("" leaves key bare).
+func FormatAttrPair(prefix, key string, v slog.Value) string {
+	return joinKey(prefix, key) + "=" + FormatAttrValue(v)
+}
+
+// FlattenAttrs renders an attr slice as "key=value" pairs (group keys
+// dotted, empty groups and empty attrs skipped), applying the shared quoting
+// policy. logring uses this to retain one dashboard field per attr with the
+// same rendering the terminal/file sink uses (issue #284).
+func FlattenAttrs(prefix string, attrs []slog.Attr) []string {
+	var out []string
+	for _, a := range attrs {
+		if a.Equal(slog.Attr{}) {
+			continue
+		}
+		if a.Value.Kind() == slog.KindGroup {
+			group := a.Value.Group()
+			if len(group) == 0 {
+				continue
+			}
+			key := prefix
+			if a.Key != "" {
+				key = a.Key
+				if prefix != "" {
+					key = prefix + "." + a.Key
+				}
+			}
+			out = append(out, FlattenAttrs(key, group)...)
+			continue
+		}
+		out = append(out, FormatAttrPair(prefix, a.Key, a.Value))
+	}
+	return out
 }
 
 // levelToken renders the level marker, colorized unless the sink includes a

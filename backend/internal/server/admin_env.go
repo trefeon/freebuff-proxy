@@ -82,10 +82,10 @@ func dialTarget(host string) string {
 	return net.JoinHostPort(host, "443")
 }
 
-func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handleDiag(w http.ResponseWriter, r *http.Request) {
 	checks := []dashboard.DiagCheck{}
 
-	cfg := s.cfg.Load()
+	cfg := a.cfgLoad()
 	switch cfg.EffectiveMode() {
 	case "bridge":
 		checks = append(checks, dashboard.DiagCheck{OK: true, Message: "Configuration: bridge mode (clients relay their own token)"})
@@ -123,17 +123,17 @@ func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, dashboard.DiagCheck{OK: true, Message: "TCP reachable " + hostForDial})
 	}
 
-	checks = append(checks, dashboard.DiagCheck{OK: true, Message: fmt.Sprintf("Model registry: %d models", s.reg.ModelCount())})
+	checks = append(checks, dashboard.DiagCheck{OK: true, Message: fmt.Sprintf("Model registry: %d models", a.reg.ModelCount())})
 
 	// Per-token validity probes (pooled mode only). Each
 	// probe is a zero-cost upstream GET /api/v1/freebuff/session (no session
 	// claim, no model needed), so they always run; a token with no active
 	// session still counts as valid.
 	if !cfg.BridgeMode() {
-		for _, snap := range s.pool.PoolSnapshot().Tokens {
+		for _, snap := range a.pool.PoolSnapshot().Tokens {
 			idx := snap.Token
 			probeCtx, probeCancel := context.WithTimeout(r.Context(), 8*time.Second)
-			state, err := s.pool.ProbeToken(probeCtx, idx)
+			state, err := a.pool.ProbeToken(probeCtx, idx)
 			probeCancel()
 			switch {
 			case errors.Is(err, upstream.ErrNoActiveSession):
@@ -152,10 +152,10 @@ func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, dashboard.DiagCheck{Warn: true, Message: "No pooled tokens to probe (the smoke test uses a client token)."})
 	}
 
-	s.dash.RenderDiag(w, r, checks)
+	a.dash.RenderDiag(w, r, checks)
 }
 
-func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	// Resolve ONCE at write time: the dashboard must write the same file the
 	// loader would read (cwd wins, else the platform config dir) — a stray
 	// ./.env with the defaults template silently becomes authoritative
@@ -170,7 +170,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	var content []byte
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		if err := r.ParseForm(); err != nil {
-			s.dash.RenderConfigResult(w, r, false, "Failed to read request form.")
+			a.dash.RenderConfigResult(w, r, false, "Failed to read request form.")
 			return
 		}
 		content = []byte(r.FormValue("content"))
@@ -178,7 +178,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 		var err error
 		content, err = io.ReadAll(r.Body)
 		if err != nil {
-			s.dash.RenderConfigResult(w, r, false, "Failed to read request body.")
+			a.dash.RenderConfigResult(w, r, false, "Failed to read request body.")
 			return
 		}
 	}
@@ -190,19 +190,19 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 	// reporting a green "Saved and reloaded". Reject it and leave the file
 	// untouched.
 	if len(bytes.TrimSpace(content)) == 0 {
-		s.dash.RenderConfigResult(w, r, false, "Configuration rejected: empty .env content — nothing to save.")
+		a.dash.RenderConfigResult(w, r, false, "Configuration rejected: empty .env content — nothing to save.")
 		return
 	}
 
-	s.adminSaveMu.Lock()
-	defer s.adminSaveMu.Unlock()
+	a.adminSaveMu.Lock()
+	defer a.adminSaveMu.Unlock()
 
 	old, oldErr := os.ReadFile(envPath)
 	if err := config.WriteFileAtomic(envPath, content); err != nil {
-		s.dash.RenderConfigResult(w, r, false, "Failed to write .env: "+err.Error())
+		a.dash.RenderConfigResult(w, r, false, "Failed to write .env: "+err.Error())
 		return
 	}
-	newCfg, err := config.Load(s.configPath)
+	newCfg, err := config.Load(a.configPath)
 	if err != nil {
 		switch {
 		case oldErr == nil:
@@ -216,15 +216,15 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 			// deleting it would destroy the operator's file. Leave the newly
 			// written content and warn — a restore is impossible without the
 			// old bytes.
-			s.logger.Warn("dashboard config save rejected; previous .env unreadable, not restored", "readErr", oldErr, "err", err)
+			a.logfunc().Warn("dashboard config save rejected; previous .env unreadable, not restored", "readErr", oldErr, "err", err)
 		}
-		s.logger.Warn("dashboard config save rejected", "err", err)
-		s.dash.RenderConfigResult(w, r, false, "Configuration rejected: "+err.Error())
+		a.logfunc().Warn("dashboard config save rejected", "err", err)
+		a.dash.RenderConfigResult(w, r, false, "Configuration rejected: "+err.Error())
 		return
 	}
-	oldCfg := s.cfg.Load()
-	s.applyReloadedConfig(&newCfg)
-	s.logger.Info("dashboard config saved and reloaded",
+	oldCfg := a.cfgLoad()
+	a.applyReloadedConfig(&newCfg)
+	a.logfunc().Info("dashboard config saved and reloaded",
 		"remote", remoteHost(r), "changed_keys", changedConfigKeys(oldCfg, &newCfg),
 		"auth_tokens", len(newCfg.AuthTokens), "safe_mode", newCfg.SafeMode)
 	if keys := envOverrideKeys(content); len(keys) > 0 {
@@ -253,7 +253,7 @@ func (s *Server) handleConfigSave(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": message, "restart_only": restartOnly})
 		return
 	}
-	s.dash.RenderConfigResult(w, r, true, "Saved and reloaded — effective configuration updated.")
+	a.dash.RenderConfigResult(w, r, true, "Saved and reloaded — effective configuration updated.")
 }
 
 // restartOnlyConfigKeys lists knobs that are snapshotted when the upstream

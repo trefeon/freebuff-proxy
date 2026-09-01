@@ -19,7 +19,6 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -64,9 +63,6 @@ type Server struct {
 	// adminAuth guards the dashboard: a stateless HMAC-signed session cookie
 	// issued against ADMIN_TOKEN, plus a per-IP login rate limiter.
 	adminAuth *adminAuth
-	// adminSaveMu serializes .env saves (config editor) so a rejected save
-	// cannot clobber a newer accepted one.
-	adminSaveMu sync.Mutex
 	// configPath is the -config JSON path ("" when none); reloads re-apply it
 	// so JSON overrides survive dashboard saves and /admin/reload.
 	configPath string
@@ -87,14 +83,56 @@ type Server struct {
 	// loginFlows is the in-flight login-flow registry keyed by flow id
 	// (fingerprint): start POSTs /api/auth/cli/code, status polls it until
 	// the authToken lands (then AddToken + persist).
-	loginMu    sync.Mutex
 	loginFlows map[string]*loginFlow
 	// reasoningCache caches reasoning content and signatures for tool calls across turns.
 	reasoningCache *reasoningcache.Cache
 	// rateLimiter caps client request rates per source IP (issue #137).
 	rateLimiter *ratelimit.Limiter
-	// rateLimitRejections tracks total client requests rejected by local rate limiter.
+	// rateLimitRejections tracks total client requests rejected by the
+	// local rate limiter.
 	rateLimitRejections atomic.Int64
+
+	// admin owns the /admin surface (issue #250): the admin handlers are
+	// methods on *adminHandlers, not *Server, so the API surface and the
+	// admin surface do not share one mutable god struct.
+	admin *adminHandlers
+
+	// gates are the per-Server access-log quiescence gates (issue #252):
+	// previously process-global, now owned per instance so two Servers do
+	// not share one access gate.
+	gates *accessGates
+	// rateLimitDedupe gates identical (token, code, window) `request failed`
+	// logs (D6): the first + every 50th occurrence fire; the counter always
+	// increments so a silent burst stays countable, and the client response
+	// is always written. Per-Server like the access gates (issue #252).
+	rateLimitDedupe struct {
+		mu sync.Mutex
+		m  map[string]int64
+	}
+}
+
+// convertOptions builds the per-request convert options from the live
+// config (issue #277/#251): feature knobs resolved once (never per chunk)
+// plus the per-Server reasoning lookup threaded through the call chain
+// instead of a process-global hook.
+func (s *Server) convertOptions() convert.Options {
+	opts := convert.Options{
+		MaxSchemaNodes:          convert.DefaultMaxSchemaNodes,
+		CompressKeepLast:        convert.DefaultCompressKeepLast,
+		CompressMaxContentBytes: convert.DefaultCompressMaxContentBytes,
+		ReasoningLookup: func(toolID, content, toolCallsJSON string) (string, string, bool) {
+			if s.reasoningCache == nil {
+				return "", "", false
+			}
+			return s.reasoningCache.Get(toolID, content, toolCallsJSON)
+		},
+	}
+	if cfg := s.cfg.Load(); cfg != nil {
+		opts.CompressPrompt = cfg.CompressPrompt
+		opts.CacheControlInjection = cfg.CacheControlInjection
+		opts.ReasoningInContent = cfg.ReasoningInContent
+	}
+	return opts
 }
 
 // WithVersion wires the running release tag + update checker for the
@@ -129,7 +167,7 @@ func New(cfg *config.Config, p *pool.Pool, reg *registry.Registry, logger *slog.
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Server{pool: p, reg: reg, logger: logger, started: time.Now(), configPath: configPath, loginFlows: make(map[string]*loginFlow), logs: logs}
+	s := &Server{pool: p, reg: reg, logger: logger, started: time.Now(), configPath: configPath, loginFlows: make(map[string]*loginFlow), logs: logs, gates: newAccessGates()}
 	s.cfg.Store(cfg)
 	s.rateLimiter = ratelimit.New(cfg.RateLimitPerIP, cfg.RateLimitBurst, 10000)
 	// The token estimator shares one o200k_base codec process-wide, so
@@ -150,10 +188,21 @@ func New(cfg *config.Config, p *pool.Pool, reg *registry.Registry, logger *slog.
 		s.dash = dashboard.New(func() *config.Config { return s.cfg.Load() }, p, reg, logger, logs, dashOpts...)
 	}
 	s.adminAuth = newAdminAuth()
+	s.admin = &adminHandlers{
+		dash:           s.dash,
+		logfunc:        func() *slog.Logger { return s.logger },
+		pool:           p,
+		reg:            reg,
+		cfgLoad:        s.cfg.Load,
+		cfgStore:       s.cfg.Store,
+		configPath:     configPath,
+		adminAuth:      s.adminAuth,
+		loginFlows:     s.loginFlows,
+		authClientFunc: func() *upstream.Client { return s.authClient },
+		rateLimiter:    s.rateLimiter,
+		handleChat:     s.handleChat,
+	}
 	s.reasoningCache = reasoningcache.New(10000, 2*time.Hour)
-	convert.SetReasoningLookup(func(toolID string, content, toolCallsJSON string) (string, string, bool) {
-		return s.reasoningCache.Get(toolID, content, toolCallsJSON)
-	})
 	return s
 }
 
@@ -166,18 +215,18 @@ func (s *Server) registerAdminRoutes(mux *http.ServeMux) {
 	for _, r := range dashboard.AdminRoutes {
 		h := s.adminHandler(r)
 		if r.Method == http.MethodPost {
-			h = s.adminCSRF(h)
+			h = s.admin.adminCSRF(h)
 		}
 		switch r.Auth {
 		case dashboard.AuthNone:
 			// No auth wrapper: login page, logout, static assets.
 		case dashboard.AuthDashboard:
-			h = s.dashboardAuth(h)
+			h = s.admin.dashboardAuth(h)
 		case dashboard.AuthSensitive:
-			h = s.adminSensitive(h)
-			h = s.dashboardAuth(h)
+			h = s.admin.adminSensitive(h)
+			h = s.admin.dashboardAuth(h)
 		case dashboard.AuthAdminToken:
-			h = s.adminSensitive(h)
+			h = s.admin.adminSensitive(h)
 			h = s.requireAdminToken(h)
 		default:
 			panic("server: unknown admin auth level " + r.Auth)
@@ -192,15 +241,15 @@ func (s *Server) registerAdminRoutes(mux *http.ServeMux) {
 func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 	switch r.Method + " " + r.Path {
 	case "POST /admin/reload":
-		return http.HandlerFunc(s.handleReload)
+		return http.HandlerFunc(s.admin.handleReload)
 	case "GET /admin/login":
-		return http.HandlerFunc(s.handleAdminLogin)
+		return http.HandlerFunc(s.admin.handleAdminLogin)
 	case "POST /admin/login":
-		return http.HandlerFunc(s.handleAdminLogin)
+		return http.HandlerFunc(s.admin.handleAdminLogin)
 	case "GET /admin/logout":
-		return http.HandlerFunc(s.handleAdminLogout)
+		return http.HandlerFunc(s.admin.handleAdminLogout)
 	case "POST /admin/logout":
-		return http.HandlerFunc(s.handleAdminLogout)
+		return http.HandlerFunc(s.admin.handleAdminLogout)
 	case "GET /admin/api/overview":
 		return s.dash.APIHandler("overview")
 	case "GET /admin/api/tokens":
@@ -226,53 +275,53 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 	case "GET /admin/api/upstream-drift":
 		return s.dash.APIHandler("upstream")
 	case "GET /admin/api/auth/status":
-		return http.HandlerFunc(s.handleAdminAuthStatus)
+		return http.HandlerFunc(s.admin.handleAdminAuthStatus)
 	case "GET /admin", "GET /admin/", "GET /admin/tokens", "GET /admin/models", "GET /admin/traces",
 		"GET /admin/setup", "GET /admin/playground", "GET /admin/config", "GET /admin/logs", "GET /admin/metrics":
 		// SPA shell routes: the gateway serves the Svelte app directly.
 		return http.HandlerFunc(s.dash.ServeSPA)
 	case "POST /admin/playground/chat":
-		return http.HandlerFunc(s.handlePlaygroundChat)
+		return http.HandlerFunc(s.admin.handlePlaygroundChat)
 	case "POST /admin/login/start":
-		return http.HandlerFunc(s.handleLoginStart)
+		return http.HandlerFunc(s.admin.handleLoginStart)
 	case "GET /admin/login/status":
-		return http.HandlerFunc(s.handleLoginStatus)
+		return http.HandlerFunc(s.admin.handleLoginStatus)
 	case "POST /admin/config":
-		return http.HandlerFunc(s.handleConfigSave)
+		return http.HandlerFunc(s.admin.handleConfigSave)
 	case "POST /admin/tokens/{id}/unlock":
-		return http.HandlerFunc(s.handleTokenUnlock)
+		return http.HandlerFunc(s.admin.handleTokenUnlock)
 	case "POST /admin/tokens/{id}/lock":
-		return http.HandlerFunc(s.handleTokenLock)
+		return http.HandlerFunc(s.admin.handleTokenLock)
 	case "POST /admin/tokens/{id}/unlock-lock":
-		return http.HandlerFunc(s.handleTokenUnlockLock)
+		return http.HandlerFunc(s.admin.handleTokenUnlockLock)
 	case "POST /admin/bridge-tokens/{key}/lock":
-		return http.HandlerFunc(s.handleBridgeTokenLock)
+		return http.HandlerFunc(s.admin.handleBridgeTokenLock)
 	case "POST /admin/bridge-tokens/{key}/unlock":
-		return http.HandlerFunc(s.handleBridgeTokenUnlock)
+		return http.HandlerFunc(s.admin.handleBridgeTokenUnlock)
 	case "POST /admin/tokens/{id}/finish":
-		return http.HandlerFunc(s.handleTokenFinish)
+		return http.HandlerFunc(s.admin.handleTokenFinish)
 	case "POST /admin/tokens/{id}/drop-session":
-		return http.HandlerFunc(s.handleTokenDropSession)
+		return http.HandlerFunc(s.admin.handleTokenDropSession)
 	case "POST /admin/tokens/{id}/test":
-		return http.HandlerFunc(s.handleTokenTest)
+		return http.HandlerFunc(s.admin.handleTokenTest)
 	case "POST /admin/tokens/{id}/session":
-		return http.HandlerFunc(s.handleTokenSpawnSession)
+		return http.HandlerFunc(s.admin.handleTokenSpawnSession)
 	case "POST /admin/tokens/test-all":
-		return http.HandlerFunc(s.handleTokenTestAll)
+		return http.HandlerFunc(s.admin.handleTokenTestAll)
 	case "POST /admin/tokens/add":
-		return http.HandlerFunc(s.handleTokenAdd)
+		return http.HandlerFunc(s.admin.handleTokenAdd)
 	case "POST /admin/tokens/remove":
-		return http.HandlerFunc(s.handleTokenRemove)
+		return http.HandlerFunc(s.admin.handleTokenRemove)
 	case "POST /admin/tokens/swap":
-		return http.HandlerFunc(s.handleTokenSwap)
+		return http.HandlerFunc(s.admin.handleTokenSwap)
 	case "POST /admin/mode":
-		return http.HandlerFunc(s.handleModeSwitch)
+		return http.HandlerFunc(s.admin.handleModeSwitch)
 	case "POST /admin/diag":
-		return http.HandlerFunc(s.handleDiag)
+		return http.HandlerFunc(s.admin.handleDiag)
 	case "POST /admin/api/change-password":
-		return http.HandlerFunc(s.handleAdminChangePassword)
+		return http.HandlerFunc(s.admin.handleAdminChangePassword)
 	case "POST /admin/smoke":
-		return http.HandlerFunc(s.handleSmoke)
+		return http.HandlerFunc(s.admin.handleSmoke)
 	case "GET /admin/assets/":
 		return noDirListing(http.StripPrefix("/admin/assets/", http.FileServerFS(mustSubFS(dashboard.DistFS(), "assets"))))
 	default:
@@ -323,24 +372,17 @@ func (s *Server) Handler() http.Handler {
 				if retrySec < 1 {
 					retrySec = 1
 				}
-				w.Header().Set("Retry-After", strconv.Itoa(retrySec))
 				s.logger.Warn("rate limit exceeded",
 					"remote", remoteHost(r),
 					"req_id", reqID,
 					"retry_after_sec", retrySec,
 				)
 				s.rateLimitRejections.Add(1)
-				if isAnthropicRequest(r) {
-					// /v1/messages requests must never see an OpenAI-shaped
-					// error body.
-					s.writeAnthropicError(w, r, http.StatusTooManyRequests,
-						fmt.Sprintf("client rate limit exceeded (Retry-After: %ds)", retrySec),
-						"rate_limit_exceeded", 0)
-				} else {
-					s.writeJSONError(w, http.StatusTooManyRequests,
-						fmt.Sprintf("client rate limit exceeded (Retry-After: %ds)", retrySec),
-						"rate_limit_exceeded", "rate_limit_exceeded", 0)
-				}
+				// One envelope dispatch (issue #253): the wire decides the
+				// body shape; the Retry-After ceiling is computed inside.
+				s.writeClientError(w, r, http.StatusTooManyRequests,
+					fmt.Sprintf("client rate limit exceeded (Retry-After: %ds)", retrySec),
+					"rate_limit_exceeded", retryAfter)
 				return
 			}
 		}
@@ -371,7 +413,7 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		if quiet := quietAccessPath(r.Method, r.URL.Path) || sw.status == http.StatusNotFound; quiet {
-			if !accessLogDue(r.URL.Path, start) || !accessQuietBudgetDue(start) {
+			if !s.gates.accessLogDue(r.URL.Path, start) || !s.gates.accessQuietBudgetDue(start) {
 				return
 			}
 		}

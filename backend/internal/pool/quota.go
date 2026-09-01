@@ -62,11 +62,13 @@ func quotaStateForSnapshot(snap session.SessionSnapshot, model string) (known bo
 	return false, 0, false
 }
 
-// quotaRemaining reports the pooled token's session-quota state for model
-// (quotaStateForSnapshot on the token's current snapshot; see there for the
-// window semantics).
-func quotaRemaining(tok *tokenEntry, model string) (known bool, remaining float64, capped bool) {
-	return quotaStateForSnapshot(tok.session.Snapshot(), model)
+// quotaRemaining reports the entry's session-quota state for model
+// (quotaStateForSnapshot on the entry's current snapshot; see there for the
+// window semantics). It is the single implementation behind both the pooled
+// and bridge modes (issue #261) — the entry-adapter interface collapses the
+// former quotaRemaining / bridgeQuotaRemaining twins.
+func quotaRemaining(acc tokenAccount, model string) (known bool, remaining float64, capped bool) {
+	return quotaStateForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
 
 // quotaLimitErrorForSnapshot builds the 429 surfaced when a snapshot's quota
@@ -94,99 +96,30 @@ func quotaLimitErrorForSnapshot(snap session.SessionSnapshot, model string) *ups
 	}
 }
 
-// quotaLimitError builds the 429 surfaced when a pooled token is excluded
-// for the model's exhausted session quota (see quotaLimitErrorForSnapshot).
-func quotaLimitError(tok *tokenEntry, model string) *upstream.RateLimitError {
-	return quotaLimitErrorForSnapshot(tok.session.Snapshot(), model)
+// quotaLimitError builds the 429 surfaced when an entry is excluded for the
+// model's exhausted session quota (see quotaLimitErrorForSnapshot). Shared
+// by both modes (issue #261).
+func quotaLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
+	return quotaLimitErrorForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
 
 // --- pool quota/snapshot ---
 
 // recordChat appends one successful upstream chat for token and prunes the
-// token's usage history outside the 24h window.
-func (p *Pool) recordChat(token int) {
-	toks := p.toks.Load()
-	if token < 0 || token >= len(*toks) {
-		return
-	}
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	// Authoritative bound under the lock: p.msgsPerToken is the index space
-	// AddToken/RemoveLastToken/RemoveAllTokens keep consistent, so a
-	// removal that raced the snapshot check above (or a lease issued from a
-	// snapshot that already went stale) is caught here instead of indexing
-	// past the usage slice.
-	if token < 0 || token >= len(p.msgsPerToken) {
-		return
-	}
-	cutoff := time.Now().Add(-usageWindow)
-	history := p.msgsPerToken[token]
-	first := 0
-	for first < len(history) && history[first].Before(cutoff) {
-		first++
-	}
-	p.msgsPerToken[token] = append(history[first:], time.Now())
-}
+// token's usage history outside the 24h window. The ledger travels with the
+// entry (issue #263), so the roster's single mutex guards it.
+func (p *Pool) recordChat(token int) { p.roster.recordChat(token) }
 
 // recordChatEntry appends one successful upstream chat for the lease's
-// backing entry and prunes its usage history outside the 24h window. The
-// entry is located by pointer in the CURRENT token list so the usage lands
-// on the right token: after a concurrent RemoveLastToken+AddToken, the
-// lease's Token index may point at a different token (or be out of range),
-// and charging by index would mis-record. An entry that is no longer in the
-// pool (removed while the request was in flight) skips the recording.
-func (p *Pool) recordChatEntry(entry *tokenEntry) {
-	if entry == nil {
-		return
-	}
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	for idx, tok := range *p.toks.Load() {
-		if tok != entry {
-			continue
-		}
-		// Authoritative bound under the lock: the msgsPerToken slice is
-		// rebuilt under usageMu by AddToken/RemoveLastToken/RemoveAllTokens,
-		// and a removal racing this snapshot can leave the entry present in
-		// toks but absent from the usage slice — never index past it.
-		if idx < 0 || idx >= len(p.msgsPerToken) {
-			return
-		}
-		cutoff := time.Now().Add(-usageWindow)
-		history := p.msgsPerToken[idx]
-		first := 0
-		for first < len(history) && history[first].Before(cutoff) {
-			first++
-		}
-		p.msgsPerToken[idx] = append(history[first:], time.Now())
-		return
-	}
-	// Entry removed from the pool: skip recording rather than charge a
-	// reused index.
-}
+// backing entry by pointer and prunes its usage history outside the 24h
+// window. The entry is the authoritative owner of its ledger, so after a
+// concurrent RemoveLastToken+AddToken a lease's Token index is never used
+// to locate the ledger — the pointer stays immune to index reuse.
+func (p *Pool) recordChatEntry(entry *tokenEntry) { p.roster.recordChatEntry(entry) }
 
+// usageCount returns how many successful chats token sent within the last
 // usageWindow, pruning expired timestamps.
-func (p *Pool) usageCount(token int) int {
-	toks := p.toks.Load()
-	if token < 0 || token >= len(*toks) {
-		return 0
-	}
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	// Authoritative bound under the lock (see recordChat): the usage slice
-	// may have been truncated/nil'd by a removal racing the snapshot check.
-	if token < 0 || token >= len(p.msgsPerToken) {
-		return 0
-	}
-	cutoff := time.Now().Add(-usageWindow)
-	history := p.msgsPerToken[token]
-	first := 0
-	for first < len(history) && history[first].Before(cutoff) {
-		first++
-	}
-	p.msgsPerToken[token] = history[first:]
-	return len(p.msgsPerToken[token])
-}
+func (p *Pool) usageCount(token int) int { return p.roster.usageCount(token) }
 
 // dailyLimitError builds the 429 surfaced when token is capped by
 // MAX_MESSAGES_PER_DAY: RetryAfter is the time until the token's oldest
@@ -194,34 +127,16 @@ func (p *Pool) usageCount(token int) int {
 // frees).
 func (p *Pool) dailyLimitError(token int) *upstream.RateLimitError {
 	return &upstream.RateLimitError{
-		RetryAfter:  p.usageResetIn(token),
+		RetryAfter:  p.roster.usageResetIn(token),
 		Limit:       float64(p.cfg.Load().MaxMessagesPerDay),
-		RecentCount: float64(p.usageCount(token)),
+		RecentCount: float64(p.roster.usageCount(token)),
 		Body:        "daily message limit reached",
 	}
 }
 
 // usageResetIn is how long until token's oldest usage timestamp ages out of
 // the window (0 when the token has no recorded usage or the reset is due).
-func (p *Pool) usageResetIn(token int) time.Duration {
-	p.usageMu.Lock()
-	defer p.usageMu.Unlock()
-	// Bounds check under the lock (see recordChat): the usage slice may
-	// have been truncated/nil'd by a removal racing this call — usageResetIn
-	// previously had no guard at all and indexed past the end.
-	if token < 0 || token >= len(p.msgsPerToken) {
-		return 0
-	}
-	history := p.msgsPerToken[token]
-	if len(history) == 0 {
-		return 0
-	}
-	reset := time.Until(history[0].Add(usageWindow))
-	if reset < 0 {
-		return 0
-	}
-	return reset
-}
+func (p *Pool) usageResetIn(token int) time.Duration { return p.roster.usageResetIn(token) }
 
 // --- bridge mode internals ---
 
@@ -237,21 +152,17 @@ func bestDailyLimit(entries []*upstream.RateLimitError) *upstream.RateLimitError
 	return best
 }
 
-// bridgeRecordChat appends one successful upstream chat for the bridge
-// entry and prunes its usage history outside the 24h window.
+// bridgeRecordChat appends one successful upstream chat for the bridge entry
+// and prunes its usage history outside the 24h window. The entry's ledger is
+// shared with the pooled path (issue #263); only this mode's global
+// BRIDGE_DAILY_LIMIT counter is extra.
 func (p *Pool) bridgeRecordChat(entry *bridgeEntry) {
 	if entry == nil {
 		return
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	cutoff := time.Now().Add(-usageWindow)
-	history := entry.usage
-	first := 0
-	for first < len(history) && history[first].Before(cutoff) {
-		first++
-	}
-	entry.usage = append(history[first:], time.Now())
+	entry.ledger.recordChat(time.Now())
 	p.bridgeDailyUsage++
 }
 
@@ -263,14 +174,7 @@ func (p *Pool) bridgeUsageCount(entry *bridgeEntry) int {
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	cutoff := time.Now().Add(-usageWindow)
-	history := entry.usage
-	first := 0
-	for first < len(history) && history[first].Before(cutoff) {
-		first++
-	}
-	entry.usage = history[first:]
-	return len(entry.usage)
+	return entry.ledger.usageCount(time.Now())
 }
 
 // bridgeUsageResetIn is how long until the bridge entry's oldest usage
@@ -282,15 +186,7 @@ func (p *Pool) bridgeUsageResetIn(entry *bridgeEntry) time.Duration {
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	history := entry.usage
-	if len(history) == 0 {
-		return 0
-	}
-	reset := time.Until(history[0].Add(usageWindow))
-	if reset < 0 {
-		return 0
-	}
-	return reset
+	return entry.ledger.usageResetIn(time.Now())
 }
 
 // bridgeDailyLimitError builds the 429 surfaced when the bridge entry is

@@ -1,0 +1,140 @@
+<script>
+  import Card from '../../components/Card.svelte';
+  import Button from '../../components/Button.svelte';
+  import EmptyState from '../../components/EmptyState.svelte';
+  import TokenCard from '../../components/TokenCard.svelte';
+  import TokenCardMobile from '../../components/TokenCardMobile.svelte';
+  import { tr } from '../../i18n.js';
+
+  /**
+   * TokenTable - the "Pool Tokens" card: desktop table + mobile stacked card
+   * grid, one row/card per pooled token. Split out of Tokens.svelte (issue
+   * #287) so the page owns add-token/rotation/device-login/page state while
+   * this component owns the table rendering.
+   *
+   * @prop {Array} tokens
+   * @prop {number} [tokenCount=0]
+   * @prop {boolean} [loading=false]
+   * @prop {string} [error='']
+   * @prop {number|null} expandedToken
+   * @prop {boolean} [actionPending=false]
+   * @prop {number} now
+   * @prop {boolean} [devToolsEnabled=false]
+   * @prop {Object} [spawnModels={}] - per-token selected spawn model (bindable)
+   * @prop {(idx: number) => void} onToggle
+   * @prop {(token: object, idx: number, action: string) => void} onAction
+   * @prop {(idx: number, model: string) => void} onSpawn
+   * @prop {(idx: number, action: string) => void} onRefresh
+   * @prop {(idx: number) => void} onDropSession
+   * @prop {(from: number, to: number) => void} onSwap
+   * @prop {() => void} onRetry
+   */
+  let {
+    tokens = [],
+    tokenCount = 0,
+    loading = false,
+    error = '',
+    expandedToken = null,
+    actionPending = false,
+    now,
+    devToolsEnabled = false,
+    spawnModels = $bindable({}),
+    onToggle,
+    onAction,
+    onSpawn,
+    onRefresh,
+    onDropSession,
+    onSwap,
+    onRetry,
+  } = $props();
+</script>
+
+<Card
+  title={$tr('Pool Tokens')}
+  description={tokenCount ? $tr('{count} pooled token(s) · Tap a card to see session & quota details', { count: tokenCount }) : $tr('Tap a card to see session & quota details')}
+>
+  {#if loading}
+    <div class="flex flex-col gap-3">
+      <div class="skeleton skeleton-text w-1/3"></div>
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line"></div>
+    </div>
+  {:else if error}
+    <EmptyState
+      title={$tr('Could not load tokens')}
+      description={error}
+    >
+      {#snippet action()}
+        <Button variant="secondary" onclick={onRetry}>
+          {$tr('Retry')}
+        </Button>
+      {/snippet}
+    </EmptyState>
+  {:else if !tokens || tokens.length === 0}
+    <EmptyState
+      title={$tr('No tokens in pool')}
+      description={$tr('Add one above or use Device Login to generate credentials via browser.')}
+    />
+  {:else}
+    <!-- Desktop: table (md+) -->
+    <div class="hidden md:block overflow-x-auto">
+      <table class="fp-table w-full min-w-[640px]">
+        <thead>
+          <tr>
+            <th class="w-8"></th>
+            <th>{$tr('Token')}</th>
+            <th>{$tr('Status')}</th>
+            <th>{$tr('Instance')}</th>
+            <th class="num">{$tr('Cooldown')}</th>
+            <th class="text-right">{$tr('Actions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each tokens as token, i (token.index ?? i)}
+            {@const idx = token.index ?? i}
+            <TokenCard
+              {token}
+              {idx}
+              totalTokens={tokens.length}
+              expanded={expandedToken === idx}
+              bind:spawnModel={spawnModels[idx]}
+              {actionPending}
+              {now}
+              {devToolsEnabled}
+              onToggle={() => onToggle(idx)}
+              onAction={(action) => onAction(token, idx, action)}
+              onSpawn={(model) => onSpawn(idx, model)}
+              onRefresh={(action) => onRefresh(idx, action)}
+              onDropSession={() => onDropSession(idx)}
+              onSwap={onSwap}
+            />
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <!-- Mobile: stacked cards (< md) - no horizontal scrolling -->
+    <div class="md:hidden flex flex-col gap-3 p-4">
+      {#each tokens as token, i (token.index ?? i)}
+        {@const idx = token.index ?? i}
+        <TokenCardMobile
+          {token}
+          {idx}
+          totalTokens={tokens.length}
+          expanded={expandedToken === idx}
+          bind:spawnModel={spawnModels[idx]}
+          {actionPending}
+          {now}
+          {devToolsEnabled}
+          onToggle={() => onToggle(idx)}
+          onAction={(action) => onAction(token, idx, action)}
+          onSpawn={(model) => onSpawn(idx, model)}
+          onRefresh={(action) => onRefresh(idx, action)}
+          onDropSession={() => onDropSession(idx)}
+          onSwap={onSwap}
+        />
+      {/each}
+    </div>
+  {/if}
+</Card>

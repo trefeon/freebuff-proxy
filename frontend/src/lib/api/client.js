@@ -90,14 +90,13 @@ export async function fetchAPI(path, opts = {}) {
   }
 
   if (!res.ok) {
-    // Backend error envelopes are JSON ({ok:false,message} from render
-    // helpers or {error:{message}} from protocol handlers); surface the
+    // Admin endpoints emit one envelope ({ok,message[,code]}); surface the
     // human message instead of a raw JSON blob. Fall back to status text.
     const text = await res.text().catch(() => '');
     let msg = '';
     try {
       const parsed = JSON.parse(text);
-      msg = parsed?.error?.message ?? parsed?.message ?? '';
+      msg = parsed?.message ?? '';
     } catch {
       msg = text;
     }

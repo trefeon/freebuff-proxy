@@ -1,12 +1,8 @@
 package dashboard
 
 import (
-	"fmt"
 	"net"
 	"net/http"
-	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
@@ -174,188 +170,19 @@ func (d *Dashboard) configData() configData {
 		cd.HasEnvFile = true
 		cd.EnvContent = string(raw)
 	} else {
-		cd.EnvContent = defaultEnvTemplate
+		cd.EnvContent = config.DefaultEnvTemplate()
 	}
-	// Format map from Config fields
-	formatKey := func(key string) (val string, secret bool) {
-		switch key {
-		case "LISTEN_ADDR":
-			return cfg.ListenAddr, false
-		case "UPSTREAM_BASE_URL":
-			return cfg.UpstreamBaseURL, false
-		case "AUTH_TOKENS":
-			return fmt.Sprintf("%d token(s)", len(cfg.AuthTokens)), true
-		case "API_KEYS":
-			return fmt.Sprintf("%d key(s)", len(cfg.APIKeys)), true
-		case "ADMIN_TOKEN":
-			return boolWord(cfg.AdminToken != ""), true
-		case "ROTATION_INTERVAL":
-			return cfg.RotationInterval.String(), false
-		case "REQUEST_TIMEOUT":
-			return cfg.RequestTimeout.String(), false
-		case "SESSION_CALL_TIMEOUT":
-			return cfg.SessionCallTimeout.String(), false
-		case "COST_MODE":
-			return cfg.CostMode, false
-		case "TLS_FINGERPRINT":
-			return cfg.TLSFingerprint, false
-		case "REGISTRY_REFRESH":
-			return cfg.RegistryRefresh.String(), false
-		case "DEBUG_DUMP":
-			return strconv.FormatBool(cfg.DebugDump), false
-		case "LOG_FILE":
-			return cfg.LogFile, false
-		case "LOG_LEVEL":
-			return cfg.LogLevel, false
-		case "LOG_FORMAT":
-			return cfg.LogFormat, false
-		case "LOG_ACCESS":
-			return strconv.FormatBool(cfg.LogAccess), false
-		case "LOG_RING_SIZE":
-			return strconv.Itoa(cfg.LogRingSize), false
-		case "MAX_MESSAGES_PER_DAY":
-			return strconv.Itoa(cfg.MaxMessagesPerDay), false
-		case "MAX_SPEND_PER_DAY":
-			return strconv.FormatInt(cfg.MaxSpendPerDay, 10), false
-		case "IDLE_ROTATION_TIMEOUT":
-			return cfg.IdleRotationTimeout.String(), false
-		case "SAFE_MODE":
-			return strconv.FormatBool(cfg.SafeMode), false
-		case "REQUEST_JITTER":
-			return cfg.RequestJitter.String(), false
-		case "CLI_VERSION":
-			return cfg.CLIVersion, false
-		case "MODEL_ALIASES":
-			var pairs []string
-			for k, v := range cfg.ModelAliases {
-				pairs = append(pairs, k+":"+v)
-			}
-			sort.Strings(pairs)
-			return strings.Join(pairs, ","), false
-		case "MODELS_ALLOW":
-			return strings.Join(cfg.ModelsAllow, ","), false
-		case "MODELS_HIDE_UNAVAILABLE":
-			return strconv.FormatBool(cfg.ModelsHideUnavailable), false
-		case "TRANSIENT_RETRIES":
-			return strconv.Itoa(cfg.TransientRetries), false
-		case "DASHBOARD_ENABLED":
-			return strconv.FormatBool(cfg.DashboardEnabled), false
-		case "SESSION_PERSIST":
-			return strconv.FormatBool(cfg.SessionPersist), false
-		case "SESSION_STATE_FILE":
-			return cfg.SessionStateFile, false
-		case "TOKEN_ROTATION":
-			return cfg.TokenRotation, false
-		case "BRIDGE_ENABLED":
-			return strconv.FormatBool(cfg.BridgeEnabled), false
-		case "BRIDGE_IDLE_EVICT":
-			return cfg.BridgeIdleEvict.String(), false
-		case "BRIDGE_DAILY_LIMIT":
-			return strconv.Itoa(cfg.BridgeDailyLimit), false
-		case "FALLBACK_AFTER_MS":
-			return strconv.Itoa(int(cfg.FallbackAfter.Milliseconds())), false
-		case "FALLBACK_MODEL":
-			var pairs []string
-			for k, v := range cfg.FallbackModels {
-				pairs = append(pairs, k+"="+v)
-			}
-			sort.Strings(pairs)
-			return strings.Join(pairs, ","), false
-		case "QUOTA_FALLBACK_MODELS":
-			var pairs []string
-			for k, v := range cfg.QuotaFallbackModels {
-				pairs = append(pairs, k+"="+v)
-			}
-			sort.Strings(pairs)
-			return strings.Join(pairs, ","), false
-		case "SESSION_IDLE_END":
-			return cfg.SessionIdleEnd.String(), false
-		case "SESSION_PROBE_CACHE_TTL":
-			return cfg.SessionProbeCacheTTL.String(), false
-		case "SESSION_RE_ADMIT_LEAD":
-			return cfg.SessionReAdmitLead.String(), false
-		case "SESSION_CREATE_MAX_PARALLEL_GLOBAL":
-			return strconv.Itoa(cfg.SessionCreateMaxParallelGlobal), false
-		case "SESSION_CREATE_MAX_PARALLEL_PER_MODEL":
-			return strconv.Itoa(cfg.SessionCreateMaxParallelPerModel), false
-		case "RUN_FINISH_QUEUE_SIZE":
-			return strconv.Itoa(cfg.RunFinishQueueSize), false
-		case "RUN_FINISH_INLINE_TIMEOUT":
-			return cfg.RunFinishInlineTimeout.String(), false
-		case "RUNS_DRAIN_QUEUE_CAP":
-			return strconv.Itoa(cfg.RunsDrainQueueCap), false
-		case "RUNS_DRAIN_TTL":
-			return cfg.RunsDrainTTL.String(), false
-		case "MODEL_UNAVAILABLE_CACHE_TTL":
-			return cfg.ModelUnavailableCacheTTL.String(), false
-		case "RATE_LIMIT_PER_IP":
-			return strconv.FormatFloat(cfg.RateLimitPerIP, 'f', -1, 64), false
-		case "RATE_LIMIT_BURST":
-			return strconv.Itoa(cfg.RateLimitBurst), false
-		case "CORS_ALLOWED_ORIGIN":
-			return cfg.CORSAllowedOrigin, false
-		case "WEBHOOK_URL":
-			return cfg.WebhookURL, true
-		case "HTTP2_UPSTREAM":
-			return strconv.FormatBool(cfg.HTTP2Upstream), false
-		case "AUTO_DISCOVER_TOKEN":
-			return "true", false
-		case "DEVTOOLS_ENABLED":
-			return strconv.FormatBool(cfg.DevToolsEnabled), false
-		case "ADOPT_CLI_SESSION":
-			return strconv.FormatBool(cfg.AdoptCLISession), false
-		case "WAITING_ROOM_CHAIN":
-			return strconv.FormatBool(cfg.WaitingRoomChain), false
-		default:
-			return "", false
-		}
-	}
-
-	for _, def := range config.Catalog() {
-		val, sec := formatKey(def.Key)
+	// Effective values come from the config package's own catalog-driven
+	// rendering (issue #288): one key map, no per-key switch here.
+	for _, entry := range cfg.Data() {
 		cd.Effective = append(cd.Effective, configKV{
-			Key:    def.Key,
-			Value:  val,
-			Secret: sec || def.Secret,
+			Key:    entry.Key,
+			Value:  entry.Value,
+			Secret: entry.Secret,
 		})
 	}
 	return cd
 }
-
-func boolWord(v bool) string {
-	if v {
-		return "set"
-	}
-	return "unset"
-}
-
-const defaultEnvTemplate = `# freebuff-proxy configuration (.env)
-# Keys mirror the environment variables; leave commented to keep the default.
-# See the README and docs/guides for the full reference.
-
-#LISTEN_ADDR=127.0.0.1:3457
-#UPSTREAM_BASE_URL=https://www.codebuff.com
-#AUTH_TOKENS=token1,token2
-#API_KEYS=sk-local-...
-#ADMIN_TOKEN=change-me
-#ROTATION_INTERVAL=6h
-#REQUEST_TIMEOUT=15m
-#SESSION_CALL_TIMEOUT=30s
-#COST_MODE=free
-#TLS_FINGERPRINT=chrome120
-#REGISTRY_REFRESH=6h
-#DEBUG_DUMP=false
-#LOG_FILE=
-#LOG_LEVEL=info
-#MAX_MESSAGES_PER_DAY=0
-#IDLE_ROTATION_TIMEOUT=0
-#SAFE_MODE=true
-#REQUEST_JITTER=0s
-#CLI_VERSION=0.10.7
-#MODEL_ALIASES=
-#MODELS_ALLOW=
-#TRANSIENT_RETRIES=1
-`
 
 // baseURLForRequest computes the dynamic API base URL (/v1) for dashboard views.
 // It prioritizes the incoming request's Host / X-Forwarded headers so that operators

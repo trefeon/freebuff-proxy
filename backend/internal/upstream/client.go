@@ -66,10 +66,10 @@ type Client struct {
 	// is itself a JA4 ALPN mismatch (#51). false forces HTTP/1.1.
 	http2Upstream bool
 
-	// risk is the passive ban-risk engine fed from session/probe responses
-	// (#64). Production always uses stealth.DefaultRiskEngine; nil disables
-	// feeding (test seam).
-	risk *stealth.RiskEngine
+	// mock is the optional simulated upstream for dummy/mock tokens (test
+	// fixtures, issue #271). nil means real network calls. Request methods
+	// branch on this narrow interface, never on the token prefix.
+	mock MockUpstream
 
 	// Counters surfaced via the pool snapshot for /metrics.
 	transientRetries     atomic.Int64 // transient transport failures retried
@@ -166,7 +166,6 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 		debugDump:             cfg.DebugDump,
 		transientRetriesLimit: cfg.TransientRetries,
 		http2Upstream:         cfg.HTTP2Upstream,
-		risk:                  stealth.DefaultRiskEngine,
 		rateLimitEvents:       make(map[string]*atomic.Int64),
 	}
 
@@ -266,6 +265,14 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 		transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 	}
 	c.stealthProfile = stealthProf
+	// Wire the mock upstream for dummy/mock tokens (issue #271). NewMockWire
+	// is populated by the testmock package (via init), so the simulation lives
+	// outside the production wire client; a nil hook leaves the client on the
+	// real network path. The request methods branch on the narrow MockUpstream
+	// interface, never on the token prefix.
+	if NewMockWire != nil {
+		c.mock = NewMockWire(token)
+	}
 	c.http = &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {

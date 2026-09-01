@@ -17,7 +17,6 @@ import (
 
 	"freebuff-proxy/backend/internal/convert"
 	"freebuff-proxy/backend/internal/phasetiming"
-	"freebuff-proxy/backend/internal/reasoningcache"
 )
 
 // --- streaming translation ---
@@ -69,17 +68,12 @@ type anthropicStreamState struct {
 // text/tool_use), thinking_delta, text_delta, input_json_delta,
 // signature_delta, content_block_stop, message_delta, message_stop.
 func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter, r io.Reader, stats *relayStats, chatStart time.Time, requestedModel string, inputTokens int) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	flusher, ok := w.(http.Flusher)
+	flusher, keepalive, lines, lastWrite, ok := newStreamRelay(ctx, w, r)
 	if !ok {
 		s.logger.Warn("response writer does not support flushing")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, ": connecting\n\n")
-	flusher.Flush()
+	defer keepalive.Stop()
 
 	// Issue #164: the message_start event names the proxy's served model
 	// (lease.Model, fallbacks included), not the raw requested id — clients
@@ -115,15 +109,6 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 	}
 	sendAnthropicMessageStart(send, st)
 
-	keepalive := time.NewTicker(keepaliveInterval)
-	defer keepalive.Stop()
-	lines := make(chan lineChunk)
-	go relayReadLoop(ctx, r, lines)
-	// lastWrite tracks the last frame actually written to the CLIENT; the
-	// keepalive condition keys on it so a liveness signal is emitted after
-	// any client-write silence, regardless of upstream comment/junk dribble
-	// (those are dropped and never relayed — #161).
-	lastWrite := time.Now()
 	first := true
 
 	for {
@@ -131,11 +116,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			if time.Since(lastWrite) >= keepaliveInterval {
-				_, _ = io.WriteString(w, "event: ping\ndata: {\"type\": \"ping\"}\n\n")
-				lastWrite = time.Now()
-				flusher.Flush()
-			}
+			maybeKeepalive(w, flusher, lastWrite, "event: ping\ndata: {\"type\": \"ping\"}\n\n")
 		case lc := <-lines:
 			if lc.err != nil {
 				if ctx.Err() == nil {
@@ -156,7 +137,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 				s.finalizeAnthropicStream(send, st)
 				return
 			}
-			clean, drop := convert.SanitizeChunk(lc.line)
+			clean, drop := convert.SanitizeChunkOpts(lc.line, s.convertOptions())
 			if drop {
 				// Dropped upstream lines are never relayed and must not
 				// advance the keepalive timer (client sees only real
@@ -203,7 +184,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 				first = false
 				phasetiming.FromContext(ctx).Since(phasetiming.UpstreamTTFBMS, chatStart)
 			}
-			lastWrite = time.Now()
+			*lastWrite = time.Now()
 			stats.chunks++
 			stats.bytes += len(clean)
 			if stats.servedModel == "" {
@@ -481,20 +462,15 @@ func (s *Server) finalizeAnthropicStream(send func(map[string]any), st *anthropi
 // can echo back. Calls whose id never arrived are skipped, matching the
 // toolIDs list that is put alongside the key.
 func canonicalAnthropicToolKey(st *anthropicStreamState) string {
-	indexes := make([]int, 0, len(st.toolCalls))
-	for i := range st.toolCalls {
-		indexes = append(indexes, i)
-	}
-	sort.Ints(indexes)
-	triples := make([][3]string, 0, len(indexes))
-	for _, i := range indexes {
-		ts := st.toolCalls[i]
-		if ts == nil || ts.id == "" {
-			continue
+	return buildCanonicalToolKey(st.toolCalls, func(ts *anthropicToolState) (string, string, string) {
+		if ts == nil {
+			return "", "", ""
 		}
-		triples = append(triples, [3]string{sanitizeToolID(ts.id), ts.name, ts.args.String()})
-	}
-	return reasoningcache.CanonicalToolKey(triples)
+		// id is the SANITIZED one: that is the identity the client saw on the
+		// wire (content_block_start carries sanitizeToolID(ts.id)) and the
+		// only one it can echo back.
+		return sanitizeToolID(ts.id), ts.name, ts.args.String()
+	})
 }
 
 // ensureThinking opens the thinking content block on first reasoning delta.

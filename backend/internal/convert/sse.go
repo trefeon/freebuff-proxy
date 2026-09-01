@@ -91,6 +91,13 @@ var cleanMapPool = sync.Pool{
 //
 // Ported from freebuff-api-kiprana sanitize_stream_chunk.
 func SanitizeChunk(line []byte) ([]byte, bool) {
+	return SanitizeChunkOpts(line, DefaultOptions())
+}
+
+// SanitizeChunkOpts is SanitizeChunk with an explicit Options (issue #277):
+// the reasoning-in-content fold mode is taken from opts instead of the
+// process environment.
+func SanitizeChunkOpts(line []byte, opts Options) ([]byte, bool) {
 	data, ok := parseSSEData(line)
 	if !ok {
 		return nil, true
@@ -104,12 +111,12 @@ func SanitizeChunk(line []byte) ([]byte, bool) {
 	// Fast path: the chunk is already in sanitized shape, so re-encoding it
 	// would be a no-op. Emit the raw payload (a subslice of line) untouched.
 	// The reasoning-in-content fold changes output, so it disables the path.
-	if reasoningInContentMode() == "" && !needsSanitize(chunk) {
+	if opts.ReasoningInContent == "" && !needsSanitize(chunk) {
 		chunkMapPool.Put(chunk)
 		return data, false
 	}
 	clean := cleanMapPool.Get().(map[string]any)
-	result := sanitizeChunk(chunk, clean)
+	result := sanitizeChunk(chunk, clean, opts.ReasoningInContent)
 	chunkMapPool.Put(chunk)
 	if result == nil {
 		clear(clean)
@@ -127,7 +134,7 @@ func SanitizeChunk(line []byte) ([]byte, bool) {
 
 // sanitizeChunk implements the per-chunk cleanup into the pooled clean map;
 // returns nil to drop the chunk. clean is cleared by the caller on drop.
-func sanitizeChunk(chunk map[string]any, clean map[string]any) map[string]any {
+func sanitizeChunk(chunk map[string]any, clean map[string]any, reasoningTag string) map[string]any {
 	if errVal, hasErr := chunk["error"]; hasErr && errVal != nil {
 		clear(clean)
 		if id, ok := chunk["id"].(string); ok && id != "" {
@@ -236,7 +243,7 @@ func sanitizeChunk(chunk map[string]any, clean map[string]any) map[string]any {
 			// Issue #44: fold reasoning into content as <think> text for
 			// clients that don't render a reasoning channel. reasoning_details
 			// is never folded.
-			foldReasoningIntoContent(delta, reasoningStr)
+			foldReasoningIntoContent(delta, reasoningStr, reasoningTag)
 		}
 		if v, ok := delta["content"]; ok && v == nil {
 			delete(delta, "content")

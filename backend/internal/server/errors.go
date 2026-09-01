@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"freebuff-proxy/backend/internal/pool"
@@ -86,6 +85,42 @@ func (s *Server) writeJSONErrorWithHint(w http.ResponseWriter, status int, messa
 	})
 }
 
+// openAIErrorType maps an internal error code to the OpenAI error `type`
+// field at the call sites that route through writeClientError. The shared
+// handler needs a single OpenAI shape; the type is derived from the code
+// so every site keeps its historical categorization.
+func openAIErrorType(status int, code string) string {
+	switch code {
+	case "rate_limit_exceeded":
+		return "rate_limit_exceeded"
+	case "missing_bearer_token":
+		return "invalid_request_error"
+	default:
+		return "upstream_error"
+	}
+}
+
+// writeClientError writes a client-error response in the envelope the
+// request's wire expects: the OpenAI shape for /v1/chat/completions and
+// /v1/responses, the Anthropic shape for /v1/messages. The Retry-After
+// ceiling is computed once here, so every dispatch site shares one rounding
+// rule (issue #253).
+func (s *Server) writeClientError(w http.ResponseWriter, r *http.Request, status int, message, code string, retryAfter time.Duration) {
+	if retryAfter > 0 {
+		retrySec := int(math.Ceil(retryAfter.Seconds()))
+		if retrySec < 1 {
+			retrySec = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(retrySec))
+	}
+	if isAnthropicRequest(r) {
+		// retryAfter is passed as 0: the header is already written above.
+		s.writeAnthropicError(w, r, status, message, code, 0)
+		return
+	}
+	s.writeJSONErrorWithHint(w, status, message, openAIErrorType(status, code), code, "", 0)
+}
+
 func defaultHintForCode(code, message string) string {
 	lowerMsg := strings.ToLower(message)
 	switch {
@@ -128,33 +163,18 @@ func defaultHintForCode(code, message string) string {
 	}
 }
 
-// rateLimitWarnDedupe gates identical (token, code, window) `request failed`
-// logs (D6): the first + every 50th occurrence fire; the per-key counter
-// always increments so a silent burst stays countable, and the client
-// response is always written. Package-level = per-process, shared by every
-// server instance.
-var rateLimitWarnDedupe = struct {
-	mu sync.Mutex
-	m  map[string]int64
-}{}
-
-// resetRateLimitWarnDedupe clears the dedupe ledger (test hook).
-func resetRateLimitWarnDedupe() {
-	rateLimitWarnDedupe.mu.Lock()
-	defer rateLimitWarnDedupe.mu.Unlock()
-	rateLimitWarnDedupe.m = make(map[string]int64)
-}
-
 // rateLimitWarnShouldLog reports whether the (token, code, window) log
 // should fire for this occurrence, always incrementing the occurrence count.
-func rateLimitWarnShouldLog(key string) bool {
-	rateLimitWarnDedupe.mu.Lock()
-	defer rateLimitWarnDedupe.mu.Unlock()
-	if rateLimitWarnDedupe.m == nil {
-		rateLimitWarnDedupe.m = make(map[string]int64)
+// The ledger is per-Server (issue #252): two Server instances in one process
+// keep separate dedupe state.
+func (s *Server) rateLimitWarnShouldLog(key string) bool {
+	s.rateLimitDedupe.mu.Lock()
+	defer s.rateLimitDedupe.mu.Unlock()
+	if s.rateLimitDedupe.m == nil {
+		s.rateLimitDedupe.m = make(map[string]int64)
 	}
-	rateLimitWarnDedupe.m[key]++
-	n := rateLimitWarnDedupe.m[key]
+	s.rateLimitDedupe.m[key]++
+	n := s.rateLimitDedupe.m[key]
 	return n == 1 || n%50 == 0
 }
 
@@ -396,12 +416,8 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		// every 50th; the counter always increments and the response is
 		// always written.
 		key := tokenLabel(lease) + "|" + code + "|" + window
-		if !rateLimitWarnShouldLog(key) {
-			if isAnthropicRequest(r) {
-				s.writeAnthropicError(w, r, status, message, code, retryAfter)
-			} else {
-				s.writeJSONError(w, status, message, "upstream_error", code, retryAfter)
-			}
+		if !s.rateLimitWarnShouldLog(key) {
+			s.writeClientError(w, r, status, message, code, retryAfter)
 			return
 		}
 	}
@@ -414,9 +430,5 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 	} else {
 		s.logger.Warn("request failed", attrs...)
 	}
-	if isAnthropicRequest(r) {
-		s.writeAnthropicError(w, r, status, message, code, retryAfter)
-	} else {
-		s.writeJSONError(w, status, message, "upstream_error", code, retryAfter)
-	}
+	s.writeClientError(w, r, status, message, code, retryAfter)
 }

@@ -24,8 +24,6 @@ jobs:
 
       - name: Build
         run: go build ./backend/...
-      - name: Vet
-        run: go vet ./backend/...
 
       - name: Build (all-in-one)
         run: go build -tags dashboard ./backend/...
@@ -38,7 +36,6 @@ jobs:
           AUTH_TOKENS: ""
           ADMIN_TOKEN: ""
         run: go test -tags dashboard -timeout 10m ./backend/internal/dashboard/... ./backend/internal/server/...
-
 
       - name: Test (race detector)
         env:

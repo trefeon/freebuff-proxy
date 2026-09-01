@@ -1,7 +1,5 @@
 <script>
-  import {
-    LayoutDashboard, Key, Gauge, Cpu, Settings, FileText, FlaskConical, Menu, X,
-  } from '@lucide/svelte';
+  import { Menu, X } from '@lucide/svelte';
 
   /**
    * @prop {string} activeTab
@@ -10,7 +8,8 @@
    */
   let { activeTab = $bindable(), versionInfo } = $props();
   import { tr } from './i18n.js';
-  import { getEnvValue } from './utils/env.js';
+  import { isDevToolsEnabled } from './utils/devtools.js';
+  import { NAV_ITEMS } from './nav.js';
   import { onMount } from 'svelte';
   import { fetchAPI } from './api/client.js';
   import { adminApi, adminRoot } from './api/paths.js';
@@ -22,21 +21,18 @@
   // hidden unless the operator explicitly enables DEVTOOLS_ENABLED=true.
   let devToolsEnabled = $state(false);
 
-  const tabs = $derived([
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'tokens',   label: 'Tokens',   icon: Key },
-    { id: 'quota',    label: 'Quota Tracker', icon: Gauge },
-    { id: 'models',   label: 'Models',   icon: Cpu },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'logs',     label: 'Logs',     icon: FileText },
-    ...(devToolsEnabled ? [{ id: 'devtools', label: 'Dev Tools', icon: FlaskConical }] : []),
-  ]);
+  const tabs = $derived(
+    NAV_ITEMS.filter((item) => {
+      if (item.inSidebar === false) return false;
+      if (item.gate === 'devtools') return devToolsEnabled;
+      return true;
+    })
+  );
   onMount(async () => {
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || '';
-      const val = (getEnvValue(envContent, 'DEVTOOLS_ENABLED') || '').toLowerCase();
-      devToolsEnabled = val === 'true' || val === '1';
+      devToolsEnabled = isDevToolsEnabled(envContent);
     } catch {
       devToolsEnabled = false;
     }

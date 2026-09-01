@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
-	"freebuff-proxy/backend/internal/modelcat"
 )
 
 // RawBase is the upstream source of the Codebuff TS constant files.
@@ -56,156 +56,45 @@ const fetchTimeout = 30 * time.Second
 // than this fails the fetch, which keeps the previous registry state.
 const maxFetchBytes = 2 << 20
 
-// ServedModels is the code-level gate of the model ids this gateway serves.
-// Derived from modelcat.Catalog (single source of truth): the served set is
-// upstream SUPPORTED_FREEBUFF_MODELS minus FREEBUFF_PAUSED_FREE_MODEL_IDS.
-// The gate therefore moves on every upstream sync by editing the catalog —
-// no separate list to keep in step.
+// Pinned upstream snapshot (registry/testdata/upstream/): the offline
+// fallback tables are DERIVED from this embed at init through the exact
+// parsers a live Refresh runs, so an upstream model-list change is one
+// snapshot update — the hand-maintained Go tables that used to need a
+// parallel edit are gone (issue #273). retiredRootOverrides stays an
+// explicit small override map inside parse.go (it remarks a model the
+// parser CAN read onto a root the parser cannot evaluate).
 //
-// openai/gpt-5.6-luna-es was served until 2026-08-23 (issue #201). Vendor
-// snapshot 0603bc1 moved it into FREEBUFF_WEB_GOD_ONLY_MODELS ("Codex (test)",
-// Novita route — evaluation only): hidden from the CLI/Desktop picker,
-// /api/live and /api/latency, and excluded from SUPPORTED_FREEBUFF_MODELS
-// (luna-es-god-only.test.ts). It is NOT the documented honeypot (that is
-// kimi-k3-eco, subscriptions.ts GOD_ONLY_BAIT_MODEL_ID) — but a model no
-// real client can reach makes proxy traffic to it indistinguishable from
-// probing a hidden eval route, so the gate excludes it.
-// stealth/ox-alpha rejoined the served set with vendor cce4800 (2026-08-24,
-// issue #209) and LEFT it with vendor 5951772 (2026-08-27), when its anonymous
-// host ended the free promotion: FREEBUFF_PAUSED_FREE_MODEL_IDS now lists it,
-// so the catalog row is Paused, not Served.
-var ServedModels = modelcat.ServedMap()
+//go:embed testdata/upstream
+var pinnedUpstreamFS embed.FS
 
-// SupportedModelIDs is the canonical list of the active models served by the
-// gateway (served catalog rows in upstream order).
-var SupportedModelIDs = modelcat.ServedIDs()
+// pinnedFallbackAgents / pinnedFallbackRootByModel are built once at init
+// from the embedded snapshot through the same parsers a live Refresh runs.
+var (
+	pinnedFallbackAgents, pinnedFallbackRootByModel = buildPinnedFallback()
+)
 
-// SupportedModelsHelpText is the formatted list of models for error messages (issue #189).
-var SupportedModelsHelpText = modelcat.ServedHelpText()
-
-// IsServedModel reports whether model is in the active served models.
-func IsServedModel(model string) bool {
-	return ServedModels[model]
-}
-
-// PausedModels mirrors upstream FREEBUFF_PAUSED_FREE_MODEL_IDS: ids upstream
-// still RECOGNIZES but refuses at admission with `model_unavailable` naming
-// the replacement (freebuffWithdrawnModelMessage, freebuff-models.ts:1685).
-// minimax/minimax-m3 was withdrawn from free mode on 2026-08-20 ($213/hr),
-// deepseek-v4-pro on 2026-08-26 (cost), stealth/ox-alpha on 2026-08-27 (its
-// anonymous host ended the free promotion). Serving a paused model would burn
-// a doomed admission per request — admission refusal is not session-ending
-// upstream, so the retry loop would amplify exactly the issue-#1801-shaped
-// load the pause exists to stop.
-//
-// The id stays in the catalog maps (count_tokens, alias resolution) but is
-// refused by the chat handlers before any lease is acquired. Values name the
-// replacement model from the catalog (the upstream default-model copy).
-var PausedModels = modelcat.PausedMap()
-
-// WithdrawnModelMessage mirrors upstream freebuffWithdrawnModelMessage
-// (freebuff-models.ts:1685-1697): names the model asked for and what to use
-// instead — the client that sends this id is a released binary whose picker
-// still lists it, so "unavailable" alone leaves the user staring at a row
-// that looks fine and does not work.
-func WithdrawnModelMessage(id string) string {
-	replacement := PausedModels[id]
-	if replacement == "" {
-		return modelcat.DisplayName(id) + " is no longer available in Freebuff."
+// buildPinnedFallback reads the five pinned snapshot files and runs the
+// live parsers in the same order Refresh does. A corrupted embed yields an
+// empty fallback rather than a panic: LoadFallback then simply serves no
+// mappings, and the registry parity test fails loudly on any drift.
+func buildPinnedFallback() ([]agentModels, map[string]string) {
+	names := []string{
+		"testdata/upstream/free-agents.ts",
+		"testdata/upstream/freebuff-model-ids.ts",
+		"testdata/upstream/freebuff-models.ts",
+		"testdata/upstream/gemini.ts",
+		"testdata/upstream/model-config.ts",
 	}
-	return modelcat.DisplayName(id) + " is no longer available in Freebuff. We recommend using " + modelcat.DisplayName(replacement) + " instead."
-}
-
-// IsPausedModel reports whether model is recognized-but-withdrawn upstream.
-func IsPausedModel(model string) bool {
-	return modelcat.IsPaused(model)
-}
-
-// fallbackAgents is the hardcoded model→agent fallback used when the sources
-// are unreachable. It mirrors the CURRENT upstream FREE_MODE_AGENT_MODELS
-// exactly: the rows below are the verbatim parse of the pinned snapshot
-// (testdata/upstream/free-agents.ts, copied from
-// reference/freebuff/common/src/constants — the RE-verified installed CLI
-// binary), entry order preserved. Rows upstream retired (laguna-s-2.1,
-// ling-3.0-flash, greg-2-ultra, greg-2-super) are absent: advertising a dead
-// model id in the offline fallback surfaces it via /v1/models and trips
-// upstream 403 free_mode_invalid_agent_model (issue #121). Most base3 root
-// rows are derived upstream via an Object.fromEntries spread the text parser
-// cannot evaluate, so they are absent here too — only explicitly written rows
-// (base3-free-luna-es) appear; Luna's root itself moved from base3-free-luna
-// to base2-free-luna in this snapshot.
-// Upstream changes update BOTH the pinned snapshot and this table together;
-// the parity test (TestFallbackParityWithPinnedUpstream) fails on drift.
-var fallbackAgents = []agentModels{
-	{agent: "base2-free", models: []string{
-		"minimax/minimax-m3",
-		"openai/gpt-5.6-luna",
-		"deepseek/deepseek-v4-pro",
-		"deepseek/deepseek-v4-flash",
-		"mimo/mimo-v2.5",
-	}},
-	{agent: "base2-free-deepseek", models: []string{"deepseek/deepseek-v4-pro"}},
-	{agent: "base2-free-deepseek-flash", models: []string{"deepseek/deepseek-v4-flash"}},
-	{agent: "base2-free-mimo", models: []string{"mimo/mimo-v2.5"}},
-	{agent: "base2-free-minimax-m3", models: []string{"minimax/minimax-m3"}},
-	{agent: "base2-free-luna", models: []string{"openai/gpt-5.6-luna"}},
-	{agent: "base2-free-solar-pro4", models: []string{"upstage/solar-pro4"}},
-	{agent: "base2-free-glm", models: []string{"z-ai/glm-5.2"}},
-	{agent: "base2-free-glm-5-3-flash", models: []string{"z-ai/glm-5.3-flash"}},
-	{agent: "base2-free-kimi-k3-eco", models: []string{"crof/kimi-k3-eco"}},
-	{agent: "base2-free-luna-es", models: []string{"openai/gpt-5.6-luna-es"}},
-	{agent: "base3-free-luna-es", models: []string{"openai/gpt-5.6-luna-es"}},
-	{agent: "base2-free-deepseek-pro-max", models: []string{"deepseek/deepseek-v4-pro-max"}},
-	{agent: "base2-free-deepseek-flash-max", models: []string{"deepseek/deepseek-v4-flash-max"}},
-	{agent: "base2-free-luna-max", models: []string{"openai/gpt-5.6-luna-max"}},
-	{agent: "base2-free-muse-spark", models: []string{"meta/muse-spark-1.2-contributor"}},
-	{agent: "base2-free-ox-alpha", models: []string{"stealth/ox-alpha"}},
-	{agent: "base2-free-fable", models: []string{"anthropic/claude-fable-5"}},
-	{agent: "base2-free-cloud-planner", models: []string{"mimo/mimo-v2.5"}},
-	{agent: "base2-free-cloud-planner-limited", models: []string{"mimo/mimo-v2.5"}},
-	{agent: "file-picker", models: []string{"google/gemini-2.5-flash-lite"}},
-	{agent: "file-picker-max", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
-	{agent: "file-lister", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
-	{agent: "researcher-web", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
-	{agent: "researcher-docs", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
-	{agent: "browser-use", models: []string{"google/gemini-3.5-flash-lite", "google/gemini-3.1-flash-lite"}},
-	{agent: "tmux-cli", models: []string{"deepseek/deepseek-v4-flash"}},
-	{agent: "code-reviewer-minimax-m3", models: []string{"minimax/minimax-m3"}},
-	{agent: "code-reviewer-luna", models: []string{"openai/gpt-5.6-luna"}},
-	{agent: "code-reviewer-solar-pro4", models: []string{"upstage/solar-pro4"}},
-	// Vendor cce4800 (2026-08-24): Ox Alpha reached CLI/Desktop, so its
-	// reviewer needs its own allowlist row — without it a base2 session falls
-	// back to the DeepSeek Flash reviewer, which that session's allowlist does
-	// not permit (pinned free-agents.ts FREEBUFF_REVIEWER_AGENT_ID_BY_MODEL).
-	{agent: "code-reviewer-ox-alpha", models: []string{"stealth/ox-alpha"}},
-	{agent: "code-reviewer-deepseek", models: []string{"deepseek/deepseek-v4-pro"}},
-	{agent: "code-reviewer-deepseek-flash", models: []string{"deepseek/deepseek-v4-flash"}},
-	{agent: "code-reviewer-mimo", models: []string{"mimo/mimo-v2.5"}},
-	{agent: "code-reviewer-glm", models: []string{"z-ai/glm-5.2"}},
-	{agent: "code-reviewer-glm-5-3-flash", models: []string{"z-ai/glm-5.3-flash"}},
-	{agent: "code-reviewer-fable", models: []string{"anthropic/claude-fable-5"}},
-	{agent: "code-reviewer-lite", models: []string{"deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash", "mimo/mimo-v2.5"}},
-}
-
-// fallbackRootByModel mirrors upstream FREEBUFF_ROOT_AGENT_ID_BY_MODEL (pinned
-// free-agents.ts): the per-model roots win over first-seen assignment, exactly
-// like a live refresh (parseRootAgentMap + buildModelMapping). Without it the
-// fallback collapses the six base models onto the generic base2-free agent,
-// so a fallback-state request for a second base model would reuse a session
-// admitted for another model and trip upstream session_model_mismatch.
-var fallbackRootByModel = map[string]string{
-	"mimo/mimo-v2.5":                  "base2-free-mimo",
-	"minimax/minimax-m3":              "base2-free-minimax-m3",
-	"openai/gpt-5.6-luna":             "base2-free-luna",
-	"upstage/solar-pro4":              "base2-free-solar-pro4",
-	"deepseek/deepseek-v4-pro":        "base2-free-deepseek",
-	"deepseek/deepseek-v4-flash":      "base2-free-deepseek-flash",
-	"z-ai/glm-5.2":                    "base2-free-glm",
-	"z-ai/glm-5.3-flash":              "base2-free-glm-5-3-flash",
-	"crof/kimi-k3-eco":                "base2-free-kimi-k3-eco",
-	"anthropic/claude-fable-5":        "base2-free-fable",
-	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
-	"stealth/ox-alpha":                "base2-free-ox-alpha",
+	texts := make([]string, 0, len(names))
+	for _, name := range names {
+		b, err := pinnedUpstreamFS.ReadFile(name)
+		if err != nil {
+			return nil, nil
+		}
+		texts = append(texts, string(b))
+	}
+	resolver := buildConstantResolver(texts)
+	return parseAgentModels(strings.Join(texts, "\n"), resolver), parseRootAgentMap(strings.Join(texts, "\n"), resolver)
 }
 
 // ErrModelNotFound is returned by AgentForModel for models absent from the
@@ -365,9 +254,9 @@ func (r *Registry) LastAttemptedSources() []string {
 // applied exactly like a live refresh, so fallback routing matches live
 // routing model-for-model.
 func (r *Registry) LoadFallback() {
-	modelToAgent, allModels := buildModelMapping(fallbackAgents, fallbackRootByModel)
-	agents := make([]agentModels, len(fallbackAgents))
-	for i, entry := range fallbackAgents {
+	modelToAgent, allModels := buildModelMapping(pinnedFallbackAgents, pinnedFallbackRootByModel)
+	agents := make([]agentModels, len(pinnedFallbackAgents))
+	for i, entry := range pinnedFallbackAgents {
 		agents[i] = agentModels{agent: entry.agent, models: slices.Clone(entry.models)}
 	}
 	r.mu.Lock()

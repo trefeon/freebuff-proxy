@@ -236,10 +236,8 @@ func TestNormalizeRequestSchemaDepthCap(t *testing.T) {
 
 func TestNormalizeRequestSchemaNodeBudget(t *testing.T) {
 	// Shrink the per-request node budget so the pathological case below is
-	// small enough to build cheaply; restore for the rest of the package.
-	old := maxSchemaNodes
-	maxSchemaNodes = 32
-	t.Cleanup(func() { maxSchemaNodes = old })
+	// small enough to build cheaply.
+	opts := Options{MaxSchemaNodes: 32}
 
 	// Valid output preserved: a small schema (5 nodes) still normalizes
 	// fully under the budget.
@@ -261,9 +259,9 @@ func TestNormalizeRequestSchemaNodeBudget(t *testing.T) {
 			"function": map[string]any{"name": "f", "parameters": short},
 		}},
 	}
-	out, err := NormalizeRequest(mustJSON(t, body), "")
+	out, err := NormalizeRequestOpts(mustJSON(t, body), "", opts)
 	if err != nil {
-		t.Fatalf("NormalizeRequest (small schema): %v", err)
+		t.Fatalf("NormalizeRequestOpts (small schema): %v", err)
 	}
 	got := decode(t, out)
 	fn := got["tools"].([]any)[0].(map[string]any)["function"].(map[string]any)
@@ -297,9 +295,9 @@ func TestNormalizeRequestSchemaNodeBudget(t *testing.T) {
 		"type":     "function",
 		"function": map[string]any{"name": "f", "parameters": wide},
 	}}
-	out, err = NormalizeRequest(mustJSON(t, body), "")
+	out, err = NormalizeRequestOpts(mustJSON(t, body), "", opts)
 	if err != nil {
-		t.Fatalf("NormalizeRequest (pathological schema): %v", err)
+		t.Fatalf("NormalizeRequestOpts (pathological schema): %v", err)
 	}
 	got = decode(t, out)
 	fn = got["tools"].([]any)[0].(map[string]any)["function"].(map[string]any)
@@ -515,13 +513,13 @@ func TestSchemaCacheHitAndMiss(t *testing.T) {
 		"type":       "object",
 		"properties": map[string]any{"a": map[string]any{"type": []any{"string", "null"}}},
 	}
-	budget := maxSchemaNodes
+	budget := DefaultMaxSchemaNodes
 	first := normalizeToolSchemaCached(params, &budget)
 	if hits, misses := schemaCacheStats(); hits != 0 || misses != 1 {
 		t.Fatalf("after first normalize: hits=%d misses=%d, want 0/1", hits, misses)
 	}
 
-	budget2 := maxSchemaNodes
+	budget2 := DefaultMaxSchemaNodes
 	second := normalizeToolSchemaCached(params, &budget2)
 	if hits, misses := schemaCacheStats(); hits != 1 || misses != 1 {
 		t.Fatalf("after second normalize: hits=%d misses=%d, want 1/1", hits, misses)
@@ -533,7 +531,7 @@ func TestSchemaCacheHitAndMiss(t *testing.T) {
 
 	// A cache hit returns a clone: mutating it must not poison the cache.
 	second["type"] = "mutated"
-	budget3 := maxSchemaNodes
+	budget3 := DefaultMaxSchemaNodes
 	third := normalizeToolSchemaCached(params, &budget3)
 	if third["type"] == "mutated" {
 		t.Error("cached value aliased by caller mutation")
@@ -696,7 +694,7 @@ func BenchmarkNormalizeToolSchema(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		budget := maxSchemaNodes
+		budget := DefaultMaxSchemaNodes
 		_ = normalizeToolSchemaCached(params, &budget)
 	}
 }

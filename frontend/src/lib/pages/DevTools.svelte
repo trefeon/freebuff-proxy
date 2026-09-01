@@ -8,8 +8,10 @@
   import SessionSpawnPanel from '../components/SessionSpawnPanel.svelte';
   import BatchTestPanel from '../components/BatchTestPanel.svelte';
   import { fetchAPI, postAPI } from '../api/client.js';
+  import { adminApi, adminActions } from '../api/paths.js';
   import { fallbackModelOptions, fetchModelOptions } from '../modelOptions.js';
-  import { usePolling } from '../utils/polling.js';
+  import { isDevToolsEnabled } from '../utils/devtools.js';
+  import { tokensData as tokensStore, tokensError as tokensErrorStore, ensureTokensStore, refreshTokens } from '../stores/tokens.js';
   import { tr } from '../i18n.js';
   import { onMount } from 'svelte';
 
@@ -38,31 +40,36 @@
   let actionPending = $state(false);
 
   let modelsList = $state(fallbackModelOptions);
-  onMount(async () => {
+  onMount(() => {
+    // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
+    // #292); this page just renders the cached snapshot.
+    const release = ensureTokensStore();
+    const unsubStore = tokensStore.subscribe((v) => {
+      if (v) {
+        tokensData = v;
+        loadingTokens = false;
+      }
+    });
+    const unsubErr = tokensErrorStore.subscribe((err) => {
+      if (err) loadingTokens = false;
+    });
     fetchModelOptions().then((rows) => (modelsList = rows));
-    try {
-      const cfgRes = await fetchAPI(adminApi.config);
-      const envContent = cfgRes?.env_content || '';
-      const mm = envContent.match(/^\s*DEVTOOLS_ENABLED=(.*)$/m);
-      const val = mm ? mm[1].trim().toLowerCase() : '';
-      devToolsEnabled = val === 'true' || val === '1';
-    } catch {
-      devToolsEnabled = false;
-    }
-    devToolsChecked = true;
+    (async () => {
+      try {
+        const cfgRes = await fetchAPI(adminApi.config);
+        const envContent = cfgRes?.env_content || '';
+        devToolsEnabled = isDevToolsEnabled(envContent);
+      } catch {
+        devToolsEnabled = false;
+      }
+      devToolsChecked = true;
+    })();
+    return () => {
+      release();
+      unsubStore();
+      unsubErr();
+    };
   });
-
-  async function fetchTokens() {
-    try {
-      tokensData = await fetchAPI(adminApi.tokens);
-    } catch (e) {
-      console.warn('Failed to fetch tokens in DevTools', e);
-    } finally {
-      loadingTokens = false;
-    }
-  }
-
-  usePolling(fetchTokens, 8000);
 
   async function sendPlaygroundChat() {
     if (sendingChat || !promptText.trim()) return;
@@ -200,7 +207,7 @@
       chatStatus = { latencyMs: Math.round(performance.now() - start), statusCode: 0, model: selectedModel };
     } finally {
       sendingChat = false;
-      fetchTokens();
+      refreshTokens();
     }
   }
 
@@ -212,7 +219,7 @@
       const res = await postAPI(url, body);
       actionOK = res.ok;
       actionMessage = res.message || (res.ok ? $tr('Action completed') : $tr('Action failed'));
-      await fetchTokens();
+      await refreshTokens();
     } catch (e) {
       actionOK = false;
       actionMessage = e.message || $tr('Action failed');
@@ -224,7 +231,7 @@
   function handleSpawn({ ok, message }) {
     actionOK = ok;
     actionMessage = message;
-    fetchTokens();
+    refreshTokens();
   }
 </script>
 

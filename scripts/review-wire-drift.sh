@@ -5,12 +5,13 @@
 # what kind.
 #
 # Usage:
-#   scripts/review-wire-drift.sh [baseline.tsv]
+#   scripts/review-wire-drift.sh [baseline.tsv] [end_ref]
 #
 # Environment:
 #   FREEBUFF_REFERENCE_DIR  upstream clone (default reference/freebuff);
-#                           must have origin/main fetched at the commit the
-#                           baseline should be compared against
+#                           must have the end_ref fetched
+#   FREEBUFF_REVIEW_END_REF explicit ref/SHA to classify against (default
+#                           origin/main); a positional end_ref wins
 #
 # Per wire file in the baseline TSV (hash<TAB>path):
 #   SAME              current origin/main content hashes to the baseline
@@ -31,9 +32,17 @@ BASELINE_FILE="${1:-$REPO_ROOT/scripts/wire-baseline.tsv}"
 CLONE_DIR="${FREEBUFF_REFERENCE_DIR:-$REPO_ROOT/reference/freebuff}"
 
 [[ -f "$BASELINE_FILE" ]] || { echo "baseline file not found: $BASELINE_FILE" >&2; exit 2; }
-git -C "$CLONE_DIR" rev-parse --verify origin/main >/dev/null 2>&1 \
-	|| { echo "$CLONE_DIR has no origin/main — fetch the upstream clone first" >&2; exit 2; }
-END_REF="$(git -C "$CLONE_DIR" rev-parse origin/main)"
+if [[ -n "${2:-}" ]]; then
+	END_REF="$2"
+elif [[ -n "${FREEBUFF_REVIEW_END_REF:-}" ]]; then
+	END_REF="$FREEBUFF_REVIEW_END_REF"
+else
+	END_REF="origin/main"
+fi
+if ! git -C "$CLONE_DIR" rev-parse --verify "$END_REF" >/dev/null 2>&1; then
+	echo "$CLONE_DIR has no $END_REF — fetch the upstream clone first" >&2; exit 2
+fi
+END_REF="$(git -C "$CLONE_DIR" rev-parse "$END_REF")"
 
 rc=0
 while read -r baseline path; do

@@ -239,9 +239,9 @@ func (a *adminAuth) releaseLogin() {
 	<-a.loginSlots
 }
 
-func (s *Server) dashboardAuth(next http.Handler) http.Handler {
+func (a *adminHandlers) dashboardAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg := s.cfg.Load()
+		cfg := a.cfgLoad()
 		// Open mode (ADMIN_TOKEN unset) must not expose the dashboard read
 		// tier to non-loopback clients: per-token quota/spend/standing and
 		// routing metadata would be anonymously readable. Apply the exact
@@ -258,12 +258,12 @@ func (s *Server) dashboardAuth(next http.Handler) http.Handler {
 		// The SPA reads fb_csrf (double-submit token) out of
 		// document.cookie on page load; issue it on the page response when
 		// missing so the first state-changing POST already carries the pair.
-		s.setCSRFCookieIfAbsent(w, r)
+		a.setCSRFCookieIfAbsent(w, r)
 		if cfg.AdminToken == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if c, err := r.Cookie(adminCookieName); err == nil && s.adminAuth.valid(c.Value) {
+		if c, err := r.Cookie(adminCookieName); err == nil && a.adminAuth.valid(c.Value) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -271,9 +271,9 @@ func (s *Server) dashboardAuth(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) adminSensitive(next http.Handler) http.Handler {
+func (a *adminHandlers) adminSensitive(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg := s.cfg.Load()
+		cfg := a.cfgLoad()
 		// Sensitive routes (raw .env read/write, logs, mode switch, token
 		// management) require a loopback client when the deployment is
 		// effectively unauthenticated: ADMIN_TOKEN unset, or still the
@@ -403,7 +403,7 @@ func csrfCookie(r *http.Request, value string) *http.Cookie {
 // setCSRFCookieIfAbsent issues the double-submit CSRF cookie when the
 // request carries none, so the SPA can pick it up and start sending the
 // matching X-CSRF-Token header on its next state-changing request.
-func (s *Server) setCSRFCookieIfAbsent(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) setCSRFCookieIfAbsent(w http.ResponseWriter, r *http.Request) {
 	if _, err := r.Cookie(csrfCookieName); err != nil {
 		if value, err := newCSRFToken(); err == nil {
 			// CSRF cookie: Secure is set for direct TLS or when a
@@ -415,7 +415,7 @@ func (s *Server) setCSRFCookieIfAbsent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
+func (a *adminHandlers) adminCSRF(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if origin := r.Header.Get("Origin"); origin != "" {
@@ -423,7 +423,7 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 				if err != nil {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusForbidden)
-					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
+					a.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
 					return
 				}
 				if !strings.EqualFold(u.Host, r.Host) {
@@ -434,7 +434,7 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 					} else {
 						w.Header().Set("Content-Type", "text/html; charset=utf-8")
 						w.WriteHeader(http.StatusForbidden)
-						s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
+						a.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
 						return
 					}
 				}
@@ -443,7 +443,7 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 				if sfs != "same-origin" && sfs != "none" {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusForbidden)
-					s.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
+					a.dash.RenderConfigResult(w, r, false, "Cross-origin request rejected.")
 					return
 				}
 			}
@@ -459,11 +459,11 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 					if subtle.ConstantTimeCompare([]byte(c.Value), []byte(r.Header.Get("X-CSRF-Token"))) != 1 {
 						w.Header().Set("Content-Type", "text/html; charset=utf-8")
 						w.WriteHeader(http.StatusForbidden)
-						s.dash.RenderConfigResult(w, r, false, "Invalid CSRF token.")
+						a.dash.RenderConfigResult(w, r, false, "Invalid CSRF token.")
 						return
 					}
 				} else {
-					s.setCSRFCookieIfAbsent(w, r)
+					a.setCSRFCookieIfAbsent(w, r)
 				}
 			}
 		}
@@ -471,8 +471,8 @@ func (s *Server) adminCSRF(next http.Handler) http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
-	cfg := s.cfg.Load()
+func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	cfg := a.cfgLoad()
 	if r.Method != http.MethodPost {
 		// GET/HEAD: render the SPA login page. The Svelte form posts to this
 		// same route; with ADMIN_TOKEN unset there is nothing to log in to.
@@ -483,8 +483,8 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		// The SPA reads fb_csrf (double-submit token) from
 		// document.cookie; issue it on the login page response so the first
 		// POST already carries the cookie.
-		s.setCSRFCookieIfAbsent(w, r)
-		s.dash.ServeSPA(w, r)
+		a.setCSRFCookieIfAbsent(w, r)
+		a.dash.ServeSPA(w, r)
 		return
 	}
 	if cfg.AdminToken == "" {
@@ -495,25 +495,25 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	// an attacker-controlled form must not cost a full body read per
 	// attempt.
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	if !s.adminAuth.tryLogin() {
+	if !a.adminAuth.tryLogin() {
 		// The login surface is saturated: answer busy without consuming a
 		// per-IP or global budget slot.
-		s.logger.Warn("admin login rejected", "remote", remoteHost(r), "reason", "busy")
+		a.logfunc().Warn("admin login rejected", "remote", remoteHost(r), "reason", "busy")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(map[string]any{"error": "Login service is busy — try again shortly."})
 		return
 	}
-	defer s.adminAuth.releaseLogin()
+	defer a.adminAuth.releaseLogin()
 	ip := remoteHost(r)
 	// The top-of-function method guard already returned for every non-POST
 	// request, so no inner method check is needed here (issue #222).
-	if !s.adminAuth.allow(ip) {
+	if !a.adminAuth.allow(ip) {
 		// T15: audit the lockout rejection — attempts is the lockout
 		// bound that was crossed; the submitted credential is never
 		// logged.
-		s.logger.Warn("admin login failed", "remote", ip, "attempts", maxLoginFails, "reason", "locked_out")
-		s.dash.RenderLogin(w, r, "Too many failed attempts — try again in a minute.")
+		a.logfunc().Warn("admin login failed", "remote", ip, "attempts", maxLoginFails, "reason", "locked_out")
+		a.dash.RenderLogin(w, r, "Too many failed attempts — try again in a minute.")
 		return
 	}
 	token := strings.TrimSpace(r.FormValue("token"))
@@ -523,37 +523,37 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	if len(token) > maxAdminTokenLen {
 		// Over-long credentials are invalid by construction; count them so
 		// the budget cannot be probed for free, but never compare them.
-		s.adminAuth.recordFail(ip)
-		attempts, locked := s.adminAuth.loginFailState(ip)
+		a.adminAuth.recordFail(ip)
+		attempts, locked := a.adminAuth.loginFailState(ip)
 		if locked {
 			attempts = maxLoginFails
 		}
-		s.logger.Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
-		s.dash.RenderLogin(w, r, "Invalid admin token.")
+		a.logfunc().Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
+		a.dash.RenderLogin(w, r, "Invalid admin token.")
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AdminToken)) == 1 {
-		s.adminAuth.clearFails(ip)
+		a.adminAuth.clearFails(ip)
 		// secureCookie trusts X-Forwarded-Proto only from a loopback or
 		// private peer; a spoofed header from a public address must
 		// never turn the session cookie Secure over plain HTTP.
-		s.adminAuth.setCookie(w, secureCookie(r))
+		a.adminAuth.setCookie(w, secureCookie(r))
 		// Double-submit CSRF cookie: the SPA re-reads it from
 		// document.cookie after the login response and echoes it on every
 		// later state-changing request.
-		s.setCSRFCookieIfAbsent(w, r)
+		a.setCSRFCookieIfAbsent(w, r)
 		http.Redirect(w, r, "/admin", http.StatusFound)
 		return
 	}
-	s.adminAuth.recordFail(ip)
-	attempts, locked := s.adminAuth.loginFailState(ip)
+	a.adminAuth.recordFail(ip)
+	attempts, locked := a.adminAuth.loginFailState(ip)
 	if locked {
 		attempts = maxLoginFails
 	}
 	// T15: audit a failed login — remote, running attempt count, and
 	// reason only; the credential itself is never logged.
-	s.logger.Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
-	s.dash.RenderLogin(w, r, "Invalid admin token.")
+	a.logfunc().Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
+	a.dash.RenderLogin(w, r, "Invalid admin token.")
 }
 
 // handleAdminLogout clears the fb_admin session cookie (MaxAge=-1, same
@@ -561,7 +561,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 // on GET, JSON {"ok":true} on POST. It does NOT require a valid cookie —
 // logging out an already-expired session must work — and it is not wrapped
 // in adminSensitive because it exposes nothing.
-func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	// Match the Secure flag with the current transport, same as login.
 	// A clearing cookie without Secure cannot overwrite a Secure cookie
 	// set during an HTTPS login, leaving the session alive.
@@ -581,8 +581,8 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-func (s *Server) handleAdminAuthStatus(w http.ResponseWriter, r *http.Request) {
-	cfg := s.cfg.Load()
+func (a *adminHandlers) handleAdminAuthStatus(w http.ResponseWriter, r *http.Request) {
+	cfg := a.cfgLoad()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"authenticated":          true,
@@ -590,7 +590,7 @@ func (s *Server) handleAdminAuthStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -600,11 +600,11 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	if strings.HasPrefix(ct, "application/json") {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 		if err != nil {
-			s.writeJSONError(w, http.StatusBadRequest, "failed to read request body", "invalid_request_error", "invalid_request", 0)
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "failed to read request body", "invalid_request")
 			return
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
-			s.writeJSONError(w, http.StatusBadRequest, "invalid request JSON", "invalid_request_error", "invalid_json", 0)
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "invalid request JSON", "invalid_json")
 			return
 		}
 	} else {
@@ -619,25 +619,25 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	req.CurrentPassword = strings.TrimSpace(req.CurrentPassword)
 	req.NewPassword = strings.TrimSpace(req.NewPassword)
 
-	cfg := s.cfg.Load()
+	cfg := a.cfgLoad()
 
 	// Verify current password with constant-time comparison
 	if subtle.ConstantTimeCompare([]byte(req.CurrentPassword), []byte(cfg.AdminToken)) != 1 {
-		s.writeJSONError(w, http.StatusBadRequest, "Current password is incorrect.", "invalid_request_error", "invalid_credentials", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "Current password is incorrect.", "invalid_credentials")
 		return
 	}
 
 	if len(req.NewPassword) < 6 {
-		s.writeJSONError(w, http.StatusBadRequest, "New password must be at least 6 characters.", "invalid_request_error", "password_too_short", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "New password must be at least 6 characters.", "password_too_short")
 		return
 	}
 	if len(req.NewPassword) > maxAdminTokenLen {
-		s.writeJSONError(w, http.StatusBadRequest, "New password is too long (max "+strconv.Itoa(maxAdminTokenLen)+" characters).", "invalid_request_error", "password_too_long", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "New password is too long (max "+strconv.Itoa(maxAdminTokenLen)+" characters).", "password_too_long")
 		return
 	}
 
 	if req.NewPassword == config.DefaultAdminToken {
-		s.writeJSONError(w, http.StatusBadRequest, "New password cannot be the factory default password ('123456').", "invalid_request_error", "password_insecure", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "New password cannot be the factory default password ('123456').", "password_insecure")
 		return
 	}
 
@@ -648,27 +648,27 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	// the environment" error on every future attempt. Reject it before any
 	// filesystem mutation instead.
 	if strings.ContainsAny(req.NewPassword, "#\r\n,") || req.NewPassword[0] == '"' || req.NewPassword[0] == '\'' {
-		s.writeJSONError(w, http.StatusBadRequest,
+		a.dash.RenderResult(w, http.StatusBadRequest, false,
 			"New password must not contain '#', ',', a newline, or start with a quote character: it could not be stored losslessly in .env.",
-			"invalid_request_error", "password_unsafe_for_env", 0)
+			"password_unsafe_for_env")
 		return
 	}
 
-	s.adminSaveMu.Lock()
-	defer s.adminSaveMu.Unlock()
+	a.adminSaveMu.Lock()
+	defer a.adminSaveMu.Unlock()
 
 	oldBytes, oldErr := os.ReadFile(".env")
 	_, err := updateEnvKeys([]config.EnvUpdate{{Key: "ADMIN_TOKEN", Value: req.NewPassword}})
 	if err != nil {
-		s.writeJSONError(w, http.StatusInternalServerError, "Failed to update .env: "+err.Error(), "internal_error", "env_write_failed", 0)
+		a.dash.RenderResult(w, http.StatusInternalServerError, false, "Failed to update .env: "+err.Error(), "env_write_failed")
 		return
 	}
 
-	newCfg, err := config.Load(s.configPath)
+	newCfg, err := config.Load(a.configPath)
 	if err != nil {
 		restoreEnvFile(oldBytes, oldErr)
-		s.logger.Warn("admin change password reload failed; restored .env", "err", err)
-		s.writeJSONError(w, http.StatusInternalServerError, "Failed to reload configuration: "+err.Error(), "internal_error", "reload_failed", 0)
+		a.logfunc().Warn("admin change password reload failed; restored .env", "err", err)
+		a.dash.RenderResult(w, http.StatusInternalServerError, false, "Failed to reload configuration: "+err.Error(), "reload_failed")
 		return
 	}
 
@@ -679,20 +679,20 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	// while telling the operator rotation succeeded.
 	if newCfg.AdminToken != req.NewPassword {
 		restoreEnvFile(oldBytes, oldErr)
-		s.logger.Warn("admin change password shadowed by environment; restored .env")
-		s.writeJSONError(w, http.StatusConflict,
+		a.logfunc().Warn("admin change password shadowed by environment; restored .env")
+		a.dash.RenderResult(w, http.StatusConflict, false,
 			"ADMIN_TOKEN is overridden by the process environment or -config JSON — the .env write was rolled back and the running credential is unchanged; change ADMIN_TOKEN where it is actually set",
-			"invalid_request_error", "admin_token_overridden", 0)
+			"admin_token_overridden")
 		return
 	}
 
-	s.applyReloadedConfig(&newCfg)
+	a.applyReloadedConfig(&newCfg)
 
 	// Set updated session cookie (Secure follows the trusted transport;
 	// X-Forwarded-Proto is honored only from a loopback/private peer).
-	s.adminAuth.setCookie(w, secureCookie(r))
+	a.adminAuth.setCookie(w, secureCookie(r))
 
-	s.logger.Info("admin password changed successfully", "remote", remoteHost(r))
+	a.logfunc().Info("admin password changed successfully", "remote", remoteHost(r))
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{

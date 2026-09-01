@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -23,48 +22,15 @@ import (
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/logring"
 	"freebuff-proxy/backend/internal/pool"
-	"freebuff-proxy/backend/internal/registry"
 	"freebuff-proxy/backend/internal/server"
-	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/testutil"
-	"freebuff-proxy/backend/internal/upstream"
 )
 
 // newTestServerWithLogger builds the full stack like newTestServer but with
 // a custom logger (logring-wrapped) so tests can assert on trace entries.
 func newTestServerWithLogger(t *testing.T, apiKeys []string, logger *slog.Logger, ring *logring.Handler, mocks ...*testutil.MockUpstream) (*httptest.Server, *pool.Pool) {
 	t.Helper()
-	cfg := &config.Config{
-		AuthTokens:         make([]string, len(mocks)),
-		RotationInterval:   time.Hour,
-		RequestTimeout:     15 * time.Minute,
-		SessionCallTimeout: 5 * time.Second,
-		RegistryRefresh:    6 * time.Hour,
-		UpstreamBaseURL:    "https://www.codebuff.com",
-		APIKeys:            apiKeys,
-		LogAccess:          true,
-		DashboardEnabled:   true,
-	}
-	clients := make([]*upstream.Client, 0, len(mocks))
-	sessions := make([]*session.Manager, 0, len(mocks))
-	for i, mock := range mocks {
-		cfg.AuthTokens[i] = fmt.Sprintf("tok-%d", i)
-		clientCfg := *cfg
-		clientCfg.UpstreamBaseURL = mock.URL()
-		client, err := upstream.New(cfg.AuthTokens[i], &clientCfg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		clients = append(clients, client)
-		sessions = append(sessions, session.NewManager(client))
-	}
-	reg := registry.New(cfg, nil)
-	reg.LoadFallback()
-	p, err := pool.New(cfg, clients, sessions, reg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := server.New(cfg, p, reg, logger, ring, "")
+	srv, p := server.NewTestServerStack(t, apiKeys, mocks, func(c *config.Config) { c.AdminToken = config.DefaultAdminToken }, logger, ring)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, p

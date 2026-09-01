@@ -19,51 +19,10 @@ import (
 // completed calls are appended as native tool-call fragments with per-stream
 // sequential indexes so they cannot collide with upstream indexes. Existing
 // native tool_calls fragments are left untouched. The delta is only rewritten
-// when the extractor actually withheld or consumed text.
+// when the extractor actually withheld or consumed text (shared core, issue
+// #245).
 func feedAnthropicXMLToolCalls(xmlExtractor *convert.XMLToolCallExtractor, chunk map[string]any, xmlCallIndex *int) {
-	choices, _ := chunk["choices"].([]any)
-	if len(choices) == 0 {
-		return
-	}
-	choice, ok := choices[0].(map[string]any)
-	if !ok || choice == nil {
-		return
-	}
-	delta, ok := choice["delta"].(map[string]any)
-	if !ok || delta == nil {
-		return
-	}
-	content, ok := delta["content"].(string)
-	if !ok || content == "" {
-		return
-	}
-	text, calls := xmlExtractor.Feed(content)
-	if text == content {
-		return
-	}
-	if text == "" {
-		delete(delta, "content")
-	} else {
-		delta["content"] = text
-	}
-	if len(calls) == 0 {
-		return
-	}
-	tcs, _ := delta["tool_calls"].([]any)
-	// Synthetic fragment indexes must never collide with the chunk's native
-	// tool_calls indexes (parity with the OpenAI half): raise the per-stream
-	// counter past the max native index present before appending.
-	bumpXMLCallIndex(tcs, xmlCallIndex)
-	for _, call := range calls {
-		if call.Function.Name == "end_turn" {
-			continue // strip-parity: never relay the proxy-injected pseudo-tool
-		}
-		tcs = append(tcs, convert.ToolCallDeltaFragment(*xmlCallIndex, call))
-		*xmlCallIndex++
-	}
-	if len(tcs) > 0 {
-		delta["tool_calls"] = tcs
-	}
+	feedXMLToolCalls(xmlExtractor, chunk, xmlCallIndex)
 }
 
 // flushAnthropicXMLToolCalls releases any still-open XML candidate block at
@@ -72,26 +31,16 @@ func feedAnthropicXMLToolCalls(xmlExtractor *convert.XMLToolCallExtractor, chunk
 // and tool_use blocks emit normally before finalize. No-op when nothing was
 // buffered.
 func (s *Server) flushAnthropicXMLToolCalls(send func(map[string]any), st *anthropicStreamState, xmlExtractor *convert.XMLToolCallExtractor, xmlCallIndex *int) {
-	ft, fc := xmlExtractor.Flush()
-	if ft == "" && len(fc) == 0 {
+	ft, frags := drainXMLToolCalls(xmlExtractor, xmlCallIndex)
+	if ft == "" && len(frags) == 0 {
 		return
 	}
 	delta := make(map[string]any)
 	if ft != "" {
 		delta["content"] = ft
 	}
-	if len(fc) > 0 {
-		tcs := make([]any, 0, len(fc))
-		for _, call := range fc {
-			if call.Function.Name == "end_turn" {
-				continue // strip-parity: never relay the proxy-injected pseudo-tool
-			}
-			tcs = append(tcs, convert.ToolCallDeltaFragment(*xmlCallIndex, call))
-			*xmlCallIndex++
-		}
-		if len(tcs) > 0 {
-			delta["tool_calls"] = tcs
-		}
+	if len(frags) > 0 {
+		delta["tool_calls"] = frags
 	}
 	s.accumulateAnthropicChunk(send, st, map[string]any{
 		"id":      "chatcmpl-flush",

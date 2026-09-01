@@ -111,6 +111,21 @@ func (m *RunManager) CooldownUntil() time.Time {
 	return m.cooldownUntil
 }
 
+// MaintenanceEligible reports whether this manager should receive background
+// maintenance work: the cooldown window has passed AND no live ban is
+// active. It is the single gate shared by runs.Maintain and every pool
+// maintain/poll caller (issue #266), replacing the previously copy-pasted
+// time.Now().Before(CooldownUntil()) || BanError() != nil predicate — the
+// pool pre-gates and runs.Maintain's own internal check had divergent
+// semantics (runs.Maintain carried no ban check, so a hard-banned token with
+// a zero cooldown deadline passed it and was only saved by the pool gate).
+func (m *RunManager) MaintenanceEligible() bool {
+	if time.Now().Before(m.CooldownUntil()) {
+		return false
+	}
+	return m.BanError() == nil
+}
+
 // CooldownRateLimit applies a rate-limit cooldown and remembers the error
 // so subsequent Acquires surface 429 + Retry-After instead of a generic
 // 502. Errors with RetryAfter <= 0 are ignored.

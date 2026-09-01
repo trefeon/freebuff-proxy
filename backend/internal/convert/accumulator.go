@@ -41,15 +41,24 @@ type Accumulator struct {
 	usage             any
 	systemFingerprint string
 	toolCalls         map[int]*toolCall
+	opts              Options
 }
 
 // NewAccumulator returns an accumulator with a fresh chatcmpl- id and
 // created timestamp; model/id/created are refined by the first chunks seen.
 func NewAccumulator() *Accumulator {
+	return NewAccumulatorOpts(DefaultOptions())
+}
+
+// NewAccumulatorOpts is NewAccumulator with an explicit Options (issue
+// #277): the reasoning-in-content fold mode for Finish is taken from opts
+// instead of the process environment.
+func NewAccumulatorOpts(opts Options) *Accumulator {
 	return &Accumulator{
 		id:        "chatcmpl-" + randHex(16),
 		created:   time.Now().Unix(),
 		toolCalls: make(map[int]*toolCall),
+		opts:      opts,
 	}
 }
 
@@ -159,8 +168,8 @@ func (a *Accumulator) addToolCall(tc map[string]any) {
 func (a *Accumulator) Finish() []byte {
 	content := strings.Join(a.contentParts, "")
 	// Issue #44: fold reasoning into message content for clients that don't
-	// render the reasoning channel (same env toggle as the streaming path).
-	if tag := reasoningInContentMode(); tag != "" {
+	// render the reasoning channel (same mode toggle as the streaming path).
+	if tag := a.opts.ReasoningInContent; tag != "" {
 		if rc := strings.Join(a.reasoningParts, ""); rc != "" {
 			content = "<" + tag + ">" + rc + "</" + tag + ">" + content
 		}

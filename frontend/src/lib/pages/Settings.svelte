@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { RefreshCw, Save, X, Eye, EyeOff, Search, Sparkles, SlidersHorizontal, ChevronDown, ChevronUp } from '@lucide/svelte';
+  import { RefreshCw, Save, X } from '@lucide/svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
@@ -8,6 +8,8 @@
   import EmptyState from '../components/EmptyState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import CopyButton from '../components/CopyButton.svelte';
+  import ConfigEditor from './settings/ConfigEditor.svelte';
+  import RawEditor from './settings/RawEditor.svelte';
   import { fetchAPI, postForm } from '../api/client.js';
   import { adminApi, adminActions } from '../api/paths.js';
   import { tr } from '../i18n.js';
@@ -34,7 +36,9 @@
   let lastSavedTime = $state(null);
   let reveal = $state({});   // secret key → revealed
 
-  const GROUP_ORDER = ['general', 'pool', 'quota', 'upstream', 'security'];
+  // Fallback group order used only when the catalog is absent; the live
+  // catalog order (issue #291) is canonical whenever meta is present.
+  const FALLBACK_GROUP_ORDER = ['general', 'pool', 'quota', 'upstream', 'security'];
 
   // Minimalist settings filter & view modes
   let searchQuery = $state('');
@@ -98,8 +102,8 @@
     rawText = out;
   }
 
-  function onRawInput(e) {
-    rawText = e.currentTarget.value;
+  function onRawInput(value) {
+    rawText = value;
     const env = parseEnv(rawText);
     for (const entry of meta) {
       const v = env[entry.key];
@@ -127,6 +131,30 @@
     changedKeys = new Set();
     result = null;
   }
+
+  // Live client-side .env parse — same rules as the legacy editor (separators,
+  // key syntax, duplicates). The server has no validate-only mode; Save posts
+  // the raw content and surfaces the server's decision.
+  let validationErrors = $derived.by(() => {
+    const errors = [];
+    const lines = rawText.split('\n');
+    const seenKeys = new Set();
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith('#')) continue;
+      const eqIdx = line.indexOf('=');
+      if (eqIdx === -1) { errors.push(`Line ${i + 1}: Missing '=' separator`); continue; }
+      const key = line.substring(0, eqIdx).trim();
+      if (!key) { errors.push(`Line ${i + 1}: Empty key name`); continue; }
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) errors.push(`Line ${i + 1}: Invalid key "${key}" (use A-Z, a-z, 0-9, _)`);
+      if (seenKeys.has(key)) errors.push(`Line ${i + 1}: Duplicate key "${key}"`);
+      seenKeys.add(key);
+    }
+    return errors;
+  });
+  let envValid = $derived(validationErrors.length === 0 && rawText.trim().length > 0);
+  let keyCount = $derived.by(() => rawText.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#') && l.includes('=')).length);
+
   // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
@@ -143,9 +171,20 @@
     return n;
   });
 
+  // Group order from the server-emitted catalog (issue #291): entries appear
+  // in catalog order, so groups are ordered by first appearance. Only when the
+  // catalog is absent do we fall back to the documented order.
+  let groupOrder = $derived.by(() => {
+    const seen = [];
+    for (const e of meta) {
+      if (e.group && !seen.includes(e.group)) seen.push(e.group);
+    }
+    return seen.length ? seen : FALLBACK_GROUP_ORDER;
+  });
+
   let groups = $derived.by(() => {
     const q = searchQuery.trim().toLowerCase();
-    return GROUP_ORDER.map((g) => {
+    return groupOrder.map((g) => {
       let entries = meta.filter((e) => e.group === g && !e.hidden);
       if (q) {
         entries = entries.filter(
@@ -173,29 +212,6 @@
   });
   let lastSavedTimeStr = $derived(lastSavedTime ? formatTime(lastSavedTime) : '');
 
-  // Live client-side .env parse — same rules as the legacy editor (separators,
-  // key syntax, duplicates). The server has no validate-only mode; Save posts
-  // the raw content and surfaces the server's decision.
-  let validationErrors = $derived.by(() => {
-    const errors = [];
-    const lines = rawText.split('\n');
-    const seenKeys = new Set();
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line || line.startsWith('#')) continue;
-      const eqIdx = line.indexOf('=');
-      if (eqIdx === -1) { errors.push(`Line ${i + 1}: Missing '=' separator`); continue; }
-      const key = line.substring(0, eqIdx).trim();
-      if (!key) { errors.push(`Line ${i + 1}: Empty key name`); continue; }
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) errors.push(`Line ${i + 1}: Invalid key "${key}" (use A-Z, a-z, 0-9, _)`);
-      if (seenKeys.has(key)) errors.push(`Line ${i + 1}: Duplicate key "${key}"`);
-      seenKeys.add(key);
-    }
-    return errors;
-  });
-  let envValid = $derived(validationErrors.length === 0 && rawText.trim().length > 0);
-  let keyCount = $derived.by(() => rawText.split('\n').filter((l) => l.trim() && !l.trim().startsWith('#') && l.includes('=')).length);
-
   // ---------------------------------------------------------------------------
   // Data
   // ---------------------------------------------------------------------------
@@ -215,7 +231,7 @@
         effectiveMap.set(kv.key, kv);
       }
       // Keys absent from the effective config keep an informational "not set" badge;
-	// the controls stay editable so the operator can set them from the form.
+	    // the controls stay editable so the operator can set them from the form.
       // When `effective` is missing entirely (old/mock payloads) nothing is
       // marked unset — the form stays fully editable.
       if (Array.isArray(cfgRes.effective) && cfgRes.effective.length > 0) {
@@ -310,29 +326,6 @@
     window.removeEventListener('keydown', handleKeyDown);
   });
 
-  const GROUP_LABELS = {
-    general: 'General',
-    pool: 'Pool',
-    quota: 'Quota',
-    upstream: 'Upstream',
-    security: 'Security',
-  };
-  const GROUP_DESCRIPTIONS = {
-    general: 'Runtime and logging knobs.',
-    pool: 'Token pool, sessions and bridge mode.',
-    quota: 'Quota and rate limits.',
-    upstream: 'Upstream gateway and model routing.',
-    security: 'Access control and secrets.',
-  };
-
-  function groupLabel(name) {
-    return GROUP_LABELS[name] || name;
-  }
-
-  function groupDescription(name) {
-    return GROUP_DESCRIPTIONS[name] || '';
-  }
-
   function toggleReveal(key) {
     reveal[key] = !reveal[key];
   }
@@ -408,207 +401,22 @@
       </Alert>
     {/if}
 
-    <!-- Filter and Search Toolbar -->
-    <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pb-1">
-      <!-- Mode Toggle -->
-      <div class="flex items-center gap-1 p-1 rounded-lg bg-[var(--fp-surface)] border border-[var(--fp-border)]">
-        <button
-          type="button"
-          class="px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 {viewMode === 'essential' ? 'bg-[var(--fp-accent)] text-[var(--fp-accent-fg,white)] font-semibold shadow-sm' : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => viewMode = 'essential'}
-        >
-          <Sparkles size={13} />
-          <span>{$tr('Essential ({count})', { count: meta.filter(e => !e.hidden && isKeyEssential(e)).length })}</span>
-        </button>
-        <button
-          type="button"
-          class="px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 {viewMode === 'all' ? 'bg-[var(--fp-accent)] text-[var(--fp-accent-fg,white)] font-semibold shadow-sm' : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => viewMode = 'all'}
-        >
-          <SlidersHorizontal size={13} />
-          <span>{$tr('All Settings ({count})', { count: meta.filter(e => !e.hidden).length })}</span>
-        </button>
-      </div>
+    <ConfigEditor
+      {meta}
+      {groups}
+      {formValues}
+      {rawText}
+      {reveal}
+      {searchQuery}
+      {viewMode}
+      onSearch={(v) => { searchQuery = v; }}
+      onViewMode={(m) => { viewMode = m; }}
+      onField={setField}
+      onToggleReveal={toggleReveal}
+      onToggleGroup={toggleGroup}
+      onResetFilters={() => { searchQuery = ''; viewMode = 'essential'; }}
+    />
 
-      <!-- Search Box -->
-      <div class="relative min-w-[220px] sm:w-72">
-        <input
-          type="text"
-          bind:value={searchQuery}
-          placeholder={$tr('Search settings by key or description…')}
-          class="fp-input !pl-8 !pr-8 !py-1.5 !text-xs !w-full"
-        />
-        <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] pointer-events-none" />
-        {#if searchQuery}
-          <button
-            type="button"
-            onclick={() => searchQuery = ''}
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-0.5"
-            aria-label={$tr('Clear search')}
-          >
-            <X size={13} />
-          </button>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Key catalog groups: one Card per group, one typed control per key -->
-    <div class="space-y-6">
-      {#each groups as group}
-        <Card title={groupLabel(group.name)} description={groupDescription(group.name)}>
-          <div class="divide-y divide-[var(--fp-border)]">
-            {#each group.displayed as entry (entry.key)}
-              <div class="py-3.5 first:pt-0 last:pb-0 grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-6 items-start">
-                <div class="md:col-span-6 min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span id={`setting-${entry.key}`} class="fp-num text-[12px] font-semibold text-[var(--fp-text)]">{entry.key}</span>
-                    {#if entry.restart_only}
-                      <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[#FCD34D] font-semibold uppercase tracking-wider shrink-0">{$tr('restart')}</span>
-                    {/if}
-                    {#if entry.secret}
-                      <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0">{$tr('secret')}</span>
-                    {/if}
-                    {#if !parseEnv(rawText)[entry.key]}
-                      <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0">{$tr('default')}</span>
-                    {/if}
-                  </div>
-                  {#if entry.description}
-                    <p class="mt-1 text-[11px] text-[var(--fp-dim)] leading-relaxed">{entry.description}</p>
-                  {/if}
-                </div>
-
-                <div class="md:col-span-6 min-w-0">
-                  {#if entry.kind === 'bool'}
-                    <label class="inline-flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        class="fp-checkbox"
-                        checked={formValues[entry.key] === 'true'}
-                        onchange={(e) => setField(entry.key, e.currentTarget.checked ? 'true' : 'false')}
-                        aria-label={entry.key}
-                      />
-                      <span class="text-xs text-[var(--fp-muted)]">
-                        {formValues[entry.key] === 'true' ? $tr('enabled') : $tr('disabled')}
-                      </span>
-                    </label>
-                  {:else if entry.kind === 'select'}
-                    <select
-                      class="fp-input text-[13px] py-2"
-                      value={formValues[entry.key]}
-                      onchange={(e) => setField(entry.key, e.currentTarget.value)}
-                      aria-label={entry.key}
-                    >
-                      {#if entry.enum && !entry.enum.includes(formValues[entry.key])}
-                        <option value={formValues[entry.key]}>{formValues[entry.key]}</option>
-                      {/if}
-                      {#each entry.enum ?? [] as opt}
-                        <option value={opt}>{opt}</option>
-                      {/each}
-                    </select>
-                  {:else if entry.kind === 'int'}
-                    <input
-                      type="number"
-                      step="1"
-                      class="fp-input fp-num text-[13px] py-2"
-                      value={formValues[entry.key]}
-                      oninput={(e) => setField(entry.key, e.currentTarget.value)}
-                      aria-label={entry.key}
-                    />
-                  {:else if entry.kind === 'secret'}
-                    <div class="flex items-center gap-2">
-                      <input
-                        type={reveal[entry.key] ? 'text' : 'password'}
-                        class="fp-input fp-mono text-[12px] py-2"
-                        value={formValues[entry.key]}
-                        oninput={(e) => setField(entry.key, e.currentTarget.value)}
-                        aria-label={entry.key}
-                        autocomplete="off"
-                      />
-                      <button
-                        type="button"
-                        class="fp-btn fp-btn-ghost fp-btn-sm shrink-0"
-                        onclick={() => toggleReveal(entry.key)}
-                        aria-label={reveal[entry.key] ? $tr('Hide {key}', { key: entry.key }) : $tr('Reveal {key}', { key: entry.key })}
-                        title={reveal[entry.key] ? $tr('Hide') : $tr('Reveal')}
-                      >
-                        {#if reveal[entry.key]}
-                          <EyeOff size={15} />
-                        {:else}
-                          <Eye size={15} />
-                        {/if}
-                      </button>
-                    </div>
-                  {:else if entry.kind === 'list'}
-                    <div>
-                      <textarea
-                        class="fp-input fp-mono text-[12px] py-2 min-h-[56px]"
-                        rows="2"
-                        value={formValues[entry.key]}
-                        oninput={(e) => setField(entry.key, e.currentTarget.value)}
-                        aria-label={entry.key}
-                        spellcheck="false"
-                        placeholder="val1, val2, val3"
-                      ></textarea>
-                      <p class="mt-1 text-[10px] text-[var(--fp-dim)]">{$tr('Comma-separated values.')}</p>
-                    </div>
-                  {:else}
-                    <input
-                      type="text"
-                      class="fp-input fp-mono text-[12px] py-2"
-                      value={formValues[entry.key]}
-                      oninput={(e) => setField(entry.key, e.currentTarget.value)}
-                      aria-label={entry.key}
-                      spellcheck="false"
-                      placeholder={entry.default || $tr('unset — default applies')}
-                    />
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-          {#if !group.isExpanded && group.advanced.length > 0}
-            <div class="pt-3 border-t border-[var(--fp-border)]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-accent)] hover:underline font-medium"
-                onclick={() => toggleGroup(group.name)}
-              >
-                <ChevronDown size={14} />
-                <span>{$tr('Show {count} more advanced settings in {group}', { count: group.advanced.length, group: groupLabel(group.name) })}</span>
-              </button>
-              <span class="text-[11px] text-[var(--fp-dim)] font-mono truncate max-w-xs">
-                {group.advanced.slice(0, 3).map((e) => e.key).join(', ')}{group.advanced.length > 3 ? '…' : ''}
-              </span>
-            </div>
-          {:else if group.isExpanded && group.advanced.length > 0 && viewMode === 'essential'}
-            <div class="pt-3 border-t border-[var(--fp-border)]/60">
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-dim)] hover:text-[var(--fp-text)] font-medium"
-                onclick={() => toggleGroup(group.name)}
-              >
-                <ChevronUp size={14} />
-                <span>{$tr('Hide advanced settings')}</span>
-              </button>
-            </div>
-          {/if}
-        </Card>
-      {/each}
-
-
-      {#if !groups.length}
-        <Card>
-          <EmptyState title={$tr('No matching configuration keys')} description={$tr('No settings match the active search or category filter.')}>
-            {#snippet action()}
-              <Button variant="secondary" onclick={() => { searchQuery = ''; viewMode = 'essential'; }}>
-                <RefreshCw size={14} />
-                {$tr('Reset filters')}
-              </Button>
-            {/snippet}
-          </EmptyState>
-        </Card>
-      {/if}
-    </div>
     <!-- Current values: read-only effective config, secrets masked -->
     <Card title={$tr('Current Values')} description={$tr('Read-only view of the running configuration. Secret values are masked.')} pad="none">
       <div class="overflow-x-auto max-h-96 overflow-y-auto">
@@ -664,81 +472,19 @@
         {/if}
       </div>
     </Card>
-    <!-- Advanced: raw .env editor (same rules as the legacy editor) -->
-    <details class="fp-card">
-      <summary class="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer text-sm font-medium text-[var(--fp-text)] list-none">
-        <span class="flex items-center gap-2">
-          <span>{$tr('Advanced: raw .env editor')}</span>
-          {#if dirty}
-            <StatusBadge status={$tr('{count} changed', { count: changedKeysCount })} tone="warn" pulse />
-          {/if}
-        </span>
-        <span class="text-[11px] text-[var(--fp-dim)]">{$tr('Direct editing. Form fields above mirror this text.')}</span>
-      </summary>
-      <div class="border-t border-[var(--fp-border)] px-5 py-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div>
-            <p class="text-xs text-[var(--fp-muted)]">
-              {$tr('Edit environment variables directly. Save validates server-side and reloads; rejected writes are rolled back.')}
-            </p>
-            <p class="mt-1 text-[11px] text-[var(--fp-dim)]">
-              {$tr('Changes take effect after save.')} <kbd class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]">Ctrl+S</kbd> {$tr('saves from the keyboard')}.
-            </p>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            {#if data}
-              <StatusBadge
-                status={data.has_env_file ? $tr('env loaded') : $tr('no env file')}
-                tone={data.has_env_file ? 'good' : 'warn'}
-              />
-            {/if}
-            <Button variant="secondary" size="sm" onclick={validateConfig} disabled={saving}>
-              {$tr('Validate')}
-            </Button>
-          </div>
-        </div>
 
-        <label for="config-env" class="sr-only">{$tr('Environment file content')}</label>
-        <textarea
-          id="config-env"
-          bind:value={rawText}
-          oninput={onRawInput}
-          spellcheck="false"
-          class="fp-input fp-mono w-full min-h-[220px] text-[13px] p-3.5 resize-y
-            {validationErrors.length > 0 ? 'border-[var(--fp-error)]/60' : envValid ? 'border-[var(--fp-success)]/40' : ''}"
-          placeholder="# Configuration variables..."
-        ></textarea>
-
-        {#if validationErrors.length > 0}
-          <div role="alert" aria-live="polite" class="mt-3 p-3 rounded-[var(--fp-radius-sm)] fp-inset border-[var(--fp-error)]/30 space-y-1">
-            <p class="text-xs font-semibold text-[var(--fp-error)]">
-              {$tr('{count} validation error(s):', { count: validationErrors.length })}
-            </p>
-            {#each validationErrors.slice(0, 5) as err}
-              <p class="text-[11px] font-mono text-[var(--fp-error)]/80">{err}</p>
-            {/each}
-            {#if validationErrors.length > 5}
-              <p class="text-[11px] text-[var(--fp-dim)]">… {$tr('and {count} more', { count: validationErrors.length - 5 })}</p>
-            {/if}
-          </div>
-        {/if}
-
-        <div class="mt-3 flex items-center justify-between gap-3 text-[11px] text-[var(--fp-dim)] font-mono">
-          <span>{keyCount} {$tr('keys')} {#if lastSavedTimeStr}<span class="text-[var(--fp-border-bright)]">|</span> {$tr('saved {time}', { time: lastSavedTimeStr })}{/if}</span>
-        </div>
-      </div>
-    </details>
+    <RawEditor
+      {rawText}
+      onRawInput={onRawInput}
+      {validationErrors}
+      {envValid}
+      {keyCount}
+      {lastSavedTimeStr}
+      onValidate={validateConfig}
+      {dirty}
+      {changedKeysCount}
+      {data}
+      {saving}
+    />
   {/if}
 </div>
-
-<style>
-  .fp-checkbox {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--fp-accent);
-    cursor: pointer;
-  }
-  .fp-checkbox:disabled {
-    cursor: not-allowed;
-  }
-</style>

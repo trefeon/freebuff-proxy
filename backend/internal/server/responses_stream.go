@@ -7,9 +7,9 @@ package server
 // completed Responses object.
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -55,17 +55,12 @@ type responsesStreamState struct {
 // with the error attached and stops (the client gets a terminal, parseable
 // signal instead of a chat-shaped error frame).
 func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter, r io.Reader, stats *relayStats, chatStart time.Time, model, respID string) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	flusher, ok := w.(http.Flusher)
+	flusher, keepalive, lines, lastWrite, ok := newStreamRelay(ctx, w, r)
 	if !ok {
 		s.logger.Warn("response writer does not support flushing")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, ": connecting\n\n")
-	flusher.Flush()
+	defer keepalive.Stop()
 
 	createdAt := time.Now().Unix()
 	// Issue #164 parity: the response object names the proxy's served model
@@ -87,15 +82,6 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 	send(map[string]any{"type": "response.created", "response": responsesBase(model, respID, createdAt, "in_progress")})
 	send(map[string]any{"type": "response.in_progress", "response": responsesBase(model, respID, createdAt, "in_progress")})
 
-	keepalive := time.NewTicker(keepaliveInterval)
-	defer keepalive.Stop()
-	lines := make(chan lineChunk)
-	go relayReadLoop(ctx, r, lines)
-	// lastWrite tracks the last frame actually written to the CLIENT; the
-	// keepalive condition keys on it so a liveness signal is emitted after
-	// any client-write silence, regardless of upstream comment/junk dribble
-	// (those are dropped and never relayed — #161).
-	lastWrite := time.Now()
 	first := true
 	endTurnCallIndexes := make(map[int]bool)
 	// XML tool-call extractor: models such as MiMo/Hermes/Qwen emit tool
@@ -110,28 +96,18 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 	// extracted calls become native tool_calls fragments (with sequential
 	// synthetic indexes) and any scrubbed text is relayed as a content
 	// delta, so accumulateResponsesChunk creates the items and the terminal
-	// frame carries complete output.
+	// frame carries complete output (shared core, issue #245).
 	flushXMLCalls := func() {
-		ft, fc := xmlExtractor.Flush()
-		if ft == "" && len(fc) == 0 {
+		ft, frags := drainXMLToolCalls(xmlExtractor, &xmlCallIndex)
+		if ft == "" && len(frags) == 0 {
 			return
 		}
 		delta := make(map[string]any, 2)
 		if ft != "" {
 			delta["content"] = ft
 		}
-		if len(fc) > 0 {
-			frags := make([]any, 0, len(fc))
-			for _, call := range fc {
-				if call.Function.Name == "end_turn" {
-					continue // strip-parity: never relay the proxy-injected pseudo-tool
-				}
-				frags = append(frags, convert.ToolCallDeltaFragment(xmlCallIndex, call))
-				xmlCallIndex++
-			}
-			if len(frags) > 0 {
-				delta["tool_calls"] = frags
-			}
+		if len(frags) > 0 {
+			delta["tool_calls"] = frags
 		}
 		id := "chatcmpl-flush"
 		if lastID != "" {
@@ -156,11 +132,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 		case <-ctx.Done():
 			return
 		case <-keepalive.C:
-			if time.Since(lastWrite) >= keepaliveInterval {
-				_, _ = io.WriteString(w, ": keepalive\n\n")
-				lastWrite = time.Now()
-				flusher.Flush()
-			}
+			maybeKeepalive(w, flusher, lastWrite, "event: ping\ndata: {\"type\": \"ping\"}\n\n")
 		case lc := <-lines:
 			if lc.err != nil {
 				if ctx.Err() == nil {
@@ -178,7 +150,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 				s.endResponsesStream(w, send, st, model, respID, createdAt, false, nil)
 				return
 			}
-			clean, drop := convert.SanitizeChunk(lc.line)
+			clean, drop := convert.SanitizeChunkOpts(lc.line, s.convertOptions())
 			if drop {
 				// Dropped upstream lines are never relayed and must not
 				// advance the keepalive timer (client sees only real
@@ -194,76 +166,14 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 			// is relayed as-is, extracted calls become native tool_calls
 			// fragments with sequential synthetic indexes (existing native
 			// indexes stay untouched). The rest of the pipeline
-			// (StripEndTurnToolCalls + accumulateResponsesChunk) translates
-			// the mutated chunk as usual.
-			if rawChoices, ok := chunk["choices"].([]any); ok && len(rawChoices) > 0 {
-				choice, _ := rawChoices[0].(map[string]any)
-				delta, _ := choice["delta"].(map[string]any)
-				if content, ok := delta["content"].(string); ok && content != "" {
-					text, calls := xmlExtractor.Feed(content)
-					if text != content {
-						if text == "" {
-							delete(delta, "content")
-						} else {
-							delta["content"] = text
-						}
-					}
-					if len(calls) > 0 {
-						tcs, _ := delta["tool_calls"].([]any)
-						if tcs == nil {
-							tcs = make([]any, 0, len(calls))
-						}
-						bumpXMLCallIndex(tcs, &xmlCallIndex)
-						for _, call := range calls {
-							if call.Function.Name == "end_turn" {
-								continue // strip-parity: never relay the proxy-injected pseudo-tool
-							}
-							tcs = append(tcs, convert.ToolCallDeltaFragment(xmlCallIndex, call))
-							xmlCallIndex++
-						}
-						if len(tcs) > 0 {
-							delta["tool_calls"] = tcs
-						}
-					}
-				}
-			}
+			// (processEndTurnCalls + accumulateResponsesChunk) translates
+			// the mutated chunk as usual (shared core, issue #245).
+			feedXMLToolCalls(xmlExtractor, chunk, &xmlCallIndex)
 			// --- end_turn pseudo-tool-call filtering ---
-			// Record end_turn indexes before stripping to catch continuation fragments.
-			foundEndTurn := false
-			if rawChoices, ok := chunk["choices"].([]any); ok {
-				for _, c := range rawChoices {
-					choice, _ := c.(map[string]any)
-					if choice == nil {
-						continue
-					}
-					delta, _ := choice["delta"].(map[string]any)
-					if rawTCs, ok := delta["tool_calls"].([]any); ok {
-						for _, raw := range rawTCs {
-							tc, _ := raw.(map[string]any)
-							if tc == nil {
-								continue
-							}
-							fn, _ := tc["function"].(map[string]any)
-							if name, _ := fn["name"].(string); name == "end_turn" {
-								foundEndTurn = true
-								if idx, ok := tc["index"].(float64); ok {
-									endTurnCallIndexes[int(idx)] = true
-								}
-							}
-						}
-					}
-				}
-			}
-			toolCallsRemaining, _ := convert.StripEndTurnToolCalls(chunk)
-			// Drop continuation fragments for stripped end_turn indexes
-			// (shared map-level helper): a later arguments-only fragment
-			// for a stripped index carries an empty name, so only its
-			// index identifies it. A drop that empties a choice's
-			// tool_calls list means no real calls remain (feeds the flip
-			// below).
-			if _, emptied := dropEndTurnContinuationsInChunk(chunk, endTurnCallIndexes); emptied {
-				toolCallsRemaining = false
-			}
+			// Shared pipeline core (issue #246): record end_turn indexes
+			// before stripping, strip, drop continuation fragments — the
+			// same semantics the OpenAI relay orbits.
+			foundEndTurn, toolCallsRemaining, _, _ := processEndTurnCalls(chunk, endTurnCallIndexes, nil, true)
 			// Flip finish_reason only when end_turn calls were actually found
 			// in this chunk and no real tool calls remain. Without the
 			// foundEndTurn gate, the terminal chunk (finish_reason: "tool_calls",
@@ -328,7 +238,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 				s.endResponsesStream(w, send, st, model, respID, createdAt, true, map[string]any{"message": msg, "type": typ})
 				return
 			}
-			lastWrite = time.Now()
+			*lastWrite = time.Now()
 			stats.chunks++
 			stats.bytes += len(clean)
 			if stats.servedModel == "" {
@@ -550,29 +460,14 @@ func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[st
 // relayResponsesJSON drains the upstream stream and writes one completed
 // Responses object. On any decode/stream error a 502 is returned.
 func (s *Server) relayResponsesJSON(ctx context.Context, w http.ResponseWriter, r io.Reader, stats *relayStats, chatStart time.Time, model, respID string) {
-	acc := convert.NewAccumulator()
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), maxStreamLine)
-	first := true
-	for scanner.Scan() {
-		if ctx.Err() != nil {
-			return
-		}
-		if first {
-			first = false
-			phasetiming.FromContext(ctx).Since(phasetiming.UpstreamTTFBMS, chatStart)
-		}
-		if err := acc.Add(scanner.Bytes()); err != nil {
+	acc := convert.NewAccumulatorOpts(s.convertOptions())
+	if err := drainUpstream(ctx, r, acc, stats, chatStart); err != nil {
+		if errors.Is(err, errDrainUpstreamDecode) {
 			s.writeJSONError(w, http.StatusBadGateway,
-				"failed to decode upstream stream: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
-			return
-		}
-		stats.chunks++
-	}
-	if err := scanner.Err(); err != nil {
-		if ctx.Err() == nil {
+				"failed to decode upstream stream: "+errDrainCause(err), "upstream_error", "upstream_unavailable", 0)
+		} else {
 			s.writeJSONError(w, http.StatusBadGateway,
-				"upstream stream error: "+err.Error(), "upstream_error", "upstream_unavailable", 0)
+				"upstream stream error: "+errDrainCause(err), "upstream_error", "upstream_unavailable", 0)
 		}
 		return
 	}

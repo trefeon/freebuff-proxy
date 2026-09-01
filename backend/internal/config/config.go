@@ -186,6 +186,18 @@ type Config struct {
 	EnvFile          string
 	DiscoveredSource string // auto-discovered credentials file path (if any)
 	DiscoveredEmail  string // auto-discovered account email (if any)
+	// CompressPrompt enables optional prompt & context compression in the
+	// request normalizer (COMPRESS_PROMPT; default off). Resolved once here
+	// and passed to convert.Options so the per-chunk hot path never reads
+	// the environment (issue #277).
+	CompressPrompt bool
+	// CacheControlInjection enables DeepSeek prompt-cache cache_control
+	// injection (CACHE_CONTROL_INJECTION; default on). See CompressPrompt.
+	CacheControlInjection bool
+	// ReasoningInContent is the think-tag label used to fold reasoning into
+	// message content for clients that do not render a reasoning channel
+	// (REASONING_IN_CONTENT; default "" = off). See CompressPrompt.
+	ReasoningInContent string
 }
 
 // DefaultAdminToken is the default dashboard admin password ("123456") used when ADMIN_TOKEN is unconfigured or empty.
@@ -298,6 +310,9 @@ type rawConfig struct {
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
 	TokenRotation                    string                  `json:"TOKEN_ROTATION"`
 	DashboardEnabled                 bool                    `json:"DASHBOARD_ENABLED"`
+	CompressPrompt                   string                  `json:"COMPRESS_PROMPT"`
+	CacheControlInjection            string                  `json:"CACHE_CONTROL_INJECTION"`
+	ReasoningInContent               string                  `json:"REASONING_IN_CONTENT"`
 }
 
 // modelsAllowList is the raw MODELS_ALLOW value. The README documents list

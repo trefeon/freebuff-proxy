@@ -54,20 +54,18 @@ func TestDoUpstreamResponseLogsAndPreservesBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, cancel, err := client.do(req, 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
+	resp, cancel, cerr := client.do(req, 5*time.Second)
+	if cerr == nil {
+		t.Fatal("expected a classified error from do() on >=400 (issue #305)")
 	}
 	defer cancel()
-	bodyText := drainBody(resp.Body)
 	_ = resp.Body.Close()
-	cerr := client.classify(resp.StatusCode, bodyText, resp.Header)
 
-	// The caller still parses the re-wrapped body: retryAfterMs survived,
-	// and the redacted body never leaks the token downstream.
+	// do() classified once and carried the body forward: retryAfterMs
+	// survived, and the redacted body never leaks the token downstream.
 	var rle *RateLimitError
 	if !errors.As(cerr, &rle) {
-		t.Fatalf("classify = %T, want *RateLimitError", cerr)
+		t.Fatalf("do() classification = %T, want *RateLimitError", cerr)
 	}
 	if rle.RetryAfter != 30*time.Minute {
 		t.Errorf("RetryAfter = %v, want 30m (body must survive the re-wrap)", rle.RetryAfter)
@@ -107,7 +105,7 @@ func TestDoUpstreamResponseLogsAndPreservesBody(t *testing.T) {
 	for _, want := range []string{
 		"status=429",
 		"code=free_mode_rate_limited",
-		"window=30 minutes",
+		"window=\"30 minutes\"",
 		"retry_after=1800",
 		"wait 30 minutes before retrying", // full body, not 200-rune truncated
 	} {

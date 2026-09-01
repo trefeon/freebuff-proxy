@@ -108,9 +108,9 @@ func TestRemoveLastTokenDropsMismatchWindow(t *testing.T) {
 
 	rle := &upstream.RateLimitError{Status: "free_mode_invalid_agent_model"}
 	p.recordMismatchEscalation(2, rle)
-	p.mismatchMu.Lock()
-	_, present := p.mismatch[2]
-	p.mismatchMu.Unlock()
+	p.roster.mu.Lock()
+	_, present := p.roster.mismatch[2]
+	p.roster.mu.Unlock()
 	if !present {
 		t.Fatal("seed mismatch window for slot 2 missing")
 	}
@@ -118,9 +118,9 @@ func TestRemoveLastTokenDropsMismatchWindow(t *testing.T) {
 	if err := p.RemoveLastToken(); err != nil {
 		t.Fatalf("RemoveLastToken: %v", err)
 	}
-	p.mismatchMu.Lock()
-	_, present = p.mismatch[2]
-	p.mismatchMu.Unlock()
+	p.roster.mu.Lock()
+	_, present = p.roster.mismatch[2]
+	p.roster.mu.Unlock()
 	if present {
 		t.Error("mismatch window for removed token still present")
 	}
@@ -139,9 +139,9 @@ func TestRemoveAllTokensDropsMismatchWindows(t *testing.T) {
 	p.recordMismatchEscalation(2, rle)
 
 	p.RemoveAllTokens(context.Background())
-	p.mismatchMu.Lock()
-	left := len(p.mismatch)
-	p.mismatchMu.Unlock()
+	p.roster.mu.Lock()
+	left := len(p.roster.mismatch)
+	p.roster.mu.Unlock()
 	if left != 0 {
 		t.Errorf("mismatch windows after RemoveAllTokens = %d, want 0", left)
 	}
@@ -251,7 +251,7 @@ func TestBridgeQuotaMirrorsPooled(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.LeaseRelease(lease)
-	pKn, pRem, pCap := quotaRemaining((*p.toks.Load())[0], modelA)
+	pKn, pRem, pCap := quotaRemaining((*p.roster.Load())[0], modelA)
 
 	pb := newBridgePool(t, mock)
 	blease, err := pb.AcquireBridge(context.Background(), "parity-client", modelA)
@@ -259,7 +259,7 @@ func TestBridgeQuotaMirrorsPooled(t *testing.T) {
 		t.Fatal(err)
 	}
 	pb.LeaseRelease(blease)
-	bKn, bRem, bCap := bridgeQuotaRemaining(blease.Bridge, modelA)
+	bKn, bRem, bCap := quotaRemaining(blease.Bridge, modelA)
 
 	if pKn != bKn || pRem != bRem || pCap != bCap {
 		t.Errorf("pooled vs bridge quota = (%v,%v,%v) vs (%v,%v,%v), want equal",
@@ -364,15 +364,13 @@ func TestRemoveTokenAtThenAddKeepsUsageSpendAligned(t *testing.T) {
 	p := sizedPool(t, mock)
 	addTokens(t, p, "cb_one", "cb_two", "cb_three") // indices 0..3
 
-	// Distinct usage/spend history per index.
-	p.usageMu.Lock()
-	p.msgsPerToken[0] = []time.Time{time.Now()}                    // token 0: 1 msg
-	p.msgsPerToken[3] = []time.Time{time.Now(), time.Now().Add(1)} // token 3: 2 msgs
-	p.usageMu.Unlock()
-	p.spendMu.Lock()
-	p.spendPerToken[0].add(100, time.Now())
-	p.spendPerToken[3].add(200, time.Now())
-	p.spendMu.Unlock()
+	// Distinct usage/spend history per index (travels with each entry).
+	p.roster.mu.Lock()
+	(*p.roster.Load())[0].ledger.usage = []time.Time{time.Now()}                    // token 0: 1 msg
+	(*p.roster.Load())[3].ledger.usage = []time.Time{time.Now(), time.Now().Add(1)} // token 3: 2 msgs
+	(*p.roster.Load())[0].ledger.spend.add(100, time.Now())
+	(*p.roster.Load())[3].ledger.spend.add(200, time.Now())
+	p.roster.mu.Unlock()
 
 	if err := p.RemoveTokenAt(1); err != nil {
 		t.Fatalf("RemoveTokenAt(1): %v", err)
@@ -381,17 +379,16 @@ func TestRemoveTokenAtThenAddKeepsUsageSpendAligned(t *testing.T) {
 		t.Fatalf("AddToken: %v", err)
 	}
 
-	p.usageMu.Lock()
-	us, u0 := len(p.msgsPerToken), len(p.msgsPerToken[0])
-	u2 := len(p.msgsPerToken[2])
-	p.usageMu.Unlock()
-	p.spendMu.Lock()
-	sp := len(p.spendPerToken)
-	d0 := p.spendPerToken[0].rolling24h(time.Now())
-	d2 := p.spendPerToken[2].rolling24h(time.Now())
-	p.spendMu.Unlock()
+	p.roster.mu.Lock()
+	us := len(*p.roster.Load())
+	u0 := len((*p.roster.Load())[0].ledger.usage)
+	u2 := len((*p.roster.Load())[2].ledger.usage)
+	sp := len(*p.roster.Load())
+	d0 := (*p.roster.Load())[0].ledger.spend.rolling24h(time.Now())
+	d2 := (*p.roster.Load())[2].ledger.spend.rolling24h(time.Now())
+	p.roster.mu.Unlock()
 
-	if got := len(*p.toks.Load()); got != 4 {
+	if got := len(*p.roster.Load()); got != 4 {
 		t.Fatalf("token count = %d, want 4", got)
 	}
 	if us != 4 || sp != 4 {

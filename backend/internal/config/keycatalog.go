@@ -52,6 +52,20 @@ func Catalog() []KeyDef {
 	return append([]KeyDef(nil), keyCatalog...)
 }
 
+// ConfigEnvKeys returns every environment variable config reads, derived
+// from the catalog plus the legacy USER_ID alias (#126). It is the single
+// source of truth for the operator env surface, so testutil can strip
+// ambient proxy env vars without hand-maintaining a parallel list (issue
+// #281).
+func ConfigEnvKeys() []string {
+	keys := make([]string, 0, len(keyCatalog)+1)
+	for _, def := range keyCatalog {
+		keys = append(keys, def.Key)
+	}
+	keys = append(keys, "USER_ID")
+	return keys
+}
+
 // keyCatalog is the single source of truth for the operator-facing env
 // surface. Every key mirrored by applyDotenv and every env-only documented
 // key must appear here exactly once (enforced by
@@ -190,6 +204,12 @@ var keyCatalog = []KeyDef{
 		Description: `Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs).`},
 
 	// ── upstream ─────────────────────────────────────────────────────────
+	{Key: "CACHE_CONTROL_INJECTION", Group: GroupUpstream, Kind: "bool",
+		Default:     "true",
+		Description: `Add {"type":"ephemeral"} cache_control to the stable context prefix on DeepSeek requests (prompt-cache cost reduction; default on). Set CACHE_CONTROL_INJECTION=false to disable.`},
+	{Key: "COMPRESS_PROMPT", Group: GroupUpstream, Kind: "bool",
+		Default:     "false",
+		Description: `Apply optional prompt & context compression: middle user/assistant turns beyond the trailing budget are dropped and summarized by one marker (default off).`},
 	{Key: "COST_MODE", Group: GroupUpstream, Kind: "select", Enum: []string{"free"}, RestartOnly: true, Hidden: true,
 		Default:     "free",
 		Description: `MUST stay "free": any other value routes requests as PAID and fresh free accounts get 402 "Out of credits".`},
@@ -205,6 +225,9 @@ var keyCatalog = []KeyDef{
 	{Key: "MODEL_ALIASES", Group: GroupUpstream, Kind: "list", Essential: true,
 		Default:     "",
 		Description: `Map aliases to real model IDs (e.g. gpt-4o:openai/gpt-5.6-luna; comma-separated). No built-in aliases — clients must map explicitly.`},
+	{Key: "REASONING_IN_CONTENT", Group: GroupUpstream, Kind: "text",
+		Default:     "",
+		Description: `Fold reasoning_content into message content as <tag>...</tag> for clients that do not render a reasoning channel. "true" uses <think>; a tag word (e.g. "thinking") sets the label; empty/off disables.`},
 	{Key: "REGISTRY_REFRESH", Group: GroupUpstream, Kind: "text", Hidden: true,
 		Default:     "6h",
 		Description: `Model catalog refresh interval.`},

@@ -122,8 +122,8 @@ func TestLoginPageRendersError(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &data); err != nil {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
-	if data["error"] != "Invalid admin token." {
-		t.Errorf("error = %v, want 'Invalid admin token.'", data["error"])
+	if data["message"] != "Invalid admin token." {
+		t.Errorf("message = %v, want 'Invalid admin token.'", data["message"])
 	}
 }
 
@@ -307,8 +307,8 @@ func TestRestrictedPageRenders(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &data); err != nil {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
-	if data["error"] != "blocked" {
-		t.Errorf("error = %v, want 'blocked'", data["error"])
+	if data["message"] != "blocked" {
+		t.Errorf("message = %v, want 'blocked'", data["message"])
 	}
 }
 

@@ -113,93 +113,107 @@ func quietAccessPath(method, path string) bool {
 	return path == "/healthz" || path == "/metrics" || method == http.MethodOptions
 }
 
-// accessQuietWindow is the quiet-endpoint access gate window: at most one
-// access line per path per window (T17). A var so tests can shrink it.
-var accessQuietWindow = 60 * time.Second
+// accessGates are the per-Server access-log and rate-limit dedupe gates
+// (issue #252). They were process-globals shared by every Server instance;
+// now each Server owns one so instances never interfere, and the mutable
+// knobs no longer serialize the test package.
+type accessGates struct {
+	// window is the quiet-endpoint gate window: at most one access line per
+	// path per window (T17). A field so tests can shrink it per-Server.
+	window time.Duration
+	// logGate is the quiet-path access gate: map[path]lastLog plus a mutex
+	// (T17). The map is CAPPED: OPTIONS preflights and unknown paths arrive
+	// for arbitrary distinct paths, so unbounded membership would leak
+	// memory; accessLogDue evicts the oldest entry past the cap.
+	logGate struct {
+		mu       sync.Mutex
+		lastSeen map[string]time.Time
+	}
+	// quietBudget caps quiet-class access lines per window: per-path gating
+	// alone lets a flood of DISTINCT paths emit one line each, so a global
+	// budget bounds the total quiet lines per window.
+	quietBudget struct {
+		mu          sync.Mutex
+		windowStart time.Time
+		lines       int
+	}
+}
 
-// accessLogGate is the per-process quiet-path access gate: map[path]lastLog
-// plus a mutex (T17). The map is CAPPED: OPTIONS preflights and unknown
-// paths arrive for arbitrary distinct paths, so unbounded membership would
-// leak memory; accessLogDue evicts the oldest entry past the cap.
-var accessLogGate = struct {
-	mu       sync.Mutex
-	lastSeen map[string]time.Time
-}{lastSeen: make(map[string]time.Time)}
-
-// maxAccessGateEntries bounds accessLogGate.lastSeen. The gate's quiet
+// maxAccessGateEntries bounds accessGates.logGate.lastSeen. The gate's quiet
 // candidates are paths, and a client can mint unlimited distinct paths
 // (OPTIONS preflights, unknown-path 404s), so the map must never grow past
 // this cap: when full the OLDEST entry is evicted before a new one is
 // recorded.
 const maxAccessGateEntries = 512
 
+// maxQuietAccessLines is the budget of quiet-class access lines per window.
+// Distinct quiet paths beyond it are silent; the window rolls the budget
+// over.
+const maxQuietAccessLines = 60
+
+// newAccessGates returns a gate set with the production defaults.
+func newAccessGates() *accessGates {
+	g := &accessGates{}
+	g.window = 60 * time.Second
+	g.logGate.lastSeen = make(map[string]time.Time)
+	return g
+}
+
 // accessLogDue reports whether an access line may fire for path now,
 // recording the current attempt. The first request for a path and any
-// request at least accessQuietWindow after the last line fire; requests
-// inside the window are suppressed. The map stays bounded: past
-// maxAccessGateEntries the oldest entry is evicted.
-func accessLogDue(path string, now time.Time) bool {
-	accessLogGate.mu.Lock()
-	defer accessLogGate.mu.Unlock()
-	last, ok := accessLogGate.lastSeen[path]
-	if !ok || now.Sub(last) >= accessQuietWindow {
-		accessLogGate.lastSeen[path] = now
-		// Bound the gate: arbitrary distinct paths must not grow the
-		// process-global map without limit.
-		if len(accessLogGate.lastSeen) > maxAccessGateEntries {
+// request at least window after the last line fire; requests inside the
+// window are suppressed. The map stays bounded: past maxAccessGateEntries
+// the oldest entry is evicted.
+func (g *accessGates) accessLogDue(path string, now time.Time) bool {
+	g.logGate.mu.Lock()
+	defer g.logGate.mu.Unlock()
+	if g.logGate.lastSeen == nil {
+		g.logGate.lastSeen = make(map[string]time.Time)
+	}
+	last, ok := g.logGate.lastSeen[path]
+	if !ok || now.Sub(last) >= g.window {
+		g.logGate.lastSeen[path] = now
+		// Bound the gate: arbitrary distinct paths must not grow the map
+		// without limit.
+		if len(g.logGate.lastSeen) > maxAccessGateEntries {
 			oldestPath, oldest := "", time.Time{}
-			for p, t := range accessLogGate.lastSeen {
+			for p, t := range g.logGate.lastSeen {
 				if oldestPath == "" || t.Before(oldest) {
 					oldestPath, oldest = p, t
 				}
 			}
-			delete(accessLogGate.lastSeen, oldestPath)
+			delete(g.logGate.lastSeen, oldestPath)
 		}
 		return true
 	}
 	return false
 }
 
-// accessQuietBudget is the per-process cap on quiet-class access lines
-// (healthz/metrics/OPTIONS preflights/unknown-path 404s): per-path gating
-// alone lets a flood of DISTINCT paths emit one line each, so a global
-// budget bounds the total quiet lines per accessQuietWindow.
-var accessQuietBudget = struct {
-	mu          sync.Mutex
-	windowStart time.Time
-	lines       int
-}{}
-
-// maxQuietAccessLines is the budget of quiet-class access lines per
-// accessQuietWindow. Distinct quiet paths beyond it are silent; the window
-// rolls the budget over.
-const maxQuietAccessLines = 60
-
 // accessQuietBudgetDue reports whether the quiet-class line budget remains
 // and charges one line. The window rolls on first use after expiry.
-func accessQuietBudgetDue(now time.Time) bool {
-	accessQuietBudget.mu.Lock()
-	defer accessQuietBudget.mu.Unlock()
-	if accessQuietBudget.windowStart.IsZero() || now.Sub(accessQuietBudget.windowStart) >= accessQuietWindow {
-		accessQuietBudget.windowStart = now
-		accessQuietBudget.lines = 0
+func (g *accessGates) accessQuietBudgetDue(now time.Time) bool {
+	g.quietBudget.mu.Lock()
+	defer g.quietBudget.mu.Unlock()
+	if g.quietBudget.windowStart.IsZero() || now.Sub(g.quietBudget.windowStart) >= g.window {
+		g.quietBudget.windowStart = now
+		g.quietBudget.lines = 0
 	}
-	if accessQuietBudget.lines >= maxQuietAccessLines {
+	if g.quietBudget.lines >= maxQuietAccessLines {
 		return false
 	}
-	accessQuietBudget.lines++
+	g.quietBudget.lines++
 	return true
 }
 
-// resetAccessLogGate clears the quiet-path access gate and budget (test hook).
-func resetAccessLogGate() {
-	accessLogGate.mu.Lock()
-	clear(accessLogGate.lastSeen)
-	accessLogGate.mu.Unlock()
-	accessQuietBudget.mu.Lock()
-	accessQuietBudget.windowStart = time.Time{}
-	accessQuietBudget.lines = 0
-	accessQuietBudget.mu.Unlock()
+// reset clears the quiet-path access gate and budget (test hook).
+func (g *accessGates) reset() {
+	g.logGate.mu.Lock()
+	clear(g.logGate.lastSeen)
+	g.logGate.mu.Unlock()
+	g.quietBudget.mu.Lock()
+	g.quietBudget.windowStart = time.Time{}
+	g.quietBudget.lines = 0
+	g.quietBudget.mu.Unlock()
 }
 
 // mustSubFS returns the named subtree of an embed.FS. The directory is

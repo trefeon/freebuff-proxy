@@ -8,6 +8,8 @@
     <array>
         <string>/usr/local/bin/freebuff-proxy</string>
     </array>
+    <key>WorkingDirectory</key>
+    <string>/usr/local/bin</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

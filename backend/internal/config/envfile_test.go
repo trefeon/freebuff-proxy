@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"freebuff-proxy/backend/internal/testutil"
 )
 
 func TestWriteFileAtomicRestoresBackupOnRenameFailure(t *testing.T) {
@@ -19,7 +17,7 @@ func TestWriteFileAtomicRestoresBackupOnRenameFailure(t *testing.T) {
 	// Drain before TempDir's own RemoveAll: Windows AV locks can leave a
 	// stray .bak behind (the injected-failure path restores it), failing
 	// the cleanup (see poll.go).
-	testutil.DrainStrayTempFiles(t, dir)
+	drainStrayTempFiles(t, dir)
 	path := filepath.Join(dir, ".env")
 	if err := os.WriteFile(path, []byte("OLD\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -24,11 +24,11 @@ type smokeRequest struct {
 
 const maxSmokeBytes = 32 << 10
 
-func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	// Server-side DEVTOOLS_ENABLED gate: the UI hides the Dev Tools
 	// page when the knob is off, but a direct POST must be refused too —
 	// the handlers are real upstream consumers.
-	cfg := s.cfg.Load()
+	cfg := a.cfgLoad()
 	if !cfg.DevToolsEnabled {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -52,11 +52,11 @@ func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
 		var body []byte
 		body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 		if err != nil {
-			s.dash.RenderConfigResult(w, r, false, "Failed to read request: "+err.Error())
+			a.dash.RenderConfigResult(w, r, false, "Failed to read request: "+err.Error())
 			return
 		}
 		if err = json.Unmarshal(body, &req); err != nil {
-			s.dash.RenderConfigResult(w, r, false, "Invalid request JSON: "+err.Error())
+			a.dash.RenderConfigResult(w, r, false, "Invalid request JSON: "+err.Error())
 			return
 		}
 	}
@@ -64,9 +64,9 @@ func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	req.Token = strings.TrimSpace(req.Token)
 	if req.Model == "" {
-		req.Model = probeModel(s.reg)
+		req.Model = probeModel(a.reg)
 		if req.Model == "" {
-			s.dash.RenderConfigResult(w, r, false, "No models in the registry to test.")
+			a.dash.RenderConfigResult(w, r, false, "No models in the registry to test.")
 			return
 		}
 	}
@@ -74,7 +74,7 @@ func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
 		req.Prompt = "ping"
 	}
 	if len(req.Prompt) > 200 {
-		s.dash.RenderConfigResult(w, r, false, "Prompt too long (max 200 chars).")
+		a.dash.RenderConfigResult(w, r, false, "Prompt too long (max 200 chars).")
 		return
 	}
 
@@ -91,31 +91,31 @@ func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	acquireStart := time.Now()
 	if cfg.BridgeMode() {
 		if req.Token == "" {
-			s.dash.RenderConfigResult(w, r, false, "Bridge mode: include a client token in the smoke request.")
+			a.dash.RenderConfigResult(w, r, false, "Bridge mode: include a client token in the smoke request.")
 			return
 		}
-		lease, err = s.pool.AcquireBridge(ctx, req.Token, req.Model)
+		lease, err = a.pool.AcquireBridge(ctx, req.Token, req.Model)
 	} else if cfg.HybridBridgeMode() && req.Token != "" {
 		// Hybrid: a supplied client token smoke-tests the bridge surface;
 		// without one the pooled surface is probed.
-		lease, err = s.pool.AcquireBridge(ctx, req.Token, req.Model)
+		lease, err = a.pool.AcquireBridge(ctx, req.Token, req.Model)
 	} else {
-		lease, err = s.pool.Acquire(ctx, req.Model)
+		lease, err = a.pool.Acquire(ctx, req.Model)
 	}
 	phases.Since(phasetiming.AcquireMS, acquireStart)
 	if err == nil {
-		up, err = s.pool.Chat(ctx, lease, chatOpts, chatBody)
+		up, err = a.pool.Chat(ctx, lease, chatOpts, chatBody)
 	}
 	if err != nil {
 		if lease != nil {
-			s.pool.LeaseRelease(lease)
+			a.pool.LeaseRelease(lease)
 		}
 		phases.Since(phasetiming.TotalMS, start)
-		s.logger.Warn("dashboard smoke test failed", "model", req.Model, "err", err)
-		s.dash.RenderConfigResult(w, r, false, "Smoke test failed: "+err.Error())
+		a.logfunc().Warn("dashboard smoke test failed", "model", req.Model, "err", err)
+		a.dash.RenderConfigResult(w, r, false, "Smoke test failed: "+err.Error())
 		return
 	}
-	defer s.pool.LeaseRelease(lease)
+	defer a.pool.LeaseRelease(lease)
 	defer func() { _ = up.Close() }()
 
 	// Read a bounded prefix of the SSE stream for the preview.
@@ -125,23 +125,23 @@ func (s *Server) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	phases.Since(phasetiming.TotalMS, start)
 	ms := time.Since(start).Milliseconds()
 	if readErr != nil {
-		s.dash.RenderConfigResult(w, r, false, "Smoke test: upstream accepted but stream read failed: "+readErr.Error())
+		a.dash.RenderConfigResult(w, r, false, "Smoke test: upstream accepted but stream read failed: "+readErr.Error())
 		return
 	}
-	s.dash.RenderSmokeResult(w, r, req.Model, tokenLabel(lease), ms, preview, dashboard.PhaseList(phases.All()))
+	a.dash.RenderSmokeResult(w, r, req.Model, tokenLabel(lease), ms, preview, dashboard.PhaseList(phases.All()))
 }
 
-func (s *Server) handlePlaygroundChat(w http.ResponseWriter, r *http.Request) {
+func (a *adminHandlers) handlePlaygroundChat(w http.ResponseWriter, r *http.Request) {
 	// Server-side DEVTOOLS_ENABLED gate: a direct POST must be
 	// refused when the knob is off, matching the hidden UI page.
-	if !s.cfg.Load().DevToolsEnabled {
-		s.writeJSONError(w, http.StatusNotFound, "dev tools are disabled — set DEVTOOLS_ENABLED=true to enable the playground", "invalid_request_error", "devtools_disabled", 0)
+	if !a.cfgLoad().DevToolsEnabled {
+		a.dash.RenderResult(w, http.StatusNotFound, false, "dev tools are disabled — set DEVTOOLS_ENABLED=true to enable the playground", "devtools_disabled")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		s.writeJSONError(w, http.StatusBadRequest, "failed to read request: "+err.Error(), "invalid_request_error", "invalid_json", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "failed to read request: "+err.Error(), "invalid_json")
 		return
 	}
 	var req struct {
@@ -150,16 +150,16 @@ func (s *Server) handlePlaygroundChat(w http.ResponseWriter, r *http.Request) {
 		Stream bool   `json:"stream"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		s.writeJSONError(w, http.StatusBadRequest, "request must be a JSON object", "invalid_request_error", "invalid_json", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "request must be a JSON object", "invalid_json")
 		return
 	}
 	req.Model = strings.TrimSpace(req.Model)
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Model == "" {
-		if m := probeModel(s.reg); m != "" {
+		if m := probeModel(a.reg); m != "" {
 			req.Model = m
 		} else {
-			s.writeJSONError(w, http.StatusBadRequest, "no model specified and no models in the registry", "invalid_request_error", "model_not_found", 0)
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "no model specified and no models in the registry", "model_not_found")
 			return
 		}
 	}
@@ -173,15 +173,15 @@ func (s *Server) handlePlaygroundChat(w http.ResponseWriter, r *http.Request) {
 	playReq := r.Clone(r.Context())
 	playReq.Body = io.NopCloser(bytes.NewReader(chatBody))
 	playReq.ContentLength = int64(len(chatBody))
-	s.handleChat(w, playReq)
+	a.handleChat(w, playReq)
 }
 
-func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
-	if s.authClient == nil {
-		s.writeJSONError(w, http.StatusServiceUnavailable, "login wizard disabled (no upstream auth client)", "server_error", "login_unavailable", 0)
+func (a *adminHandlers) handleLoginStart(w http.ResponseWriter, r *http.Request) {
+	if a.authClientFunc == nil || a.authClientFunc() == nil {
+		a.dash.RenderResult(w, http.StatusServiceUnavailable, false, "login wizard disabled (no upstream auth client)", "login_unavailable")
 		return
 	}
-	s.pruneLoginFlows()
+	a.pruneLoginFlows()
 	// The dashboard device login defaults to isolated random fingerprints
 	// (mirroring gen-freebuff-token.sh: "enhanced-" + base64url(random-32-bytes))
 	// so multiple accounts added to a pool are not correlated by a single machine
@@ -189,21 +189,21 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	var code *upstream.CLILoginCode
 	var err error
 	if r.URL.Query().Get("isolated") == "false" {
-		code, err = s.authClient.StartCLILogin(r.Context())
+		code, err = a.authClientFunc().StartCLILogin(r.Context())
 	} else {
-		code, err = s.authClient.StartCLILoginIsolated(r.Context())
+		code, err = a.authClientFunc().StartCLILoginIsolated(r.Context())
 	}
 	if err != nil {
-		s.logger.Warn("login wizard: start failed", "err", err)
-		s.writeJSONError(w, http.StatusBadGateway, "failed to start browser login: "+err.Error(), "server_error", "login_start_failed", 0)
+		a.logfunc().Warn("login wizard: start failed", "err", err)
+		a.dash.RenderResult(w, http.StatusBadGateway, false, "failed to start browser login: "+err.Error(), "login_start_failed")
 		return
 	}
 	flowID := shortFlowID(code.FingerprintID)
 	flow := &loginFlow{ID: flowID, Code: code, Started: time.Now()}
-	s.loginMu.Lock()
-	s.loginFlows[code.FingerprintID] = flow
-	s.loginMu.Unlock()
-	s.logger.Info("login wizard: started", "flow", flowID)
+	a.loginMu.Lock()
+	a.loginFlows[code.FingerprintID] = flow
+	a.loginMu.Unlock()
+	a.logfunc().Info("login wizard: started", "flow", flowID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"flow_id":     flowID,
@@ -213,29 +213,29 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
-	s.pruneLoginFlows()
+func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
+	a.pruneLoginFlows()
 	fp := strings.TrimSpace(r.URL.Query().Get("fingerprint"))
 	if fp == "" {
-		s.writeJSONError(w, http.StatusBadRequest, "missing fingerprint query param", "invalid_request_error", "bad_request", 0)
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "missing fingerprint query param", "bad_request")
 		return
 	}
-	s.loginMu.Lock()
-	flow := s.loginFlows[fp]
-	s.loginMu.Unlock()
+	a.loginMu.Lock()
+	flow := a.loginFlows[fp]
+	a.loginMu.Unlock()
 	if flow == nil {
-		s.writeJSONError(w, http.StatusNotFound, "login flow not found or expired — start a new one", "invalid_request_error", "login_flow_missing", 0)
+		a.dash.RenderResult(w, http.StatusNotFound, false, "login flow not found or expired — start a new one", "login_flow_missing")
 		return
 	}
 	// Read the completion state under the lock: concurrent status polls
 	// (second tab) must not both proceed to addTokenPersist —
 	// the completing flag is set before the network poll so exactly one
 	// goroutine owns the add.
-	s.loginMu.Lock()
+	a.loginMu.Lock()
 	done := flow.Done
 	completing := flow.Completing
 	flow.Completing = true
-	s.loginMu.Unlock()
+	a.loginMu.Unlock()
 	if done {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "token_index": flow.Index})
@@ -248,22 +248,22 @@ func (s *Server) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
 		return
 	}
-	status, err := s.authClient.PollCLILogin(r.Context(), flow.Code)
+	status, err := a.authClientFunc().PollCLILogin(r.Context(), flow.Code)
 	if err != nil {
 		// Transient poll failure: keep the flow alive, report pending. A
 		// later poll may retry completion.
-		s.loginMu.Lock()
+		a.loginMu.Lock()
 		flow.Completing = false
-		s.loginMu.Unlock()
-		s.logger.Debug("login wizard: poll failed", "flow", flow.ID, "err", err)
+		a.loginMu.Unlock()
+		a.logfunc().Debug("login wizard: poll failed", "flow", flow.ID, "err", err)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
 		return
 	}
 	if !status.Done {
-		s.loginMu.Lock()
+		a.loginMu.Lock()
 		flow.Completing = false
-		s.loginMu.Unlock()
+		a.loginMu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
 		return
@@ -273,38 +273,38 @@ func (s *Server) handleLoginStatus(w http.ResponseWriter, r *http.Request) {
 	// observing Done reads a consistent record.
 	flow.Done = true
 	flow.Token = status.AuthToken
-	s.loginMu.Lock()
-	s.loginFlows[fp] = flow
-	s.loginMu.Unlock()
-	index, addErr := s.addTokenPersist(r.Context(), status.AuthToken)
+	a.loginMu.Lock()
+	a.loginFlows[fp] = flow
+	a.loginMu.Unlock()
+	index, addErr := a.addTokenPersist(r.Context(), status.AuthToken)
 	if addErr != nil {
 		flow.Error = addErr.Error()
-		s.loginMu.Lock()
+		a.loginMu.Lock()
 		flow.Completing = false
-		s.loginMu.Unlock()
-		s.logger.Warn("login wizard: token persist failed", "flow", flow.ID, "err", addErr)
+		a.loginMu.Unlock()
+		a.logfunc().Warn("login wizard: token persist failed", "flow", flow.ID, "err", addErr)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "message": addErr.Error()})
 		return
 	}
 	flow.Index = index
 	if index >= 0 {
-		s.pool.SetTokenAccountInfo(index, status.User.Email, status.User.ID)
+		a.pool.SetTokenAccountInfo(index, status.User.Email, status.User.ID)
 	}
-	s.logger.Info("login wizard: completed", "flow", flow.ID, "token_index", index, "user", status.User.Name)
+	a.logfunc().Info("login wizard: completed", "flow", flow.ID, "token_index", index, "user", status.User.Name)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "token_index": index, "user": status.User.Name})
 }
 
-func (s *Server) pruneLoginFlows() {
+func (a *adminHandlers) pruneLoginFlows() {
 	cutoff := time.Now().Add(-loginFlowTTL)
-	s.loginMu.Lock()
-	for fp, flow := range s.loginFlows {
+	a.loginMu.Lock()
+	for fp, flow := range a.loginFlows {
 		if flow.Started.Before(cutoff) {
-			delete(s.loginFlows, fp)
+			delete(a.loginFlows, fp)
 		}
 	}
-	s.loginMu.Unlock()
+	a.loginMu.Unlock()
 }
 
 // applyReloadedConfig propagates a freshly loaded config to every live
@@ -312,29 +312,29 @@ func (s *Server) pruneLoginFlows() {
 // per-IP rate limiter. Every config-save/reload path must apply new
 // settings through this one method so no consumer is skipped — the
 // change-password reload historically dropped the rate limiter.
-func (s *Server) applyReloadedConfig(cfg *config.Config) {
-	s.cfg.Store(cfg)
-	s.reg.SetConfig(cfg)
-	s.pool.SetConfig(cfg)
-	s.rateLimiter.SetRate(cfg.RateLimitPerIP, cfg.RateLimitBurst)
+func (a *adminHandlers) applyReloadedConfig(cfg *config.Config) {
+	a.cfgStore(cfg)
+	a.reg.SetConfig(cfg)
+	a.pool.SetConfig(cfg)
+	a.rateLimiter.SetRate(cfg.RateLimitPerIP, cfg.RateLimitBurst)
 }
 
-func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
-	s.logger.Info("admin reload requested", "remote", remoteHost(r), "path", r.URL.Path)
+func (a *adminHandlers) handleReload(w http.ResponseWriter, r *http.Request) {
+	a.logfunc().Info("admin reload requested", "remote", remoteHost(r), "path", r.URL.Path)
 	// Serialize with the .env writers (config editor, token add/remove,
 	// mode switch): the reload re-reads the SAME files those writers mutate,
 	// and applying a load raced against a save could store stale config
 	// over a just-saved one (disk NEW, memory OLD).
-	s.adminSaveMu.Lock()
-	defer s.adminSaveMu.Unlock()
-	newCfg, err := config.Load(s.configPath)
+	a.adminSaveMu.Lock()
+	defer a.adminSaveMu.Unlock()
+	newCfg, err := config.Load(a.configPath)
 	if err != nil {
-		s.logger.Warn("admin reload failed", "remote", remoteHost(r), "path", r.URL.Path, "err", err)
-		s.writeJSONError(w, http.StatusInternalServerError, "failed to reload config: "+err.Error(), "internal_error", "reload_failed", 0)
+		a.logfunc().Warn("admin reload failed", "remote", remoteHost(r), "path", r.URL.Path, "err", err)
+		a.dash.RenderResult(w, http.StatusInternalServerError, false, "failed to reload config: "+err.Error(), "reload_failed")
 		return
 	}
-	s.applyReloadedConfig(&newCfg)
-	s.logger.Info("config reloaded successfully", "remote", remoteHost(r), "path", r.URL.Path,
+	a.applyReloadedConfig(&newCfg)
+	a.logfunc().Info("config reloaded successfully", "remote", remoteHost(r), "path", r.URL.Path,
 		"auth_tokens", len(newCfg.AuthTokens), "safe_mode", newCfg.SafeMode)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{

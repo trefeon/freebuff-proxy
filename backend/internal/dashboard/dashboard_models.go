@@ -31,7 +31,7 @@ type modelRow struct {
 func servedModels(reg *registry.Registry) []string {
 	out := make([]string, 0, 8)
 	for _, id := range reg.Models() {
-		if registry.IsServedModel(id) {
+		if modelcat.IsServed(id) {
 			out = append(out, id)
 		}
 	}
@@ -123,7 +123,7 @@ func (d *Dashboard) modelsData() modelsData {
 	// vendor catalog now carries god-only/eval rows (e.g. luna-es) that
 	// must never be presented as servable.
 	for _, id := range d.reg.Models() {
-		if !registry.IsServedModel(id) {
+		if !modelcat.IsServed(id) {
 			continue
 		}
 		row := modelRow{ID: id}

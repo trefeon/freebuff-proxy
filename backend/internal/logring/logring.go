@@ -7,11 +7,11 @@ package logring
 import (
 	"context"
 	"log/slog"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
+
+	"freebuff-proxy/backend/internal/telemetry"
 )
 
 // Entry is one retained log record, pre-formatted for display.
@@ -138,11 +138,11 @@ func (h *Handler) Handle(ctx context.Context, rec slog.Record) error {
 	prefix := strings.Join(h.groups, ".")
 	fields := make([]string, 0, len(h.attrs)+4)
 	for _, a := range h.attrs {
-		fields = append(fields, flatten(prefix, a)...)
+		fields = append(fields, telemetry.FlattenAttrs(prefix, []slog.Attr{a})...)
 	}
 	var flat []string
 	rec.Attrs(func(a slog.Attr) bool {
-		flat = append(flat, flatten(prefix, a)...)
+		flat = append(flat, telemetry.FlattenAttrs(prefix, []slog.Attr{a})...)
 		return true
 	})
 	fields = append(fields, flat...)
@@ -166,84 +166,4 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 	c.groups = append(append([]string{}, h.groups...), name)
 	c.next = h.next.WithGroup(name)
 	return &c
-}
-
-// flatten renders an attr subtree into "key=value" strings; group keys are
-// dotted (group.subkey=value) and empty-key groups are inlined.
-func flatten(prefix string, a slog.Attr) []string {
-	if a.Value.Kind() == slog.KindGroup {
-		// The group's own key extends the prefix ("http.status=200"); an
-		// empty key inlines the group, so children keep the current prefix
-		// with no extra separator.
-		key := prefix
-		if a.Key != "" {
-			key = a.Key
-			if prefix != "" {
-				key = prefix + "." + a.Key
-			}
-		}
-		var out []string
-		for _, child := range a.Value.Group() {
-			out = append(out, flatten(key, child)...)
-		}
-		return out
-	}
-	key := a.Key
-	if prefix != "" {
-		key = prefix + "." + key
-	}
-	return []string{key + "=" + formatAttr(a.Value)}
-}
-
-// formatAttr renders an attr value the way slog's text handler does: strings
-// raw (unless they need quoting — see quoteIfNeeded), everything else via
-// the text formatter.
-func formatAttr(v slog.Value) string {
-	switch v.Kind() {
-	case slog.KindString:
-		return quoteIfNeeded(v.String())
-	case slog.KindBool:
-		return strconv.FormatBool(v.Bool())
-	case slog.KindInt64:
-		return strconv.FormatInt(v.Int64(), 10)
-	case slog.KindUint64:
-		return strconv.FormatUint(v.Uint64(), 10)
-	case slog.KindFloat64:
-		return strconv.FormatFloat(v.Float64(), 'g', -1, 64)
-	case slog.KindDuration:
-		return v.Duration().String()
-	case slog.KindTime:
-		return v.Time().Format(time.RFC3339)
-	default:
-		return v.String()
-	}
-}
-
-// quoteIfNeeded quotes a string value that would break one-entry-per-line
-// rendering in the dashboard log viewer: a URL path or other attr value
-// with an embedded newline/carriage return — e.g. %0A/%0D-decoded from the
-// request line — would otherwise forge additional log lines inside a single
-// ring entry. Mirrors backend/internal/telemetry's quoteMessage for the control
-// characters (the file sink applies the same rule to \n/\r/tab/other
-// controls).
-func quoteIfNeeded(s string) string {
-	if needsQuote(s) {
-		return strconv.Quote(s)
-	}
-	return s
-}
-
-// needsQuote reports whether s contains control characters that would
-// corrupt one-entry-per-line rendering when written unquoted. Deliberately
-// NARROWER than telemetry's needsQuote: spaces and quotes alone are left
-// raw so common values ("30 minutes") keep their plain form — the ring is
-// structured ([]string fields), so only control characters can forge or
-// corrupt lines.
-func needsQuote(s string) bool {
-	for _, r := range s {
-		if unicode.IsControl(r) {
-			return true
-		}
-	}
-	return false
 }

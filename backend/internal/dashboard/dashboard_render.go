@@ -7,29 +7,46 @@ import (
 	"freebuff-proxy/backend/internal/phasetiming"
 )
 
-// RenderLogin renders the login page with an optional error message.
+// resultEnvelope is the single admin wire shape: every admin endpoint ships
+// {ok, message} with an optional machine-readable code (issue #289). The
+// server's /v1 protocol handlers keep their own wire error bodies; admin
+// never emits the {error:{message}} shape.
+type resultEnvelope struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+}
+
+// RenderResult writes the unified admin envelope at the given HTTP status.
+func (d *Dashboard) RenderResult(w http.ResponseWriter, status int, ok bool, message, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(resultEnvelope{OK: ok, Message: message, Code: code})
+}
+
+// RenderLogin renders the login response with an optional error message,
+// writing 401 when errMsg is non-empty (the login page is a 200 shell).
 func (d *Dashboard) RenderLogin(w http.ResponseWriter, r *http.Request, errMsg string) {
-	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
 	if errMsg != "" {
-		w.WriteHeader(http.StatusUnauthorized)
+		status = http.StatusUnauthorized
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": errMsg})
+	d.RenderResult(w, status, errMsg == "", errMsg, "")
 }
 
-// RenderRestricted renders the access-denied page as JSON.
+// RenderRestricted renders the access-denied response as JSON.
 func (d *Dashboard) RenderRestricted(w http.ResponseWriter, r *http.Request, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusForbidden)
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": msg})
+	d.RenderResult(w, http.StatusForbidden, false, msg, "access_denied")
 }
 
-// RenderConfigResult renders the response after a config save or token action.
+// RenderConfigResult renders the response after a config save or token
+// action (200 on success, 400 on rejection).
 func (d *Dashboard) RenderConfigResult(w http.ResponseWriter, r *http.Request, ok bool, message string) {
-	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
+		status = http.StatusBadRequest
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"ok": ok, "message": message})
+	d.RenderResult(w, status, ok, message, "")
 }
 
 // RenderTestResult appends one per-token outcome.

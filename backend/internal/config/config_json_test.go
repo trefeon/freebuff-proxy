@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"freebuff-proxy/backend/internal/clicreds"
 )
 
 func TestLoadFromFile(t *testing.T) {
@@ -323,9 +325,9 @@ func TestJSONExplicitEmptyAuthTokensBridge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load(path)
+	cfg, err := LoadOpts(path, LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadOpts: %v", err)
 	}
 	if len(cfg.AuthTokens) != 0 {
 		t.Errorf("AuthTokens = %v, want empty (explicit [] is bridge mode)", cfg.AuthTokens)

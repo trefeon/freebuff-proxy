@@ -3,16 +3,16 @@ package pool
 import (
 	"errors"
 	"fmt"
-	"time"
-
 	"freebuff-proxy/backend/internal/notify"
+	"freebuff-proxy/backend/internal/runs"
 	"freebuff-proxy/backend/internal/upstream"
+	"time"
 )
 
 // CooldownToken puts token in a cooldown window of duration d (auth-reject
 // recovery, e.g. runs.DefaultCooldown). Out-of-range tokens are ignored.
 func (p *Pool) CooldownToken(token int, d time.Duration) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return
 	}
@@ -25,14 +25,12 @@ func (p *Pool) CooldownToken(token int, d time.Duration) {
 // (issue #122), the event is also counted on the token's spend ledger —
 // the $ ceiling is server-enforced, so the ledger only records the event.
 func (p *Pool) CooldownTokenRateLimit(token int, rle *upstream.RateLimitError) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) || rle == nil {
 		return
 	}
 	(*toks)[token].runs.CooldownRateLimit(rle)
 	if rle.Status == "spend_limited" {
-		p.spendMu.Lock()
-		defer p.spendMu.Unlock()
 		p.recordSpendLimited(token)
 	}
 	p.recordMismatchEscalation(token+1, rle) // 1-based key: 0 is the bridge-shared window
@@ -45,7 +43,7 @@ func (p *Pool) CooldownTokenRateLimit(token int, rle *upstream.RateLimitError) {
 // 429 ip_capped; upstream itself is admission-only, not a quota reset).
 // Out-of-range tokens are ignored.
 func (p *Pool) CooldownTokenIpCapped(token int, ice *upstream.IpCappedError) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) || ice == nil {
 		return
 	}
@@ -56,7 +54,7 @@ func (p *Pool) CooldownTokenIpCapped(token int, ice *upstream.IpCappedError) {
 // Acquire surfaces 403 banned + resumes-at during the window) and fires the
 // token_banned webhook alert (issue #48, throttled per event type).
 func (p *Pool) CooldownTokenBan(token int, be *upstream.BanError) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) || be == nil {
 		return
 	}
@@ -76,7 +74,7 @@ func (p *Pool) CooldownTokenBan(token int, be *upstream.BanError) {
 // (remembered so Acquire surfaces the region-block error during the ~15m
 // window instead of re-hitting upstream).
 func (p *Pool) CooldownTokenCountryBlocked(token int, cbe *upstream.CountryBlockedError) {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) || cbe == nil {
 		return
 	}
@@ -157,6 +155,110 @@ func (p *Pool) notifyBan(tokenIndex int, model string) {
 		Message: "a FreeBuff token was classified banned upstream (403)"})
 }
 
+// classifyTarget selects the mode-specific recovery policy in
+// classifyAndCooldown (issue #260): pooled quarantines a terminal account
+// (banned / country_blocked / 401 invalid) while bridge evicts a dead token
+// on 401 and never quarantines (per-request client tokens are never marked
+// terminal).
+
+// classifiedError carries the classification result of one upstream error:
+// the mode-agnostic recovery policy is applied first (Cooldown*), and the
+// site-specific recovery (pooled quarantine vs bridge eviction, webhook
+// notify index/model, spend_limited ledger, quota fallback, bucket
+// aggregation) reads the flags at the calling site.
+type classifiedError struct {
+	authRejected   bool
+	rateLimited    *upstream.RateLimitError
+	ipCapped       *upstream.IpCappedError
+	banned         *upstream.BanError
+	countryBlocked *upstream.CountryBlockedError
+	limitedIp      *upstream.LimitedIpError
+	spendLimited   bool
+}
+
+// classifyAndCooldown runs the shared upstream-error classification cascade
+// against one entry's run manager (issue #260): asType(err) → the matching
+// runs.Cooldown* so the remembered error is surfaced on the next acquire.
+// The four inline cascade sites (leaseFromOrder ×2, AcquireBridge ×2) and
+// the chat-path wrappers (CooldownToken*/CooldownBridge*) all funnel here,
+// so classification cannot drift between the caller surfaces. Only the
+// mode-agnostic Cooldown* application lives here; the site-specific recovery
+// (pooled quarantine vs bridge eviction, webhook notify index/model,
+// spend_limited ledger, quota fallback, bucket aggregation) stays at each
+// caller using the returned classifiedError.
+func (p *Pool) classifyAndCooldown(runsMgr *runs.RunManager, err error) *classifiedError {
+	c := &classifiedError{}
+	if err == nil {
+		return c
+	}
+	if errors.Is(err, upstream.ErrAuthRejected) {
+		runsMgr.Cooldown(runs.DefaultCooldown)
+		c.authRejected = true
+	}
+	if rle := asRateLimit(err); rle != nil {
+		c.rateLimited = rle
+		c.spendLimited = rle.Status == "spend_limited"
+		runsMgr.CooldownRateLimit(rle)
+	}
+	if ice := asIpCapped(err); ice != nil {
+		c.ipCapped = ice
+		runsMgr.CooldownIpCapped(ice)
+	}
+	if be := asBan(err); be != nil {
+		c.banned = be
+		runsMgr.CooldownBan(be)
+	}
+	if cbe := asCountryBlocked(err); cbe != nil {
+		c.countryBlocked = cbe
+		runsMgr.CooldownCountryBlocked(cbe)
+	}
+	if lie := asLimitedIp(err); lie != nil {
+		c.limitedIp = lie
+	}
+	return c
+}
+
+// appendRateLimit adds rle to dst unless an equivalent error is already
+// present (error-string identity, matching the original inline dedup).
+func appendRateLimit(dst []*upstream.RateLimitError, rle *upstream.RateLimitError) []*upstream.RateLimitError {
+	for _, existing := range dst {
+		if existing.Error() == rle.Error() {
+			return dst
+		}
+	}
+	return append(dst, rle)
+}
+
+// appendIpCapped adds ice to dst unless an equivalent error is present.
+func appendIpCapped(dst []*upstream.IpCappedError, ice *upstream.IpCappedError) []*upstream.IpCappedError {
+	for _, existing := range dst {
+		if existing.Error() == ice.Error() {
+			return dst
+		}
+	}
+	return append(dst, ice)
+}
+
+// appendBan adds be to dst unless an equivalent error is present.
+func appendBan(dst []*upstream.BanError, be *upstream.BanError) []*upstream.BanError {
+	for _, existing := range dst {
+		if existing.Error() == be.Error() {
+			return dst
+		}
+	}
+	return append(dst, be)
+}
+
+// appendCountryBlock adds cbe to dst unless an equivalent error is present.
+func appendCountryBlock(dst []*upstream.CountryBlockedError, cbe *upstream.CountryBlockedError) []*upstream.CountryBlockedError {
+	for _, existing := range dst {
+		if existing.Error() == cbe.Error() {
+			return dst
+		}
+	}
+	return append(dst, cbe)
+}
+
 // mismatchEscalation is the issue #140 escalation guard's state for one
 // token: free_mode_invalid_agent_model 403s inside stormWindow mean the
 // registry is serving an id upstream retired — exactly how the v0.11.3-era
@@ -182,44 +284,15 @@ const (
 // RemoveTokenAt/RemoveLastToken reindex — so a pooled token never shares
 // its window with the bridge entries.
 func (p *Pool) recordMismatchEscalation(tokenIndex int, rle *upstream.RateLimitError) {
-	if rle == nil || rle.Status != "free_mode_invalid_agent_model" {
-		return
-	}
-	now := time.Now()
-	p.mismatchMu.Lock()
-	st := p.mismatch[tokenIndex]
-	// Drop hits older than the window.
-	kept := st.hits[:0]
-	for _, t := range st.hits {
-		if now.Sub(t) < mismatchWindow {
-			kept = append(kept, t)
-		}
-	}
-	st.hits = append(kept, now)
-	fire := false
-	if len(st.hits) >= mismatchThreshold && now.Sub(st.lastStorm) >= mismatchWindow {
-		st.lastStorm = now
-		fire = true
-	}
-	p.mismatch[tokenIndex] = st
-	p.mismatchMu.Unlock()
-
+	fire, model := p.roster.recordMismatch(tokenIndex, rle)
 	if !fire {
 		return
 	}
-	model := rle.Model // the refused model when the body carried one (fallback below)
 	p.notifyMu.Lock()
 	n := p.notify
 	p.notifyMu.Unlock()
 	if n == nil {
 		return
-	}
-	// The event's Model names the refused MODEL (rle.Model) when the
-	// upstream body carried one, falling back to the refusal code — the
-	// alert must never put "free_mode_invalid_agent_model" in the model
-	// slot.
-	if model == "" {
-		model = rle.Status
 	}
 	n.Send(notify.Event{Event: "agent_model_mismatch_escalation", TokenIndex: tokenIndex,
 		Model:   model,
@@ -231,7 +304,7 @@ func (p *Pool) recordMismatchEscalation(tokenIndex int, rle *upstream.RateLimitE
 // operator's explicit action to restore a token after appealing the account
 // upstream, so it also clears any terminal-quarantine marker.
 func (p *Pool) UnlockToken(token int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}
@@ -309,7 +382,7 @@ func (p *Pool) clearLiftedQuarantine(tok *tokenEntry) bool {
 // LockToken administratively excludes token from Acquire without clearing
 // its cooldown state (dashboard lock action).
 func (p *Pool) LockToken(token int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}
@@ -320,7 +393,7 @@ func (p *Pool) LockToken(token int) error {
 // UnlockLockToken clears the administrative lock on token so Acquire can
 // use it again (dashboard unlock-lock action).
 func (p *Pool) UnlockLockToken(token int) error {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}

@@ -745,7 +745,7 @@ func TestRemoveLastTokenRaceHammer(t *testing.T) {
 	p.retiredMu.Unlock()
 
 	// Current tokens hold no leaked inflight either.
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	for i, tok := range *toks {
 		if got := tok.runs.InflightCount(); got != 0 {
 			t.Errorf("current token %d leaked inflight = %d", i, got)
@@ -927,9 +927,9 @@ func TestDailyCapExactRetryAfter(t *testing.T) {
 
 	// Seed usage with a KNOWN oldest timestamp.
 	oldest := time.Now().Add(-2 * time.Hour)
-	p.usageMu.Lock()
-	p.msgsPerToken[0] = []time.Time{oldest}
-	p.usageMu.Unlock()
+	p.roster.mu.Lock()
+	(*p.roster.Load())[0].ledger.usage = []time.Time{oldest}
+	p.roster.mu.Unlock()
 
 	want := time.Until(oldest.Add(usageWindow))
 	got := p.usageResetIn(0)

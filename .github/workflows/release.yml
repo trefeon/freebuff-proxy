@@ -12,7 +12,11 @@ permissions:
 jobs:
   # Tag pushes bypass the branch- and PR-triggered CI runs, so gate the
   # release on the same hermetic suite ci.yml runs before GoReleaser can
-  # publish anything.
+  # publish anything: gofmt, plain + dashboard-tagged build, the
+  # dashboard-tagged test suites, race, modules verify. golangci-lint runs
+  # separately (lint.yml, via govet+staticcheck) but is also gated here so a
+  # tag push cannot release past a lint failure. The frontend job mirrors
+  # ci.yml's SPA build so a stale committed dashboard bundle also blocks.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -25,14 +29,61 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Test (race detector)
-        run: env -u AUTH_TOKENS -u ADMIN_TOKEN go test -race -timeout 10m ./backend/...
+      - name: Format
+        run: test -z "$(gofmt -l backend)"
+
+      - name: Build
+        run: go build ./backend/...
 
       - name: Build (dashboard embed)
         run: go build -tags dashboard ./backend/...
 
+      - name: Test (dashboard embed)
+        env:
+          AUTH_TOKENS: ""
+          ADMIN_TOKEN: ""
+        run: go test -tags dashboard -timeout 10m ./backend/internal/dashboard/... ./backend/internal/server/...
+
+      - name: Test (race detector)
+        run: env -u AUTH_TOKENS -u ADMIN_TOKEN go test -race -timeout 10m ./backend/...
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: v2.12
+
+  # Reproduce the embedded dashboard bundle from source and fail when the
+  # committed backend/internal/dashboard/dist is stale (mirrors ci.yml).
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
+      - run: npm run check
+        working-directory: frontend
+
+      - run: npm run build
+        working-directory: frontend
+
+      - name: Verify committed dashboard bundle is fresh
+        run: git diff --exit-code -- backend/internal/dashboard/dist
+
   release:
-    needs: test
+    needs: [test, frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

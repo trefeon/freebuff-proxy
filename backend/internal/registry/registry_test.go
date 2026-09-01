@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/modelcat"
 )
 
 // fileSource builds a file:// URL for a local fixture path (no network).
@@ -116,11 +117,12 @@ func TestFallbackMap(t *testing.T) {
 // (copied from reference/freebuff/common/src/constants, the RE-verified
 // installed CLI binary). This test parses that snapshot with the real parser
 // — the same code a live Refresh runs — and requires LoadFallback to produce
-// the identical model set, model→agent routing, and agent set. When upstream
-// adds or retires a model: refresh the pinned snapshot (copy the five files
-// from the vendored reference or CodebuffAI/freebuff main) AND update
-// fallbackAgents/fallbackRootByModel in the same change — this test fails on
-// drift, so a stale fallback can no longer ship silently.
+// the identical model set, model→agent routing, and agent set. The fallback
+// is now DERIVED at init from the embedded snapshot (issue #273), so when
+// upstream adds or retires a model only the pinned snapshot needs refreshing
+// (copy the five files from the vendored reference or CodebuffAI/freebuff
+// main); this test stays as the cross-check that the derivation matches a
+// live parse.
 func TestFallbackParityWithPinnedUpstream(t *testing.T) {
 	dir := filepath.Join("testdata", "upstream")
 	files := []string{"free-agents.ts", "freebuff-model-ids.ts", "freebuff-models.ts", "gemini.ts", "model-config.ts"}
@@ -925,15 +927,15 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"z-ai/glm-5.3-flash",
 		"mimo/mimo-v2.5",
 	}
-	if len(ServedModels) != 6 {
-		t.Fatalf("len(ServedModels) = %d, want exactly 6", len(ServedModels))
+	if len(modelcat.ServedMap()) != 6 {
+		t.Fatalf("len(modelcat.ServedMap()) = %d, want exactly 6", len(modelcat.ServedMap()))
 	}
 	for _, m := range wantModels {
-		if !ServedModels[m] {
+		if !modelcat.IsServed(m) {
 			t.Errorf("ServedModels missing %q", m)
 		}
-		if !IsServedModel(m) {
-			t.Errorf("IsServedModel(%q) = false, want true", m)
+		if !modelcat.IsServed(m) {
+			t.Errorf("modelcat.IsServed(%q) = false, want true", m)
 		}
 	}
 
@@ -954,11 +956,11 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"random/unsupported-model",
 	}
 	for _, m := range decommissioned {
-		if ServedModels[m] {
+		if modelcat.IsServed(m) {
 			t.Errorf("ServedModels contains decommissioned model %q", m)
 		}
-		if IsServedModel(m) {
-			t.Errorf("IsServedModel(%q) = true, want false", m)
+		if modelcat.IsServed(m) {
+			t.Errorf("modelcat.IsServed(%q) = true, want false", m)
 		}
 	}
 }
@@ -972,15 +974,15 @@ func TestStrictServedModelsPinned(t *testing.T) {
 // names the upstream default (GPT-5.6 Luna) as the replacement.
 func TestPausedModelPolicy(t *testing.T) {
 	for _, paused := range []string{"minimax/minimax-m3", "deepseek/deepseek-v4-pro", "stealth/ox-alpha"} {
-		if !IsPausedModel(paused) {
-			t.Errorf("IsPausedModel(%s) = false, want true", paused)
+		if !modelcat.IsPaused(paused) {
+			t.Errorf("modelcat.IsPaused(%s) = false, want true", paused)
 		}
-		if ServedModels[paused] {
+		if modelcat.IsServed(paused) {
 			t.Errorf("ServedModels contains paused model %s; requests would burn doomed admissions", paused)
 		}
 	}
-	if IsPausedModel("deepseek/deepseek-v4-flash") {
-		t.Error("IsPausedModel(deepseek/deepseek-v4-flash) = true, want false")
+	if modelcat.IsPaused("deepseek/deepseek-v4-flash") {
+		t.Error("modelcat.IsPaused(deepseek/deepseek-v4-flash) = true, want false")
 	}
 
 	// The catalog still recognizes paused ids so alias resolution/count_tokens work.
@@ -992,12 +994,12 @@ func TestPausedModelPolicy(t *testing.T) {
 		}
 	}
 
-	got := WithdrawnModelMessage("minimax/minimax-m3")
+	got := modelcat.WithdrawnModelMessage("minimax/minimax-m3")
 	want := "MiniMax M3 is no longer available in Freebuff. We recommend using GLM 5.3 Flash instead."
 	if got != want {
 		t.Errorf("WithdrawnModelMessage = %q, want %q (mirror freebuffWithdrawnModelMessage)", got, want)
 	}
-	if got := WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "GLM 5.3 Flash") {
+	if got := modelcat.WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "GLM 5.3 Flash") {
 		t.Errorf("WithdrawnModelMessage(ox-alpha) = %q, want GLM 5.3 Flash replacement", got)
 	}
 }

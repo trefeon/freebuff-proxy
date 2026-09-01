@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"freebuff-proxy/backend/internal/cli/setup"
 	"freebuff-proxy/backend/internal/egress"
 	"freebuff-proxy/backend/internal/testutil"
 )
@@ -62,7 +63,7 @@ func TestLifecycleSetupDoctorVersion(t *testing.T) {
 		_ = os.Setenv("USERPROFILE", home)
 		_ = os.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 		_ = os.Setenv("PATH", home)
-		runSetup(true)
+		setup.Run(true)
 		return
 
 	case "doctor":

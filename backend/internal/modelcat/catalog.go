@@ -191,6 +191,19 @@ func PausedReplacement(id string) string {
 	return ""
 }
 
+// WithdrawnModelMessage mirrors upstream freebuffWithdrawnModelMessage
+// (freebuff-models.ts:1685-1697): names the model asked for and what to use
+// instead — the client that sends this id is a released binary whose picker
+// still lists it, so "unavailable" alone leaves the user staring at a row
+// that looks fine and does not work.
+func WithdrawnModelMessage(id string) string {
+	replacement := PausedReplacement(id)
+	if replacement == "" {
+		return DisplayName(id) + " is no longer available in Freebuff."
+	}
+	return DisplayName(id) + " is no longer available in Freebuff. We recommend using " + DisplayName(replacement) + " instead."
+}
+
 // IsPremium reports whether id is in the shared daily premium pool
 // (FREEBUFF_PREMIUM_MODEL_IDS)
 func IsPremium(id string) bool {

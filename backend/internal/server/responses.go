@@ -99,7 +99,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 			"invalid responses request: "+err.Error(), "invalid_request_error", "invalid_json", 0)
 		return
 	}
-	normalized, _, err := convert.NormalizeRequestMapped(chatParams, model)
+	normalized, _, err := convert.NormalizeRequestMappedOpts(chatParams, model, s.convertOptions())
 	if err != nil {
 		s.writeJSONError(w, http.StatusBadRequest,
 			"request body must be a valid JSON object: "+err.Error(), "invalid_request_error", "invalid_json", 0)

@@ -122,7 +122,7 @@ func TestEntitledPoolTokenWithGlmPromo(t *testing.T) {
 	p := newTestPool(t, mock)
 
 	// Seed token 0 with active GlmPromo
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	(*toks)[0].session.Invalidate()
 	// Run a probe that populates GlmPromo
 	mock.GlmPromo = map[string]any{

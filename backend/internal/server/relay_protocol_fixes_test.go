@@ -27,6 +27,7 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/convert"
+	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/registry"
 	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/testutil"
@@ -609,16 +610,16 @@ func TestAnthropicStreamCloseOpenToolCallsIndexOrder(t *testing.T) {
 
 // TestAccessLogGateBounded pins the quiet-path gate cap: arbitrary distinct
 // paths (OPTIONS preflights, unknown-path 404s) must never grow the
-// process-global lastSeen map past maxAccessGateEntries.
+// per-Server lastSeen map past maxAccessGateEntries.
 func TestAccessLogGateBounded(t *testing.T) {
-	resetAccessLogGate()
-	t.Cleanup(resetAccessLogGate)
+	g := newAccessGates()
+	t.Cleanup(g.reset)
 	for i := range maxAccessGateEntries + 100 {
-		accessLogDue(fmt.Sprintf("/v1/opt-%d", i), time.Now())
+		g.accessLogDue(fmt.Sprintf("/v1/opt-%d", i), time.Now())
 	}
-	accessLogGate.mu.Lock()
-	n := len(accessLogGate.lastSeen)
-	accessLogGate.mu.Unlock()
+	g.logGate.mu.Lock()
+	n := len(g.logGate.lastSeen)
+	g.logGate.mu.Unlock()
 	if n > maxAccessGateEntries {
 		t.Fatalf("access gate map grew to %d entries, cap %d", n, maxAccessGateEntries)
 	}
@@ -629,11 +630,11 @@ func TestAccessLogGateBounded(t *testing.T) {
 // line per path — the quiet-class budget caps the total per window.
 func TestAccessNotFoundLogFloodSuppressed(t *testing.T) {
 	testutil.UnsetConfigEnv(t)
-	resetAccessLogGate()
-	t.Cleanup(resetAccessLogGate)
 	mock := testutil.NewMock()
 	defer mock.Close()
 	srv, sink := newLoggingServer(t, mock, nil)
+	srv.gates = newAccessGates()
+	t.Cleanup(func() { srv.gates.reset() })
 	h := srv.Handler()
 	for i := range maxQuietAccessLines + 140 {
 		rec := httptest.NewRecorder()
@@ -695,7 +696,7 @@ func TestProbeModelNeverGated(t *testing.T) {
 	if got == "" {
 		t.Fatal("probeModel returned empty for the fallback registry")
 	}
-	if !registry.ServedModels[got] {
+	if !modelcat.IsServed(got) {
 		t.Errorf("probeModel = %q, want a served model (never an alphabetically-first gated id)", got)
 	}
 	if got != session.DefaultFallbackModel {

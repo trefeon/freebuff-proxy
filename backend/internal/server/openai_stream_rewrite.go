@@ -10,24 +10,6 @@ import (
 // chunk with the served model. A chunk carrying no model field is left
 // untouched (the upstream OpenAI-compatible surface always includes it;
 // injecting into arbitrary frames would re-marshal every chunk). served ""
-// (relay driven directly without a lease) disables the rewrite entirely.
-func rewriteChatChunkModel(clean []byte, served string) []byte {
-	if served == "" || !bytes.Contains(clean, []byte(`"model":`)) {
-		return clean
-	}
-	var chunk map[string]any
-	if json.Unmarshal(clean, &chunk) != nil {
-		return clean
-	}
-	if cur, _ := chunk["model"].(string); cur == served {
-		return clean
-	}
-	chunk["model"] = served
-	if b, err := json.Marshal(chunk); err == nil {
-		return b
-	}
-	return clean
-}
 
 // trackToolCallIndexes records per-stream tool-call state on every chunk
 // BEFORE StripEndTurnToolCalls deletes the end_turn entries (tracking after
@@ -36,43 +18,6 @@ func rewriteChatChunkModel(clean []byte, served string) []byte {
 // but an empty name, so they are only recognizable by index — and any real
 // named call flips seenRealToolCalls so the terminal finish_reason rewrite
 // never downgrades a genuine tool-call turn to "stop". The cheap substring
-// probe keeps non-tool chunks unmarshaled.
-func trackToolCallIndexes(clean []byte, endTurnCallIndexes map[int]bool, seenRealToolCalls *bool) {
-	if !bytes.Contains(clean, []byte(`"tool_calls"`)) {
-		return
-	}
-	var chunk map[string]any
-	if json.Unmarshal(clean, &chunk) != nil {
-		return
-	}
-	if choices, ok := chunk["choices"].([]any); ok {
-		for _, raw := range choices {
-			choice, _ := raw.(map[string]any)
-			if choice == nil {
-				continue
-			}
-			delta, _ := choice["delta"].(map[string]any)
-			if delta == nil {
-				continue
-			}
-			tcs, _ := delta["tool_calls"].([]any)
-			for _, tc := range tcs {
-				tcMap, _ := tc.(map[string]any)
-				if tcMap == nil {
-					continue
-				}
-				fn, _ := tcMap["function"].(map[string]any)
-				if name, _ := fn["name"].(string); name == "end_turn" {
-					if i, ok := tcMap["index"].(float64); ok {
-						endTurnCallIndexes[int(i)] = true
-					}
-				} else if name != "" {
-					*seenRealToolCalls = true
-				}
-			}
-		}
-	}
-}
 
 // dropEndTurnContinuations removes delta.tool_calls fragments whose index
 // belongs to an already-stripped end_turn call. Upstream models emit a
@@ -158,37 +103,6 @@ func dropEndTurnContinuationsInChunk(chunk map[string]any, endTurnCallIndexes ma
 // carries the role in the first chunk of a chat completion stream and some
 // clients assemble message.role from it. Idempotent per stream via
 // roleSent; chunks that already carry role (or any later chunk) pass
-// through untouched.
-func ensureChatChunkRole(clean []byte, roleSent *bool) []byte {
-	if *roleSent || !bytes.Contains(clean, []byte(`"delta"`)) {
-		return clean
-	}
-	var chunk map[string]any
-	if json.Unmarshal(clean, &chunk) != nil {
-		return clean
-	}
-	choices, _ := chunk["choices"].([]any)
-	if len(choices) == 0 {
-		return clean
-	}
-	choice, _ := choices[0].(map[string]any)
-	if choice == nil {
-		return clean
-	}
-	delta, _ := choice["delta"].(map[string]any)
-	if delta == nil {
-		return clean
-	}
-	*roleSent = true
-	if _, has := delta["role"]; has {
-		return clean
-	}
-	delta["role"] = "assistant"
-	if b, err := json.Marshal(chunk); err == nil {
-		return b
-	}
-	return clean
-}
 
 // bumpXMLCallIndex raises the per-stream synthetic tool-call index floor
 // past the largest native tool-call index in tcs (the chunk's existing

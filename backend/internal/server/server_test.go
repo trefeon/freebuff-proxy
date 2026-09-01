@@ -15,11 +15,8 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/pool"
-	"freebuff-proxy/backend/internal/registry"
 	"freebuff-proxy/backend/internal/server"
-	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/testutil"
-	"freebuff-proxy/backend/internal/upstream"
 )
 
 // modelA must map to an agent with EXCLUSIVE ownership in the registry
@@ -37,49 +34,11 @@ func newTestServer(t *testing.T, apiKeys []string, mocks ...*testutil.MockUpstre
 // enabling TRANSIENT_RETRIES for retry/metrics tests).
 func newTestServerCfg(t *testing.T, apiKeys []string, mut func(*config.Config), mocks ...*testutil.MockUpstream) (*httptest.Server, *pool.Pool) {
 	t.Helper()
-	cfg := &config.Config{
-		AuthTokens:         make([]string, len(mocks)),
-		RotationInterval:   time.Hour,
-		RequestTimeout:     15 * time.Minute,
-		SessionCallTimeout: 5 * time.Second,
-		RegistryRefresh:    6 * time.Hour,
-		UpstreamBaseURL:    "https://www.codebuff.com",
-		APIKeys:            apiKeys,
-		LogAccess:          true,
-		DashboardEnabled:   true,
-		// Dev tools default off in production (DEVTOOLS_ENABLED); the test
-		// stack exercises the smoke/playground surfaces, so keep them on
-		// unless a test explicitly flips it (S-05 gate tests set false).
-		DevToolsEnabled: true,
-		AdminToken:      config.DefaultAdminToken,
-		QuotaFallbackModels: map[string]string{
-			"deepseek/deepseek-v4-flash": "mimo/mimo-v2.5",
-			"z-ai/glm-5.2":               "deepseek/deepseek-v4-flash",
-		},
-	}
-	if mut != nil {
-		mut(cfg)
-	}
-	clients := make([]*upstream.Client, 0, len(mocks))
-	sessions := make([]*session.Manager, 0, len(mocks))
-	for i, mock := range mocks {
-		cfg.AuthTokens[i] = fmt.Sprintf("tok-%d", i)
-		clientCfg := *cfg
-		clientCfg.UpstreamBaseURL = mock.URL()
-		client, err := upstream.New(cfg.AuthTokens[i], &clientCfg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		clients = append(clients, client)
-		sessions = append(sessions, session.NewManager(client))
-	}
-	reg := registry.New(cfg, nil)
-	reg.LoadFallback()
-	p, err := pool.New(cfg, clients, sessions, reg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := server.New(cfg, p, reg, nil, nil, "")
+	// The shared stack defaults AdminToken unset (open mode) so
+	// dashboard/auth tests control it; the convenience wrappers pin the
+	// production default like the old fixtures did.
+	mut = chainMut(func(c *config.Config) { c.AdminToken = config.DefaultAdminToken }, mut)
+	srv, p := server.NewTestServerStack(t, apiKeys, mocks, mut, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, p
@@ -669,5 +628,18 @@ func TestChatClientIDStableAcrossRun(t *testing.T) {
 	}
 	if id1 != id2 {
 		t.Errorf("client_id = %q then %q on run %q, want one id per run (fanout shape otherwise)", id1, id2, run1)
+	}
+}
+
+// chainMut composes config mutation hooks (issue #256): the first, then the
+// second — nil-safe.
+func chainMut(first, second func(*config.Config)) func(*config.Config) {
+	return func(c *config.Config) {
+		if first != nil {
+			first(c)
+		}
+		if second != nil {
+			second(c)
+		}
 	}
 }

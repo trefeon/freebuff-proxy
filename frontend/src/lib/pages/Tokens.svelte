@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     LogIn,
     Plus,
@@ -8,24 +8,23 @@
   } from '@lucide/svelte';
   import Button from '../components/Button.svelte';
   import Card from '../components/Card.svelte';
-  import Field from '../components/Field.svelte';
   import Alert from '../components/Alert.svelte';
-  import EmptyState from '../components/EmptyState.svelte';
   import CopyButton from '../components/CopyButton.svelte';
   import PageHeader from '../components/PageHeader.svelte';
-  import TokenCard from '../components/TokenCard.svelte';
-  import TokenCardMobile from '../components/TokenCardMobile.svelte';
+  import BridgeTokenCard from '../components/BridgeTokenCard.svelte';
+  import TokenTable from './tokens/TokenTable.svelte';
   import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
   import { adminApi, adminActions, tokenActions } from '../api/paths.js';
-  import { usePolling } from '../utils/polling.js';
-  import { useEventStream } from '../utils/events.js';
+  import { isDevToolsEnabled } from '../utils/devtools.js';
+  import { tokensData as tokensStore, tokensError as tokensErrorStore, ensureTokensStore, refreshTokens } from '../stores/tokens.js';
   import { getEnvValue, setEnvValue } from '../utils/env.js';
   import { tr } from '../i18n.js';
 
   let data = $state(null);
   let loading = $state(true);
   let error = $state('');
-  let unsubEvents = null;
+  let unsubStore = null;
+  let unsubErr = null;
 
   // Add-token form
   let newToken = $state('');
@@ -77,22 +76,18 @@
         newToken.trim().length >= 10
   );
 
-  async function fetchData() {
-    try {
-      data = await fetchAPI(adminApi.tokens);
-      // Seed the per-token spawn-model map so no TokenCard binding ever sees
-      // undefined — Svelte 5 rejects bind:spawnModel={undefined} for a prop
-      // with a fallback (props_invalid_value) and unmounts the table.
-      (data?.tokens ?? []).forEach((t, i) => {
-        const idx = t.index ?? i;
-        if (!(idx in spawnModels)) spawnModels[idx] = '';
-      });
-      error = '';
-    } catch (e) {
-      error = e.message || $tr('Failed to fetch tokens');
-    } finally {
-      loading = false;
-    }
+  function applyTokens(v) {
+    if (!v) return;
+    data = v;
+    // Seed the per-token spawn-model map so no TokenCard binding ever sees
+    // undefined — Svelte 5 rejects bind:spawnModel={undefined} for a prop
+    // with a fallback (props_invalid_value) and unmounts the table.
+    (v?.tokens ?? []).forEach((t, i) => {
+      const idx = t.index ?? i;
+      if (!(idx in spawnModels)) spawnModels[idx] = '';
+    });
+    error = '';
+    loading = false;
   }
 
   async function addToken(e) {
@@ -105,7 +100,7 @@
       actionMessage = result.message || (actionOK ? $tr('Token added successfully') : $tr('Failed to add token'));
       if (actionOK) {
         newToken = '';
-        fetchData();
+        refreshTokens();
       }
     } catch (e) {
       actionOK = false;
@@ -122,7 +117,7 @@
       const result = await postAPI(url, body || undefined);
       actionOK = result.ok !== false;
       actionMessage = result.message || (actionOK ? $tr('Action completed') : $tr('Action failed'));
-      fetchData();
+      refreshTokens();
     } catch (e) {
       actionOK = false;
       actionMessage = e.message || $tr('Network error executing action');
@@ -199,7 +194,7 @@
                 type: 'success',
               };
               oauthStarting = false;
-              fetchData();
+              refreshTokens();
             } else if (pollData.status === 'error') {
               clearInterval(oauthTimer);
               oauthStatus = {
@@ -229,34 +224,39 @@
     expandedToken = expandedToken === idx ? null : idx;
   }
 
-  usePolling(fetchData, 10000);
-  const tick = setInterval(() => { now = Date.now(); }, 1000);
-  onMount(async () => {
-    unsubEvents = useEventStream({
-      onTokens: (freshData) => {
-        data = freshData;
+  onMount(() => {
+    // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
+    // #292); this page renders from the cached snapshot and refreshes the
+    // store after every mutation.
+    const release = ensureTokensStore();
+    unsubStore = tokensStore.subscribe(applyTokens);
+    unsubErr = tokensErrorStore.subscribe((err) => {
+      if (err) {
+        error = err;
         loading = false;
-        error = '';
-      },
+      }
     });
-    try {
-      const cfgRes = await fetchAPI(adminApi.config);
-      const envContent = cfgRes?.env_content || '';
-      const val = (getEnvValue(envContent, 'DEVTOOLS_ENABLED') || '').toLowerCase();
-      devToolsEnabled = val === 'true' || val === '1';
+    const tick = setInterval(() => { now = Date.now(); }, 1000);
+    (async () => {
+      try {
+        const cfgRes = await fetchAPI(adminApi.config);
+        const envContent = cfgRes?.env_content || '';
+        devToolsEnabled = isDevToolsEnabled(envContent);
 
-      const rotVal = (getEnvValue(envContent, 'TOKEN_ROTATION') || 'drain').toLowerCase();
-      tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
-    } catch {
-      devToolsEnabled = false;
-      tokenRotation = 'drain';
-    }
-  });
-
-  onDestroy(() => {
-    unsubEvents?.();
-    clearInterval(oauthTimer);
-    clearInterval(tick);
+        const rotVal = (getEnvValue(envContent, 'TOKEN_ROTATION') || 'drain').toLowerCase();
+        tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
+      } catch {
+        devToolsEnabled = false;
+        tokenRotation = 'drain';
+      }
+    })();
+    return () => {
+      release();
+      unsubStore?.();
+      unsubErr?.();
+      clearInterval(tick);
+      clearInterval(oauthTimer);
+    };
   });
 </script>
 
@@ -269,7 +269,7 @@
     {/if}
     {#if error}
       <Alert tone="error" title={error}>
-        <Button variant="ghost" size="sm" onclick={() => { error = ''; fetchData(); }}>
+        <Button variant="ghost" size="sm" onclick={() => { error = ''; refreshTokens(); }}>
           {$tr('Retry')}
         </Button>
       </Alert>
@@ -436,96 +436,24 @@
       </div>
     </Card>
 
-    <!-- Pool Tokens — friendly card grid (replaces dense table) -->
-    <Card
-      title={$tr('Pool Tokens')}
-      description={data ? $tr('{count} pooled token(s) · Tap a card to see session & quota details', { count: data.token_count || 0 }) : $tr('Tap a card to see session & quota details')}
-    >
-      {#if loading}
-        <div class="flex flex-col gap-3">
-          <div class="skeleton skeleton-text w-1/3"></div>
-          <div class="skeleton skeleton-line"></div>
-          <div class="skeleton skeleton-line"></div>
-          <div class="skeleton skeleton-line"></div>
-          <div class="skeleton skeleton-line"></div>
-        </div>
-      {:else if error}
-        <EmptyState
-          title={$tr('Could not load tokens')}
-          description={error}
-        >
-          {#snippet action()}
-            <Button variant="secondary" onclick={() => { error = ''; fetchData(); }}>
-              {$tr('Retry')}
-            </Button>
-          {/snippet}
-        </EmptyState>
-      {:else if !data?.tokens || data.tokens.length === 0}
-        <EmptyState
-          title={$tr('No tokens in pool')}
-          description={$tr('Add one above or use Device Login to generate credentials via browser.')}
-        />
-      {:else}
-        <!-- Desktop: table (md+) -->
-        <div class="hidden md:block overflow-x-auto">
-          <table class="fp-table w-full min-w-[640px]">
-            <thead>
-              <tr>
-                <th class="w-8"></th>
-                <th>{$tr('Token')}</th>
-                <th>{$tr('Status')}</th>
-                <th>{$tr('Instance')}</th>
-                <th class="num">{$tr('Cooldown')}</th>
-                <th class="text-right">{$tr('Actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each data.tokens as token, i (token.index ?? i)}
-                {@const idx = token.index ?? i}
-                <TokenCard
-                  {token}
-                  {idx}
-                  totalTokens={(data?.tokens ?? []).length}
-                  expanded={expandedToken === idx}
-                  bind:spawnModel={spawnModels[idx]}
-                  {actionPending}
-                  {now}
-                  {devToolsEnabled}
-                  onToggle={() => toggleExpand(idx)}
-                  onAction={(action) => handleTokenAction(token, idx, action)}
-                  onSpawn={(model) => handleSpawn(idx, model)}
-                  onRefresh={(action) => handleRefresh(idx, action)}
-                  onDropSession={() => handleDropSession(idx)}
-                  onSwap={handleSwap}
-                />
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        <!-- Mobile: stacked cards (< md) — no horizontal scrolling -->
-        <div class="md:hidden flex flex-col gap-3 p-4">
-          {#each data.tokens as token, i (token.index ?? i)}
-            {@const idx = token.index ?? i}
-            <TokenCardMobile
-              {token}
-              {idx}
-              totalTokens={(data?.tokens ?? []).length}
-              expanded={expandedToken === idx}
-              bind:spawnModel={spawnModels[idx]}
-              {actionPending}
-              {now}
-              {devToolsEnabled}
-              onToggle={() => toggleExpand(idx)}
-              onAction={(action) => handleTokenAction(token, idx, action)}
-              onSpawn={(model) => handleSpawn(idx, model)}
-              onRefresh={(action) => handleRefresh(idx, action)}
-              onDropSession={() => handleDropSession(idx)}
-              onSwap={handleSwap}
-            />
-          {/each}
-        </div>
-      {/if}
-    </Card>
+    <TokenTable
+      tokens={data?.tokens ?? []}
+      tokenCount={data?.token_count ?? 0}
+      {loading}
+      {error}
+      {expandedToken}
+      {actionPending}
+      {now}
+      {devToolsEnabled}
+      bind:spawnModels
+      onToggle={toggleExpand}
+      onAction={handleTokenAction}
+      onSpawn={handleSpawn}
+      onRefresh={handleRefresh}
+      onDropSession={handleDropSession}
+      onSwap={handleSwap}
+      onRetry={() => { error = ''; refreshTokens(); }}
+    />
     {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
       <Card
         title={$tr('Bridge Clients')}

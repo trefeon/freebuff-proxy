@@ -152,23 +152,11 @@ type Manager struct {
 	// model (issue #158); entry.until = min(next window opening, now+TTL).
 	unavailableTTL   time.Duration
 	modelUnavailable map[string]modelUnavailableEntry
-	// savedQuota preserves the most recent non-nil quota map across
-	// invalidation/re-admission cycles (issue #146).  When commit(nil)
-	// drops the cached state, the quota map is stashed here; a later
-	// commit(non-nil) without fresh quota restores it so the dashboard
-	// quota table stays visible between quota-carrying responses.
-	savedQuota map[string]upstream.ModelQuota
-	// savedRemainingMs / savedReferral mirror the quota/glmPromo stash (issue
-	// #146/#178): they survive invalidation so the dashboard keeps showing the
-	// session countdown and referral banner between quota-carrying responses.
-	savedRemainingMs int64
-	savedReferral    *upstream.SessionReferral
-	// savedGlmPromo preserves the last glmPromo block across
-	// invalidation/re-admission cycles, mirroring savedQuota (issue #178):
-	// the GLM promo quota row must stay visible while the session is
-	// between quota-carrying responses.
-	savedGlmPromo   string
-	savedAccessTier string
+	// snap holds the manager's dashboard-resilience / observability state
+	// (issue #267): the saved fields that keep the dashboard quota table
+	// between quota-carrying responses, and the rolling recorders that feed
+	// the re-admit storm log. Guarded by mu like the rest of the manager.
+	snap snapshotState
 
 	// adopt is the issue #97 CLI-session adoption mode (ADOPT_CLI_SESSION):
 	// nil (default) = create sessions normally. When set, the manager adopts
@@ -180,15 +168,6 @@ type Manager struct {
 	// re-admit storm detector deterministically. Defaults to time.Now.
 	now func() time.Time
 
-	// invalidationEvents is the rolling stormWindow of terminal session
-	// events (timestamps + reason) feeding the re-admit storm detector
-	// reAdmitTriggers records pre-emptive re-admit trigger times so
-	// a storm summary can report how many daily slots the burst burned;
-	// lastStormAt suppresses repeat summaries until a quiet window passes.
-	invalidationEvents []invalidationEvent
-	reAdmitTriggers    []time.Time
-	lastStormAt        time.Time
-
 	// modelLocked tallies model-lock release events keyed by from → to
 	// model pair (issue #160): every model_locked admission releases the
 	// old slot and re-admits with the requested model, so the pair counts
@@ -196,6 +175,23 @@ type Manager struct {
 	// other lock while recording).
 	modelLockedMu sync.Mutex
 	modelLocked   map[string]map[string]int64
+}
+
+// snapshotState is the Manager's dashboard-resilience / observability state
+// (issue #267): the saved fields that keep the dashboard quota table between
+// quota-carrying responses, and the rolling recorders that feed the re-admit
+// storm log. It is owned by the Manager and guarded by mu, but separated
+// from the core cachedState + single-flight lifecycle so every new dashboard
+// field has a single home.
+type snapshotState struct {
+	savedQuota         map[string]upstream.ModelQuota
+	savedRemainingMs   int64
+	savedReferral      *upstream.SessionReferral
+	savedGlmPromo      string
+	savedAccessTier    string
+	invalidationEvents []invalidationEvent
+	reAdmitTriggers    []time.Time
+	lastStormAt        time.Time
 }
 
 // invalidationEvent is one terminal session event in the re-admit storm
@@ -295,48 +291,48 @@ func (m *Manager) commit(cs *cachedState) {
 		// Stash the quota map before dropping state so it survives
 		// invalidation (commit(nil)) and later re-admission (issue #146).
 		if m.state.quotaByModel != nil {
-			m.savedQuota = m.state.quotaByModel
+			m.snap.savedQuota = m.state.quotaByModel
 		}
 		// Stash the glmPromo block the same way (issue #178): it survives
 		// invalidation so the GLM promo row stays on the dashboard between
 		// quota-carrying responses.
 		if m.state.glmPromo != "" {
-			m.savedGlmPromo = m.state.glmPromo
+			m.snap.savedGlmPromo = m.state.glmPromo
 		}
 		// Stash the server-authoritative countdown and referral block the same
 		// way, so the dashboard keeps them across quota-carrying cycles.
 		if m.state.remainingMs > 0 {
-			m.savedRemainingMs = m.state.remainingMs
+			m.snap.savedRemainingMs = m.state.remainingMs
 		}
 		if m.state.referral != nil {
-			m.savedReferral = m.state.referral
+			m.snap.savedReferral = m.state.referral
 		}
 		if m.state.accessTier != "" {
-			m.savedAccessTier = m.state.accessTier
+			m.snap.savedAccessTier = m.state.accessTier
 		}
 	}
 	// Restore the previously-seen quota map when the new state omits
 	// rateLimitsByModel (the upstream intermittently drops the field on
 	// re-admission or compact polls — issue #146).  This keeps the
 	// dashboard quota table visible between quota-carrying responses.
-	if cs != nil && cs.quotaByModel == nil && m.savedQuota != nil {
-		cs.quotaByModel = m.savedQuota
+	if cs != nil && cs.quotaByModel == nil && m.snap.savedQuota != nil {
+		cs.quotaByModel = m.snap.savedQuota
 	}
 	// Restore the previously-seen glmPromo block when the new state omits
 	// it (issue #178), mirroring the quota-map restore above.
-	if cs != nil && cs.glmPromo == "" && m.savedGlmPromo != "" {
-		cs.glmPromo = m.savedGlmPromo
+	if cs != nil && cs.glmPromo == "" && m.snap.savedGlmPromo != "" {
+		cs.glmPromo = m.snap.savedGlmPromo
 	}
 	// Restore the countdown and referral the same way when the new state
 	// omits them.
-	if cs != nil && cs.accessTier == "" && m.savedAccessTier != "" {
-		cs.accessTier = m.savedAccessTier
+	if cs != nil && cs.accessTier == "" && m.snap.savedAccessTier != "" {
+		cs.accessTier = m.snap.savedAccessTier
 	}
-	if cs != nil && cs.remainingMs == 0 && m.savedRemainingMs > 0 {
-		cs.remainingMs = m.savedRemainingMs
+	if cs != nil && cs.remainingMs == 0 && m.snap.savedRemainingMs > 0 {
+		cs.remainingMs = m.snap.savedRemainingMs
 	}
-	if cs != nil && cs.referral == nil && m.savedReferral != nil {
-		cs.referral = m.savedReferral
+	if cs != nil && cs.referral == nil && m.snap.savedReferral != nil {
+		cs.referral = m.snap.savedReferral
 	}
 	m.state = cs
 	if m.store != nil && m.key != "" {
@@ -563,9 +559,9 @@ func (m *Manager) Snapshot() SessionSnapshot {
 	defer m.mu.Unlock()
 	if m.state == nil {
 		var quota map[string]QuotaSnapshot
-		if len(m.savedQuota) > 0 {
-			quota = make(map[string]QuotaSnapshot, len(m.savedQuota))
-			for modelID, q := range m.savedQuota {
+		if len(m.snap.savedQuota) > 0 {
+			quota = make(map[string]QuotaSnapshot, len(m.snap.savedQuota))
+			for modelID, q := range m.snap.savedQuota {
 				quota[modelID] = QuotaSnapshot{
 					Model:       q.Model,
 					Limit:       q.Limit,
@@ -581,10 +577,10 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		return SessionSnapshot{
 			Refreshing:   m.refreshing,
 			QuotaByModel: quota,
-			GlmPromo:     m.savedGlmPromo,
-			RemainingMs:  m.savedRemainingMs,
-			Referral:     m.savedReferral,
-			AccessTier:   m.savedAccessTier,
+			GlmPromo:     m.snap.savedGlmPromo,
+			RemainingMs:  m.snap.savedRemainingMs,
+			Referral:     m.snap.savedReferral,
+			AccessTier:   m.snap.savedAccessTier,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -637,8 +633,8 @@ func (m *Manager) HasGlmEntitlement() bool {
 }
 
 func (m *Manager) hasGlmEntitlementLocked() bool {
-	quota := m.savedQuota
-	promo := m.savedGlmPromo
+	quota := m.snap.savedQuota
+	promo := m.snap.savedGlmPromo
 	if m.state != nil {
 		if m.state.quotaByModel != nil {
 			quota = m.state.quotaByModel
@@ -685,31 +681,31 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if st.GlmPromo != "" {
-		m.savedGlmPromo = st.GlmPromo
+		m.snap.savedGlmPromo = st.GlmPromo
 		if m.state != nil {
 			m.state.glmPromo = st.GlmPromo
 		}
 	}
 	if len(st.RateLimitsByModel) > 0 {
-		m.savedQuota = st.RateLimitsByModel
+		m.snap.savedQuota = st.RateLimitsByModel
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel
 		}
 	}
 	if st.RemainingMs > 0 {
-		m.savedRemainingMs = st.RemainingMs
+		m.snap.savedRemainingMs = st.RemainingMs
 		if m.state != nil {
 			m.state.remainingMs = st.RemainingMs
 		}
 	}
 	if st.Referral != nil {
-		m.savedReferral = st.Referral
+		m.snap.savedReferral = st.Referral
 		if m.state != nil {
 			m.state.referral = st.Referral
 		}
 	}
 	if st.AccessTier != "" {
-		m.savedAccessTier = st.AccessTier
+		m.snap.savedAccessTier = st.AccessTier
 		if m.state != nil {
 			m.state.accessTier = st.AccessTier
 		}

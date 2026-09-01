@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/upstream/login"
 )
 
 // loginCallTimeout bounds each login HTTP call (code request, status poll,
@@ -111,29 +112,29 @@ type CLILoginStatus struct {
 // StartCLILogin begins the headless GitHub OAuth login with the stable
 // machine-derived fingerprint (reference account_login.go startGitHubLoginWithProfile).
 func (c *Client) StartCLILogin(ctx context.Context) (*CLILoginCode, error) {
-	return c.StartCLILoginWithFingerprint(ctx, generateFingerprintID())
+	return c.StartCLILoginWithFingerprint(ctx, login.GenerateFingerprintID())
 }
 
 // StartCLILoginIsolated begins the login with a fresh, random "enhanced-"
 // fingerprint (mirroring gen-freebuff-token.sh). Used by the dashboard login
 // wizard so multiple accounts added to a pool are not correlated by a shared hardware identifier.
 func (c *Client) StartCLILoginIsolated(ctx context.Context) (*CLILoginCode, error) {
-	return c.StartCLILoginWithFingerprint(ctx, GenerateIsolatedFingerprintID())
+	return c.StartCLILoginWithFingerprint(ctx, login.GenerateIsolatedFingerprintID())
 }
 
 // StartCLILoginWithFingerprint begins the login with an explicit fingerprintId.
 func (c *Client) StartCLILoginWithFingerprint(ctx context.Context, fingerprintID string) (*CLILoginCode, error) {
 	if fingerprintID == "" {
-		fingerprintID = generateFingerprintID()
+		fingerprintID = login.GenerateFingerprintID()
 	}
 	payload, _ := json.Marshal(map[string]any{"fingerprintId": fingerprintID})
 	req, err := c.authLoginRequest(ctx, http.MethodPost, "/api/auth/cli/code", payload)
 	if err != nil {
 		return nil, err
 	}
-	resp, cancel, err := c.do(req, loginCallTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("upstream: start login: %w", err)
+	resp, cancel, classErr := c.do(req, loginCallTimeout)
+	if classErr != nil && resp == nil {
+		return nil, fmt.Errorf("upstream: start login: %w", classErr)
 	}
 	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
@@ -141,7 +142,7 @@ func (c *Client) StartCLILoginWithFingerprint(ctx context.Context, fingerprintID
 	if err != nil {
 		return nil, fmt.Errorf("upstream: read login code response: %w", err)
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if classErr != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("upstream: start login failed: status %d: %s", resp.StatusCode, truncate(string(raw), 200))
 	}
 	var decoded struct {
@@ -208,21 +209,23 @@ func (c *Client) PollCLILogin(ctx context.Context, code *CLILoginCode) (*CLILogi
 		return nil, fmt.Errorf("upstream: build login status request: %w", err)
 	}
 	req.Header.Set("User-Agent", bunUserAgent)
-	resp, cancel, err := c.do(req, loginCallTimeout)
-	if err != nil {
+	resp, cancel, classErr := c.do(req, loginCallTimeout)
+	if classErr != nil && resp == nil {
 		// Transient transport failure: login-flow.ts logs and keeps polling
 		// through network errors — return pending so the caller retries
 		// until its 5-minute deadline (#125).
-		slog.Warn("login status poll: transient transport error, will retry", "err", err)
+		slog.Warn("login status poll: transient transport error, will retry", "err", classErr)
 		return &CLILoginStatus{}, nil
 	}
 	defer cancel()
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 500 {
-		// Transient upstream error: login-flow.ts keeps polling on any
-		// non-401 status — return pending (#125).
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		slog.Warn("login status poll: transient upstream status, will retry", "status", resp.StatusCode, "body", truncate(string(raw), 200))
+	if classErr != nil {
+		// Classified >=400 response: a 5xx is transient upstream (warn +
+		// pending); a 401 pending needs no warning. Both keep polling.
+		if resp.StatusCode >= 500 {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+			slog.Warn("login status poll: transient upstream status, will retry", "status", resp.StatusCode, "body", truncate(string(raw), 200))
+		}
 		return &CLILoginStatus{}, nil
 	}
 	if resp.StatusCode != http.StatusOK {

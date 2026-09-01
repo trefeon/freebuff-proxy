@@ -85,7 +85,7 @@ func premiumSnapshotFromQuotaMapAt(m map[string]session.QuotaSnapshot, now time.
 }
 
 func (p *Pool) PremiumQuotaForToken(idx int) *PremiumQuotaSnapshot {
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if toks == nil || idx < 0 || idx >= len(*toks) {
 		return nil
 	}

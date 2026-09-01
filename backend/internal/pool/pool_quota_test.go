@@ -278,16 +278,14 @@ func TestSetConfigAppendsNewTokens(t *testing.T) {
 	if got := p.TokenCount(); got != 2 {
 		t.Fatalf("TokenCount = %d, want 2 after appended AUTH_TOKENS", got)
 	}
-	cur := (*p.toks.Load())[1]
+	cur := (*p.roster.Load())[1]
 	if cur == nil || cur.token != "tok-1" {
 		t.Fatalf("appended entry = %+v, want tok-1", cur)
 	}
-	// The usage/spend slices are index-aligned with the new snapshot.
-	p.usageMu.Lock()
-	msgs := len(p.msgsPerToken)
-	p.usageMu.Unlock()
+	// The ledger travels with each entry, so the slate is the token count.
+	msgs := p.TokenCount()
 	if msgs != 2 {
-		t.Errorf("msgsPerToken len = %d, want 2", msgs)
+		t.Errorf("token count = %d, want 2 after appended AUTH_TOKENS", msgs)
 	}
 	if p.Snapshot()[1].Token != 1 {
 		t.Errorf("snapshot token index = %d, want 1", p.Snapshot()[1].Token)

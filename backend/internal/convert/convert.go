@@ -1,13 +1,24 @@
 // Package convert implements pure OpenAI request/response normalization for
 // the freebuff-proxy bridge.
 //
-// It performs no I/O and depends on no other internal package. Everything
-// here is a pure function over JSON: request sanitization (parameter
-// whitelist, developer→system role rewrite, tool-schema normalization), SSE
-// frame encoding, per-chunk stream sanitization, and the non-streaming
-// response accumulator. Envelope injection (codebuff_metadata, forced
-// stream, x-freebuff headers) is deliberately out of scope — that lives in
-// backend/internal/upstream.
+// It performs no I/O: every function is a pure transformation over JSON
+// decoded from a request body or SSE frame. The primary entry points (the
+// *Opts variants) never read the process environment, touch the filesystem,
+// or make network calls; the only external inputs are passed in explicitly
+// (Options, a ReasoningLookupFn, an Accumulator's per-call config).
+// DefaultOptions is a deprecated compatibility shim that still reads
+// COMPRESS_PROMPT / CACHE_CONTROL_INJECTION / REASONING_IN_CONTENT from the
+// environment until callers supply config-derived options (issue #277).
+//
+// The one internal dependency is backend/internal/modelcat (per-model
+// reasoning-effort ladders and model classification). Envelope injection
+// (codebuff_metadata, forced stream, x-freebuff headers) is deliberately out
+// of scope — that lives in backend/internal/upstream.
+//
+// Everything here is a pure function over JSON: request sanitization
+// (parameter whitelist, developer→system role rewrite, tool-schema
+// normalization), SSE frame encoding, per-chunk stream sanitization, and the
+// non-streaming response accumulator.
 package convert
 
 import (
@@ -15,8 +26,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -85,10 +94,18 @@ func randHex(n int) string {
 // responses.go), so a request that arrives at this function carries either
 // mapped-supported params or params the client can afford to lose.
 //
-// modelOverride, when non-empty, replaces the client's model in the
-// forwarded body (used for alias resolution). The returned bytes are compact
-// JSON. Errors only occur on invalid JSON or a non-object body.
+// opts are resolved from DefaultOptions by this wrapper; callers holding a
+// config.Config should use NormalizeRequestOpts to supply cfg-derived
+// options (issue #277).
 func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
+	return NormalizeRequestOpts(body, modelOverride, DefaultOptions())
+}
+
+// NormalizeRequestOpts is NormalizeRequest with an explicit Options: the
+// compression, cache_control and reasoning-in-content modes are taken from
+// opts instead of the process environment (issue #277). Callers that have a
+// resolved config.Config construct Options once and pass them here.
+func NormalizeRequestOpts(body []byte, modelOverride string, opts Options) ([]byte, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
@@ -142,23 +159,24 @@ func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
 	}
 	normalizeReasoning(payload, out)
 	model, _ := out["model"].(string)
-	normalizeMessages(out, model)
+	normalizeMessages(out, model, opts)
 	// Optional prompt compression (#58): drops middle non-tool turns and caps
-	// long content, env-gated (COMPRESS_PROMPT=true), never touching tool
+	// long content, gated by opts.CompressPrompt, never touching tool
 	// calls/results or the current message.
-	if compressionEnabled() {
+	if opts.CompressPrompt {
 		if msgs, ok := out["messages"].([]any); ok {
-			out["messages"], _ = compressMessages(msgs)
+			out["messages"], _ = compressMessages(msgs, opts)
 		}
 	}
 	// DeepSeek prompt-cache hints (#84): cache_control ephemeral on the stable
-	// context prefix (messages at indices 2-3), env-gated default on.
-	if model, _ := out["model"].(string); deepseekCacheControlEnabled() && isDeepSeekModel(model) {
+	// context prefix (messages at indices 2-3), gated by
+	// opts.CacheControlInjection (default on).
+	if model, _ := out["model"].(string); opts.CacheControlInjection && isDeepSeekModel(model) {
 		if msgs, ok := out["messages"].([]any); ok {
 			InjectCacheControl(msgs)
 		}
 	}
-	normalizeToolSchemas(out)
+	normalizeToolSchemas(out, opts)
 	return json.Marshal(out)
 }
 
@@ -170,8 +188,14 @@ func NormalizeRequest(body []byte, modelOverride string) ([]byte, error) {
 // The parameter schemas are forwarded untouched — the model fills arguments
 // per the schema it was shown, so only names need restoring.
 func NormalizeRequestMapped(body []byte, modelOverride string) ([]byte, ToolMapper, error) {
+	return NormalizeRequestMappedOpts(body, modelOverride, DefaultOptions())
+}
+
+// NormalizeRequestMappedOpts is NormalizeRequestMapped with an explicit
+// Options (issue #277). See NormalizeRequestOpts.
+func NormalizeRequestMappedOpts(body []byte, modelOverride string, opts Options) ([]byte, ToolMapper, error) {
 	mapper := NewToolMapper(body)
-	out, err := NormalizeRequest(body, modelOverride)
+	out, err := NormalizeRequestOpts(body, modelOverride, opts)
 	if err != nil {
 		return nil, ToolMapper{}, err
 	}
@@ -192,7 +216,7 @@ func NormalizeRequestMapped(body []byte, modelOverride string) ([]byte, ToolMapp
 // normalizeMessages rewrites message role "developer" to "system" in place,
 // extracts leaked think tags from assistant messages, restores missing reasoning_content
 // via globalReasoningLookup, and ensures content: null on assistant tool calls.
-func normalizeMessages(payload map[string]any, model string) {
+func normalizeMessages(payload map[string]any, model string, opts Options) {
 	msgs, _ := payload["messages"].([]any)
 	for _, m := range msgs {
 		msg, ok := m.(map[string]any)
@@ -244,44 +268,43 @@ func normalizeMessages(payload map[string]any, model string) {
 					}
 				}
 
-				// 2. If still missing, check globalReasoningLookup if set
-				if rc == "" {
-					if fnPtr := globalReasoningLookup.Load(); fnPtr != nil && *fnPtr != nil {
-						fn := *fnPtr
-						// Look up by each tool call id, bound to this message's
-						// content and the canonical identity of its tool_calls so
-						// a per-conversation sequential tool_call_id cannot
-						// restore another conversation's reasoning — including
-						// tool-only turns whose content is empty or null (the
-						// cache canonicalizes the raw array internally, so both
-						// wire shapes bind identically).
-						cStr0 := ""
-						if s, ok := cVal.(string); ok {
-							cStr0 = s
-						}
-						rawTC, _ := json.Marshal(msg["tool_calls"])
-						for _, item := range tcSlice {
-							if tcMap, ok := item.(map[string]any); ok {
-								if id, _ := tcMap["id"].(string); id != "" {
-									if r, _, ok := fn(id, cStr0, string(rawTC)); ok && r != "" {
-										rc = r
-										msg["reasoning_content"] = r
-										break
-									}
+				// 2. If still missing, check the per-call reasoning lookup
+				// (threaded through Options, issue #251)
+				if rc == "" && opts.ReasoningLookup != nil {
+					fn := opts.ReasoningLookup
+					// Look up by each tool call id, bound to this message's
+					// content and the canonical identity of its tool_calls so
+					// a per-conversation sequential tool_call_id cannot
+					// restore another conversation's reasoning — including
+					// tool-only turns whose content is empty or null (the
+					// cache canonicalizes the raw array internally, so both
+					// wire shapes bind identically).
+					cStr0 := ""
+					if s, ok := cVal.(string); ok {
+						cStr0 = s
+					}
+					rawTC, _ := json.Marshal(msg["tool_calls"])
+					for _, item := range tcSlice {
+						if tcMap, ok := item.(map[string]any); ok {
+							if id, _ := tcMap["id"].(string); id != "" {
+								if r, _, ok := fn(id, cStr0, string(rawTC)); ok && r != "" {
+									rc = r
+									msg["reasoning_content"] = r
+									break
 								}
 							}
 						}
-						// If still not found, look up by content + toolCalls JSON
-						if rc == "" {
-							cStr := ""
-							if s, ok := msg["content"].(string); ok {
-								cStr = s
-							}
-							tcJSON := string(rawTC)
-							if r, _, ok := fn("", cStr, tcJSON); ok && r != "" {
-								rc = r
-								msg["reasoning_content"] = r
-							}
+					}
+					// If still not found, look up by content + toolCalls JSON.
+					if rc == "" {
+						cStr := ""
+						if s, ok := msg["content"].(string); ok {
+							cStr = s
+						}
+						tcJSON := string(rawTC)
+						if r, _, ok := fn("", cStr, tcJSON); ok && r != "" {
+							rc = r
+							msg["reasoning_content"] = r
 						}
 					}
 				}
@@ -328,39 +351,22 @@ const (
 	compressContentMarker = "[truncated by freebuff-proxy compression]"
 )
 
-var (
-	// compressKeepLast is the number of trailing messages that are always
-	// kept (the current turn and recent context).
-	compressKeepLast = 10
-	// compressMaxContentBytes caps string content on kept user/assistant
-	// turns (never the last message, never tool results).
-	compressMaxContentBytes = 8 << 10
-)
-
-// compressionEnabled reports whether prompt compression is on
-// (COMPRESS_PROMPT=true).
-func compressionEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("COMPRESS_PROMPT")))
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	}
-	return false
-}
-
 // compressMessages compresses a message list in place: middle user/assistant
 // content turns beyond the trailing budget are dropped and summarized by ONE
 // marker message; long content on kept user/assistant turns is capped. Tool
 // results, assistant tool_calls, system messages and the last message are
 // never dropped or truncated. Returns the (possibly new) slice and the
 // number of messages omitted.
-func compressMessages(messages []any) ([]any, int) {
-	capLongContents(messages)
-	n := len(messages)
-	if n <= compressKeepLast {
+func compressMessages(messages []any, opts Options) ([]any, int) {
+	if opts.CompressKeepLast <= 0 {
 		return messages, 0
 	}
-	keepStart := n - compressKeepLast // first index of the trailing window
+	capLongContents(messages, opts)
+	n := len(messages)
+	if n <= opts.CompressKeepLast {
+		return messages, 0
+	}
+	keepStart := n - opts.CompressKeepLast // first index of the trailing window
 
 	// Pass 1: count droppable middle turns and where the marker goes.
 	dropped := 0
@@ -428,7 +434,7 @@ func mustKeepMessage(m map[string]any) bool {
 // capLongContents truncates string content longer than compressMaxContentBytes
 // on kept user/assistant turns, appending the summary marker. The last
 // message and tool messages are never touched.
-func capLongContents(messages []any) {
+func capLongContents(messages []any, opts Options) {
 	if len(messages) == 0 {
 		return
 	}
@@ -446,10 +452,10 @@ func capLongContents(messages []any) {
 			continue
 		}
 		content, ok := m["content"].(string)
-		if !ok || len(content) <= compressMaxContentBytes {
+		if !ok || opts.CompressMaxContentBytes <= 0 || len(content) <= opts.CompressMaxContentBytes {
 			continue
 		}
-		m["content"] = truncateRunes(content, compressMaxContentBytes) + "…" + compressContentMarker
+		m["content"] = truncateRunes(content, opts.CompressMaxContentBytes) + "…" + compressContentMarker
 	}
 }
 
@@ -472,18 +478,6 @@ func truncateRunes(s string, maxBytes int) string {
 // Ported from freebuff-reverse/internal/channels/freebuff/model.go
 // injectCacheControl.
 // ---------------------------------------------------------------------------
-
-// deepseekCacheControlEnabled reports whether cache_control injection is on.
-// Default ON; set CACHE_CONTROL_INJECTION=false (or 0/off/no/disabled) to
-// disable, preserving SAFE_MODE behavior.
-func deepseekCacheControlEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("CACHE_CONTROL_INJECTION")))
-	switch v {
-	case "0", "false", "off", "no", "disabled":
-		return false
-	}
-	return true
-}
 
 // InjectCacheControl adds {"type":"ephemeral"} cache_control to every content
 // block of messages at indices 2 and 3 (the stable context prefix) when the

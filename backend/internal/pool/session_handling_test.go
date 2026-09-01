@@ -78,7 +78,7 @@ func TestAcquireMatchingHotSessionStickinessEqualQuota(t *testing.T) {
 	p := newTestPool(t, mock0, mock1)
 
 	// Pre-admit active sessions for modelA on BOTH tokens.
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	if _, err := (*toks)[0].session.EnsureSessionForModel(context.Background(), modelA); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestAcquireReusesGraceDrainSession(t *testing.T) {
 	}
 
 	// Manually set Token 0's session to be in grace drain (past expiresAt, but before gracePeriodEndsAt).
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	now := time.Now()
 	(*toks)[0].session.SetSessionStateForTest(
 		"active",

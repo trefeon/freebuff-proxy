@@ -377,7 +377,7 @@ func (m *RunManager) Invalidate(agentID string) {
 // "token cooling down" rotate failure once per maintain tick (observed in
 // production). The pool logs the skip.
 func (m *RunManager) Maintain(ctx context.Context) {
-	if time.Now().Before(m.CooldownUntil()) {
+	if !m.MaintenanceEligible() {
 		return
 	}
 	m.mu.Lock()

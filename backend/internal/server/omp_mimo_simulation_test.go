@@ -1561,10 +1561,7 @@ func TestOmpMiMoSimulation(t *testing.T) {
 		cache.Put([]string{"call_read_test"}, "", "", "Thinking about reading...", "", mimoModelID)
 		cache.Put([]string{"call_edit_test"}, "", "", "Thinking about editing...", "", mimoModelID)
 
-		convert.SetReasoningLookup(func(toolID string, content, toolCallsJSON string) (string, string, bool) {
-			return cache.Get(toolID, content, toolCallsJSON)
-		})
-		defer convert.SetReasoningLookup(nil)
+		lookup := convert.Options{ReasoningLookup: cache.Get}
 
 		// Simulate client sending multi-turn conversation where reasoning_content is stripped
 		// and content is empty string or nil
@@ -1606,7 +1603,7 @@ func TestOmpMiMoSimulation(t *testing.T) {
 		}
 
 		rawBytes, _ := json.Marshal(clientReq)
-		normBytes, err := convert.NormalizeRequest(rawBytes, "")
+		normBytes, err := convert.NormalizeRequestOpts(rawBytes, "", lookup)
 		if err != nil {
 			t.Fatalf("NormalizeRequest failed: %v", err)
 		}

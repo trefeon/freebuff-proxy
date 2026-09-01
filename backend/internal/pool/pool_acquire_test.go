@@ -42,7 +42,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 	for i := 0; i < n; i++ {
 		// Unconditional invalidation (test intent: force the cold path) —
 		// the pool's InvalidateSession is now instance-guarded (#132).
-		toks := p.toks.Load()
+		toks := p.roster.Load()
 		(*toks)[0].session.Invalidate()
 		(*toks)[1].session.Invalidate()
 		lease, err := p.Acquire(context.Background(), modelA)
@@ -501,7 +501,7 @@ func TestChatDispatchesThroughLeaseEntry(t *testing.T) {
 	if _, err := p.AddToken("new-token"); err != nil {
 		t.Fatal(err)
 	}
-	if (*p.toks.Load())[0] == origEntry {
+	if (*p.roster.Load())[0] == origEntry {
 		t.Fatal("test setup: index 0 still the original entry")
 	}
 
@@ -750,7 +750,7 @@ func TestTokenLocking(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		// Invalidate both cached sessions so the cold path is exercised.
-		toks := p.toks.Load()
+		toks := p.roster.Load()
 		(*toks)[0].session.Invalidate()
 		(*toks)[1].session.Invalidate()
 		lease, err := p.Acquire(context.Background(), modelA)
@@ -776,7 +776,7 @@ func TestTokenLocking(t *testing.T) {
 	if err := p.UnlockLockToken(0); err != nil {
 		t.Fatal(err)
 	}
-	toks := p.toks.Load()
+	toks := p.roster.Load()
 	(*toks)[0].session.Invalidate()
 	(*toks)[1].session.Invalidate()
 	lease, err := p.Acquire(context.Background(), modelA)

@@ -8,27 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"freebuff-proxy/backend/internal/testutil"
+	"freebuff-proxy/backend/internal/clicreds"
 )
 
 // envKeys lists every environment variable the package reads. Tests clear
 // them all first so machine-level env can never leak into assertions.
-var envKeys = []string{
-	"LISTEN_ADDR", "UPSTREAM_BASE_URL", "AUTH_TOKENS", "ROTATION_INTERVAL",
-	"REQUEST_TIMEOUT", "SESSION_CALL_TIMEOUT", "API_KEYS", "COST_MODE", "ACTING_USER_ID", "USER_ID",
-	"TLS_FINGERPRINT", "REGISTRY_REFRESH", "DEBUG_DUMP", "LOG_FILE", "LOG_LEVEL", "LOG_FORMAT", "LOG_ACCESS", "LOG_RING_SIZE",
-	"MAX_MESSAGES_PER_DAY", "IDLE_ROTATION_TIMEOUT", "SAFE_MODE",
-	"MODELS_HIDE_UNAVAILABLE", "MODELS_ALLOW", "CORS_ALLOWED_ORIGIN", "REQUEST_JITTER", "CLI_VERSION", "MODEL_ALIASES",
-	"AUTO_DISCOVER_TOKEN", "TRANSIENT_RETRIES", "ADMIN_TOKEN",
-	"SESSION_PERSIST", "SESSION_STATE_FILE",
-	"HTTP2_UPSTREAM",
-	"MAX_SPEND_PER_DAY", "SESSION_RE_ADMIT_LEAD", "SESSION_PROBE_CACHE_TTL", "MODEL_UNAVAILABLE_CACHE_TTL",
-	"SESSION_CREATE_MAX_PARALLEL_GLOBAL", "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
-	"RUN_FINISH_QUEUE_SIZE", "RUN_FINISH_INLINE_TIMEOUT", "RUNS_DRAIN_QUEUE_CAP", "RUNS_DRAIN_TTL",
-	"WEBHOOK_URL", "FALLBACK_AFTER_MS", "FALLBACK_MODEL", "ADOPT_CLI_SESSION", "WAITING_ROOM_CHAIN",
-	"QUOTA_FALLBACK_MODELS",
-	"BRIDGE_ENABLED", "BRIDGE_IDLE_EVICT", "BRIDGE_DAILY_LIMIT",
-}
+// Sourced from ConfigEnvKeys() (the catalog plus the legacy USER_ID alias)
+// so it cannot drift from the loader (issue #281).
+var envKeys = ConfigEnvKeys()
 
 // TestMain strips ambient freebuff-proxy config env vars for the whole test
 // binary (testutil.UnsetConfigEnvForTestMain). clearEnv in each test covers
@@ -37,7 +24,7 @@ var envKeys = []string{
 // otherwise leak into package-level behavior before the first clearEnv runs
 // (e.g. TestDefaults / TestSessionPersist assert on those defaults).
 func TestMain(m *testing.M) {
-	testutil.UnsetConfigEnvForTestMain()
+	unsetConfigEnvForTestMain()
 	os.Exit(m.Run())
 }
 
@@ -210,9 +197,9 @@ func TestAutoDiscoverStripsCredentialsBOM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load("")
+	cfg, err := LoadOpts("", LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadOpts: %v", err)
 	}
 	if got := cfg.AuthTokens; len(got) != 1 || got[0] != "cb_discovered" {
 		t.Fatalf("AuthTokens = %v, want [cb_discovered] (BOM must not break credentials parsing)", got)
@@ -246,9 +233,9 @@ func TestAutoDiscoverWarnsOnBridgeToPooled(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	defer slog.SetDefault(prev)
 
-	cfg, err := Load("")
+	cfg, err := LoadOpts("", LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadOpts: %v", err)
 	}
 	if got := cfg.AuthTokens; len(got) != 1 || got[0] != "cb_discovered" {
 		t.Fatalf("AuthTokens = %v, want [cb_discovered] (auto-discovered)", got)

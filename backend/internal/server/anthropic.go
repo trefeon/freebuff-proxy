@@ -94,7 +94,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			"invalid messages request: "+err.Error(), "invalid_json", 0)
 		return
 	}
-	normalized, _, err := convert.NormalizeRequestMapped(chatParams, model)
+	normalized, _, err := convert.NormalizeRequestMappedOpts(chatParams, model, s.convertOptions())
 	if err != nil {
 		s.writeAnthropicError(w, r, http.StatusBadRequest,
 			"request body must be a valid JSON object: "+err.Error(), "invalid_json", 0)

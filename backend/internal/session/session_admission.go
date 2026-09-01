@@ -175,13 +175,13 @@ func (m *Manager) createSessionForModel(ctx context.Context, model string) (*ups
 				if probeState, err := m.client.ProbeAccount(ctx); err == nil && probeState != nil {
 					m.mu.Lock()
 					if probeState.GlmPromo != "" {
-						m.savedGlmPromo = probeState.GlmPromo
+						m.snap.savedGlmPromo = probeState.GlmPromo
 						if m.state != nil {
 							m.state.glmPromo = probeState.GlmPromo
 						}
 					}
 					if len(probeState.RateLimitsByModel) > 0 {
-						m.savedQuota = probeState.RateLimitsByModel
+						m.snap.savedQuota = probeState.RateLimitsByModel
 						if m.state != nil {
 							m.state.quotaByModel = probeState.RateLimitsByModel
 						}
@@ -249,14 +249,14 @@ func (m *Manager) recordReAdmitTrigger() {
 	m.mu.Lock()
 	now := m.now()
 	cutoff := now.Add(-stormWindow)
-	m.reAdmitTriggers = append(m.reAdmitTriggers, now)
-	triggers := m.reAdmitTriggers[:0]
-	for _, t := range m.reAdmitTriggers {
+	m.snap.reAdmitTriggers = append(m.snap.reAdmitTriggers, now)
+	triggers := m.snap.reAdmitTriggers[:0]
+	for _, t := range m.snap.reAdmitTriggers {
 		if t.After(cutoff) {
 			triggers = append(triggers, t)
 		}
 	}
-	m.reAdmitTriggers = triggers
+	m.snap.reAdmitTriggers = triggers
 	m.mu.Unlock()
 }
 
@@ -269,35 +269,35 @@ func (m *Manager) recordReAdmitTrigger() {
 func (m *Manager) recordInvalidation(reason string) {
 	m.mu.Lock()
 	now := m.now()
-	m.invalidationEvents = append(m.invalidationEvents, invalidationEvent{at: now, reason: reason})
+	m.snap.invalidationEvents = append(m.snap.invalidationEvents, invalidationEvent{at: now, reason: reason})
 	cutoff := now.Add(-stormWindow)
-	events := m.invalidationEvents[:0]
-	for _, ev := range m.invalidationEvents {
+	events := m.snap.invalidationEvents[:0]
+	for _, ev := range m.snap.invalidationEvents {
 		if ev.at.After(cutoff) {
 			events = append(events, ev)
 		}
 	}
-	m.invalidationEvents = events
-	triggers := m.reAdmitTriggers[:0]
-	for _, t := range m.reAdmitTriggers {
+	m.snap.invalidationEvents = events
+	triggers := m.snap.reAdmitTriggers[:0]
+	for _, t := range m.snap.reAdmitTriggers {
 		if t.After(cutoff) {
 			triggers = append(triggers, t)
 		}
 	}
-	m.reAdmitTriggers = triggers
+	m.snap.reAdmitTriggers = triggers
 
 	// Storm only when strictly more than the threshold invalidations sit in
 	// the window, and only once per suppression window (60s of quiet re-arms
 	// the detector).
-	if len(m.invalidationEvents) <= stormThreshold || (!m.lastStormAt.IsZero() && now.Sub(m.lastStormAt) < stormWindow) {
+	if len(m.snap.invalidationEvents) <= stormThreshold || (!m.snap.lastStormAt.IsZero() && now.Sub(m.snap.lastStormAt) < stormWindow) {
 		m.mu.Unlock()
 		return
 	}
-	m.lastStormAt = now
-	count := len(m.invalidationEvents)
-	duration := m.invalidationEvents[len(m.invalidationEvents)-1].at.Sub(m.invalidationEvents[0].at).Milliseconds()
+	m.snap.lastStormAt = now
+	count := len(m.snap.invalidationEvents)
+	duration := m.snap.invalidationEvents[len(m.snap.invalidationEvents)-1].at.Sub(m.snap.invalidationEvents[0].at).Milliseconds()
 	superseded := 0
-	for _, ev := range m.invalidationEvents {
+	for _, ev := range m.snap.invalidationEvents {
 		if ev.reason == reasonSuperseded {
 			superseded++
 		}
@@ -306,7 +306,7 @@ func (m *Manager) recordInvalidation(reason string) {
 	// each one whose session the storm then invalidated burned a daily slot.
 	// The trigger list is pruned to the window above, so its length is the
 	// count.
-	burned := len(m.reAdmitTriggers)
+	burned := len(m.snap.reAdmitTriggers)
 	m.mu.Unlock()
 
 	slog.Info("session re-admit storm",

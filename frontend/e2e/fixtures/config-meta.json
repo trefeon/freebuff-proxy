@@ -463,6 +463,26 @@
     "description": "Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs)."
   },
   {
+    "key": "CACHE_CONTROL_INJECTION",
+    "group": "upstream",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Add {\"type\":\"ephemeral\"} cache_control to the stable context prefix on DeepSeek requests (prompt-cache cost reduction; default on). Set CACHE_CONTROL_INJECTION=false to disable."
+  },
+  {
+    "key": "COMPRESS_PROMPT",
+    "group": "upstream",
+    "kind": "bool",
+    "default": "false",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Apply optional prompt \u0026 context compression: middle user/assistant turns beyond the trailing budget are dropped and summarized by one marker (default off)."
+  },
+  {
     "key": "COST_MODE",
     "group": "upstream",
     "kind": "select",
@@ -516,6 +536,16 @@
     "secret": false,
     "essential": true,
     "description": "Map aliases to real model IDs (e.g. gpt-4o:openai/gpt-5.6-luna; comma-separated). No built-in aliases — clients must map explicitly."
+  },
+  {
+    "key": "REASONING_IN_CONTENT",
+    "group": "upstream",
+    "kind": "text",
+    "default": "",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Fold reasoning_content into message content as \u003ctag\u003e...\u003c/tag\u003e for clients that do not render a reasoning channel. \"true\" uses \u003cthink\u003e; a tag word (e.g. \"thinking\") sets the label; empty/off disables."
   },
   {
     "key": "REGISTRY_REFRESH",

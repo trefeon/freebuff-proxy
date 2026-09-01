@@ -18,7 +18,7 @@ func TestPoolSwapTokens(t *testing.T) {
 		t.Fatalf("TokenCount = %d, want 4", p.TokenCount())
 	}
 
-	toks := *p.toks.Load()
+	toks := *p.roster.Load()
 	if toks[1].token != "cb_alpha" || toks[2].token != "cb_beta" || toks[3].token != "cb_gamma" {
 		t.Fatalf("initial order wrong: %v, %v, %v", toks[1].token, toks[2].token, toks[3].token)
 	}
@@ -41,7 +41,7 @@ func TestPoolSwapTokens(t *testing.T) {
 		t.Fatalf("SwapTokens(1, 2) error: %v", err)
 	}
 
-	toks = *p.toks.Load()
+	toks = *p.roster.Load()
 	if toks[1].token != "cb_beta" || toks[2].token != "cb_alpha" || toks[3].token != "cb_gamma" {
 		t.Fatalf("swapped order wrong: %v, %v, %v", toks[1].token, toks[2].token, toks[3].token)
 	}

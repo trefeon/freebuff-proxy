@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"freebuff-proxy/backend/internal/stealth"
 )
 
 // SessionState is the parsed result of a free-session create/poll.
@@ -44,6 +42,11 @@ type SessionState struct {
 	RetryAfterMs       int64
 	AvailableHours     string
 	Message            string
+	// WireBody is the raw upstream body the state was parsed from. ProbeAccount
+	// uses it to build BanError/CountryBlockedError through the shared
+	// banFromBody/countryBlockFromBody constructors (issue #306), so its typed
+	// errors match the classification matrix exactly.
+	WireBody string
 	// UnavailableWindow is the parsed availability window carried by a
 	// model_unavailable admission response (issue #158); nil when the
 	// response omitted availableHours or the string could not be parsed.
@@ -410,6 +413,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
 			Status:             raw.Status,
+			WireBody:           body,
 			InstanceID:         raw.InstanceID,
 			Model:              raw.Model,
 			CurrentModel:       raw.CurrentModel,
@@ -517,19 +521,6 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				}
 				state.RateLimitsByModel[modelID] = mq
 			}
-		}
-		// Feed the passive ban-risk engine (#64): ipPrivacySignals and the
-		// ip_capped activeUsersForIp/limit arrive on the session admission
-		// and probe responses. Read-only — the engine only warns.
-		if c.risk != nil && (len(state.IpPrivacySignals) > 0 ||
-			state.ActiveUsersForIP > 0 || state.Limit > 0 || state.CountryCode != "") {
-			c.risk.Observe(stealth.RiskSample{
-				At:               time.Now(),
-				Country:          state.CountryCode,
-				IPPrivacySignals: state.IpPrivacySignals,
-				ActiveUsersForIP: state.ActiveUsersForIP,
-				Limit:            state.Limit,
-			})
 		}
 		return state, nil
 	}

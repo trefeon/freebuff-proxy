@@ -118,7 +118,12 @@ func TestAdminCookieSecureFlag(t *testing.T) {
 func TestAdminCookieExpiredRedirects(t *testing.T) {
 	s := &Server{adminAuth: newAdminAuth(), logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	s.cfg.Store(&config.Config{AdminToken: "secret"})
-	h := s.dashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.admin = &adminHandlers{
+		adminAuth: s.adminAuth,
+		cfgLoad:   s.cfg.Load,
+		logfunc:   func() *slog.Logger { return s.logger },
+	}
+	h := s.admin.dashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -373,8 +378,6 @@ func TestUpdateEnvKeys(t *testing.T) {
 		t.Errorf(".env after flip = %q, want single SAFE_MODE=true line", got)
 	}
 }
-
-
 
 // ── Wave 1 issue tests (#81, #82, #76) ───────────────────────────────────
 

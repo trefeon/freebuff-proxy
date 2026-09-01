@@ -1,10 +1,8 @@
 package convert
 
 import (
-	"os"
 	"regexp"
 	"strings"
-	"sync/atomic"
 
 	"freebuff-proxy/backend/internal/modelcat"
 )
@@ -103,19 +101,6 @@ const defaultReasoningEffort = "high"
 
 // ReasoningLookupFn looks up cached reasoning content by tool ID or by content + toolCalls JSON.
 type ReasoningLookupFn func(toolID string, content, toolCallsJSON string) (reasoning, signature string, ok bool)
-
-var globalReasoningLookup atomic.Pointer[ReasoningLookupFn]
-
-// SetReasoningLookup installs a global reasoning lookup hook used to restore
-// missing reasoning_content on assistant messages in multi-turn requests.
-// Passing nil clears the hook.
-func SetReasoningLookup(fn ReasoningLookupFn) {
-	if fn == nil {
-		globalReasoningLookup.Store(nil)
-		return
-	}
-	globalReasoningLookup.Store(&fn)
-}
 
 // effortsForModel returns the allowed effort rungs for a model: the catalog
 // ladder, else the full ladder for unlisted models.
@@ -312,26 +297,11 @@ func normalizeReasoning(payload, out map[string]any) {
 // bare boolean.
 const reasoningInContentTag = "think"
 
-// reasoningInContentMode returns the think-tag label when reasoning folding is
-// enabled, or "" when off. The env var REASONING_IN_CONTENT may be a boolean
-// (true → "think") or an explicit tag word ("thinking" → "thinking").
-func reasoningInContentMode() string {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("REASONING_IN_CONTENT")))
-	switch v {
-	case "", "0", "false", "off", "no", "disabled":
-		return ""
-	case "1", "true", "yes", "on":
-		return reasoningInContentTag
-	}
-	return v
-}
-
 // foldReasoningIntoContent appends the <tag>reasoning</tag> text to the
 // delta's content when folding is enabled. Reasoning precedes text (the
 // model layer enqueues reasoning deltas before text deltas); non-string
 // content is left untouched.
-func foldReasoningIntoContent(delta map[string]any, reasoning string) {
-	tag := reasoningInContentMode()
+func foldReasoningIntoContent(delta map[string]any, reasoning string, tag string) {
 	if tag == "" || reasoning == "" {
 		return
 	}

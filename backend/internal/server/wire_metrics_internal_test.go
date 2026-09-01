@@ -49,9 +49,6 @@ func countRequestFailedCode(entries []logring.Entry, codeField string) int {
 // ledger always counts every occurrence; non-rate-limit codes log every
 // time. The client response is written on every call regardless.
 func TestRequestFailedWarnDedupe(t *testing.T) {
-	resetRateLimitWarnDedupe()
-	t.Cleanup(resetRateLimitWarnDedupe)
-
 	t.Run("rate_limited burst fires <=4 WARNs", func(t *testing.T) {
 		ring := logring.NewHandler(slog.NewTextHandler(io.Discard, nil), 500)
 		s := &Server{logger: slog.New(ring)}
@@ -69,9 +66,9 @@ func TestRequestFailedWarnDedupe(t *testing.T) {
 		if n := countRequestFailedCode(ring.Recent(500), "code=rate_limited"); n > 4 {
 			t.Errorf("`request failed` WARNs = %d, want <= 4 for 100 identical rate_limited errors", n)
 		}
-		rateLimitWarnDedupe.mu.Lock()
-		n := rateLimitWarnDedupe.m["bridge|rate_limited|reset"]
-		rateLimitWarnDedupe.mu.Unlock()
+		s.rateLimitDedupe.mu.Lock()
+		n := s.rateLimitDedupe.m["bridge|rate_limited|reset"]
+		s.rateLimitDedupe.mu.Unlock()
 		if n != 100 {
 			t.Errorf("dedupe ledger count = %d, want 100 (counter always increments)", n)
 		}
@@ -95,8 +92,6 @@ func TestRequestFailedWarnDedupe(t *testing.T) {
 // carries req_id, retry_after, reset_at, token and model when the caller and
 // the error provide them.
 func TestRequestFailedStructuredFields(t *testing.T) {
-	resetRateLimitWarnDedupe()
-	t.Cleanup(resetRateLimitWarnDedupe)
 	future := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
 
 	t.Run("req_id token model retry_after", func(t *testing.T) {

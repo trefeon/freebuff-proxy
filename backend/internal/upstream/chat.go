@@ -127,17 +127,21 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 			// foreign user (a possible flag).
 			req.Header.Set("x-freebuff-acting-user-id", c.userID)
 		}
-		resp, _, err := c.do(req, 0)
-		if err != nil {
+		resp, _, cerr := c.do(req, 0)
+		if cerr != nil && resp == nil {
+			// Transport failure (no upstream response read): surface it.
 			releaseCancel(cancel)
-			return nil, err
+			return nil, cerr
 		}
-		if resp.StatusCode >= 400 {
+		if cerr != nil {
+			// Classified >=400 response: do() already classified the body once
+			// (the 428 waiting-room flag and the rate-limit ledger are
+			// recorded). Preserve the chat path's debug dump and the
+			// same-session capacity-deferred retry.
 			bodyText := drainBody(resp.Body)
 			_ = resp.Body.Close()
 			releaseCancel(cancel)
 			c.dump("chat", req, resp.StatusCode, bodyText)
-			cerr := c.classify(resp.StatusCode, bodyText, resp.Header)
 			if isCapacityDeferred(cerr) && capacityDeferredAttempts < c.transientRetriesLimit {
 				capacityDeferredAttempts++
 				c.capacityDeferredRetries.Add(1) // lifetime metric
