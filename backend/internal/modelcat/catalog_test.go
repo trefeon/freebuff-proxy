@@ -324,9 +324,9 @@ func TestCatalogFactsPinned(t *testing.T) {
 		t.Errorf("ServedIDs() = %v, want %v", got, wantServed)
 	}
 
-	// Shared premium pool = Luna + Solar Pro 4; GLM 5.3 Flash is unmetered
-	// (left the pool 2026-08-28), so it must NOT be premium.
-	wantPremium := []string{"openai/gpt-5.6-luna", "upstage/solar-pro4"}
+	// Shared premium pool = Luna only (Solar 1-session cap, per-model pool
+	// freebuff-spend-ceilings.ts experimental limit). GLM 5.3 Flash unmetered.
+	wantPremium := []string{"openai/gpt-5.6-luna"}
 	if got := SharedPremiumModels(); !slices.Equal(got, wantPremium) {
 		t.Errorf("SharedPremiumModels() = %v, want %v", got, wantPremium)
 	}
@@ -349,10 +349,19 @@ func TestCatalogFactsPinned(t *testing.T) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)
 	}
 
-	// Per-model caps: none at the current pin.
+	// Per-model caps: Solar Pro 4 is the only capped row (freebuff-
+	// spend-ceilings.ts experimental 1-session cap, freebuff-model-
+	// availability.ts copy; pin a6be463).
 	for _, id := range ServedIDs() {
-		if limit, pool := PerModelCap(id); limit != 0 || pool != "" {
-			t.Errorf("PerModelCap(%q) = (%d, %q), want (0, \"\") — no capped rows at this pin", id, limit, pool)
+		limit, pool := PerModelCap(id)
+		if id == "upstage/solar-pro4" {
+			if limit != 1 || pool != "solar_pro4" {
+				t.Errorf("PerModelCap(%q) = (%d, %q), want (1, \"solar_pro4\")", id, limit, pool)
+			}
+			continue
+		}
+		if limit != 0 || pool != "" {
+			t.Errorf("PerModelCap(%q) = (%d, %q), want (0, \"\")", id, limit, pool)
 		}
 	}
 

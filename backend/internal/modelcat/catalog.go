@@ -67,7 +67,7 @@ var Catalog = []ModelInfo{
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
-		Served: true, Premium: true, ContextWindow: 500_000},
+		Served: true, Premium: true, ContextWindow: 500_000, Cap: 1, CapPool: "solar_pro4"},
 	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", Served: true},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
 		Served: true, ContextWindow: 1_000_000,

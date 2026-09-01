@@ -323,6 +323,24 @@ export const FREEBUFF_GPT_5_6_LUNA_REASONING_EFFORT = 'high' as const
  *  So this is a dearer row than Luna ($0.10/$0.60 list), not a cheaper one.
  *  Read the smoke test's implied $/M before quoting a price from the card. */
 export const FREEBUFF_SOLAR_PRO_4_MODEL_ID = 'upstage/solar-pro4'
+
+/**
+ * The OpenRouter endpoint Solar Pro 4 is pinned to — TAG-QUALIFIED, not the
+ * bare `upstage` provider slug.
+ *
+ * OpenRouter lists two endpoints for this model that are identical in price,
+ * context, supported parameters and `provider_name`, and differ only by `tag`:
+ * this one and an untagged `upstage`. The bare slug matches both, which split
+ * traffic across two prompt caches (worse hit rates with no warming than
+ * every other high-volume row) and — because SOLAR_PRO_4_MODEL's
+ * `dataUse: 'service'` rests on the ZDR tag — let half of all turns run on an
+ * endpoint that is not zero-data-retention while the UI suppressed the training
+ * notice.
+ *
+ * See applyOpenRouterProviderRouting for the full reasoning and for the probe
+ * that shows OpenRouter validates tags rather than ignoring them.
+ */
+export const SOLAR_PRO_4_OPENROUTER_ENDPOINT = 'upstage/zdr'
 /**
  * Kimi K3 (Eco), served by CrofAI. God-only on Freebuff Web, for testing.
  *
@@ -535,36 +553,46 @@ const DEEPSEEK_V4_REASONING_EFFORTS = ['low', 'high', 'max'] as const
  *  providers are free to diverge. */
 const OX_ALPHA_REASONING_EFFORTS = ['low', 'high', 'max'] as const
 /**
- * GLM 5.3 Flash's native ladder — the three values the Merge Gateway DECLARES
- * for this model (`effort_values: ["low","high","max"]`), which is also a
- * subset of OpenRouter's enum and passes through CrofAI verbatim. All three
- * rungs of the cascade therefore mean the same thing, which is the property
- * that makes a user's pick safe here: a diverted session must not silently
- * change depth (see MERGE_VENDOR_ORDER for how often diverts happen).
+ * GLM 5.3 Flash's pickable ladder — `low` and `high`, and deliberately NOT the
+ * whole of what the endpoint declares.
  *
- * MEASURED, not assumed, in thinking characters on a prompt that needs
- * reasoning (2026-08-27, recorded in merge-gateway.ts):
+ * The Merge Gateway DECLARES three values for this model
+ * (`effort_values: ["low","high","max"]`), which is also a subset of
+ * OpenRouter's enum and passes through CrofAI verbatim, so all three rungs of
+ * the cascade mean the same thing and a divert cannot silently change depth
+ * (see MERGE_VENDOR_ORDER for how often diverts happen). `max` is therefore
+ * available on every lane; it is withheld here as a PRODUCT decision, not a
+ * capability one.
+ *
+ * `max` WAS OFFERED AND WAS REMOVED ON 2026-08-31, because at that depth this
+ * model does not converge on agent work: it re-reads the same files, re-plans
+ * the same step and re-issues tool calls it has already made, until the turn is
+ * spent on deliberation rather than edits. Depth past `high` is not free on a
+ * harness that feeds every thought back into the next step's prompt.
+ *
+ * REMOVING THE RUNG IS ONLY HALF THE FIX, and the other half is the reason this
+ * row now also carries `reasoningEffort: 'high'`. Measured in thinking
+ * characters on a prompt that needs reasoning (2026-08-27, recorded in
+ * merge-gateway.ts):
  *
  *   low 107  <  high 175  <  max 590  <  unset 708
  *
- * Monotonic, which is what distinguishes a real ladder from three strings the
- * endpoint accepts and ignores — the trap DEEPSEEK_V4_REASONING_EFFORTS warns
- * about. Note the fourth column: UNSET IS DEEPER THAN `max`, and unset is
- * where this row ran from launch until the ladder landed, so shipping
- * `defaultEffort: 'max'` is a small step DOWN in depth rather than a step up.
- * That is deliberate — see GLM_V53_FLASH_MODEL — and it is the only rung close
- * enough to unset to be an honest default for a row taglined "Deep reasoning".
- *
- * THE UNSET > MAX ORDERING IS PROMPT-DEPENDENT — re-measured 2026-08-29, three
- * samples each on an agent-shaped refactor prompt, thinking chars:
+ * and again on an agent-shaped refactor prompt, three samples each (2026-08-29):
  *
  *   unset  8118 / 9942 / 9871      max  7271 / 8011 / 5781
  *
- * which reproduces it comfortably on the traffic this row actually serves. On a
- * short logic puzzle the same probe REVERSED it (unset 649, max 1356). So do
- * not treat any single sample as the ordering, and do not re-tune the default
- * off one: the claim that survives repetition is that unset and max are close,
- * with unset ahead on real agent turns, which is all the default needs.
+ * UNSET IS DEEPER THAN `max`. Unset is what this row sent on every untouched
+ * turn from launch until 2026-08-31 — no `reasoningEffort` meant
+ * `applyFreebuffReasoningDefaults` sent no effort at all — so the looping
+ * setting was ALSO the default one, and the majority of turns never went near
+ * the picker. Deleting the rung while leaving the wire default unset would have
+ * taken the control away from the few users who could already see the problem
+ * and left it running for everyone else. Hence the pin.
+ *
+ * (A short logic puzzle REVERSES the unset/max ordering — unset 649, max 1356 —
+ * so no single sample is the ordering. What survives repetition is that unset
+ * and max are both far above `high` on real agent turns, which is all this
+ * needs.)
  *
  * `low` EMITS NO THINKING TRACE AT ALL — 0 chars on both vendors, measured
  * 2026-08-29, while still answering normally. That is the rung behaving as
@@ -575,8 +603,13 @@ const OX_ALPHA_REASONING_EFFORTS = ['low', 'high', 'max'] as const
  * `none` is deliberately absent and must never be added: the model declares
  * `disable_supported: false`, and the undeclared `'none'` measures at 732 —
  * MORE thinking than unset, the exact opposite of what it names.
+ *
+ * NOT a change to what BYOK and direct-API callers may send. MERGE_EFFORT_ALIASES
+ * still maps OpenRouter's wider enum onto the gateway's declared three, `max`
+ * included: a caller paying their own bill keeps the rung. This list governs
+ * what Freebuff itself picks and offers.
  */
-const GLM_V53_FLASH_REASONING_EFFORTS = ['low', 'high', 'max'] as const
+const GLM_V53_FLASH_REASONING_EFFORTS = ['low', 'high'] as const
 /**
  * The marker that turns a Muse Spark rate limit into a queued turn rather than
  * a failed one.
@@ -1361,47 +1394,47 @@ const GLM_V53_FLASH_MODEL = {
   premium: false,
   // OpenRouter reports text + image + video in, text out.
   multimodal: true,
-  // LADDERED as of 2026-08-29, reversing the note that stood here. That note
-  // said "OpenRouter lists no reasoning levels for this model" and it was
-  // simply wrong on the facts: `z-ai/glm-5.3-flash` carries `reasoning_effort`
+  // LADDERED as of 2026-08-29. `z-ai/glm-5.3-flash` carries `reasoning_effort`
   // in its `supported_parameters`, and the Merge Gateway — the lane that
   // actually serves nearly all of this row's traffic — DECLARES
-  // `effort_values: ["low","high","max"]` and was already measured behaving
-  // monotonically across them. So the bar this catalog sets (a native provider
-  // setting, never a compatibility alias) was met the whole time and the
-  // control was withheld on a mistaken reading. MiniMax M3, Solar Pro 4 and
-  // MiMo stay bare — those were re-checked at the same time and genuinely
-  // expose no effort parameter.
+  // `effort_values: ["low","high","max"]` and was measured behaving
+  // monotonically across them, so the bar this catalog sets (a native provider
+  // setting, never a compatibility alias) is met. MiniMax M3, Solar Pro 4 and
+  // MiMo stay bare — those genuinely expose no effort parameter.
   //
-  // NO `reasoningEffort`, DELIBERATELY — an untouched turn sends no
-  // `reasoning_effort` at all and runs at the provider's own setting. This is
-  // the same shape FABLE_5_MODEL already has (a ladder with no pinned wire
-  // default) rather than a new one.
-  //
-  // UNSET IS THE DEEPEST SETTING, NOT A NEUTRAL ONE, and that is the whole
-  // thing to understand before changing it. It is not a mid-ladder value and it
-  // is not "off": measured on an agent-shaped prompt, three samples each, in
-  // thinking characters —
+  // PINNED TO `high` ON 2026-08-31, AND THE PIN IS THE POINT. `max` left the
+  // ladder the same day for looping on agent work (see
+  // GLM_V53_FLASH_REASONING_EFFORTS), and this row's wire default was UNSET,
+  // which is DEEPER than `max`:
   //
   //   unset  8118 / 9942 / 9871      max  7271 / 8011 / 5781
   //
-  // so leaving it unset asks for MORE reasoning than `max` does, not less. A
-  // shorter probe reverses the ordering, so the honest claim is that the two
-  // are close with unset ahead on real turns; what is NOT true under any
-  // sample is that unset is a lighter setting. If this row is ever made faster,
-  // the change is to ADD `reasoningEffort: 'low'` or `'high'`, not to remove
-  // something.
+  // (agent-shaped prompt, thinking characters, three samples each, 2026-08-29).
+  // Unset is not a neutral setting and never was — it is the top of the range.
+  // So the rung that looped was also what every untouched turn ran at, on every
+  // surface: `applyFreebuffReasoningDefaults` reads THIS field, and with it
+  // absent it sent no `reasoning_effort` at all. The CHAT surfaces
+  // (freebuff.com/chat, iMessage) have no effort control whatsoever, so unset
+  // was the only thing they could ever run.
   //
-  // `defaultEffort` STAYS `'max'` even though nothing is sent, and the two are
-  // deliberately unequal here — the field's docblock allows exactly this. It is
-  // where the PICKER's cursor starts, and `max` is the nearest declared rung to
-  // a wire default that sits just past the top of the ladder. Naming the
-  // closest rung is the most accurate thing a three-rung control can say about
-  // an off-ladder setting; the alternative is a fourth pseudo-rung that no
-  // provider accepts. Note the CLI picker reads `reasoningEffort`, not this, so
-  // it correctly shows NO reasoning suffix on this row until a user picks.
+  // Dropping the rung without pinning the default would therefore have fixed
+  // the loop only for users who had already found the picker and moved off it,
+  // and left it in place for everyone who never touched the control — which is
+  // nearly all of them. The two changes are one change.
+  //
+  // WHAT THIS GIVES UP: depth. This is still the catalog's deep row, but `high`
+  // is a real step down from unset, and the "Deep reasoning" tagline is now a
+  // claim about the model rather than about its setting. If a turn is ever
+  // observed under-thinking rather than looping, the lever is to move this to
+  // `max` for a WIRE default while leaving it off the ladder — not to restore
+  // the rung users can pick.
+  //
+  // `defaultEffort` now EQUALS `reasoningEffort`, which is the ordinary shape;
+  // they were deliberately unequal only while the wire default sat off the top
+  // of the ladder and the picker had to name the nearest rung to it.
   efforts: GLM_V53_FLASH_REASONING_EFFORTS,
-  defaultEffort: 'max',
+  reasoningEffort: 'high',
+  defaultEffort: 'high',
   //
   // No `supersededBy` and no RECOMMENDED badge: nothing in this catalog nudges
   // anyone anywhere, and a notice here would rewrite saved picks on every load
@@ -1645,14 +1678,16 @@ export const FREEBUFF_MODELS = [
   // spend per message puts MiMo at 4.6x this row and V4 Flash at 8.9x (exact
   // figures in the internal cost notes, not in this exported file).
   //
-  // WHAT THIS GIVES UP, stated plainly because the previous ordering note was
-  // written to prevent exactly this move: this row is the DEEP one, and depth
-  // costs latency. It runs `defaultEffort: 'max'`, measured at ~7-9k thinking
-  // characters on an agent-shaped prompt against `high`'s ~175. A new user's
-  // first turn is therefore slower than it was on Luna. That trade was made
-  // deliberately — see GLM_V53_FLASH_MODEL — and it is the thing to revisit
-  // FIRST if first-run metrics move the wrong way: dropping this row's default
-  // rung to `high` is one line and keeps the cost and availability wins.
+  // WHAT THIS GIVES UP is no longer latency, and that changed on 2026-08-31.
+  // This row led the list while running UNSET on the wire — ~7-9k thinking
+  // characters on an agent-shaped prompt against `high`'s ~175 — which made a
+  // new user's first turn slower than it was on Luna. That was the trade this
+  // comment warned would need revisiting first, and it has been: the row is now
+  // pinned to `reasoningEffort: 'high'` and `max` is off its ladder entirely,
+  // because at that depth it looped rather than finished (see
+  // GLM_V53_FLASH_REASONING_EFFORTS). Leading the list costs nothing on latency
+  // now; what it gives up is depth, and the case for the row is the cost and
+  // availability wins, which are untouched.
   //
   // Ordering is still the ONLY steer here — no supersedes notices, nothing
   // badged RECOMMENDED, because a `supersededBy` would rewrite saved picks on
@@ -1773,6 +1808,120 @@ export const FREEBUFF_PER_MODEL_SESSION_CAPS: Readonly<
   // premium model absent from every pool becomes UNLIMITED rather than
   // stricter. Dropping the cap changes which pool meters this row, never
   // whether one does.
+  //
+  // SOLAR PRO 4, at ONE a day since 2026-08-31 — the same measurement window
+  // GLM 5.3 Flash got, opened for the same reason and closed the same way.
+  //
+  // The row shipped to every surface on 2026-08-28 with no cap, and the client
+  // release that carried it (0.0.162, 01:42 UTC on 08-31) multiplied its daily
+  // spend by roughly seventy inside fourteen hours. Measured over that first
+  // day it was the joint most expensive row we serve per message, 8-12x the
+  // rows most users are on. (Absolute figures in
+  // ./freebuff-costs.knowledge.md — this file is exported.)
+  //
+  // Its cache rate is why, and it is exactly the uncertainty the paragraph
+  // above describes: far below every other high-volume row, on a lane we had
+  // never run at fleet scale. Part of that is now understood and fixed — the
+  // provider pin was matching two endpoints and splitting the cache in half
+  // (SOLAR_PRO_4_OPENROUTER_ENDPOINT) — and the honest position is that we do
+  // not yet know what the rate settles at once traffic lands on one endpoint.
+  // ONE rather than GLM's two because this row is dearer per message and its
+  // corrected cost is still unmeasured.
+  //
+  // So this is a measurement window and it is MEANT TO COME OFF. Read the cache
+  // rate and $/msg on /web/admin/spend once the pin has been live a full day;
+  // if they land near the other premium rows, raise or remove this and let the
+  // shared premium pool meter the row alone.
+  [FREEBUFF_SOLAR_PRO_4_MODEL_ID]: {
+    limit: 1,
+    pool: 'solar_pro4',
+    poolLabel: 'Daily',
+  },
+}
+
+/**
+ * The catalog's human-facing name for `model`, or the raw id when it has none.
+ *
+ * Falls back to the id rather than to a placeholder: an unrecognised id in a
+ * user-facing sentence should still say WHICH model, and a paused or
+ * pre-catalog row is exactly when that matters.
+ */
+export function freebuffModelLabel(model: string): string {
+  return (
+    SUPPORTED_FREEBUFF_MODELS.find((m) => m.id === model)?.displayName ?? model
+  )
+}
+
+/**
+ * Whether the catalog marks `model` experimental.
+ *
+ * Read by the limit gates so a refusal can name the reason — a tight ceiling on
+ * a trial row is a different message from an ordinary quota error, and users
+ * who hit one without that context reasonably read it as the product being
+ * broken. Derived from the catalog rather than a second list, so a row that
+ * stops being experimental stops saying so everywhere at once.
+ */
+export function isFreebuffExperimentalModel(
+  model: string | null | undefined,
+): boolean {
+  if (!model) return false
+  const row = SUPPORTED_FREEBUFF_MODELS.find((m) => m.id === model)
+  // `in` rather than a property read: the catalog is a union of `as const`
+  // literals and only some carry the optional flag, so a direct access does not
+  // typecheck against the members that omit it.
+  return row !== undefined && 'experimental' in row && row.experimental === true
+}
+
+/**
+ * Per-SESSION dollar ceilings on individual models — a bound on what one
+ * session may cost us, on top of the session COUNT ceilings above.
+ *
+ * The two answer different questions and neither implies the other. A count cap
+ * bounds how many sessions a user may open; it says nothing about what one of
+ * them costs, and on an agentic product that varies by orders of magnitude — a
+ * single long session can spend more than a hundred short ones. This is the
+ * bound on the tail.
+ *
+ * Why it exists at all: Solar Pro 4 shipped uncapped on 2026-08-28 and its
+ * daily spend rose about seventyfold within a day of the client release that
+ * carried it, on a row costing an order of magnitude more per message than the
+ * ones most users are on. A count cap alone would have left one session per
+ * user per day unbounded in cost, which for a row this dear is most of the
+ * exposure. (Absolute figures in ./freebuff-costs.knowledge.md.)
+ *
+ * MEASURED IN DOLLARS OF PROVIDER SPEND, from the same
+ * `freebuffAdmissionSpendFilter` population the daily ceiling uses, so "spend"
+ * means one thing across every gate. Enforced only when a user OPENS A PROMPT
+ * (never per agent step), and only for models listed here — an unlisted model
+ * costs a lookup against this object and no database read at all.
+ *
+ * It is a CEILING, not a budget: a turn already in flight is never killed
+ * mid-stream, because a half-finished agent run is worse for the user than an
+ * honest refusal at the next prompt and the overshoot is bounded by one turn.
+ */
+export const FREEBUFF_PER_MODEL_SESSION_SPEND_CAPS: Readonly<
+  Record<string, number>
+> = {
+  // Solar Pro 4, $0.50 a session since 2026-08-31, alongside its one-a-day
+  // count cap. Sized against the row's own measured economics rather than
+  // picked round: at the rate it ran on 08-31 this buys roughly 25 messages, a
+  // real session on an agentic product, and about twice that at the rate it
+  // should reach once the endpoint pin lands (see
+  // SOLAR_PRO_4_OPENROUTER_ENDPOINT). So the ceiling loosens in practice
+  // exactly as the row gets cheaper, without anyone editing it. (Both rates in
+  // ./freebuff-costs.knowledge.md.)
+  //
+  // Comes off with the count cap, and for the same reason: this is a
+  // measurement window on a row whose corrected cost is not yet known.
+  [FREEBUFF_SOLAR_PRO_4_MODEL_ID]: 0.5,
+}
+
+/** The per-session dollar ceiling for `model`, or undefined when it has none. */
+export function getFreebuffPerModelSessionSpendCap(
+  model: string | null | undefined,
+): number | undefined {
+  if (!model) return undefined
+  return FREEBUFF_PER_MODEL_SESSION_SPEND_CAPS[model]
 }
 
 /** Whether `model` carries a ceiling of its own beyond the shared pool. */
@@ -2322,8 +2471,9 @@ export type FreebuffWebPremiumModelId =
  *  It is also `availability: 'always'` and the cheapest row we serve
  *  (measured per-message, 4.6x under MiMo and 8.9x under V4 Flash). The cost
  *  and availability arguments are therefore both strictly better than the Luna
- *  it replaces; the argument it LOSES is latency, since this is the deep row
- *  running `defaultEffort: 'max'`. See FREEBUFF_MODELS for that trade in full.
+ *  it replaces. Latency used to be the argument it LOST, while it ran unset on
+ *  the wire; since 2026-08-31 it is pinned to `high` (see
+ *  GLM_V53_FLASH_REASONING_EFFORTS for why) and that gap is closed.
  *
  *  Still three separate constants: this one, DEFAULT_FREEBUFF_WEB_MODEL_ID and
  *  FALLBACK_FREEBUFF_MODEL_ID (what callers needing a guaranteed-available id
@@ -2351,11 +2501,13 @@ export const DEFAULT_FREEBUFF_MODEL_ID: FreebuffModelId =
  *
  *  Against that: browser turns re-send their whole prefix every step, so these
  *  surfaces are the most latency-sensitive we have, and preparation already
- *  costs ~6.3s at p50 before a token (docs/freebuff-ttft-deferred-vm.md). A
- *  `max` reasoning default adds to that on every step. If first-run completion
- *  moves the wrong way after this lands, drop the row's `defaultEffort` to
- *  `high` before reaching for a different model — that keeps the cost and
- *  availability wins and is the change this comment expects to be made.
+ *  costs ~6.3s at p50 before a token (docs/freebuff-ttft-deferred-vm.md). The
+ *  deep default this comment expected to have to walk back HAS been walked back
+ *  — the row was pinned to `high` on 2026-08-31, for looping rather than for
+ *  latency (see GLM_V53_FLASH_REASONING_EFFORTS) — so the per-step reasoning
+ *  cost this paragraph warned about is already paid down. If first-run
+ *  completion still moves the wrong way, the next lever is a different model,
+ *  not a lower rung.
  *
  *  The cost half is not close. Cache reads are ~98% of browser tokens, and this
  *  row's list cache-read rate is nearly double Luna's — but measured per

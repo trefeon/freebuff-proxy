@@ -53,7 +53,7 @@ func TestPremiumSnapshotFromQuotaMap(t *testing.T) {
 		{
 			name: "premium via shared pool member",
 			m: map[string]session.QuotaSnapshot{
-				"upstage/solar-pro4": {Model: "upstage/solar-pro4", Limit: 4, RecentCount: 1, Period: "pacific_day", ResetAt: future},
+				"openai/gpt-5.6-luna": {Model: "openai/gpt-5.6-luna", Limit: 4, RecentCount: 1, Period: "pacific_day", ResetAt: future},
 			},
 			wantP: true,
 		},
