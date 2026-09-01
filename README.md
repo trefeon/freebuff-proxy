@@ -309,7 +309,7 @@ All keys can be set via environment variables or the JSON config file passed to 
 | `SCARCE_SESSION_MODELS` | `openai/gpt-5.6-luna` | 1-session/day models to keep alive for their full session (never idle-evict or DELETE on shutdown while active) |
 | `QUOTA_FALLBACK_MODELS` | `flash→mimo, glm→flash, luna→flash` | Map model → fallback when its session quota is exhausted/unentitled. Defaults: `deepseek/deepseek-v4-flash=mimo/mimo-v2.5`, `z-ai/glm-5.2=deepseek/deepseek-v4-flash`, `openai/gpt-5.6-luna=deepseek/deepseek-v4-flash` (luna degrades the scarce premium session locally instead of hammering quota 429s; #203) |
 | `SAFE_MODE` | `true` | Apply anti-ban presets (see below; set `false` to disable) |
-| `REQUEST_JITTER` | `0s` | Random delay range `[0, REQUEST_JITTER)` before upstream calls (`SAFE_MODE` sets 2s when unset) |
+| `REQUEST_JITTER` | `0s` | Random delay range `[0, REQUEST_JITTER)` before upstream calls (`SAFE_MODE` sets 200ms when unset; set `0` for instant TTFB) |
 | `CLI_VERSION` | `0.10.7` | Informational only: parsed and shown on the admin dashboard (Configuration Studio). No wire impact — the chat UA is pinned to `ai-sdk/openai-compatible/1.0.0/codebuff`, the ads UA to `Freebuff-CLI/1.0.0`, and session/auth endpoints default to `Bun/1.3.14` |
 | `MODEL_ALIASES` | `""` | Map aliases to real model IDs, e.g. `gpt-4o:openai/gpt-5.6-luna`. There are no built-in aliases (the old `deepseek-chat`/`gpt-4o`/`claude-3-5-sonnet` map was removed when `deepseek-v4-pro` was paused); clients must map aliases explicitly. |
 | `TRANSIENT_RETRIES` | `1` | Max additional attempts after a transient transport failure; `0` disables |
@@ -351,7 +351,7 @@ opt out). It enables essential anti-ban protections and presets:
 
 - **JA3 TLS Stealth**: Mimics real browser handshakes (Chrome 120/126, Safari 17/18, Firefox 120/128, Edge 126) via `uTLS` to prevent WAF / CDN bot detection.
 - **Proxy Header Sanitization**: Strips 25 proxy-identifying headers (`X-Forwarded-For`, `Via`, `CF-Connecting-IP`, etc.).
-- **Request Jitter**: Injects randomized 0-2s delay jitter to break robotic, machine-like cadence.
+- **Request Jitter**: Injects randomized 0-200ms delay jitter to break robotic, machine-like cadence (set `REQUEST_JITTER=0` for instant, or `REQUEST_JITTER=100ms` for minimal jitter).
 - **Idle Rotation**: Finishes runs after 30 minutes of inactivity.
 - **Daily Cap** (optional): `MAX_MESSAGES_PER_DAY` defaults to `0` (unlimited). The upstream `429` lock is the real enforcement; see below.
 

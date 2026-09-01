@@ -110,7 +110,7 @@ var keyCatalog = []KeyDef{
 		Description: `In-memory log ring capacity behind the dashboard log viewer (50-5000).`},
 	{Key: "SAFE_MODE", Group: GroupGeneral, Kind: "bool", Essential: true,
 		Default:     "true",
-		Description: `Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 2s, browser TLS fingerprint auto. Keep on.`},
+		Description: `Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms, browser TLS fingerprint auto. Keep on.`},
 
 	// ── pool ─────────────────────────────────────────────────────────────
 	{Key: "ADOPT_CLI_SESSION", Group: GroupPool, Kind: "bool", RestartOnly: true, Hidden: true,
@@ -233,7 +233,7 @@ var keyCatalog = []KeyDef{
 		Description: `Model catalog refresh interval.`},
 	{Key: "REQUEST_JITTER", Group: GroupUpstream, Kind: "text", RestartOnly: true, Hidden: true,
 		Default:     "0s",
-		Description: `Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 2s when unset; 0 disables.`},
+		Description: `Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 200ms when unset; 0 disables.`},
 	{Key: "REQUEST_TIMEOUT", Group: GroupUpstream, Kind: "text", RestartOnly: true, Hidden: true,
 		Default:     "15m",
 		Description: `Upstream request timeout.`},

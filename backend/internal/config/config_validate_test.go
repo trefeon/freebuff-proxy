@@ -85,8 +85,8 @@ func TestSafeMode(t *testing.T) {
 		if cfg.IdleRotationTimeout != 30*time.Minute {
 			t.Errorf("IdleRotationTimeout = %v, want 30m under SafeMode", cfg.IdleRotationTimeout)
 		}
-		if cfg.RequestJitter != 2*time.Second {
-			t.Errorf("RequestJitter = %v, want 2s under SafeMode", cfg.RequestJitter)
+		if cfg.RequestJitter != 200*time.Millisecond {
+			t.Errorf("RequestJitter = %v, want 200ms under SafeMode", cfg.RequestJitter)
 		}
 	})
 
@@ -104,8 +104,8 @@ func TestSafeMode(t *testing.T) {
 		if cfg.MaxMessagesPerDay != 0 {
 			t.Errorf("MaxMessagesPerDay = %d, want 0 (explicit unlimited)", cfg.MaxMessagesPerDay)
 		}
-		if cfg.RequestJitter != 2*time.Second {
-			t.Errorf("RequestJitter = %v, want 2s under SafeMode", cfg.RequestJitter)
+		if cfg.RequestJitter != 200*time.Millisecond {
+			t.Errorf("RequestJitter = %v, want 200ms under SafeMode", cfg.RequestJitter)
 		}
 	})
 

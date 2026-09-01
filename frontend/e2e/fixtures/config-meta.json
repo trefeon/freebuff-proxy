@@ -145,7 +145,7 @@
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 2s, browser TLS fingerprint auto. Keep on."
+    "description": "Apply the anti-ban preset when a knob is left unset: idle-run rotation 30m, request jitter 200ms, browser TLS fingerprint auto. Keep on."
   },
   {
     "key": "ADOPT_CLI_SESSION",
@@ -567,7 +567,7 @@
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 2s when unset; 0 disables."
+    "description": "Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 200ms when unset; 0 disables."
   },
   {
     "key": "REQUEST_TIMEOUT",

@@ -206,7 +206,13 @@ func newStreamRelay(ctx context.Context, w http.ResponseWriter, r io.Reader) (fl
 	flusher.Flush()
 
 	keepalive = time.NewTicker(keepaliveInterval)
-	ch := make(chan lineChunk)
+	// Buffered channel decouples upstream read-ahead from downstream
+	// Write+Flush syscall latency: the scanner can keep filling while the
+	// client socket drains, so a slow WAN client never stalls the upstream
+	// producer and upstream burst never stalls on a single Flush. 64 is
+	// enough for a full streaming window without blocking (freebuff bursts
+	// ~70-120 deltas/s).
+	ch := make(chan lineChunk, 64)
 	go relayReadLoop(ctx, r, ch)
 	now := time.Now()
 	return flusher, keepalive, ch, &now, true

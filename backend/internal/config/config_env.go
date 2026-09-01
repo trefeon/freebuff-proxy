@@ -490,7 +490,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 			cfg.IdleRotationTimeout = 30 * time.Minute
 		}
 		if !requestJitterSet && cfg.RequestJitter == 0 {
-			cfg.RequestJitter = 2 * time.Second
+			cfg.RequestJitter = 200 * time.Millisecond
 		}
 		if cfg.TLSFingerprint == "" {
 			cfg.TLSFingerprint = "auto"
