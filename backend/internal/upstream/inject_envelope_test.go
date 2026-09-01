@@ -124,6 +124,78 @@ func TestInjectEnvelopeStepNumber(t *testing.T) {
 		t.Error("llm_step_number present when StepNumber == 0")
 	}
 }
+// TestInjectEnvelopeNAndCacheDebugCorrelation verifies llm.ts:118-122
+// mirror: N (when >0) and cache_debug_correlation (when non-empty) are
+// stamped into codebuff_metadata, and ExtraCodebuffMetadata is merged
+// BEFORE reserved identifiers so reserved keys win. Also covers payload
+// codebuff_metadata extra passthrough (payload extras are kept, reserved
+// extras are overwritten).
+func TestInjectEnvelopeNAndCacheDebugCorrelation(t *testing.T) {
+	// N + cache_debug_correlation present
+	out, err := injectEnvelope([]byte(`{"model":"m"}`), "free", ChatOptions{
+		RunID:                 "r",
+		N:                     3,
+		CacheDebugCorrelation: "corr-123",
+		ExtraCodebuffMetadata: map[string]string{"custom_key": "custom_val", "run_id": "smuggled"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(out, &sent); err != nil {
+		t.Fatal(err)
+	}
+	md := sent["codebuff_metadata"].(map[string]any)
+	if md["n"] != float64(3) { // JSON numbers decode as float64
+		t.Errorf("n = %v (%T), want 3", md["n"], md["n"])
+	}
+	if md["cache_debug_correlation"] != "corr-123" {
+		t.Errorf("cache_debug_correlation = %v, want corr-123", md["cache_debug_correlation"])
+	}
+	if md["custom_key"] != "custom_val" {
+		t.Errorf("custom_key = %v, want custom_val (extra metadata passthrough)", md["custom_key"])
+	}
+	if md["run_id"] != "r" {
+		t.Errorf("run_id = %v, want r (reserved must win over smuggled extra)", md["run_id"])
+	}
+
+	// Absent when zero/empty
+	out2, err := injectEnvelope([]byte(`{"model":"m"}`), "free", ChatOptions{RunID: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out2, &sent); err != nil {
+		t.Fatal(err)
+	}
+	md2 := sent["codebuff_metadata"].(map[string]any)
+	if _, present := md2["n"]; present {
+		t.Error("n present when N == 0")
+	}
+	if _, present := md2["cache_debug_correlation"]; present {
+		t.Error("cache_debug_correlation present when empty")
+	}
+
+	// Payload codebuff_metadata extra keys are preserved; reserved payload
+	// keys are overwritten.
+	out3, err := injectEnvelope([]byte(`{"model":"m","codebuff_metadata":{"payload_extra":"keep","run_id":"old","cache_debug_correlation":"old_corr"}}`), "free", ChatOptions{RunID: "r", CacheDebugCorrelation: "new_corr"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out3, &sent); err != nil {
+		t.Fatal(err)
+	}
+	md3 := sent["codebuff_metadata"].(map[string]any)
+	if md3["payload_extra"] != "keep" {
+		t.Errorf("payload_extra = %v, want keep (payload extra passthrough)", md3["payload_extra"])
+	}
+	if md3["run_id"] != "r" {
+		t.Errorf("run_id = %v, want r (payload reserved overwrite)", md3["run_id"])
+	}
+	if md3["cache_debug_correlation"] != "new_corr" {
+		t.Errorf("cache_debug_correlation = %v, want new_corr (ChatOptions wins over payload)", md3["cache_debug_correlation"])
+	}
+}
+
 
 // --- #94: 428 waiting_room_required classification ---------------------------
 

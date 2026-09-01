@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -139,7 +140,7 @@ func TestChatAttemptRetryCarriesFreshRunIdentity(t *testing.T) {
 			RequestID:         "req-rf",
 			StepNumber:        1, // the fresh run's first step
 		}
-		if captured[1] != want {
+		if !reflect.DeepEqual(captured[1], want) {
 			t.Errorf("retry envelope = %+v, want %+v (fresh run identity)", captured[1], want)
 		}
 	})
@@ -158,7 +159,7 @@ func TestChatAttemptRetryCarriesFreshRunIdentity(t *testing.T) {
 		if got := invalidated; len(got) != 0 {
 			t.Errorf("invalidateRun calls = %v, want none on a transient error", got)
 		}
-		if captured[1] != captured[0] {
+		if !reflect.DeepEqual(captured[1], captured[0]) {
 			t.Errorf("same-run retry envelope changed: %+v -> %+v (want identical)", captured[0], captured[1])
 		}
 	})

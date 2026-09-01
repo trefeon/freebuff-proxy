@@ -45,6 +45,17 @@ type ChatOptions struct {
 	// Injected as codebuff_metadata["llm_step_number"] when > 0; the run
 	// manager sets it per chat call at the server construction sites.
 	StepNumber int
+	// N is codebuff_metadata["n"] (llm.ts:118 `...(n && {n})`). 0 means
+	// absent (mirrors JS truthiness). CLI forwards it when sampling multiple
+	// completions.
+	N int
+	// CacheDebugCorrelation is codebuff_metadata["cache_debug_correlation"]
+	// (llm.ts:120-122). Empty means absent.
+	CacheDebugCorrelation string
+	// ExtraCodebuffMetadata is the CLI's extraCodebuffMetadata spread
+	// (llm.ts:115 `...(extraCodebuffMetadata ?? {})`) — caller-supplied
+	// keys merged BEFORE reserved identifiers so reserved keys win.
+	ExtraCodebuffMetadata map[string]string
 }
 
 // ChatCompletions POSTs an OpenAI-shaped request to the upstream chat
@@ -325,18 +336,27 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	}
 	// Preserve any extra caller-supplied codebuff_metadata keys (e.g.
 	// cache_debug_correlation, n) the CLI's getProviderOptions merges via
-	// extraCodebuffMetadata before stamping reserved identifiers (llm.ts:112-119).
+	// extraCodebuffMetadata before stamping reserved identifiers (llm.ts:112-122).
 	// Reserved keys are always overwritten below so the server trusts only
 	// proxy-minted identifiers; non-reserved extras are forwarded verbatim.
 	extraMeta := map[string]any{}
 	if raw, ok := payload["codebuff_metadata"].(map[string]any); ok {
 		for k, v := range raw {
 			switch k {
-			case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort":
+			case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort", "n", "cache_debug_correlation":
 				// reserved — overwritten below
 			default:
 				extraMeta[k] = v
 			}
+		}
+	}
+	for k, v := range opts.ExtraCodebuffMetadata {
+		switch k {
+		case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort", "n", "cache_debug_correlation":
+			// reserved — must not be smuggled via extra
+			continue
+		default:
+			extraMeta[k] = v
 		}
 	}
 	metadata := map[string]any{}
@@ -356,8 +376,14 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	if opts.StepNumber > 0 {
 		metadata["llm_step_number"] = strconv.Itoa(opts.StepNumber)
 	}
+	if opts.N > 0 {
+		metadata["n"] = opts.N
+	}
 	if costMode != "" {
 		metadata["cost_mode"] = costMode
+	}
+	if opts.CacheDebugCorrelation != "" {
+		metadata["cache_debug_correlation"] = opts.CacheDebugCorrelation
 	}
 	// freebuff_reasoning_effort mirrors the normalized top-level
 	// reasoning_effort the convert layer already clamped to the model's
