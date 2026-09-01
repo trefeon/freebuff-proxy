@@ -416,7 +416,6 @@ func TestActingUserID(t *testing.T) {
 	})
 }
 
-
 func TestQuotaFallbackModels(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		clearEnv(t)

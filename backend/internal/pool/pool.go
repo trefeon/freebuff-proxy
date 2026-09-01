@@ -386,11 +386,14 @@ type admissionGate struct {
 }
 
 type tokenEntry struct {
-	session *session.Manager
-	runs    *runs.RunManager
-	client  *upstream.Client
-	email      atomic.Pointer[string]
-	accountID  atomic.Pointer[string]
+	session   *session.Manager
+	runs      *runs.RunManager
+	client    *upstream.Client
+	email     atomic.Pointer[string]
+	accountID atomic.Pointer[string]
+	// accountFetch guards the background account-info backfill so at most
+	// one FetchAccountInfo runs per entry at a time (issue #269).
+	accountFetch atomic.Bool
 	// config reload that replaces the account at this slot REBUILDS the
 	// entry (see Pool.SetConfig): the old entry is retired and drained
 	// (runs FINISHed, session ended) and a fresh one is constructed for
@@ -453,6 +456,26 @@ func (e *tokenEntry) SetAccountID(id string) {
 	if id != "" {
 		e.accountID.Store(&id)
 	}
+}
+
+// asyncAccountInfoFetch backfills the account email/id for one pooled token
+// entry whose email is still unknown. It never blocks the caller, and at most
+// one fetch per entry is in flight at a time (issue #269). A failed fetch
+// releases the guard so a later backfill pass retries.
+func (p *Pool) asyncAccountInfoFetch(e *tokenEntry) {
+	if e.email.Load() != nil || !e.accountFetch.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer e.accountFetch.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		email, id, err := e.client.FetchAccountInfo(ctx)
+		if err == nil && email != "" {
+			e.SetEmail(email)
+			e.SetAccountID(id)
+		}
+	}()
 }
 
 // SetTokenAccountInfo stamps the account email and ID onto a pooled token entry.
@@ -521,15 +544,6 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 			client:  clients[i],
 			token:   cfg.AuthTokens[i],
 		}
-		go func(e *tokenEntry) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			email, id, err := e.client.FetchAccountInfo(ctx)
-			if err == nil && email != "" {
-				e.SetEmail(email)
-				e.SetAccountID(id)
-			}
-		}(entry)
 		toks = append(toks, entry)
 	}
 	p.toks.Store(&toks)
@@ -742,17 +756,10 @@ func (p *Pool) buildTokenEntry(idx int, token string) (*tokenEntry, error) {
 		client:  client,
 		token:   token,
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		email, id, err := client.FetchAccountInfo(ctx)
-		if err == nil && email != "" {
-			entry.SetEmail(email)
-			entry.SetAccountID(id)
-		}
-	}()
+	go p.asyncAccountInfoFetch(entry)
 	return entry, nil
 }
+
 // isPooledToken reports whether raw matches one of the fixed AUTH_TOKENS
 // entries (exact string compare against the pool's own in-memory copies).
 func (p *Pool) isPooledToken(raw string) bool {

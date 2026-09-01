@@ -328,7 +328,6 @@ func Load(configPath string) (Config, error) {
 		fallbackModels = defaultFallbackModels()
 	}
 
-
 	// QUOTA_FALLBACK_MODELS defaults (issue #155): when a model's session
 	// quota is exhausted, fall back to an unlimited model (flash → mimo).
 	quotaFallbackModels := parseMap(string(raw.QuotaFallbackModels))

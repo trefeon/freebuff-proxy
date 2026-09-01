@@ -11,7 +11,7 @@ func TestPoolSwapTokens(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 
-	p := sizedPool(t, mock) // initial token at index 0
+	p := sizedPool(t, mock)                            // initial token at index 0
 	addTokens(t, p, "cb_alpha", "cb_beta", "cb_gamma") // indices 1, 2, 3
 
 	if p.TokenCount() != 4 {

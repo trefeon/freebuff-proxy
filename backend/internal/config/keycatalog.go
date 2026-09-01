@@ -24,11 +24,11 @@ type KeyDef struct {
 	// the values they were built with until the process restarts. The set
 	// exactly equals the server's restartOnlyConfigKeys (enforced by
 	// TestRestartOnlyCatalogMatchesServer).
-	RestartOnly bool     `json:"restart_only"`
-	Secret      bool     `json:"secret"`
-	Essential   bool     `json:"essential"`
-	Hidden      bool     `json:"hidden,omitempty"`
-	Description string   `json:"description"`
+	RestartOnly bool   `json:"restart_only"`
+	Secret      bool   `json:"secret"`
+	Essential   bool   `json:"essential"`
+	Hidden      bool   `json:"hidden,omitempty"`
+	Description string `json:"description"`
 }
 
 // Catalog group names, in the order the UI renders them.

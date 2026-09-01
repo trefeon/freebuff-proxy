@@ -466,12 +466,15 @@ func (s *Server) handleTokenSwap(w http.ResponseWriter, r *http.Request) {
 		toIdx = *req.To
 	} else if req.Idx != nil {
 		fromIdx = *req.Idx
-		if req.Dir == "up" {
+		switch req.Dir {
+		case "up":
 			toIdx = fromIdx - 1
-		} else if req.Dir == "down" {
+		case "down":
 			toIdx = fromIdx + 1
-		} else if req.To != nil {
-			toIdx = *req.To
+		default:
+			if req.To != nil {
+				toIdx = *req.To
+			}
 		}
 	} else if rawFrom := r.URL.Query().Get("from"); rawFrom != "" {
 		fromIdx, _ = strconv.Atoi(rawFrom)
@@ -479,9 +482,10 @@ func (s *Server) handleTokenSwap(w http.ResponseWriter, r *http.Request) {
 	} else if rawIdx := r.URL.Query().Get("index"); rawIdx != "" {
 		fromIdx, _ = strconv.Atoi(rawIdx)
 		dir := r.URL.Query().Get("direction")
-		if dir == "up" {
+		switch dir {
+		case "up":
 			toIdx = fromIdx - 1
-		} else if dir == "down" {
+		case "down":
 			toIdx = fromIdx + 1
 		}
 	}

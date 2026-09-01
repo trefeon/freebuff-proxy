@@ -2,7 +2,6 @@
 package pool
 
 import (
-	"context"
 	"time"
 
 	"freebuff-proxy/backend/internal/session"
@@ -144,18 +143,6 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			if q != nil {
 				quarantineReason = q.reason
 			}
-		}
-
-		if tok.Email() == "" {
-			go func(e *tokenEntry) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				email, id, err := e.client.FetchAccountInfo(ctx)
-				if err == nil && email != "" {
-					e.SetEmail(email)
-					e.SetAccountID(id)
-				}
-			}(tok)
 		}
 
 		out = append(out, TokenSnapshot{

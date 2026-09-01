@@ -89,13 +89,13 @@ type FreebucksWindow struct {
 
 // FreebucksInfo is the caller's Freebucks position (issue #232).
 type FreebucksInfo struct {
-	Balance       float64                  `json:"balance"`
-	Daily         FreebucksWindow          `json:"daily"`
-	Weekly        FreebucksWindow          `json:"weekly"`
-	Monthly       FreebucksWindow          `json:"monthly"`
-	BindingWindow string                   `json:"bindingWindow"`
-	PlanDaily     *float64                 `json:"planDaily,omitempty"`
-	Prices        map[string]float64       `json:"prices"`
+	Balance       float64            `json:"balance"`
+	Daily         FreebucksWindow    `json:"daily"`
+	Weekly        FreebucksWindow    `json:"weekly"`
+	Monthly       FreebucksWindow    `json:"monthly"`
+	BindingWindow string             `json:"bindingWindow"`
+	PlanDaily     *float64           `json:"planDaily,omitempty"`
+	Prices        map[string]float64 `json:"prices"`
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -338,13 +338,13 @@ type rawFreebucksWindow struct {
 }
 
 type rawFreebucks struct {
-	Balance       float64                    `json:"balance"`
-	Daily         rawFreebucksWindow         `json:"daily"`
-	Weekly        rawFreebucksWindow         `json:"weekly"`
-	Monthly       rawFreebucksWindow         `json:"monthly"`
-	BindingWindow string                     `json:"bindingWindow"`
-	PlanDaily     *float64                   `json:"planDaily"`
-	Prices        map[string]float64         `json:"prices"`
+	Balance       float64            `json:"balance"`
+	Daily         rawFreebucksWindow `json:"daily"`
+	Weekly        rawFreebucksWindow `json:"weekly"`
+	Monthly       rawFreebucksWindow `json:"monthly"`
+	BindingWindow string             `json:"bindingWindow"`
+	PlanDaily     *float64           `json:"planDaily"`
+	Prices        map[string]float64 `json:"prices"`
 }
 
 // parseSessionResponse decodes a session control response body into a

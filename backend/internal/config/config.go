@@ -322,7 +322,6 @@ func (m *modelsAllowList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-
 // quotaFallbackModelsList is the raw QUOTA_FALLBACK_MODELS value (issue #155):
 // env is a comma-separated list of k=v pairs, JSON may be a string or a map.
 type quotaFallbackModelsList string
@@ -411,7 +410,6 @@ func defaultQuotaFallbackModels() map[string]string {
 		"openai/gpt-5.6-luna":        "deepseek/deepseek-v4-flash",
 	}
 }
-
 
 // EnvFileCandidates returns the ordered candidate paths for the .env file
 // (issue #39). The working directory wins (./.env), matching the historic
