@@ -170,6 +170,16 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Low-latency pooling for SG→US high-BDP link (240ms): keep many idle
+	// conns warm to avoid 30ms TLS re-handshakes on every chat. Defaults
+	// (MaxIdleConns 100, PerHost 2, Idle 90s) are too thin for 2 pooled
+	// tokens sharing one upstream host.
+	transport.MaxIdleConns = 200
+	transport.MaxIdleConnsPerHost = 64
+	transport.IdleConnTimeout = 120 * time.Second
+	transport.MaxConnsPerHost = 0 // unlimited, multiplex via HTTP/2 when enabled
+	transport.WriteBufferSize = 32 * 1024
+	transport.ReadBufferSize = 32 * 1024
 	var baseDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	var stealthProf *stealth.Profile
@@ -188,7 +198,6 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 	// HTTP_PROXY/HTTPS_PROXY env var never routes upstream traffic through a
 	// proxy either (full egress control).
 	transport.Proxy = nil
-
 	if stealthProf != nil {
 		// Resolve the profile per request (instead of capturing it) so a
 		// transient retry can swap the pinned fingerprint without rebuilding
