@@ -323,10 +323,28 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	if clientID == "" {
 		clientID = generateClientID()
 	}
-	metadata := map[string]any{
-		"run_id":    opts.RunID,
-		"client_id": clientID,
+	// Preserve any extra caller-supplied codebuff_metadata keys (e.g.
+	// cache_debug_correlation, n) the CLI's getProviderOptions merges via
+	// extraCodebuffMetadata before stamping reserved identifiers (llm.ts:112-119).
+	// Reserved keys are always overwritten below so the server trusts only
+	// proxy-minted identifiers; non-reserved extras are forwarded verbatim.
+	extraMeta := map[string]any{}
+	if raw, ok := payload["codebuff_metadata"].(map[string]any); ok {
+		for k, v := range raw {
+			switch k {
+			case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort":
+				// reserved — overwritten below
+			default:
+				extraMeta[k] = v
+			}
+		}
 	}
+	metadata := map[string]any{}
+	for k, v := range extraMeta {
+		metadata[k] = v
+	}
+	metadata["run_id"] = opts.RunID
+	metadata["client_id"] = clientID
 	if opts.TraceSessionID != "" {
 		metadata["trace_session_id"] = opts.TraceSessionID
 	}
