@@ -124,6 +124,7 @@ func TestInjectEnvelopeStepNumber(t *testing.T) {
 		t.Error("llm_step_number present when StepNumber == 0")
 	}
 }
+
 // TestInjectEnvelopeNAndCacheDebugCorrelation verifies llm.ts:118-122
 // mirror: N (when >0) and cache_debug_correlation (when non-empty) are
 // stamped into codebuff_metadata, and ExtraCodebuffMetadata is merged
@@ -220,7 +221,6 @@ func TestInjectEnvelopeNAndCacheDebugCorrelation(t *testing.T) {
 		t.Errorf("n = %v, want 5 (opts.N overwrites payload)", sent["codebuff_metadata"].(map[string]any)["n"])
 	}
 }
-
 
 // --- #94: 428 waiting_room_required classification ---------------------------
 
