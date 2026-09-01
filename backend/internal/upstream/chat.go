@@ -343,8 +343,8 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	if raw, ok := payload["codebuff_metadata"].(map[string]any); ok {
 		for k, v := range raw {
 			switch k {
-			case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort", "n", "cache_debug_correlation":
-				// reserved — overwritten below
+			case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort":
+				// reserved — overwritten below (server-trusted identifiers)
 			default:
 				extraMeta[k] = v
 			}
@@ -352,7 +352,7 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	}
 	for k, v := range opts.ExtraCodebuffMetadata {
 		switch k {
-		case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort", "n", "cache_debug_correlation":
+		case "run_id", "client_id", "trace_session_id", "freebuff_instance_id", "llm_step_number", "cost_mode", "freebuff_reasoning_effort":
 			// reserved — must not be smuggled via extra
 			continue
 		default:

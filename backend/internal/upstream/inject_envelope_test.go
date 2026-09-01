@@ -194,6 +194,31 @@ func TestInjectEnvelopeNAndCacheDebugCorrelation(t *testing.T) {
 	if md3["cache_debug_correlation"] != "new_corr" {
 		t.Errorf("cache_debug_correlation = %v, want new_corr (ChatOptions wins over payload)", md3["cache_debug_correlation"])
 	}
+
+	// Downstream client sending n via payload codebuff_metadata must be
+	// forwarded when opts.N==0 (watchdog: n is forwardable, not reserved).
+	out4, err := injectEnvelope([]byte(`{"model":"m","codebuff_metadata":{"n":2,"custom":"x"}}`), "free", ChatOptions{RunID: "r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out4, &sent); err != nil {
+		t.Fatal(err)
+	}
+	md4 := sent["codebuff_metadata"].(map[string]any)
+	if md4["n"] != float64(2) {
+		t.Errorf("payload n = %v, want 2 (forwarded when opts.N==0)", md4["n"])
+	}
+	// opts.N overwrites payload n when set
+	out5, err := injectEnvelope([]byte(`{"model":"m","codebuff_metadata":{"n":2}}`), "free", ChatOptions{RunID: "r", N: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(out5, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["codebuff_metadata"].(map[string]any)["n"] != float64(5) {
+		t.Errorf("n = %v, want 5 (opts.N overwrites payload)", sent["codebuff_metadata"].(map[string]any)["n"])
+	}
 }
 
 
