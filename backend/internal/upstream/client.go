@@ -177,7 +177,7 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 	transport.MaxIdleConns = 200
 	transport.MaxIdleConnsPerHost = 64
 	transport.IdleConnTimeout = 120 * time.Second
-	transport.MaxConnsPerHost = 0 // unlimited, multiplex via HTTP/2 when enabled
+	transport.MaxConnsPerHost = 64 // cap bursts; 0=unlimited would spike 64 TLS handshakes on cold start (h1 path). h2 multiplexes within this cap.
 	transport.WriteBufferSize = 32 * 1024
 	transport.ReadBufferSize = 32 * 1024
 	var baseDial func(ctx context.Context, network, addr string) (net.Conn, error)
