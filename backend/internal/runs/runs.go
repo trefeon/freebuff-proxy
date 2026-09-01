@@ -4,7 +4,7 @@
 // reference/proxy-freebuff/lib/runs.js and freebuff2api-quorinex
 // run_manager.go (tokenPool half), adapted to this project's layout: the
 // session manager is owned by the caller (pool) and only used here for the
-// shutdown EndSession, and the pool â€” not this package â€” decides which token
+// shutdown EndSession, and the pool — not this package — decides which token
 // serves a request.
 //
 // Concurrency: all run bookkeeping is guarded by the manager mutex; no lock
@@ -372,7 +372,7 @@ func (m *RunManager) Invalidate(agentID string) {
 // outstanding inflight leases or an in-flight FINISH are skipped. Best
 // effort: failures are logged, never returned (background job). While the
 // token is cooling down (auth rejection, rate limit, ban) the pass returns
-// immediately: no rotate attempts, no draining FINISH, no log â€” retrying
+// immediately: no rotate attempts, no draining FINISH, no log — retrying
 // upstream work during a cooldown looks like abuse and would log the
 // "token cooling down" rotate failure once per maintain tick (observed in
 // production). The pool logs the skip.
@@ -438,7 +438,7 @@ func (m *RunManager) Shutdown(ctx context.Context) {
 	m.finishDrainCtx = ctx
 	m.finishOnce.Do(func() { close(m.finishStop) })
 	// Ensure the worker exists BEFORE waiting: its finishWg.Add(1) must be
-	// ordered before the Wait below â€” a lazy first-start racing Shutdown
+	// ordered before the Wait below — a lazy first-start racing Shutdown
 	// would be a WaitGroup Add/Wait race and Shutdown could proceed without
 	// the late worker. If it was never started, it exits immediately on
 	// the closed stop channel and balances the count.
@@ -468,7 +468,7 @@ func (m *RunManager) Shutdown(ctx context.Context) {
 	_ = ctx.Err() // lint: ctx is still used by the caller below
 
 	// Run persistence (issue #40): with a store, keep the active runs alive
-	// across the restart like the session keep-alive â€” FINISHing them here
+	// across the restart like the session keep-alive — FINISHing them here
 	// would force the next process to re-START and burn upstream calls. The
 	// runs are already persisted on START; re-save so the latest Requests
 	// counter survives.
@@ -481,7 +481,7 @@ func (m *RunManager) Shutdown(ctx context.Context) {
 			snapshot = append(snapshot, m.cloneRun(run))
 		}
 		// Drained (rotated) runs are finished, never resumed: best-effort
-		// FINISH them NOW â€” the worker is stopped, so this is their last
+		// FINISH them NOW — the worker is stopped, so this is their last
 		// chance, and a stale store entry must not resurrect a finished
 		// run on the next boot.
 		draining := make([]*Run, 0, len(m.draining))
@@ -636,7 +636,7 @@ func (m *RunManager) rotate(ctx context.Context, agentID string) error {
 
 		// Issue #40: resume a persisted run instead of STARTing a fresh one
 		// when a restart left an active run behind. Only runs started within
-		// the rotation interval are adopted â€” a stale entry is dropped so
+		// the rotation interval are adopted — a stale entry is dropped so
 		// the upstream's own rotation wins. Best-effort: the store read
 		// never fails the rotate.
 		if m.store != nil && m.key != "" {

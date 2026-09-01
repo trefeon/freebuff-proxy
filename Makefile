@@ -1,33 +1,33 @@
-.PHONY: all build web-build build-proxy test test-race lint web-dev dev-proxy clean
+# Makefile — thin wrapper over Taskfile.yml (the canonical runner, issue #299).
+# `task --list` shows the full set; these mirrors exist only for muscle memory.
 
-BINARY_NAME=freebuff-proxy
-BIN_DIR=bin
+.PHONY: all build web-build build-proxy test test-race lint web-dev dev-proxy clean
 
 all: build
 
 web-build:
-	npm --prefix frontend run build
+	task frontend:build
 
 build-proxy:
-	go build -tags dashboard -o $(BIN_DIR)/$(BINARY_NAME) ./backend/cmd/freebuff-proxy
+	task build:proxy
 
-build: web-build build-proxy
+build:
+	task build
 
 test:
-	env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...
+	task test
 
 test-race:
-	env -u AUTH_TOKENS -u ADMIN_TOKEN go test -race ./backend/...
+	task test:race
 
 lint:
-	go vet ./backend/...
-	golangci-lint run ./backend/...
+	task lint
 
 web-dev:
-	npm --prefix frontend run dev
+	task frontend:dev
 
 dev-proxy:
-	go run -tags dashboard ./backend/cmd/freebuff-proxy
+	task dev
 
 clean:
-	rm -rf $(BIN_DIR)
+	rm -rf bin

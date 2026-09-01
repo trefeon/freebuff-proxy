@@ -5,7 +5,7 @@
 | Action | Linux / macOS | Windows (PowerShell) | Windows (CMD / Explorer) |
 | :--- | :--- | :--- | :--- |
 | **Start Proxy** | `./start-proxy.sh` | `.\start-proxy.ps1` | `.\start-proxy.cmd` |
-| **Generate Token** | `./gen-token.sh` | `.\gen-token.ps1` | `.\gen-token.cmd` |
+| **Generate Token** | `./gen-freebuff-token.sh` | `.\gen-freebuff-token.ps1` | (use `.\gen-freebuff-token.ps1` in PowerShell) |
 | **Easy Install** | `./install.sh` | `.\install.ps1` | `.\install.cmd` |
 | **Sync Upstream** | `./sync-upstream.sh` | `.\sync-upstream.ps1` | `.\sync-upstream.cmd` |
 ---
@@ -143,7 +143,7 @@ Automates fetching upstream changes from `CodebuffAI/freebuff`, syncing the five
 ## 5. Backward Compatibility Aliases
 
 The following legacy script names are preserved as transparent forwarders:
-- `gen-freebuff-token.ps1` / `gen-freebuff-token.sh` → `gen-token.*`
-- `get-freebuff-token.ps1` / `get-freebuff-token.sh` → `gen-token.*`
+- `gen-token.ps1` / `gen-token.sh` → `gen-freebuff-token.*` (canonical generator)
+- `get-freebuff-token.ps1` / `get-freebuff-token.sh` → `gen-freebuff-token.*`
 - `install-freebuff-proxy.ps1` / `install-freebuff-proxy.sh` → `install.*`
 - `install.bat` → `install.cmd`

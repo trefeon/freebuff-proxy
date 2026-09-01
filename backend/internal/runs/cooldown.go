@@ -50,7 +50,7 @@ func cappedDeadline(t time.Time) time.Time {
 // maxIpCappedReAdmitsPerDay caps how many times one token may re-admit
 // (and be refused ip_capped again) per Pacific day before it is locked
 // until the next Pacific midnight. The CLI treats ip_capped as
-// terminal-until-reset â€” it never loops an automatic re-admission â€” so the
+// terminal-until-reset — it never loops an automatic re-admission — so the
 // proxy mirrors that with this bounded budget instead of pacing an endless
 // POST loop (issue #118). Test-shrinkable like the pool's unfit TTL
 // (backend/internal/pool/unfit.go modelUnfitTTL).
@@ -138,11 +138,11 @@ func (m *RunManager) CooldownRateLimit(rle *upstream.RateLimitError) {
 }
 
 // CooldownIpCapped applies an ip_capped cooldown bounded to the body's
-// retryAfterMs ONLY â€” never the Pacific-midnight quota lock (ip_capped is
+// retryAfterMs ONLY — never the Pacific-midnight quota lock (ip_capped is
 // admission-only, not tied to a quota reset). The window honors the FULL
 // retryAfterMs plus the CLI's Â±20% poll jitter (#118). The CLI treats
-// ip_capped as terminal-until-reset â€” it never loops an automatic
-// re-admission â€” so the token's re-admission budget is capped at
+// ip_capped as terminal-until-reset — it never loops an automatic
+// re-admission — so the token's re-admission budget is capped at
 // maxIpCappedReAdmitsPerDay per Pacific day: once exhausted the token stays
 // locked (remembered 429 ip_capped + Retry-After reflecting the remaining
 // window) until the next Pacific midnight. Remembered so Acquires keep

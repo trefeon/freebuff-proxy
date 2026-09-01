@@ -85,7 +85,7 @@ func (m *RunManager) FinishAllRuns(ctx context.Context) {
 // FinishRun FINISHes the run upstream with its recorded terminal status,
 // completed steps, and totalSteps (issue #114), then drops it from the
 // active set. On upstream failure the run is put back on the draining list
-// so Maintain retries it. It does not touch inflight â€” callers should have
+// so Maintain retries it. It does not touch inflight — callers should have
 // already Released the lease.
 func (m *RunManager) FinishRun(ctx context.Context, run *Run) {
 	if run == nil {
@@ -223,8 +223,8 @@ func (m *RunManager) finishPayload(run *Run) (status string, steps []upstream.Ru
 }
 
 // logRunFinished emits a run's terminal lifecycle record: every way
-// a run leaves the manager â€” FINISHed through the deferred queue or
-// force-dropped from the draining list without FINISH â€” logs the same
+// a run leaves the manager — FINISHed through the deferred queue or
+// force-dropped from the draining list without FINISH — logs the same
 // run-finished event with the run's lifetime (duration_ms, now-StartedAt),
 // its in-memory recorded step count (steps), and the termination path
 // ("finish" via the FINISH queue, "drop" without FINISH). steps is the
@@ -274,7 +274,7 @@ func (m *RunManager) runDrainingLocked(run *Run) bool {
 }
 
 // pruneDrainingLocked bounds the draining list (issue #55): entries stuck
-// past DrainTTL or beyond DrainQueueCap are force-dropped with a warn log â€”
+// past DrainTTL or beyond DrainQueueCap are force-dropped with a warn log —
 // their upstream FINISH is best-effort anyway, and the list must never grow
 // unbounded when FINISH keeps failing. Caller holds m.mu.
 func (m *RunManager) pruneDrainingLocked() {

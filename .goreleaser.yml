@@ -35,12 +35,6 @@ archives:
         dst: LICENSE
       - src: .env.example
         dst: .env.example
-      - src: scripts/gen-token.sh
-        dst: gen-token.sh
-      - src: scripts/gen-token.ps1
-        dst: gen-token.ps1
-      - src: scripts/gen-token.cmd
-        dst: gen-token.cmd
       - src: scripts/gen-freebuff-token.sh
         dst: gen-freebuff-token.sh
       - src: scripts/gen-freebuff-token.ps1
@@ -51,6 +45,12 @@ archives:
         dst: start-proxy.ps1
       - src: scripts/start-proxy.cmd
         dst: start-proxy.cmd
+      - src: scripts/install.sh
+        dst: install.sh
+      - src: scripts/install.ps1
+        dst: install.ps1
+      - src: scripts/install.cmd
+        dst: install.cmd
       - src: scripts/README.md
         dst: README.md
 checksum:

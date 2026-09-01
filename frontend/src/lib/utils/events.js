@@ -1,3 +1,4 @@
+import { adminApi } from '../api/paths.js';
 import { isSessionDead } from '../stores/session.js';
 
 /**
@@ -25,7 +26,7 @@ export function useEventStream({ onTokens, onOpen, onError }) {
   function connect() {
     if (closed || isSessionDead() || document.hidden) return;
     try {
-      es = new EventSource('/admin/api/events');
+      es = new EventSource(adminApi.events);
       es.addEventListener('tokens', (e) => {
         try {
           const data = JSON.parse(e.data);

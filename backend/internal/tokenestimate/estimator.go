@@ -56,9 +56,11 @@ var ErrDocument = errors.New("document blocks are not supported by this proxy")
 
 // Estimator counts text with a process-shared o200k_base codec. The codec is
 // created once; Count/Encode only read its vocabulary, so the instance is
-// safe for concurrent use.
+// safe for concurrent use. Decode is serialized by decodeMu (issue #243):
+// tiktoken-go builds a reverse-vocabulary map lazily without its own lock.
 type Estimator struct {
-	codec tokenizer.Codec
+	codec    tokenizer.Codec
+	decodeMu sync.Mutex
 }
 
 var (
@@ -69,12 +71,6 @@ var (
 
 // New returns an Estimator backed by a shared o200k_base codec (vocabulary
 // embedded in the binary; no network access).
-//
-// The codec is process-wide: only Count (and Encode) are safe for concurrent
-// use. tiktoken-go's Codec.Decode lazily builds a reverse-vocabulary map
-// without a lock and crashes the process (concurrent map read/map write) when
-// called concurrently — never add a Decode call site here. If decoding is
-// ever needed, pre-warm it once under this sync.Once.
 func New() (*Estimator, error) {
 	codecOnce.Do(func() {
 		codec, codecErr = tokenizer.Get(tokenizer.O200kBase)
@@ -112,6 +108,16 @@ func (e *Estimator) CountJSON(v any) int {
 		return 0
 	}
 	return e.CountText(string(b))
+}
+
+// Decode converts token ids back to text. Safe for concurrent use: the
+// shared codec's Decode lazily builds a reverse-vocabulary map without a
+// lock, so every call is serialized here instead of crashing the process
+// (issue #243; the API is safe by construction, not by comment).
+func (e *Estimator) Decode(ids []uint) (string, error) {
+	e.decodeMu.Lock()
+	defer e.decodeMu.Unlock()
+	return e.codec.Decode(ids)
 }
 
 // CountAnthropicRequest estimates input tokens for an Anthropic

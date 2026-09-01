@@ -434,7 +434,7 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				instanceID:         st.InstanceID,
 				model:              model,
 				expiresAt:          st.ExpiresAt,
-				gracePeriodEndsAt:  st.ExpiresAt.Add(graceWindow),
+				gracePeriodEndsAt:  graceEndFromState(st.ExpiresAt, st.GracePeriodEndsAt),
 				countryCode:        st.CountryCode,
 				countryBlockReason: st.CountryBlockReason,
 				activeUsersForIP:   st.ActiveUsersForIP,

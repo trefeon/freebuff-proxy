@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"freebuff-proxy/backend/internal/tokenestimate"
+	"github.com/tiktoken-go/tokenizer"
 )
 
 func mustNew(t *testing.T) *tokenestimate.Estimator {
@@ -530,6 +531,44 @@ func TestConcurrentUse(t *testing.T) {
 					t.Errorf("CountText = %d, want 2", got)
 					return
 				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// TestDecodeRoundTrip pins the Decode API (issue #243): ids produced by
+// Encode decode back to the text, and concurrent Decode calls do not race
+// (the shared codec's reverse-vocabulary map is built lazily and would
+// crash without the internal lock).
+func TestDecodeRoundTrip(t *testing.T) {
+	est, err := tokenestimate.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "hello, world — token estimate round trip"
+	codec, err := tokenizer.Get(tokenizer.O200kBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, _, err := codec.Encode(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := est.Decode(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != text {
+		t.Errorf("decoded = %q, want %q", got, text)
+	}
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := est.Decode(ids); err != nil {
+				t.Errorf("concurrent Decode: %v", err)
 			}
 		}()
 	}

@@ -65,9 +65,10 @@
     syncTabFromURL();
     window.addEventListener('hashchange', syncTabFromURL);
 
-    // Fetch version / update check
-    fetch(adminApi.version)
-      .then((res) => res.json())
+    // Fetch version / update check. fetchAPI (not raw fetch): it routes the
+    // admin base and surfaces the session-expired 401/redirect so the
+    // login banner fires instead of swallowing an HTML error (issue #244).
+    fetchAPI(adminApi.version)
       .then((data) => {
         versionInfo = {
           current_version: data.current_version || '',

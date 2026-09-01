@@ -29,8 +29,8 @@ services:
     # cwd, and rename over a single-file bind mount fails with EBUSY
     # ("device or resource busy"), which 500s every dashboard save.
     # The directory and its contents must be writable by the container's
-    # uid 100 (alpine "app" user):
-    #   touch .env && chmod 777 .    (or: chown 100:100 .)
+    # uid 1000 (the Dockerfile's "app" user, adduser -u 1000):
+    #   touch .env && chmod 777 .    (or: chown 1000:1000 .)
     # rename() only needs write on the DIRECTORY, so .env itself can stay 644.
     # The container image is stateless; do NOT set AUTH_TOKENS via compose
     # environment — config precedence (env > .env) would make every
@@ -45,9 +45,11 @@ services:
       #   - "127.0.0.1:3457:3457"
       - "3457:3457"
     restart: unless-stopped
-    # Docker's default 10s stop timeout races the app's 10s drain while
-    # in-flight SSE streams starve the pool FINISH drain — give it room.
-    stop_grace_period: 20s
+    # Docker's default 10s stop timeout races the app's shutdown: the
+    # httpServer.Shutdown gets 10s, then Pool.Shutdown gets its own 20s
+    # (main.go) — a 30s worst case. SIGKILL at 20s would abort the pool
+    # FINISH drain the grace was added to protect (issue #300).
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3457/healthz"]
       interval: 30s

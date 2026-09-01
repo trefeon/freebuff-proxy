@@ -49,4 +49,14 @@ func TestEnvExampleLoadsCleanly(t *testing.T) {
 	if !cfg.BridgeMode() {
 		t.Error("BridgeMode() = false, want true (empty AUTH_TOKENS)")
 	}
+	// Issue #238: .env.example documents SESSION_PERSIST as on-by-default
+	// (the key is commented out, so the built-in default applies). A fresh
+	// install copying the example verbatim must persist, not silently write
+	// state files while being told it is opt-in.
+	if !cfg.SessionPersist {
+		t.Error("SessionPersist = false, want true (.env.example default)")
+	}
+	if cfg.SessionStateFile != ".freebuff-session-state.json" {
+		t.Errorf("SessionStateFile = %q, want .freebuff-session-state.json", cfg.SessionStateFile)
+	}
 }

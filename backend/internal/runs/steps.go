@@ -33,7 +33,7 @@ func newTraceSessionID() string {
 
 // Run is one agent run leased to a caller. Requests counts acquires served
 // by this run; it is used as the totalSteps fallback when no steps were
-// recorded (issue #114 â€” a step is one chat call, recorded in memory and
+// recorded (issue #114 — a step is one chat call, recorded in memory and
 // batched with FINISH).
 type Run struct {
 	AgentID   string
@@ -63,7 +63,7 @@ type Run struct {
 	StepCount atomic.Int64
 
 	// Steps accumulates the run's completed chat steps in memory (issue
-	// #114): they are batched and sent WITH FINISH â€” the CLI has no /steps
+	// #114): they are batched and sent WITH FINISH — the CLI has no /steps
 	// endpoint, so step recording is local-only. Guarded by the manager
 	// mutex; snapshot under the lock at FINISH time. Bounded to the newest
 	// maxRecordedSteps (the FINISH payload must not grow without bound).
@@ -107,12 +107,12 @@ func (r *Run) NextStepNumber() int64 {
 const maxRecordedSteps = 512
 
 // RecordStep appends a completed-chat step to run's in-memory step list
-// (issue #114): steps are batched and sent WITH FINISH â€” the CLI has no
+// (issue #114): steps are batched and sent WITH FINISH — the CLI has no
 // /steps endpoint, so recording is local-only and never touches the
 // network. The server fires it after a successful chat; messageID is the
 // completed chat response id ("" â†’ null on the wire, allowed by the CLI
-// step schema). Step numbers come from the run's per-attempt counter â€” the
-// SAME counter stamped as llm_step_number on the wire â€” so FINISH's steps
+// step schema). Step numbers come from the run's per-attempt counter — the
+// SAME counter stamped as llm_step_number on the wire — so FINISH's steps
 // agree with the stamps already sent even when earlier attempts failed
 // (#113/#114; the CLI numbers both from one per-run counter).
 func (m *RunManager) RecordStep(run *Run, messageID string) {
@@ -148,7 +148,7 @@ func (m *RunManager) RecordStep(run *Run, messageID string) {
 // MarkFailed records that run's chat died on a terminal upstream error so
 // its eventual FINISH reports status "failed" instead of "completed"
 // (issue #114: a gateway with zero failed runs looks synthetic). The server
-// calls it from the chat error path; the run stays active â€” only its
+// calls it from the chat error path; the run stays active — only its
 // terminal status is recorded.
 func (m *RunManager) MarkFailed(run *Run) {
 	if run == nil {
@@ -217,7 +217,7 @@ func (m *RunManager) removeRun(run *Run) {
 // decision happen under the manager mutex, so a racing Acquire can never
 // lease a run that is about to be finished. The abandoned run FINISHes as
 // "cancelled" (issue #114): a run killed by a client disconnect must not
-// report completed â€” a gateway with zero cancelled runs looks synthetic.
+// report completed — a gateway with zero cancelled runs looks synthetic.
 func (m *RunManager) ReleaseAbandoned(run *Run) {
 	if run == nil {
 		return
@@ -234,7 +234,7 @@ func (m *RunManager) ReleaseAbandoned(run *Run) {
 	// Last lease abandoned: the run must FINISH as cancelled, whichever
 	// finish path owns it (active drop or the draining queue). A run that
 	// already died on a terminal upstream error keeps its "failed" status
-	// (issue #114) â€” cancelled only fills an unset status.
+	// (issue #114) — cancelled only fills an unset status.
 	if run.Status == "" {
 		run.Status = "cancelled"
 	}

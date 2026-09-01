@@ -82,7 +82,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 	flusher.Flush()
 
 	// Issue #164: the message_start event names the proxy's served model
-	// (lease.Model, fallbacks included), not the raw requested id â€” clients
+	// (lease.Model, fallbacks included), not the raw requested id — clients
 	// must see what actually served the request. Falls back to the requested
 	// model when the relay is driven without a lease (direct unit tests).
 	servedModel := stats.servedModel
@@ -122,7 +122,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 	// lastWrite tracks the last frame actually written to the CLIENT; the
 	// keepalive condition keys on it so a liveness signal is emitted after
 	// any client-write silence, regardless of upstream comment/junk dribble
-	// (those are dropped and never relayed â€” #161).
+	// (those are dropped and never relayed — #161).
 	lastWrite := time.Now()
 	first := true
 
@@ -160,7 +160,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 			if drop {
 				// Dropped upstream lines are never relayed and must not
 				// advance the keepalive timer (client sees only real
-				// frames â€” #161).
+				// frames — #161).
 				continue
 			}
 			var chunk map[string]any
@@ -329,7 +329,7 @@ func (s *Server) accumulateAnthropicChunk(send func(map[string]any), st *anthrop
 	// Tool-call fragments â†’ tool_use blocks.
 	if tcs, ok := delta["tool_calls"].([]any); ok && len(tcs) > 0 {
 		// Sequential block lifecycle: an open thinking block must be closed
-		// before a tool_use content_block_start fires â€” leaving it open until
+		// before a tool_use content_block_start fires — leaving it open until
 		// finalize would straddle the tool_use block (both calls idempotent).
 		st.closeThinking(send)
 		st.closeText(send)
@@ -499,7 +499,7 @@ func canonicalAnthropicToolKey(st *anthropicStreamState) string {
 
 // ensureThinking opens the thinking content block on first reasoning delta.
 // Reasoning arriving AFTER a text block opened (which closed the thinking
-// block via ensureText) reopens a FRESH thinking block at a new index â€”
+// block via ensureText) reopens a FRESH thinking block at a new index —
 // mirror of ensureText's reopen pattern. Emitting a delta against the closed
 // index would violate the sequential block lifecycle.
 func (st *anthropicStreamState) ensureThinking(send func(map[string]any)) {
@@ -529,7 +529,7 @@ func (st *anthropicStreamState) ensureThinking(send func(map[string]any)) {
 }
 
 // closeThinking closes the thinking block with a signature_delta (empty
-// signature â€” the upstream never emits signatures).
+// signature — the upstream never emits signatures).
 func (st *anthropicStreamState) closeThinking(send func(map[string]any)) {
 	if !st.thinkingStarted || st.thinkingClosed {
 		return
@@ -637,7 +637,7 @@ func (st *anthropicStreamState) setStopReason(reason string) {
 	case "tool_calls", "function_call":
 		// sawToolCall is deliberately NOT set here: it must reflect actual
 		// relayed tool fragments (accumulateAnthropicChunk), not the terminal
-		// chunk's claim â€” an end_turn-only stream whose finish_reason is
+		// chunk's claim — an end_turn-only stream whose finish_reason is
 		// "tool_calls" must still finalize as "end_turn".
 		st.finishReason = "tool_use"
 	case "stop", "":

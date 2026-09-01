@@ -265,10 +265,7 @@ func (m *Manager) Poll(ctx context.Context) error {
 		// as ended-with-instance so the fast path keeps serving it until
 		// grace closes; the pool keeps polling. The grace end comes from the
 		// response when present, else expiresAt + graceWindow.
-		graceEnd := st.GracePeriodEndsAt
-		if graceEnd.IsZero() && !st.ExpiresAt.IsZero() {
-			graceEnd = st.ExpiresAt.Add(graceWindow)
-		}
+		graceEnd := graceEndFromState(st.ExpiresAt, st.GracePeriodEndsAt)
 		if st.InstanceID != "" && !graceEnd.IsZero() && time.Now().Before(graceEnd) {
 			m.mu.Lock()
 			if m.state != nil && m.state.instanceID == instanceID {

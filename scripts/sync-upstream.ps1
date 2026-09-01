@@ -185,6 +185,35 @@ finally {
     }
 }
 
+# 2b. Vendor npm wrapper version (freebuff CLI package). Best-effort: npm
+#     not on PATH is fine; in sync mode the pin auto-updates.
+$vendorVersionFile = Join-Path $RepoRoot "scripts\vendor-version.txt"
+$npmVersion = ""
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    $npmVersion = (npm view freebuff version 2>$null)
+    if (-not $npmVersion) { $npmVersion = "" }
+}
+$pinnedVersion = ""
+if (Test-Path $vendorVersionFile) {
+    $pinnedVersion = ([System.IO.File]::ReadAllText($vendorVersionFile)).Trim()
+}
+if ($npmVersion) {
+    if ($pinnedVersion -and $npmVersion -ne $pinnedVersion) {
+        Write-Host "    npm freebuff@$npmVersion (pinned $pinnedVersion) - VERSION DRIFT"
+        $driftCount++
+        if (-not $CheckOnly) {
+            [System.IO.File]::WriteAllText($vendorVersionFile, $npmVersion + "`n", [System.Text.Encoding]::UTF8)
+            Write-Host "    Updated scripts/vendor-version.txt to $npmVersion"
+        }
+    }
+    else {
+        Write-Host "    npm freebuff@$npmVersion matches pin $pinnedVersion"
+    }
+}
+else {
+    Write-Host "    npm not on PATH - skipping vendor npm version check"
+}
+
 Write-Host ""
 
 if ($CheckOnly) {
@@ -208,16 +237,47 @@ else {
 Write-Host ""
 Write-Host "==> 4. Verifying pin parity..." -ForegroundColor Cyan
 
-# Run check-upstream.sh via Git Bash if available
+# Run check-upstream.sh via Git Bash if available. After a sync, verify only
+# the registry group: the wire files are deliberately not touched by this
+# sync, so wire drift arriving in the same upstream batch (tracked by the
+# drift workflow as a separate needs-port issue) must not fail the registry
+# sync. Check-only mode keeps the full check so drift reports still fail on
+# wire drift.
 $gitBash = "C:\Program Files\Git\bin\bash.exe"
 if (Test-Path $gitBash) {
-    & $gitBash "$RepoRoot/scripts/check-upstream.sh" $UpstreamSha $CloneDir
+    $checkArgs = @()
+    if (-not $CheckOnly) { $checkArgs = @("--group", "registry") }
+    & $gitBash "$RepoRoot/scripts/check-upstream.sh" @checkArgs $UpstreamSha $CloneDir
     if ($LASTEXITCODE -ne 0) {
-        throw "check-upstream.sh failed"
+        throw "check-upstream.sh reported failure after sync"
     }
 }
 else {
-    Write-Host "    (Git Bash not detected; verified via native SHA-256 computation: $driftCount drifts)"
+    Write-Host "    (Git Bash not detected; re-verifying pinned files via native SHA-256)..."
+    $reVerifyFailures = 0
+    foreach ($f in $Files) {
+        $pinnedFile = Join-Path $PinnedDir $f
+        $pinnedSha = Get-FileNormalizedSha256 $pinnedFile
+        git -C $CloneDir cat-file -e "${UpstreamSha}:${UpstreamPrefix}/$f" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            if ($pinnedSha -ne "-") {
+                Write-Host "    $f : still present locally but MISSING upstream" -ForegroundColor Red
+                $reVerifyFailures++
+            }
+            continue
+        }
+        cmd.exe /c "git -C `"$CloneDir`" show `"${UpstreamSha}:${UpstreamPrefix}/$f`" > `"$tempFile`""
+        $vendorRaw = [System.IO.File]::ReadAllText($tempFile, [System.Text.Encoding]::UTF8)
+        $vendorSha = Get-NormalizedSha256 $vendorRaw
+        if ($pinnedSha -ne $vendorSha) {
+            Write-Host "    $f : pin $($pinnedSha.Substring(0,12)) != vendor $($vendorSha.Substring(0,12))" -ForegroundColor Red
+            $reVerifyFailures++
+        }
+    }
+    if ($reVerifyFailures -gt 0) {
+        throw "post-sync verification failed for $reVerifyFailures file(s)"
+    }
+    Write-Host "    Post-sync verification passed for all pinned files." -ForegroundColor Green
 }
 
 if (-not $NoTest) {

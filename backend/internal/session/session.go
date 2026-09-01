@@ -71,6 +71,20 @@ const (
 	stormThreshold = 3
 )
 
+// graceEndFromState prefers the server-defined grace end carried by the
+// upstream response and falls back to the fixed expiresAt+graceWindow
+// formula. Both admission refresh and poll use it so a server-defined
+// grace window is never replaced by the proxy deadline (issue #240).
+func graceEndFromState(expiresAt, wireGraceEnd time.Time) time.Time {
+	if !wireGraceEnd.IsZero() {
+		return wireGraceEnd
+	}
+	if expiresAt.IsZero() {
+		return time.Time{}
+	}
+	return expiresAt.Add(graceWindow)
+}
+
 // WaitingRoomError is returned when the session is queued and pollAt has not
 // passed. Callers should surface it as 503 with Retry-After.
 type WaitingRoomError struct {

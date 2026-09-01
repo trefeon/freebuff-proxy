@@ -20,7 +20,7 @@ import (
 
 // relayAnthropicJSON drains the upstream stream and writes one Anthropic
 // message object. On any decode/stream error a 502 is returned with an
-// Anthropic error envelope â€” this path serves only /v1/messages, so the
+// Anthropic error envelope — this path serves only /v1/messages, so the
 // OpenAI-shaped body writeJSONError produces is never correct here.
 func (s *Server) relayAnthropicJSON(ctx context.Context, w http.ResponseWriter, r *http.Request, up io.Reader, stats *relayStats, chatStart time.Time, requestedModel string) {
 	acc := convert.NewAccumulator()
@@ -56,7 +56,7 @@ func (s *Server) relayAnthropicJSON(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 	// Issue #164: the message object names the proxy's served model (lease.Model,
-	// fallbacks included), not the raw requested id â€” fall back to the
+	// fallbacks included), not the raw requested id — fall back to the
 	// requested model only when the relay ran without a lease.
 	servedModel := stats.servedModel
 	if servedModel == "" {
@@ -159,7 +159,7 @@ func (s *Server) relayAnthropicJSON(ctx context.Context, w http.ResponseWriter, 
 // an accumulated chat.completion. servedModel is the authoritative model the
 // proxy's lease was bound to (issue #164) and wins over the upstream echo;
 // the echo only fills the field when no served model is known (direct unit
-// calls) â€” the response must name what actually served the request.
+// calls) — the response must name what actually served the request.
 func anthropicMessageFromCompletion(completion map[string]any, servedModel string) map[string]any {
 	id, _ := completion["id"].(string)
 	if id == "" {

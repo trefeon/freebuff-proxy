@@ -111,7 +111,7 @@ Official reference specifications and SDKs reside in `reference/` (gitignored).
 
 ```bash
 # Build binary
-go build -o freebuff-proxy.exe ./backend/cmd/freebuff-proxy
+go build -tags dashboard -o freebuff-proxy.exe ./backend/cmd/freebuff-proxy
 
 # Run full hermetic test suite
 env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...
