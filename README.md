@@ -75,12 +75,11 @@ If you are a beginner, you don't need to write code or compile anything:
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
-| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool (`PREMIUM 0/5`). |
-| **Premium** | **Solar Pro 4** `NEW` | `upstage/solar-pro4` | **Limited-time trial**, experimental, OpenRouter BYOK (Upstage), text-only, context `500_000`. Shares `5/day` premium pool. |
-| **Unlimited**| **GLM 5.3 Flash** `NEW` | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool 2026-08-28; now the default pick, per vendor `0.0.161`). |
-| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; off-peak-only serving window removed 2026-08-28). |
+| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool. |
+| **Premium** | **Solar Pro 4** `NEW` | `upstage/solar-pro4` | **Limited-time trial**, experimental, OpenRouter BYOK (Upstage), text-only, context `500_000`. Shares `5/day` premium pool **+ `1/day` per-model cap (`solar_pro4`)**. |
+| **Unlimited**| **GLM 5.3 Flash** `NEW` | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; now the default pick, per vendor `0.0.161`). |
+| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; off-peak-only serving window removed `2026-08-28`). |
 | **Unlimited**| **MiMo 2.5** | `mimo/mimo-v2.5` | **Balanced**, Images. **Unlimited across all tiers**. |
-| **Referral** | **GLM 5.2** | `z-ai/glm-5.2` | **Top open-source agentic model**. Referral-gated (`+1/day` per referral), 1-hour sessions. |
 | **Disabled** | **MiniMax M3** | `minimax/minimax-m3` | **Withdrawn** upstream (2026-08-20). |
 | **Disabled** | **DeepSeek V4 Pro** | `deepseek/deepseek-v4-pro` | **Withdrawn** upstream (2026-08-26, cost). |
 | **Disabled** | **Ox Alpha** | `stealth/ox-alpha` | **Withdrawn** upstream (2026-08-27, free promotion ended). |

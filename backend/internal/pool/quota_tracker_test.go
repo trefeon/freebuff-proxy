@@ -115,7 +115,7 @@ func TestPremiumSnapshotFromQuotaMap(t *testing.T) {
 				if premium.Remaining != premium.Limit-premium.Used && premium.Remaining != 0 {
 					// remaining is max(0, limit-used)
 					if premium.Remaining < 0 {
-						t.Errorf("remaining negative: %d", premium.Remaining)
+						t.Errorf("remaining negative: %v", premium.Remaining)
 					}
 				}
 			}
@@ -134,7 +134,7 @@ func TestPremiumSnapshotPreferLuna(t *testing.T) {
 		t.Fatal("premium nil")
 	}
 	if premium.Used != 2 {
-		t.Errorf("prefer flash: used=%d want 2", premium.Used)
+		t.Errorf("prefer flash: used=%v want 2", premium.Used)
 	}
 }
 
@@ -148,10 +148,10 @@ func TestPremiumSnapshotSortedFallback(t *testing.T) {
 		t.Fatal("premium nil")
 	}
 	if premium.Used != 1 {
-		t.Errorf("sorted fallback: used=%d want 1", premium.Used)
+		t.Errorf("sorted fallback: used=%v want 1", premium.Used)
 	}
 	if premium.Limit != 4 {
-		t.Errorf("limit = %d, want 4", premium.Limit)
+		t.Errorf("limit = %v, want 4", premium.Limit)
 	}
 }
 

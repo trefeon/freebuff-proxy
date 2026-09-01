@@ -8,12 +8,17 @@ import (
 	"freebuff-proxy/backend/internal/session"
 )
 
-// PremiumQuotaSnapshot is the per-token premium quota view (4/day pacific_day
-// shared pool) derived from session.QuotaSnapshot.
+// PremiumQuotaSnapshot is the per-token premium quota view (5/day pacific_day
+// shared pool) derived from session.QuotaSnapshot. Mirrors the CLI's TUI
+// "N of M used · resets in …" for the PREMIUM header — fractional session
+// units (0.1 = 6 min, 1.0 = 60 min) exactly as the server counts them, not
+// truncated ints. See reference/freebuff/common/src/types/freebuff-session.ts
+// FreebuffSessionRateLimit.recentCount (float) and the clock in
+// cli/src/components/freebuff-model-selector.tsx:83.
 type PremiumQuotaSnapshot struct {
-	Limit       int       `json:"limit"`
-	Used        int       `json:"used"`
-	Remaining   int       `json:"remaining"`
+	Limit       float64   `json:"limit"`
+	Used        float64   `json:"used"`
+	Remaining   float64   `json:"remaining"`
 	Period      string    `json:"period"`
 	ResetAt     time.Time `json:"reset_at"`
 	PercentUsed int       `json:"percent_used"`
@@ -37,15 +42,15 @@ func buildPremiumSnapshot(q session.QuotaSnapshot) *PremiumQuotaSnapshot {
 }
 
 func buildPremiumSnapshotAt(q session.QuotaSnapshot, now time.Time) *PremiumQuotaSnapshot {
-	limit := int(q.Limit)
-	used := int(q.RecentCount)
+	limit := q.Limit
+	used := q.RecentCount
 	remaining := limit - used
 	if remaining < 0 {
 		remaining = 0
 	}
 	percent := 0
 	if limit > 0 {
-		percent = (used * 100) / limit
+		percent = int(used * 100 / limit)
 		if percent > 100 {
 			percent = 100
 		}

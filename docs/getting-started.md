@@ -55,18 +55,18 @@ FreeBuff assigns an access tier at the Cloudflare edge based on your TCP source 
 
 ### Current Upstream Model Status & Quotas
 
-> **📢 Official Freebuff Upstream Notice** (vendor snapshot `87ef664` · npm `0.0.158`):
-> *"Solar Pro 4 joins as a limited-time premium trial row sharing the normal premium pool; DeepSeek V4 Flash is back to always-available (peak pricing still applies). Every model runs on your normal daily sessions — no per-model caps, and MiMo stays unmetered. —Freebuff Team"*
-> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; `GLM 5.3 Flash` shares the premium pool — no per-model cap.)
+> **📢 Official Freebuff Upstream Notice** (vendor snapshot `89ce3f5` · npm `0.0.161` `2026-08-30`):
+> *"Every model runs on your normal daily sessions — no per-model caps; your shared premium allowance still charges partial time, rounded up to a tenth. MiMo, DeepSeek V4 Flash and GLM 5.3 Flash are unmetered. —❤️ Freebuff Team"*
+> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` + `Solar Pro 4` (solar additionally `1/day` `pool:solar_pro4` cap on top of the shared pool). `GLM 5.3 Flash` is **unmetered** — no per-model cap, left the premium pool `2026-08-28`.)
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
 | **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool. |
-| **Premium** | **Solar Pro 4** `NEW` | `upstage/solar-pro4` | **Limited-time trial**, experimental, OpenRouter BYOK (Upstage), text-only, context `500_000`. Shares `5/day` premium pool. |
-| **Premium** | **GLM 5.3 Flash** `NEW` | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. Shares `5/day` premium pool. |
-| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; off-peak-only serving window removed 2026-08-28). |
+| **Premium** | **Solar Pro 4** `NEW` | `upstage/solar-pro4` | **Limited-time trial**, experimental, OpenRouter BYOK (Upstage), text-only, context `500_000`. Shares `5/day` premium pool **+ `1/day` per-model cap (`solar_pro4`)**. |
+| **Unlimited**| **GLM 5.3 Flash** `NEW` | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; now the default pick). |
+| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; off-peak-only serving window removed `2026-08-28`). |
 | **Unlimited**| **MiMo 2.5** | `mimo/mimo-v2.5` | **Balanced**, Images. **Unlimited across all tiers** (sole active model on limited tier). |
-| **Referral** | **GLM 5.2** | `z-ai/glm-5.2` | **Top open-source agentic model**. Referral-gated (+1/day promo pool), 1-hour sessions. |
+| **Referral** | **GLM 5.2** | `z-ai/glm-5.2` | **Top open-source agentic model**. Referral-gated (`+1/day` promo pool), 1-hour sessions. |
 | **Disabled** | **MiniMax M3** | `minimax/minimax-m3` | **Withdrawn** upstream (2026-08-20). |
 | **Disabled** | **DeepSeek V4 Pro** | `deepseek/deepseek-v4-pro` | **Withdrawn** upstream (2026-08-26, cost). |
 | **Disabled** | **Ox Alpha** | `stealth/ox-alpha` | **Withdrawn** upstream (2026-08-27, free promotion ended). |

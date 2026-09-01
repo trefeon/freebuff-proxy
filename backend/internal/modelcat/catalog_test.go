@@ -324,9 +324,10 @@ func TestCatalogFactsPinned(t *testing.T) {
 		t.Errorf("ServedIDs() = %v, want %v", got, wantServed)
 	}
 
-	// Shared premium pool = Luna only (Solar 1-session cap, per-model pool
-	// freebuff-spend-ceilings.ts experimental limit). GLM 5.3 Flash unmetered.
-	wantPremium := []string{"openai/gpt-5.6-luna"}
+	// Shared premium pool = Luna + Solar Pro 4 (both metered by the shared
+	// 5/day pool; solar additionally has a per-model 1/day cap
+	// solar_pro4). GLM 5.3 Flash unmetered.
+	wantPremium := []string{"openai/gpt-5.6-luna", "upstage/solar-pro4"}
 	if got := SharedPremiumModels(); !slices.Equal(got, wantPremium) {
 		t.Errorf("SharedPremiumModels() = %v, want %v", got, wantPremium)
 	}

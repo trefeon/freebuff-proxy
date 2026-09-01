@@ -87,6 +87,6 @@ func TestPremiumSnapshotMathSpec(t *testing.T) {
 	}
 	p5 := premiumSnapshotFromQuotaMap(m5)
 	if p5.Used != 3 {
-		t.Errorf("priority: used=%d want 3 (luna)", p5.Used)
+		t.Errorf("priority: used=%v want 3 (luna)", p5.Used)
 	}
 }

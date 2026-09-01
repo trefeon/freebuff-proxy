@@ -214,11 +214,13 @@ func IsPremium(id string) bool {
 }
 
 // SharedPremiumModels returns the ids metered by the shared daily premium
-// pool (FREEBUFF_PREMIUM_MODEL_IDS). Luna and Solar Pro 4 (GLM 5.3 Flash is unmetered).
+// pool (FREEBUFF_PREMIUM_MODEL_IDS). Luna + Solar Pro 4 share the 5/day
+// premium pool; solar additionally has a per-model cap (1/day, pool
+// solar_pro4) on top of the shared pool. GLM 5.3 Flash is unmetered.
 func SharedPremiumModels() []string {
 	var out []string
 	for i := range Catalog {
-		if Catalog[i].Premium && Catalog[i].Cap == 0 {
+		if Catalog[i].Premium {
 			out = append(out, Catalog[i].ID)
 		}
 	}

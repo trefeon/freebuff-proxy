@@ -191,11 +191,8 @@ the proxy without risking your account's trust tier.
 
 ## Access Tiers
 
-FreeBuff assigns access tiers at the Cloudflare edge based on TCP source IP GeoIP (not HTTP headers):
-
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. Access to premium models (`openai/gpt-5.6-luna`, `z-ai/glm-5.3-flash`, `upstage/solar-pro4`). **5 premium sessions/day base** (resets every 24h).
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. Access to premium models (`openai/gpt-5.6-luna`, `upstage/solar-pro4` — solar additionally `1/day` `pool:solar_pro4` on top of the `5/day` shared premium pool). **GLM 5.3 Flash**, DeepSeek V4 Flash and MiMo 2.5 are **unmetered unlimited** on full tier (GLM left the premium pool `2026-08-28`). **5 premium sessions/day base** (resets every `07:00 UTC`).
 - **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries. All model requests coerced to `mimo/mimo-v2.5` (`MiMo 2.5`). **MiMo 2.5 stays unlimited across all tiers**.
-Check your tier: the `/healthz` response includes access tier info when the last session admission carried it. The dashboard Overview page also shows it.
 
 See [Getting Started — Access Tiers & Workarounds](getting-started.md#access-tiers--workarounds) for how to reach full tier from a limited-tier location.
 

@@ -323,12 +323,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	sb.WriteString("# TYPE freebuff_proxy_premium_quota_limit gauge\n")
 	for _, snap := range snaps {
 		if snap.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Limit)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"%d\"} %g\n", snap.Token+1, snap.PremiumQuota.Limit)
 		}
 	}
 	for _, bs := range s.pool.BridgeSnapshot() {
 		if bs.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Limit)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_limit{token=\"bridge_%s\"} %g\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Limit)
 		}
 	}
 	sb.WriteString("\n")
@@ -336,12 +336,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	sb.WriteString("# TYPE freebuff_proxy_premium_quota_used gauge\n")
 	for _, snap := range snaps {
 		if snap.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Used)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"%d\"} %g\n", snap.Token+1, snap.PremiumQuota.Used)
 		}
 	}
 	for _, bs := range s.pool.BridgeSnapshot() {
 		if bs.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Used)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_used{token=\"bridge_%s\"} %g\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Used)
 		}
 	}
 	sb.WriteString("\n")
@@ -349,12 +349,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	sb.WriteString("# TYPE freebuff_proxy_premium_quota_remaining gauge\n")
 	for _, snap := range snaps {
 		if snap.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"%d\"} %d\n", snap.Token+1, snap.PremiumQuota.Remaining)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"%d\"} %g\n", snap.Token+1, snap.PremiumQuota.Remaining)
 		}
 	}
 	for _, bs := range s.pool.BridgeSnapshot() {
 		if bs.PremiumQuota != nil {
-			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"bridge_%s\"} %d\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Remaining)
+			fmt.Fprintf(&sb, "freebuff_proxy_premium_quota_remaining{token=\"bridge_%s\"} %g\n", escapeLabelValue(bs.Key), bs.PremiumQuota.Remaining)
 		}
 	}
 	sb.WriteString("\n")
