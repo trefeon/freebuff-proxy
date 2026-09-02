@@ -117,7 +117,11 @@
     />
   {/if}
 
-  <div class="flex-1 flex flex-col h-full overflow-y-auto {activeTab !== 'login' ? 'md:pl-56' : ''}">
+  <div
+    class="flex-1 flex flex-col h-full overflow-y-auto {activeTab !== 'login'
+      ? 'md:pl-56'
+      : ''}"
+  >
     <main
       id="main-content"
       tabindex="-1"
