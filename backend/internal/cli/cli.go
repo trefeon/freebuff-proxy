@@ -32,6 +32,7 @@ import (
 	_ "time/tzdata"
 
 	"freebuff-proxy/backend/internal/cli/port"
+	"freebuff-proxy/backend/internal/clicreds"
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/logring"
 	"freebuff-proxy/backend/internal/notify"
@@ -50,7 +51,7 @@ import (
 // drain gracefully on a shutdown signal. It returns the process exit code
 // (0 normal, 1 server failure); the caller maps it to os.Exit.
 func Serve(configPath string, verbose bool, version string) int {
-	cfg, err := config.Load(configPath)
+	cfg, err := config.LoadOpts(configPath, config.LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "freebuff-proxy: invalid config:", err)
 		holdForExitIfConsole()

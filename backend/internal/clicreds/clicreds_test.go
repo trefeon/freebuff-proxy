@@ -91,3 +91,41 @@ func TestDiscoverTokenStripsBOM(t *testing.T) {
 		t.Fatalf("DiscoverToken = (%q, %v), want cb_bom (BOM must not break parsing)", token, ok)
 	}
 }
+
+func TestDiscoverTokenPrefersFreebuff(t *testing.T) {
+	home := setFakeHome(t)
+	writeCreds(t, home, ".config/freebuff", `{"default": {"authToken": "cb_freebuff"}}`)
+	writeCreds(t, home, ".config/manicode", `{"default": {"authToken": "cb_manicode"}}`)
+	writeCreds(t, home, ".config/codebuff", `{"default": {"authToken": "cb_codebuff"}}`)
+
+	token, _, path, ok := clicreds.DiscoverToken()
+	if !ok || token != "cb_freebuff" {
+		t.Fatalf("DiscoverToken = (%q, %v), want cb_freebuff", token, ok)
+	}
+	if !strings.Contains(path, "freebuff") {
+		t.Errorf("path = %q, want freebuff", path)
+	}
+}
+
+func TestDiscoverTokenSessionTokenFallback(t *testing.T) {
+	home := setFakeHome(t)
+	writeCreds(t, home, ".config/codebuff", `{"default": {"id": "uuid-123", "sessionToken": "cb_session_token", "email": "dev@example.com"}}`)
+
+	token, email, _, ok := clicreds.DiscoverToken()
+	if !ok || token != "cb_session_token" {
+		t.Fatalf("DiscoverToken = (%q, %v), want cb_session_token", token, ok)
+	}
+	if email != "dev@example.com" {
+		t.Errorf("email = %q, want dev@example.com", email)
+	}
+}
+
+func TestDiscoverTokenFreebuffProfilePrecedence(t *testing.T) {
+	home := setFakeHome(t)
+	writeCreds(t, home, ".config/codebuff", `{"freebuff": {"authToken": "cb_from_freebuff_profile"}, "default": {"authToken": "cb_from_default"}}`)
+
+	token, _, _, ok := clicreds.DiscoverToken()
+	if !ok || token != "cb_from_freebuff_profile" {
+		t.Fatalf("DiscoverToken = (%q, %v), want cb_from_freebuff_profile", token, ok)
+	}
+}

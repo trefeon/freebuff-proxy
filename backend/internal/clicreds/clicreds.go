@@ -13,17 +13,21 @@ import (
 )
 
 // DiscoverToken auto-discovers the CLI credentials the same way the official
-// FreeBuff CLI stores them: ~/.config/manicode/credentials.json first, then
-// ~/.config/codebuff/credentials.json. It returns the auth token, the
-// account email, the source file path, and whether a token was found. The
-// boolean is false on any failure (missing home, unreadable file, malformed
-// JSON, no authToken), so callers can silently fall back to bridge mode.
+// FreeBuff / Codebuff CLI stores them:
+//  1. ~/.config/freebuff/credentials.json (standalone FreeBuff CLI)
+//  2. ~/.config/manicode/credentials.json (original Codebuff/FreeBuff CLI location)
+//  3. ~/.config/codebuff/credentials.json (Codebuff CLI fallback)
+//
+// Inside each file, it inspects profiles in precedence:
+// "freebuff" -> "default" -> "codebuff" -> any profile map.
+// Token fields are checked in precedence: "authToken" -> "sessionToken" -> "token".
 func DiscoverToken() (token, email, path string, ok bool) {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return "", "", "", false
 	}
 	candidates := []string{
+		filepath.Join(home, ".config", "freebuff", "credentials.json"),
 		filepath.Join(home, ".config", "manicode", "credentials.json"),
 		filepath.Join(home, ".config", "codebuff", "credentials.json"),
 	}
@@ -39,23 +43,46 @@ func DiscoverToken() (token, email, path string, ok bool) {
 		if err := json.Unmarshal(data, &parsed); err != nil {
 			continue
 		}
-		acct, _ := parsed["default"].(map[string]any)
+
+		// Look for preferred profile keys first
+		var acct map[string]any
+		for _, profileKey := range []string{"freebuff", "default", "codebuff"} {
+			if m, ok := parsed[profileKey].(map[string]any); ok {
+				acct = m
+				break
+			}
+		}
+		// Fallback: look for any map with a valid token
 		if acct == nil {
 			for _, v := range parsed {
-				if m, ok := v.(map[string]any); ok && m["authToken"] != nil {
-					acct = m
-					break
+				if m, ok := v.(map[string]any); ok {
+					if extractToken(m) != "" {
+						acct = m
+						break
+					}
 				}
 			}
 		}
+
 		if acct != nil {
-			rawToken, _ := acct["authToken"].(string)
+			rawToken := extractToken(acct)
 			rawEmail, _ := acct["email"].(string)
-			rawToken = strings.TrimSpace(rawToken)
 			if rawToken != "" {
-				return rawToken, rawEmail, p, true
+				return rawToken, strings.TrimSpace(rawEmail), p, true
 			}
 		}
 	}
 	return "", "", "", false
+}
+
+func extractToken(m map[string]any) string {
+	for _, key := range []string{"authToken", "sessionToken", "token"} {
+		if val, ok := m[key].(string); ok {
+			trimmed := strings.TrimSpace(val)
+			if trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
 }
