@@ -12,6 +12,7 @@
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
+  import { confirmAction } from "../stores/confirm.js";
   import { formatTime } from "../utils/format.js";
   import { parseEnv, setEnvValue as setEnvLine } from "../utils/env.js";
 
@@ -325,13 +326,16 @@
   async function saveConfig(e, opts = {}) {
     e?.preventDefault();
     if (saving || !dirty) return;
-    if (
-      opts.confirm !== false &&
-      !window.confirm(
-        $tr("Save the .env file and reload the proxy with these changes?"),
-      )
-    ) {
-      return;
+    if (opts.confirm !== false) {
+      const ok = await confirmAction({
+        title: $tr("Save Configuration"),
+        message: $tr(
+          "Save the .env file and reload the proxy with these changes?",
+        ),
+        confirmText: $tr("Save & Reload"),
+        tone: "warn",
+      });
+      if (!ok) return;
     }
     saving = true;
     result = null;
@@ -524,7 +528,7 @@
       )}
       pad="none"
     >
-      <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <div class="overflow-auto max-h-96 min-h-0" style="contain: paint;">
         {#if data?.effective?.length}
           <table class="fp-table">
             <caption class="sr-only"

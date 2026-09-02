@@ -4,6 +4,7 @@
   import { postAPI } from "../api/client.js";
   import { tokenActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
+  import { confirmAction } from "../stores/confirm.js";
   import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
   import { onMount } from "svelte";
 
@@ -18,7 +19,15 @@
   let actionPending = $state(false);
 
   async function triggerAction(action, body, confirmMsg) {
-    if (confirmMsg && !confirm(confirmMsg)) return;
+    if (confirmMsg) {
+      const ok = await confirmAction({
+        title: $tr("Confirm Action"),
+        message: confirmMsg,
+        confirmText: $tr("Confirm"),
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
     actionPending = true;
     try {
       const res = await postAPI(tokenActions[action](idx), body);
@@ -39,7 +48,7 @@
 <td>
   <select
     bind:value={spawnModel}
-    class="fp-input !text-xs !py-1 !px-2 !h-8 !w-48"
+    class="fp-input !text-xs !py-1 !pl-2.5 !h-8 !w-48"
   >
     {#each modelOptions as m (m.id)}
       <option value={m.id}>{m.label}</option>
