@@ -24,7 +24,7 @@
           aria-label="Update available"
         >
           <span class="led led-accent led-pulse" aria-hidden="true"></span>
-          <span>update to v{versionInfo.latest_version}</span>
+          <span>update to {versionInfo.latest_version}</span>
         </a>
       {/if}
       <a

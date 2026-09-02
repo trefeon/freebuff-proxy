@@ -228,7 +228,7 @@
           <span class="led led-accent led-pulse" aria-hidden="true"></span>
           <span>update</span>
           <span class="ml-auto text-[var(--fp-dim)] normal-case tracking-normal"
-            >v{versionInfo.latest_version}</span
+            >{versionInfo.latest_version}</span
           >
         </a>
       {/if}
@@ -365,7 +365,7 @@
             <span>update</span>
             <span
               class="ml-auto text-[var(--fp-dim)] normal-case tracking-normal"
-              >v{versionInfo.latest_version}</span
+              >{versionInfo.latest_version}</span
             >
           </a>
         {/if}
