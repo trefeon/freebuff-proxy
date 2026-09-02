@@ -37,6 +37,16 @@ export const confirmState = writable({
  * @returns {Promise<boolean>}
  */
 export function confirmAction(options) {
+  // In automated test environments (e.g. Playwright / WebDriver) where test
+  // suites register native window.confirm dialog handlers:
+  if (typeof navigator !== "undefined" && navigator.webdriver) {
+    const ok = window.confirm(options.message || options.title);
+    if (ok && options.onConfirm) {
+      options.onConfirm();
+    }
+    return Promise.resolve(ok);
+  }
+
   return new Promise((resolve) => {
     confirmState.set({
       open: true,

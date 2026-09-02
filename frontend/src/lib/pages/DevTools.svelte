@@ -18,6 +18,7 @@
     refreshTokens,
   } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
+  import { confirmAction } from "../stores/confirm.js";
   import { onMount } from "svelte";
 
   // Dev Tools is an operator-only manual testing surface (issue: dev testing
@@ -245,7 +246,15 @@
   }
 
   async function triggerTokenAction(url, body, confirmMsg) {
-    if (confirmMsg && !confirm(confirmMsg)) return;
+    if (confirmMsg) {
+      const ok = await confirmAction({
+        title: $tr("Confirm Action"),
+        message: confirmMsg,
+        confirmText: $tr("Confirm"),
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
     actionPending = true;
     actionMessage = "";
     try {

@@ -40,12 +40,6 @@ export const NAV_ITEMS = [
   { id: "tokens", component: Tokens, label: "Tokens", icon: Key },
   { id: "quota", component: QuotaTracker, label: "Quota Tracker", icon: Gauge },
   { id: "models", component: Models, label: "Models", icon: Cpu },
-  {
-    id: "settings",
-    component: Settings,
-    label: "Settings",
-    icon: SettingsIcon,
-  },
   { id: "logs", component: Logs, label: "Logs", icon: FileText },
   {
     id: "devtools",
@@ -53,6 +47,12 @@ export const NAV_ITEMS = [
     label: "Dev Tools",
     icon: FlaskConical,
     gate: "devtools",
+  },
+  {
+    id: "settings",
+    component: Settings,
+    label: "Settings",
+    icon: SettingsIcon,
   },
   // Deep-link-only pages: reachable by URL but never listed in the sidebar.
   { id: "setup", component: Setup, inSidebar: false },

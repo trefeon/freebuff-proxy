@@ -19,7 +19,7 @@
   } from "../stores/tokens.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
-
+  import { confirmAction } from "../stores/confirm.js";
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -118,8 +118,23 @@
     }
   }
 
-  async function triggerAction(url, body, confirmMsg) {
-    if (confirmMsg && !confirm(confirmMsg)) return;
+  async function triggerAction(
+    url,
+    body,
+    confirmMsg,
+    title,
+    tone = "warn",
+    confirmText = "",
+  ) {
+    if (confirmMsg) {
+      const ok = await confirmAction({
+        title: title || $tr("Confirm Action"),
+        message: confirmMsg,
+        confirmText: confirmText || $tr("Confirm"),
+        tone,
+      });
+      if (!ok) return;
+    }
     actionPending = true;
     try {
       const result = await postAPI(url, body || undefined);
@@ -146,30 +161,49 @@
             "Clear cooldown for token {idx}? Only do this if the lock is stale.",
             { idx },
           ),
+          $tr("Clear Cooldown"),
+          "warn",
+          $tr("Clear"),
         );
       case "unlock":
         return triggerAction(
           tokenActions.unlockLock(idx),
           {},
-          $tr("Unlock token {idx}?", { idx }),
+          $tr("Unlock token {idx}? It will rejoin the active rotation.", {
+            idx,
+          }),
+          $tr("Unlock Token"),
+          "neutral",
+          $tr("Unlock"),
         );
       case "lock":
         return triggerAction(
           tokenActions.lock(idx),
           {},
-          $tr("Lock token {idx}?", { idx }),
+          $tr(
+            "Lock token {idx}? It will be excluded from rotation until unlocked.",
+            { idx },
+          ),
+          $tr("Lock Token"),
+          "warn",
+          $tr("Lock"),
         );
       case "remove":
         return triggerAction(
           adminActions.tokenRemove,
           { token: idx },
-          $tr("Remove token {idx} from the pool and .env?", { idx }),
+          $tr(
+            "Remove token {idx} from the pool and .env? The account must be re-added to use it again.",
+            { idx },
+          ),
+          $tr("Remove Token"),
+          "danger",
+          $tr("Remove"),
         );
       default:
         return;
     }
   }
-
   function handleSpawn(idx, model) {
     const m = model || "mimo/mimo-v2.5";
     triggerAction(
