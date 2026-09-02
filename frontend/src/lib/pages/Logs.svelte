@@ -27,7 +27,7 @@
   let loading = $state(true);
   let error = $state("");
   let manualRefresh = $state(false);
-  let viewMode = $state("console"); // 'console' | 'table'
+  let viewMode = $state("table"); // 'table' | 'console'
   let clearedBefore = $state(0);
   let copiedConsole = $state(false);
   let consoleEl = $state(null);
