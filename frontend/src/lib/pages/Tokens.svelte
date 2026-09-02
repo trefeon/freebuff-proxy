@@ -1,42 +1,42 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
+  import { LogIn, Plus, ExternalLink, RefreshCw } from "@lucide/svelte";
+  import Button from "../components/Button.svelte";
+  import Card from "../components/Card.svelte";
+  import Alert from "../components/Alert.svelte";
+  import CopyButton from "../components/CopyButton.svelte";
+  import PageHeader from "../components/PageHeader.svelte";
+  import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
+  import TokenTable from "./tokens/TokenTable.svelte";
+  import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
+  import { adminApi, adminActions, tokenActions } from "../api/paths.js";
+  import { isDevToolsEnabled } from "../utils/devtools.js";
   import {
-    LogIn,
-    Plus,
-    ExternalLink,
-    RefreshCw,
-  } from '@lucide/svelte';
-  import Button from '../components/Button.svelte';
-  import Card from '../components/Card.svelte';
-  import Alert from '../components/Alert.svelte';
-  import CopyButton from '../components/CopyButton.svelte';
-  import PageHeader from '../components/PageHeader.svelte';
-  import BridgeTokenCard from '../components/BridgeTokenCard.svelte';
-  import TokenTable from './tokens/TokenTable.svelte';
-  import { fetchAPI, postAPI, postForm, csrfHeader } from '../api/client.js';
-  import { adminApi, adminActions, tokenActions } from '../api/paths.js';
-  import { isDevToolsEnabled } from '../utils/devtools.js';
-  import { tokensData as tokensStore, tokensError as tokensErrorStore, ensureTokensStore, refreshTokens } from '../stores/tokens.js';
-  import { getEnvValue, setEnvValue } from '../utils/env.js';
-  import { tr } from '../i18n.js';
+    tokensData as tokensStore,
+    tokensError as tokensErrorStore,
+    ensureTokensStore,
+    refreshTokens,
+  } from "../stores/tokens.js";
+  import { getEnvValue, setEnvValue } from "../utils/env.js";
+  import { tr } from "../i18n.js";
 
   let data = $state(null);
   let loading = $state(true);
-  let error = $state('');
+  let error = $state("");
   let unsubStore = null;
   let unsubErr = null;
 
   // Add-token form
-  let newToken = $state('');
+  let newToken = $state("");
   let adding = $state(false);
-  let actionMessage = $state('');
+  let actionMessage = $state("");
   let actionOK = $state(true);
   // Dev Tools surfaces (per-token session spawn toolbar) are hidden unless
   // the operator enables DEVTOOLS_ENABLED=true in .env (same gate as the
   // sidebar's Dev Tools tab and the server-side DevTools route).
   let devToolsEnabled = $state(false);
   // Token rotation strategy (TOKEN_ROTATION in .env)
-  let tokenRotation = $state('drain');
+  let tokenRotation = $state("drain");
   let savingRotation = $state(false);
 
   async function setTokenRotation(newMode) {
@@ -44,14 +44,16 @@
     savingRotation = true;
     try {
       const cfgRes = await fetchAPI(adminApi.config);
-      const envContent = cfgRes?.env_content || '';
-      const newContent = setEnvValue(envContent, 'TOKEN_ROTATION', newMode);
-      const save = await postForm(adminActions.configSave, { content: newContent });
+      const envContent = cfgRes?.env_content || "";
+      const newContent = setEnvValue(envContent, "TOKEN_ROTATION", newMode);
+      const save = await postForm(adminActions.configSave, {
+        content: newContent,
+      });
       if (save.ok) {
         tokenRotation = newMode;
       }
     } catch (e) {
-      console.warn('Failed to update token rotation', e);
+      console.warn("Failed to update token rotation", e);
     } finally {
       savingRotation = false;
     }
@@ -69,11 +71,11 @@
   let now = $state(Date.now());
 
   const tokenValid = $derived(
-    newToken.trim() === ''
+    newToken.trim() === ""
       ? null
-      : !newToken.trim().toLowerCase().startsWith('bearer ') &&
-        !/[,\s]/.test(newToken.trim()) &&
-        newToken.trim().length >= 10
+      : !newToken.trim().toLowerCase().startsWith("bearer ") &&
+          !/[,\s]/.test(newToken.trim()) &&
+          newToken.trim().length >= 10,
   );
 
   function applyTokens(v) {
@@ -84,9 +86,9 @@
     // with a fallback (props_invalid_value) and unmounts the table.
     (v?.tokens ?? []).forEach((t, i) => {
       const idx = t.index ?? i;
-      if (!(idx in spawnModels)) spawnModels[idx] = '';
+      if (!(idx in spawnModels)) spawnModels[idx] = "";
     });
-    error = '';
+    error = "";
     loading = false;
   }
 
@@ -95,16 +97,22 @@
     if (!newToken.trim() || tokenValid === false || adding) return;
     adding = true;
     try {
-      const result = await postAPI(adminActions.tokenAdd, { token: newToken.trim() });
+      const result = await postAPI(adminActions.tokenAdd, {
+        token: newToken.trim(),
+      });
       actionOK = result.ok !== false;
-      actionMessage = result.message || (actionOK ? $tr('Token added successfully') : $tr('Failed to add token'));
+      actionMessage =
+        result.message ||
+        (actionOK
+          ? $tr("Token added successfully")
+          : $tr("Failed to add token"));
       if (actionOK) {
-        newToken = '';
+        newToken = "";
         refreshTokens();
       }
     } catch (e) {
       actionOK = false;
-      actionMessage = e.message || $tr('Network error adding token');
+      actionMessage = e.message || $tr("Network error adding token");
     } finally {
       adding = false;
     }
@@ -116,11 +124,13 @@
     try {
       const result = await postAPI(url, body || undefined);
       actionOK = result.ok !== false;
-      actionMessage = result.message || (actionOK ? $tr('Action completed') : $tr('Action failed'));
+      actionMessage =
+        result.message ||
+        (actionOK ? $tr("Action completed") : $tr("Action failed"));
       refreshTokens();
     } catch (e) {
       actionOK = false;
-      actionMessage = e.message || $tr('Network error executing action');
+      actionMessage = e.message || $tr("Network error executing action");
     } finally {
       actionPending = false;
     }
@@ -128,38 +138,74 @@
 
   function handleTokenAction(token, idx, action) {
     switch (action) {
-      case 'clear':
-        return triggerAction(tokenActions.unlock(idx), {}, $tr('Clear cooldown for token {idx}? Only do this if the lock is stale.', { idx }));
-      case 'unlock':
-        return triggerAction(tokenActions.unlockLock(idx), {}, $tr('Unlock token {idx}?', { idx }));
-      case 'lock':
-        return triggerAction(tokenActions.lock(idx), {}, $tr('Lock token {idx}?', { idx }));
-      case 'remove':
-        return triggerAction(adminActions.tokenRemove, { token: idx }, $tr('Remove token {idx} from the pool and .env?', { idx }));
+      case "clear":
+        return triggerAction(
+          tokenActions.unlock(idx),
+          {},
+          $tr(
+            "Clear cooldown for token {idx}? Only do this if the lock is stale.",
+            { idx },
+          ),
+        );
+      case "unlock":
+        return triggerAction(
+          tokenActions.unlockLock(idx),
+          {},
+          $tr("Unlock token {idx}?", { idx }),
+        );
+      case "lock":
+        return triggerAction(
+          tokenActions.lock(idx),
+          {},
+          $tr("Lock token {idx}?", { idx }),
+        );
+      case "remove":
+        return triggerAction(
+          adminActions.tokenRemove,
+          { token: idx },
+          $tr("Remove token {idx} from the pool and .env?", { idx }),
+        );
       default:
         return;
     }
   }
 
   function handleSpawn(idx, model) {
-    const m = model || 'mimo/mimo-v2.5';
-    triggerAction(tokenActions.session(idx), { model: m }, $tr('Create upstream session for token #{idx} on {model}?', { idx, model: m }));
+    const m = model || "mimo/mimo-v2.5";
+    triggerAction(
+      tokenActions.session(idx),
+      { model: m },
+      $tr("Create upstream session for token #{idx} on {model}?", {
+        idx,
+        model: m,
+      }),
+    );
   }
 
   function handleRefresh(idx, action) {
-    if (action === 'probe') {
-      return triggerAction(tokenActions.test(idx), {}, $tr('Probe token #{idx} against upstream?', { idx }));
+    if (action === "probe") {
+      return triggerAction(
+        tokenActions.test(idx),
+        {},
+        $tr("Probe token #{idx} against upstream?", { idx }),
+      );
     }
-    return triggerAction(tokenActions.finish(idx), {}, $tr('Finish active runs on token #{idx}?', { idx }));
+    return triggerAction(
+      tokenActions.finish(idx),
+      {},
+      $tr("Finish active runs on token #{idx}?", { idx }),
+    );
   }
   function handleDropSession(idx) {
     return triggerAction(
       tokenActions.dropSession(idx),
       {},
-      $tr('Drop active session on token #{idx}? This ends the current session upstream (e.g. luna) so the next request admits fresh for the model you want. Use this when you need to switch models immediately.', { idx })
+      $tr(
+        "Drop active session on token #{idx}? This ends the current session upstream (e.g. luna) so the next request admits fresh for the model you want. Use this when you need to switch models immediately.",
+        { idx },
+      ),
     );
   }
-
 
   function handleSwap(from, to) {
     triggerAction(adminActions.tokenSwap, { from, to });
@@ -167,39 +213,51 @@
 
   async function startOAuthLogin() {
     oauthStarting = true;
-    oauthStatus = { message: $tr('Starting headless login flow…'), type: 'info' };
+    oauthStatus = {
+      message: $tr("Starting headless login flow…"),
+      type: "info",
+    };
 
     try {
-      const res = await fetch(adminActions.loginStart, { method: 'POST', headers: csrfHeader('POST') });
+      const res = await fetch(adminActions.loginStart, {
+        method: "POST",
+        headers: csrfHeader("POST"),
+      });
       const result = await res.json();
 
       if (result.fingerprint && result.login_url) {
         oauthStatus = {
           loginUrl: result.login_url,
           fingerprint: result.fingerprint,
-          message: $tr('Open this URL in your browser to sign in:'),
-          type: 'pending',
+          message: $tr("Open this URL in your browser to sign in:"),
+          type: "pending",
         };
 
         clearInterval(oauthTimer);
         oauthTimer = setInterval(async () => {
           try {
-            const pollRes = await fetch(`${adminApi.loginStatus}?fingerprint=${encodeURIComponent(result.fingerprint)}`);
+            const pollRes = await fetch(
+              `${adminApi.loginStatus}?fingerprint=${encodeURIComponent(result.fingerprint)}`,
+            );
             const pollData = await pollRes.json();
 
-            if (pollData.status === 'completed') {
+            if (pollData.status === "completed") {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: $tr('Token #{idx} added to pool and saved to .env.', { idx: pollData.token_index }),
-                type: 'success',
+                message: $tr("Token #{idx} added to pool and saved to .env.", {
+                  idx: pollData.token_index,
+                }),
+                type: "success",
               };
               oauthStarting = false;
               refreshTokens();
-            } else if (pollData.status === 'error') {
+            } else if (pollData.status === "error") {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: $tr('Login failed: {message}', { message: pollData.message || $tr('unknown error') }),
-                type: 'error',
+                message: $tr("Login failed: {message}", {
+                  message: pollData.message || $tr("unknown error"),
+                }),
+                type: "error",
               };
               oauthStarting = false;
             }
@@ -209,13 +267,16 @@
         }, 3000);
       } else {
         oauthStatus = {
-          message: result.message || $tr('Failed to start login wizard.'),
-          type: 'error',
+          message: result.message || $tr("Failed to start login wizard."),
+          type: "error",
         };
         oauthStarting = false;
       }
     } catch (e) {
-      oauthStatus = { message: $tr('Network error: {message}', { message: e.message }), type: 'error' };
+      oauthStatus = {
+        message: $tr("Network error: {message}", { message: e.message }),
+        type: "error",
+      };
       oauthStarting = false;
     }
   }
@@ -236,18 +297,29 @@
         loading = false;
       }
     });
-    const tick = setInterval(() => { now = Date.now(); }, 1000);
+    const tick = setInterval(() => {
+      now = Date.now();
+    }, 1000);
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);
-        const envContent = cfgRes?.env_content || '';
+        const envContent = cfgRes?.env_content || "";
         devToolsEnabled = isDevToolsEnabled(envContent);
 
-        const rotVal = (getEnvValue(envContent, 'TOKEN_ROTATION') || 'drain').toLowerCase();
-        tokenRotation = ['drain', 'round_robin', 'least_used', 'random'].includes(rotVal) ? rotVal : 'drain';
+        const rotVal = (
+          getEnvValue(envContent, "TOKEN_ROTATION") || "drain"
+        ).toLowerCase();
+        tokenRotation = [
+          "drain",
+          "round_robin",
+          "least_used",
+          "random",
+        ].includes(rotVal)
+          ? rotVal
+          : "drain";
       } catch {
         devToolsEnabled = false;
-        tokenRotation = 'drain';
+        tokenRotation = "drain";
       }
     })();
     return () => {
@@ -262,41 +334,64 @@
 
 <div class="page-enter">
   <div class="flex flex-col gap-6">
-    <PageHeader title={$tr('Tokens')} description={$tr('Upstream credentials, device login, client API keys, and per-token session quotas')} />
+    <PageHeader
+      title={$tr("Tokens")}
+      description={$tr(
+        "Upstream credentials, device login, client API keys, and per-token session quotas",
+      )}
+    />
 
     {#if actionMessage}
-      <Alert tone={actionOK ? 'success' : 'error'} title={actionMessage} />
+      <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
     {/if}
     {#if error}
       <Alert tone="error" title={error}>
-        <Button variant="ghost" size="sm" onclick={() => { error = ''; refreshTokens(); }}>
-          {$tr('Retry')}
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={() => {
+            error = "";
+            refreshTokens();
+          }}
+        >
+          {$tr("Retry")}
         </Button>
       </Alert>
     {/if}
 
     {#if oauthStatus}
       <Alert
-        tone={oauthStatus.type === 'success' ? 'success' : oauthStatus.type === 'error' ? 'error' : 'info'}
+        tone={oauthStatus.type === "success"
+          ? "success"
+          : oauthStatus.type === "error"
+            ? "error"
+            : "info"}
         title={oauthStatus.message}
       >
         {#if oauthStatus.loginUrl}
           <div class="flex flex-col gap-2 mt-2">
             <div class="flex flex-wrap items-center gap-2">
-              <code class="fp-num text-xs break-all max-w-full">{oauthStatus.loginUrl}</code>
-              <CopyButton text={oauthStatus.loginUrl} label={$tr('Copy link')} />
+              <code class="fp-num text-xs break-all max-w-full"
+                >{oauthStatus.loginUrl}</code
+              >
+              <CopyButton
+                text={oauthStatus.loginUrl}
+                label={$tr("Copy link")}
+              />
               <a
                 href={oauthStatus.loginUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-1 text-xs text-[var(--fp-accent)] hover:underline font-medium"
               >
-                {$tr('Open in New Tab')}
+                {$tr("Open in New Tab")}
                 <ExternalLink size={12} />
               </a>
             </div>
             <p class="text-xs text-[var(--fp-dim)]">
-              {$tr('Tip: To add a different FreeBuff account, open this link in an Incognito / Private window so your browser does not reuse an existing GitHub session.')}
+              {$tr(
+                "Tip: To add a different FreeBuff account, open this link in an Incognito / Private window so your browser does not reuse an existing GitHub session.",
+              )}
             </p>
           </div>
         {/if}
@@ -305,8 +400,10 @@
 
     <!-- Add token form -->
     <Card
-      title={$tr('Add Token to Pool')}
-      description={$tr('Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.')}
+      title={$tr("Add Token to Pool")}
+      description={$tr(
+        "Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.",
+      )}
     >
       {#snippet actions()}
         <Button
@@ -316,16 +413,22 @@
         >
           {#if oauthStarting}
             <RefreshCw size={15} class="animate-spin" />
-            <span>{$tr('Authorizing…')}</span>
+            <span>{$tr("Authorizing…")}</span>
           {:else}
             <LogIn size={15} />
-            <span>{$tr('Device Login')}</span>
+            <span>{$tr("Device Login")}</span>
           {/if}
         </Button>
       {/snippet}
       <form onsubmit={addToken} class="flex flex-col gap-1.5">
-        <label for="add-token-input" class="text-xs font-medium text-[var(--fp-muted)]">{$tr('Token')}</label>
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+        <label
+          for="add-token-input"
+          class="text-xs font-medium text-[var(--fp-muted)]"
+          >{$tr("Token")}</label
+        >
+        <div
+          class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+        >
           <input
             id="add-token-input"
             type="text"
@@ -343,16 +446,22 @@
             class="shrink-0"
           >
             <Plus size={15} />
-            <span>{$tr('Add Token')}</span>
+            <span>{$tr("Add Token")}</span>
           </Button>
         </div>
         {#if tokenValid === false}
           <p class="text-[11px] text-[var(--fp-error)]" role="alert">
-            {$tr('Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix')}
+            {$tr(
+              "Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix",
+            )}
           </p>
         {:else}
           <p class="text-[11px] text-[var(--fp-dim)]">
-            {tokenValid === true ? $tr('Valid format') : $tr('UUID or session token from ~/.config/codebuff/credentials.json')}
+            {tokenValid === true
+              ? $tr("Valid format")
+              : $tr(
+                  "UUID or session token from ~/.config/codebuff/credentials.json",
+                )}
           </p>
         {/if}
       </form>
@@ -360,76 +469,119 @@
 
     <!-- Token Rotation Scheme & Handling Policy Card -->
     <Card
-      title={$tr('Token Rotation & Handling Policy')}
-      description={$tr('Strategy used by the gateway to select upstream accounts for model requests.')}
+      title={$tr("Token Rotation & Handling Policy")}
+      description={$tr(
+        "Strategy used by the gateway to select upstream accounts for model requests.",
+      )}
     >
       {#snippet actions()}
-        <span class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]">
-          <span class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"></span>
-          <span class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]">{tokenRotation}</span>
+        <span
+          class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]"
+        >
+          <span
+            class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"
+          ></span>
+          <span
+            class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]"
+            >{tokenRotation}</span
+          >
         </span>
       {/snippet}
 
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={$tr('Token Rotation Policy')}>
+        <div
+          class="flex flex-wrap items-center gap-2"
+          role="radiogroup"
+          aria-label={$tr("Token Rotation Policy")}
+        >
           <button
             type="button"
             role="radio"
-            aria-checked={tokenRotation === 'drain'}
+            aria-checked={tokenRotation === "drain"}
             disabled={savingRotation}
-            onclick={() => setTokenRotation('drain')}
-            class="fp-btn {tokenRotation === 'drain' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+            onclick={() => setTokenRotation("drain")}
+            class="fp-btn {tokenRotation === 'drain'
+              ? 'fp-btn-primary'
+              : 'fp-btn-ghost'} fp-btn-sm text-xs"
           >
-            {$tr('Drain (Safest)')}
+            {$tr("Drain (Safest)")}
           </button>
           <button
             type="button"
             role="radio"
-            aria-checked={tokenRotation === 'round_robin'}
+            aria-checked={tokenRotation === "round_robin"}
             disabled={savingRotation}
-            onclick={() => setTokenRotation('round_robin')}
-            class="fp-btn {tokenRotation === 'round_robin' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+            onclick={() => setTokenRotation("round_robin")}
+            class="fp-btn {tokenRotation === 'round_robin'
+              ? 'fp-btn-primary'
+              : 'fp-btn-ghost'} fp-btn-sm text-xs"
           >
-            {$tr('Round Robin (1:1)')}
+            {$tr("Round Robin (1:1)")}
           </button>
           <button
             type="button"
             role="radio"
-            aria-checked={tokenRotation === 'least_used'}
+            aria-checked={tokenRotation === "least_used"}
             disabled={savingRotation}
-            onclick={() => setTokenRotation('least_used')}
-            class="fp-btn {tokenRotation === 'least_used' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+            onclick={() => setTokenRotation("least_used")}
+            class="fp-btn {tokenRotation === 'least_used'
+              ? 'fp-btn-primary'
+              : 'fp-btn-ghost'} fp-btn-sm text-xs"
           >
-            {$tr('Least Used (Max Quota)')}
+            {$tr("Least Used (Max Quota)")}
           </button>
           <button
             type="button"
             role="radio"
-            aria-checked={tokenRotation === 'random'}
+            aria-checked={tokenRotation === "random"}
             disabled={savingRotation}
-            onclick={() => setTokenRotation('random')}
-            class="fp-btn {tokenRotation === 'random' ? 'fp-btn-primary' : 'fp-btn-ghost'} fp-btn-sm text-xs"
+            onclick={() => setTokenRotation("random")}
+            class="fp-btn {tokenRotation === 'random'
+              ? 'fp-btn-primary'
+              : 'fp-btn-ghost'} fp-btn-sm text-xs"
           >
-            {$tr('Random (Stochastic)')}
+            {$tr("Random (Stochastic)")}
           </button>
         </div>
 
-        <div class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2">
-          {#if tokenRotation === 'drain'}
+        <div
+          class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2"
+        >
+          {#if tokenRotation === "drain"}
             <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]">{$tr('Drain Mode (Default & Recommended):')}</strong> {$tr('Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.')}
+              <strong class="text-[var(--fp-text)]"
+                >{$tr("Drain Mode (Default & Recommended):")}</strong
+              >
+              {$tr(
+                "Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
+              )}
             </p>
-          {:else if tokenRotation === 'round_robin'}
+          {:else if tokenRotation === "round_robin"}
             <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]">{$tr('Round-Robin Mode:')}</strong> {$tr('Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.')}
+              <strong class="text-[var(--fp-text)]"
+                >{$tr("Round-Robin Mode:")}</strong
+              >
+              {$tr(
+                "Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
+              )}
             </p>
-          {:else if tokenRotation === 'least_used'}
+          {:else if tokenRotation === "least_used"}
             <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]">{$tr('Least-Used Mode:')}</strong> {$tr('Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.')}
+              <strong class="text-[var(--fp-text)]"
+                >{$tr("Least-Used Mode:")}</strong
+              >
+              {$tr(
+                "Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.",
+              )}
             </p>
-          {:else if tokenRotation === 'random'}
+          {:else if tokenRotation === "random"}
             <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]">{$tr('Random Mode:')}</strong> {$tr('Selects an available healthy token at random per request. Provides stochastic load balancing.')}
+              <strong class="text-[var(--fp-text)]"
+                >{$tr("Random Mode:")}</strong
+              >
+              {$tr(
+                "Selects an available healthy token at random per request. Provides stochastic load balancing.",
+              )}
             </p>
           {/if}
         </div>
@@ -452,16 +604,22 @@
       onRefresh={handleRefresh}
       onDropSession={handleDropSession}
       onSwap={handleSwap}
-      onRetry={() => { error = ''; refreshTokens(); }}
+      onRetry={() => {
+        error = "";
+        refreshTokens();
+      }}
     />
     {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
       <Card
-        title={$tr('Bridge Clients')}
-        description={$tr('{count} active bridge client(s) relaying their own FreeBuff tokens', { count: data.bridge_token_cards.length })}
+        title={$tr("Bridge Clients")}
+        description={$tr(
+          "{count} active bridge client(s) relaying their own FreeBuff tokens",
+          { count: data.bridge_token_cards.length },
+        )}
         pad="none"
       >
         <div class="flex flex-col gap-3 p-4">
-          {#each data.bridge_token_cards as bc}
+          {#each data.bridge_token_cards as bc (bc.key)}
             <BridgeTokenCard card={bc} {now} />
           {/each}
         </div>

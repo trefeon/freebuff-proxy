@@ -1,15 +1,15 @@
 <script>
-  import { Zap, RefreshCw, Check } from '@lucide/svelte';
-  import Button from './Button.svelte';
-  import { postAPI } from '../api/client.js';
-  import { tokenActions } from '../api/paths.js';
-  import { tr } from '../i18n.js';
-  import { fallbackModelOptions, fetchModelOptions } from '../modelOptions.js';
-  import { onMount } from 'svelte';
+  import { Zap, RefreshCw, Check } from "@lucide/svelte";
+  import Button from "./Button.svelte";
+  import { postAPI } from "../api/client.js";
+  import { tokenActions } from "../api/paths.js";
+  import { tr } from "../i18n.js";
+  import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import { onMount } from "svelte";
 
   let { idx, onSpawn } = $props();
 
-  let spawnModel = $state('mimo/mimo-v2.5');
+  let spawnModel = $state("mimo/mimo-v2.5");
 
   let modelOptions = $state(fallbackModelOptions);
   onMount(() => {
@@ -22,16 +22,21 @@
     actionPending = true;
     try {
       const res = await postAPI(tokenActions[action](idx), body);
-      onSpawn?.({ ok: res.ok, message: res.message || (res.ok ? $tr('Action completed') : $tr('Action failed')) });
+      onSpawn?.({
+        ok: res.ok,
+        message:
+          res.message ||
+          (res.ok ? $tr("Action completed") : $tr("Action failed")),
+      });
     } catch (e) {
-      onSpawn?.({ ok: false, message: e.message || $tr('Action failed') });
+      onSpawn?.({ ok: false, message: e.message || $tr("Action failed") });
     } finally {
       actionPending = false;
     }
   }
 </script>
-<td>
 
+<td>
   <select
     bind:value={spawnModel}
     class="fp-input !text-xs !py-1 !px-2 !h-8 !w-48"
@@ -47,28 +52,42 @@
       variant="primary"
       size="sm"
       disabled={actionPending}
-      onclick={() => triggerAction('session', { model: spawnModel }, $tr('Spawn upstream session on token #{idx} for {model}?', { idx, model: spawnModel }))}
+      onclick={() =>
+        triggerAction(
+          "session",
+          { model: spawnModel },
+          $tr("Spawn upstream session on token #{idx} for {model}?", {
+            idx,
+            model: spawnModel,
+          }),
+        )}
     >
       <Zap size={13} />
-      <span>{$tr('Make Session')}</span>
+      <span>{$tr("Make Session")}</span>
     </Button>
     <Button
       variant="secondary"
       size="sm"
       disabled={actionPending}
-      onclick={() => triggerAction('test', {}, $tr('Probe token #{idx}?', { idx }))}
+      onclick={() =>
+        triggerAction("test", {}, $tr("Probe token #{idx}?", { idx }))}
     >
       <RefreshCw size={13} />
-      <span>{$tr('Probe')}</span>
+      <span>{$tr("Probe")}</span>
     </Button>
     <Button
       variant="ghost"
       size="sm"
       disabled={actionPending}
-      onclick={() => triggerAction('finish', {}, $tr('Finish runs on token #{idx}?', { idx }))}
+      onclick={() =>
+        triggerAction(
+          "finish",
+          {},
+          $tr("Finish runs on token #{idx}?", { idx }),
+        )}
     >
       <Check size={13} />
-      <span>{$tr('Finish')}</span>
+      <span>{$tr("Finish")}</span>
     </Button>
   </div>
 </td>

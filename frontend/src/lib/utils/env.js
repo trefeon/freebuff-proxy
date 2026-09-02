@@ -13,10 +13,10 @@
  */
 export function parseEnv(content) {
   const map = {};
-  for (const line of (content || '').split('\n')) {
+  for (const line of (content || "").split("\n")) {
     const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
     if (eq === -1) continue;
     map[t.slice(0, eq).trim()] = t.slice(eq + 1).trim();
   }
@@ -35,7 +35,7 @@ export function getEnvValue(content, key) {
 }
 
 function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -47,9 +47,9 @@ function escapeRegex(s) {
  * @returns {string}
  */
 export function setEnvValue(content, key, value) {
-  const re = new RegExp(`^\\s*${escapeRegex(key)}=.*$`, 'm');
+  const re = new RegExp(`^\\s*${escapeRegex(key)}=.*$`, "m");
   const line = `${key}=${value}`;
   if (re.test(content)) return content.replace(re, line);
   if (!content) return line;
-  return content.endsWith('\n') ? content + line : content + '\n' + line;
+  return content.endsWith("\n") ? content + line : content + "\n" + line;
 }

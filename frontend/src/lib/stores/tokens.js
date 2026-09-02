@@ -1,8 +1,8 @@
-import { writable } from 'svelte/store';
-import { fetchAPI, SessionExpiredError } from '../api/client.js';
-import { adminApi } from '../api/paths.js';
-import { useEventStream } from '../utils/events.js';
-import { isSessionDead } from './session.js';
+import { writable } from "svelte/store";
+import { fetchAPI, SessionExpiredError } from "../api/client.js";
+import { adminApi } from "../api/paths.js";
+import { useEventStream } from "../utils/events.js";
+import { isSessionDead } from "./session.js";
 
 // Shared tokens snapshot (issue #292). Tokens.svelte, QuotaTracker.svelte and
 // DevTools.svelte previously each wired their own /admin/api/tokens poll and
@@ -17,7 +17,7 @@ const INTERVAL_MS = 10000;
 export const tokensData = writable(null);
 
 /** @type {import('svelte/store').Writable<string>} */
-export const tokensError = writable('');
+export const tokensError = writable("");
 
 let started = false;
 let busy = false;
@@ -31,14 +31,14 @@ async function poll() {
   try {
     const data = await fetchAPI(adminApi.tokens);
     tokensData.set(data);
-    tokensError.set('');
+    tokensError.set("");
   } catch (e) {
     // A SessionExpiredError already surfaced the banner via the API client;
     // do not show a page-level error for that. Everything else surfaces the
     // message so the page can leave its loading state instead of spinning.
     if (!(e instanceof SessionExpiredError)) {
-      tokensError.set(e.message || 'Failed to fetch tokens');
-      console.warn('tokens store: poll failed', e);
+      tokensError.set(e.message || "Failed to fetch tokens");
+      console.warn("tokens store: poll failed", e);
     }
   } finally {
     busy = false;
@@ -69,11 +69,11 @@ function startStore() {
   started = true;
   poll();
   startInterval();
-  document.addEventListener('visibilitychange', handleVisibility);
+  document.addEventListener("visibilitychange", handleVisibility);
   unsubEvents = useEventStream({
     onTokens: (data) => {
       tokensData.set(data);
-      tokensError.set('');
+      tokensError.set("");
     },
   });
 }
@@ -82,7 +82,7 @@ function stopStore() {
   if (!started) return;
   started = false;
   stopInterval();
-  document.removeEventListener('visibilitychange', handleVisibility);
+  document.removeEventListener("visibilitychange", handleVisibility);
   unsubEvents?.();
   unsubEvents = null;
 }

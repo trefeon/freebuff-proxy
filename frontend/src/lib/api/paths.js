@@ -9,25 +9,25 @@
  */
 
 /** URL prefix of the dashboard SPA and its admin API. */
-export const adminRoot = '/admin';
+export const adminRoot = "/admin";
 
 /** JSON admin API endpoints (GET). */
 export const adminApi = {
-  overview: '/admin/api/overview',
-  tokens: '/admin/api/tokens',
-  models: '/admin/api/models',
-  config: '/admin/api/config',
-  configMeta: '/admin/api/config/meta',
-  logs: '/admin/api/logs',
-  metrics: '/admin/api/metrics',
-  traces: '/admin/api/traces',
-  setup: '/admin/api/setup',
-  version: '/admin/api/version',
-  authStatus: '/admin/api/auth/status',
-  changePassword: '/admin/api/change-password',
-  upstreamDrift: '/admin/api/upstream-drift',
-  events: '/admin/api/events',
-  loginStatus: '/admin/login/status',
+  overview: "/admin/api/overview",
+  tokens: "/admin/api/tokens",
+  models: "/admin/api/models",
+  config: "/admin/api/config",
+  configMeta: "/admin/api/config/meta",
+  logs: "/admin/api/logs",
+  metrics: "/admin/api/metrics",
+  traces: "/admin/api/traces",
+  setup: "/admin/api/setup",
+  version: "/admin/api/version",
+  authStatus: "/admin/api/auth/status",
+  changePassword: "/admin/api/change-password",
+  upstreamDrift: "/admin/api/upstream-drift",
+  events: "/admin/api/events",
+  loginStatus: "/admin/login/status",
 };
 
 /**
@@ -36,23 +36,23 @@ export const adminApi = {
  * lives in adminApi above.
  */
 export const adminActions = {
-  login: '/admin/login',
-  logout: '/admin/logout',
-  loginStart: '/admin/login/start',
-  mode: '/admin/mode',
-  smoke: '/admin/smoke',
-  diag: '/admin/diag',
-  configSave: '/admin/config',
-  tokenAdd: '/admin/tokens/add',
-  tokenRemove: '/admin/tokens/remove',
-  tokenSwap: '/admin/tokens/swap',
-  tokenTestAll: '/admin/tokens/test-all',
+  login: "/admin/login",
+  logout: "/admin/logout",
+  loginStart: "/admin/login/start",
+  mode: "/admin/mode",
+  smoke: "/admin/smoke",
+  diag: "/admin/diag",
+  configSave: "/admin/config",
+  tokenAdd: "/admin/tokens/add",
+  tokenRemove: "/admin/tokens/remove",
+  tokenSwap: "/admin/tokens/swap",
+  tokenTestAll: "/admin/tokens/test-all",
 };
 
 /** SPA shell routes (the gateway also serves these directly). */
 export const adminShell = {
-  root: '/admin',
-  playground: '/admin/playground',
+  root: "/admin",
+  playground: "/admin/playground",
 };
 
 /**

@@ -11,19 +11,22 @@
  *   {$tr('banned until {time}', { time })}
  */
 
-import { derived, writable } from 'svelte/store';
+import { derived, writable } from "svelte/store";
 
 // Fixed English locale. Kept as a writable so $tr stays a store (the
 // auto-subscription syntax in components is unchanged) — there is no
 // language switching anymore.
-const locale = writable('en');
+const locale = writable("en");
 
 function interpolate(template, params) {
-	if (!params) return template;
-	return template.replace(/\{(\w+)\}/g, (match, name) =>
-		params[name] !== undefined ? String(params[name]) : match
-	);
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name) =>
+    params[name] !== undefined ? String(params[name]) : match,
+  );
 }
 
 /** English-only translator store: keys resolve to themselves. */
-export const tr = derived(locale, () => (key, params) => interpolate(key, params));
+export const tr = derived(
+  locale,
+  () => (key, params) => interpolate(key, params),
+);

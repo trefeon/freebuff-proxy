@@ -14,14 +14,14 @@
  * Background polling must never reload the page (issue #197).
  */
 
-import { markSessionExpired } from '../stores/session.js';
-import { adminRoot } from './paths.js';
+import { markSessionExpired } from "../stores/session.js";
+import { adminRoot } from "./paths.js";
 
 /** Thrown by fetchAPI/postAPI when the admin session is no longer valid. */
 export class SessionExpiredError extends Error {
-  constructor(message = 'Session expired') {
+  constructor(message = "Session expired") {
     super(message);
-    this.name = 'SessionExpiredError';
+    this.name = "SessionExpiredError";
   }
 }
 
@@ -37,9 +37,9 @@ function handleAuthFailure(message) {
  * @returns {string} Nonce value, or '' when the cookie is absent.
  */
 export function csrfToken() {
-  if (typeof document === 'undefined') return '';
+  if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)fb_csrf=([^;]*)/);
-  return m ? decodeURIComponent(m[1]) : '';
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 /**
@@ -49,11 +49,11 @@ export function csrfToken() {
  * @param {string} [method]
  * @returns {Record<string, string>}
  */
-export function csrfHeader(method = 'GET') {
+export function csrfHeader(method = "GET") {
   const m = String(method).toUpperCase();
-  if (m === 'GET' || m === 'HEAD') return {};
+  if (m === "GET" || m === "HEAD") return {};
   const token = csrfToken();
-  return token ? { 'X-CSRF-Token': token } : {};
+  return token ? { "X-CSRF-Token": token } : {};
 }
 
 /**
@@ -69,34 +69,34 @@ export async function fetchAPI(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
     headers: {
-      'Accept': 'application/json',
-      'X-Requested-With': 'fetch',
+      Accept: "application/json",
+      "X-Requested-With": "fetch",
       ...csrfHeader(opts.method),
       ...opts.headers,
     },
   });
 
-    // dashboardAuth answers unauthenticated admin API requests with a 302 to
+  // dashboardAuth answers unauthenticated admin API requests with a 302 to
   // the login route; fetch follows it (on the dev server the final hop is the
   // SPA's own login route) and res.json() would then throw a
   // 'Unexpected token <' HTML parse error. Detect ANY redirect that lands
   // under the admin prefix as an auth failure.
   if (res.redirected && new URL(res.url).pathname.startsWith(`${adminRoot}/`)) {
-    handleAuthFailure('Session expired');
+    handleAuthFailure("Session expired");
   }
 
   if (res.status === 401) {
-    handleAuthFailure('Unauthorized');
+    handleAuthFailure("Unauthorized");
   }
 
   if (!res.ok) {
     // Admin endpoints emit one envelope ({ok,message[,code]}); surface the
     // human message instead of a raw JSON blob. Fall back to status text.
-    const text = await res.text().catch(() => '');
-    let msg = '';
+    const text = await res.text().catch(() => "");
+    let msg;
     try {
       const parsed = JSON.parse(text);
-      msg = parsed?.message ?? '';
+      msg = parsed?.message ?? "";
     } catch {
       msg = text;
     }
@@ -114,8 +114,8 @@ export async function fetchAPI(path, opts = {}) {
  */
 export async function postAPI(path, body) {
   return fetchAPI(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: body != null ? JSON.stringify(body) : undefined,
   });
 }
@@ -128,8 +128,11 @@ export async function postAPI(path, body) {
  */
 export async function postForm(path, fields) {
   return fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...csrfHeader('POST') },
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...csrfHeader("POST"),
+    },
     body: new URLSearchParams(fields),
   });
 }

@@ -1,10 +1,10 @@
 <script>
-  import Card from '../../components/Card.svelte';
-  import Button from '../../components/Button.svelte';
-  import EmptyState from '../../components/EmptyState.svelte';
-  import TokenCard from '../../components/TokenCard.svelte';
-  import TokenCardMobile from '../../components/TokenCardMobile.svelte';
-  import { tr } from '../../i18n.js';
+  import Card from "../../components/Card.svelte";
+  import Button from "../../components/Button.svelte";
+  import EmptyState from "../../components/EmptyState.svelte";
+  import TokenCard from "../../components/TokenCard.svelte";
+  import TokenCardMobile from "../../components/TokenCardMobile.svelte";
+  import { tr } from "../../i18n.js";
 
   /**
    * TokenTable - the "Pool Tokens" card: desktop table + mobile stacked card
@@ -33,7 +33,7 @@
     tokens = [],
     tokenCount = 0,
     loading = false,
-    error = '',
+    error = "",
     expandedToken = null,
     actionPending = false,
     now,
@@ -50,8 +50,13 @@
 </script>
 
 <Card
-  title={$tr('Pool Tokens')}
-  description={tokenCount ? $tr('{count} pooled token(s) · Tap a card to see session & quota details', { count: tokenCount }) : $tr('Tap a card to see session & quota details')}
+  title={$tr("Pool Tokens")}
+  description={tokenCount
+    ? $tr(
+        "{count} pooled token(s) · Tap a card to see session & quota details",
+        { count: tokenCount },
+      )
+    : $tr("Tap a card to see session & quota details")}
 >
   {#if loading}
     <div class="flex flex-col gap-3">
@@ -62,20 +67,19 @@
       <div class="skeleton skeleton-line"></div>
     </div>
   {:else if error}
-    <EmptyState
-      title={$tr('Could not load tokens')}
-      description={error}
-    >
+    <EmptyState title={$tr("Could not load tokens")} description={error}>
       {#snippet action()}
         <Button variant="secondary" onclick={onRetry}>
-          {$tr('Retry')}
+          {$tr("Retry")}
         </Button>
       {/snippet}
     </EmptyState>
   {:else if !tokens || tokens.length === 0}
     <EmptyState
-      title={$tr('No tokens in pool')}
-      description={$tr('Add one above or use Device Login to generate credentials via browser.')}
+      title={$tr("No tokens in pool")}
+      description={$tr(
+        "Add one above or use Device Login to generate credentials via browser.",
+      )}
     />
   {:else}
     <!-- Desktop: table (md+) -->
@@ -84,11 +88,11 @@
         <thead>
           <tr>
             <th class="w-8"></th>
-            <th>{$tr('Token')}</th>
-            <th>{$tr('Status')}</th>
-            <th>{$tr('Instance')}</th>
-            <th class="num">{$tr('Cooldown')}</th>
-            <th class="text-right">{$tr('Actions')}</th>
+            <th>{$tr("Token")}</th>
+            <th>{$tr("Status")}</th>
+            <th>{$tr("Instance")}</th>
+            <th class="num">{$tr("Cooldown")}</th>
+            <th class="text-right">{$tr("Actions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -108,7 +112,7 @@
               onSpawn={(model) => onSpawn(idx, model)}
               onRefresh={(action) => onRefresh(idx, action)}
               onDropSession={() => onDropSession(idx)}
-              onSwap={onSwap}
+              {onSwap}
             />
           {/each}
         </tbody>
@@ -132,7 +136,7 @@
           onSpawn={(model) => onSpawn(idx, model)}
           onRefresh={(action) => onRefresh(idx, action)}
           onDropSession={() => onDropSession(idx)}
-          onSwap={onSwap}
+          {onSwap}
         />
       {/each}
     </div>

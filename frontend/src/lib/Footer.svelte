@@ -6,9 +6,13 @@
 </script>
 
 <footer class="border-t border-[var(--fp-border)]">
-  <div class="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+  <div
+    class="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4"
+  >
     <span class="font-mono text-[11px] text-[var(--fp-dim)]">
-      freebuff-proxy <span class="fp-num text-[var(--fp-muted)]">{versionInfo?.current_version ?? 'dev'}</span>
+      freebuff-proxy <span class="fp-num text-[var(--fp-muted)]"
+        >{versionInfo?.current_version ?? "dev"}</span
+      >
     </span>
     <div class="flex items-center gap-4">
       {#if versionInfo?.has_update}
@@ -24,7 +28,8 @@
         </a>
       {/if}
       <a
-        href={versionInfo?.update_url ?? 'https://github.com/trefeon/freebuff-proxy/releases'}
+        href={versionInfo?.update_url ??
+          "https://github.com/trefeon/freebuff-proxy/releases"}
         target="_blank"
         rel="noopener noreferrer"
         class="font-mono text-[11px] text-[var(--fp-dim)] hover:text-[var(--fp-muted)] transition-colors"

@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable } from "svelte/store";
 
 /**
  * Global session-expiry state shared by the API client, the polling helper,

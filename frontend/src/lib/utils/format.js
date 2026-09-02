@@ -4,15 +4,15 @@
  * @returns {string}
  */
 export function formatLocalDate(utcIso) {
-  if (!utcIso) return '';
+  if (!utcIso) return "";
   try {
     const d = new Date(utcIso);
     if (isNaN(d.getTime())) return utcIso;
     return d.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return utcIso;
@@ -25,14 +25,14 @@ export function formatLocalDate(utcIso) {
  * @returns {string}
  */
 export function formatTime(ts) {
-  if (!ts) return '';
+  if (!ts) return "";
   try {
     const d = new Date(ts);
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
   } catch {
     return ts;
@@ -48,11 +48,11 @@ export function formatTime(ts) {
 export function parseLogFields(fields) {
   if (!fields) return [];
   return fields
-    .split('  ')
+    .split("  ")
     .filter(Boolean)
     .map((f) => {
-      const [k, ...v] = f.split('=');
-      return { key: k, value: v.join('=') };
+      const [k, ...v] = f.split("=");
+      return { key: k, value: v.join("=") };
     });
 }
 
@@ -63,7 +63,9 @@ export function parseLogFields(fields) {
 export function generateRandomApiKey() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
   return `sk-fb-${hex}`;
 }
 
@@ -74,6 +76,8 @@ export function generateRandomApiKey() {
 export function generateRandomAdminToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
   return `fb-adm-${hex}`;
 }

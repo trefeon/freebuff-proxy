@@ -1,5 +1,5 @@
 <script>
-  import Spinner from './Spinner.svelte';
+  import Spinner from "./Spinner.svelte";
 
   /**
    * Button — ranked by importance, never colored by meaning.
@@ -12,12 +12,12 @@
    * @prop {string} [class]
    */
   let {
-    variant = 'secondary',
-    size = 'md',
+    variant = "secondary",
+    size = "md",
     disabled = false,
     loading = false,
-    type = 'button',
-    class: className = '',
+    type = "button",
+    class: className = "",
     children,
     ...rest
   } = $props();

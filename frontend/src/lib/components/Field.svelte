@@ -28,7 +28,7 @@
     const fid = fieldId;
     const el = containerEl;
     if (!el) return;
-    const control = el.querySelector('input, select, textarea');
+    const control = el.querySelector("input, select, textarea");
     if (!control) return;
     if (!control.id) control.id = fid;
     // Keep for ↔ id in sync if caller passed divergent ids
@@ -36,10 +36,10 @@
       // Field is source of truth for label/for; align control to field id
       control.id = fid;
     }
-    if (d) control.setAttribute('aria-describedby', d);
-    else control.removeAttribute('aria-describedby');
-    if (isInvalid) control.setAttribute('aria-invalid', 'true');
-    else control.removeAttribute('aria-invalid');
+    if (d) control.setAttribute("aria-describedby", d);
+    else control.removeAttribute("aria-describedby");
+    if (isInvalid) control.setAttribute("aria-invalid", "true");
+    else control.removeAttribute("aria-invalid");
   });
 </script>
 
@@ -51,7 +51,9 @@
     {@render children()}
   {/if}
   {#if error}
-    <p class="text-[11px] text-[var(--fp-error)]" id={errorId} role="alert">{error}</p>
+    <p class="text-[11px] text-[var(--fp-error)]" id={errorId} role="alert">
+      {error}
+    </p>
   {:else if hint}
     <p class="text-[11px] text-[var(--fp-dim)]" id={hintId}>{hint}</p>
   {/if}

@@ -1,8 +1,8 @@
 <script>
-  import StatusBadge from './StatusBadge.svelte';
-  import Card from './Card.svelte';
-  import { formatLocalDate } from '../utils/format.js';
-  import { tr } from '../i18n.js';
+  import StatusBadge from "./StatusBadge.svelte";
+  import Card from "./Card.svelte";
+  import { formatLocalDate } from "../utils/format.js";
+  import { tr } from "../i18n.js";
 
   /**
    * RiskCards — at-risk token cards (cooldown / banned / risk-level status).
@@ -14,33 +14,42 @@
 
   function riskTone(risk) {
     switch (risk) {
-      case 'low':
-        return 'good';
-      case 'moderate':
-        return 'warn';
-      case 'high':
-      case 'critical':
-        return 'bad';
+      case "low":
+        return "good";
+      case "moderate":
+        return "warn";
+      case "high":
+      case "critical":
+        return "bad";
       default:
-        return 'idle';
+        return "idle";
     }
   }
 
   function banBadge(t) {
-    if (t.ban_type === 'hard') {
-      return { label: $tr('banned — appeal required'), tone: 'critical', pulse: true };
+    if (t.ban_type === "hard") {
+      return {
+        label: $tr("banned — appeal required"),
+        tone: "critical",
+        pulse: true,
+      };
     }
-    if (t.ban_type === 'temporary') {
+    if (t.ban_type === "temporary") {
       const until = formatLocalDate(t.banned_until);
-      return { label: until ? $tr('banned until {time}', { time: until }) : $tr('banned (temporary)'), tone: 'bad' };
+      return {
+        label: until
+          ? $tr("banned until {time}", { time: until })
+          : $tr("banned (temporary)"),
+        tone: "bad",
+      };
     }
     return null;
   }
 
   function formatCooldown(until) {
-    if (!until) return '';
+    if (!until) return "";
     const diff = new Date(until).getTime() - Date.now();
-    if (diff <= 0) return '';
+    if (diff <= 0) return "";
     const h = Math.floor(diff / 3_600_000);
     const m = Math.floor((diff % 3_600_000) / 60_000);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -49,8 +58,12 @@
 
 <section aria-label="At-risk tokens">
   <div class="flex items-center justify-between mb-3">
-    <h2 class="text-lg font-semibold text-[var(--fp-text)]">{$tr('Token risk')}</h2>
-    <span class="fp-num text-xs text-[var(--fp-dim)]">{tokens.length}/{total}</span>
+    <h2 class="text-lg font-semibold text-[var(--fp-text)]">
+      {$tr("Token risk")}
+    </h2>
+    <span class="fp-num text-xs text-[var(--fp-dim)]"
+      >{tokens.length}/{total}</span
+    >
   </div>
 
   {#if tokens.length > 0}
@@ -59,36 +72,60 @@
         <Card>
           <div class="space-y-3">
             <div class="flex items-center justify-between gap-2">
-              <span class="fp-num text-sm font-semibold text-[var(--fp-text)]">Token #{t.index}</span>
+              <span class="fp-num text-sm font-semibold text-[var(--fp-text)]"
+                >Token #{t.index}</span
+              >
               {#if banBadge(t)}
-                <StatusBadge status={banBadge(t).label} tone={banBadge(t).tone} pulse={banBadge(t).pulse} />
+                <StatusBadge
+                  status={banBadge(t).label}
+                  tone={banBadge(t).tone}
+                  pulse={banBadge(t).pulse}
+                />
               {:else}
                 <StatusBadge
                   status={t.risk_level}
                   tone={riskTone(t.risk_level)}
-                  pulse={t.risk_level === 'critical'}
+                  pulse={t.risk_level === "critical"}
                 />
               {/if}
             </div>
 
             {#if t.cooldown_active}
-              <div class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-warning)]">
-                {$tr('Cooldown')} — <span class="fp-num">{formatCooldown(t.cooldown_until)}</span> {$tr('remaining')}
+              <div
+                class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-warning)]"
+              >
+                {$tr("Cooldown")} —
+                <span class="fp-num">{formatCooldown(t.cooldown_until)}</span>
+                {$tr("remaining")}
               </div>
             {/if}
 
             <div class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-muted)]">
               {#if t.daily_limit > 0}
-                <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}/{t.daily_limit}</span> {$tr('msgs today')}
+                <span class="fp-num text-[var(--fp-text)]"
+                  >{t.messages_24h}/{t.daily_limit}</span
+                >
+                {$tr("msgs today")}
                 (<span class="fp-num">{t.usage_pct}%</span>)
               {:else}
-                <span class="fp-num text-[var(--fp-text)]">{t.messages_24h}</span> {$tr('msgs 24h')}
+                <span class="fp-num text-[var(--fp-text)]"
+                  >{t.messages_24h}</span
+                >
+                {$tr("msgs 24h")}
               {/if}
             </div>
 
             <div class="flex justify-between text-xs text-[var(--fp-dim)]">
-              <span>runs <span class="fp-num text-[var(--fp-text)]">{t.active_runs}</span></span>
-              <span>reqs <span class="fp-num text-[var(--fp-text)]">{t.requests}</span></span>
+              <span
+                >runs <span class="fp-num text-[var(--fp-text)]"
+                  >{t.active_runs}</span
+                ></span
+              >
+              <span
+                >reqs <span class="fp-num text-[var(--fp-text)]"
+                  >{t.requests}</span
+                ></span
+              >
             </div>
           </div>
         </Card>
@@ -98,7 +135,7 @@
     <Card>
       <div class="flex items-center gap-2 text-sm text-[var(--fp-muted)]">
         <span class="led led-good" aria-hidden="true"></span>
-        {$tr('All tokens healthy — no risk flags.')}
+        {$tr("All tokens healthy — no risk flags.")}
       </div>
     </Card>
   {/if}

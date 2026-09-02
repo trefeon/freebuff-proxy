@@ -1,16 +1,16 @@
 <script>
-  import { onMount } from 'svelte';
-  import { Zap } from '@lucide/svelte';
-  import { tr } from '../i18n.js';
-  import Alert from '../components/Alert.svelte';
-  import Button from '../components/Button.svelte';
-  import Card from '../components/Card.svelte';
-  import Field from '../components/Field.svelte';
-  import { csrfHeader } from '../api/client.js';
-  import { adminActions, adminRoot } from '../api/paths.js';
+  import { onMount } from "svelte";
+  import { Zap } from "@lucide/svelte";
+  import { tr } from "../i18n.js";
+  import Alert from "../components/Alert.svelte";
+  import Button from "../components/Button.svelte";
+  import Card from "../components/Card.svelte";
+  import Field from "../components/Field.svelte";
+  import { csrfHeader } from "../api/client.js";
+  import { adminActions, adminRoot } from "../api/paths.js";
 
-  let token = $state('');
-  let errorMsg = $state('');
+  let token = $state("");
+  let errorMsg = $state("");
   let loading = $state(false);
   let tokenInput = $state(null);
   // The server replies to failed logins with {"error":"..."} JSON, but a
@@ -18,21 +18,25 @@
   // Only surface a clean message; never dump the raw response body.
   function cleanLoginError(res, body) {
     if (res?.status === 403) {
-      return $tr('Request blocked (CSRF/Origin mismatch). Please access directly via 127.0.0.1:3457.');
+      return $tr(
+        "Request blocked (CSRF/Origin mismatch). Please access directly via 127.0.0.1:3457.",
+      );
     }
     if (res?.status === 429) {
-      return $tr('Too many failed attempts — try again in a minute.');
+      return $tr("Too many failed attempts — try again in a minute.");
     }
-    if (!body) return $tr('Invalid password.');
+    if (!body) return $tr("Invalid password.");
     try {
       const data = JSON.parse(body);
       const err = data?.error;
-      const msg = typeof err === 'string' ? err : err?.message;
-      if (typeof msg !== 'string' || !msg.trim()) return $tr('Invalid password.');
+      const msg = typeof err === "string" ? err : err?.message;
+      if (typeof msg !== "string" || !msg.trim())
+        return $tr("Invalid password.");
       return msg.trim();
     } catch {
-      if (body.includes('Too many failed')) return $tr('Too many failed attempts — try again in a minute.');
-      return $tr('Invalid password.');
+      if (body.includes("Too many failed"))
+        return $tr("Too many failed attempts — try again in a minute.");
+      return $tr("Invalid password.");
     }
   }
 
@@ -40,25 +44,31 @@
     e.preventDefault();
     if (!token.trim() || loading) return;
     loading = true;
-    errorMsg = '';
+    errorMsg = "";
 
     try {
       const res = await fetch(adminActions.login, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...csrfHeader('POST') },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...csrfHeader("POST"),
+        },
         body: new URLSearchParams({ token: token.trim() }),
       });
 
       if (res.ok || res.redirected) {
         // Return to the tab the user came from (hash carried through
         // the login route by App.svelte's banner, or a direct #tab deep link).
-        const tab = window.location.hash.replace('#', '');
-        window.location.href = tab && tab !== 'login' ? `${adminRoot}#${tab}` : adminRoot;
+        const tab = window.location.hash.replace("#", "");
+        window.location.href =
+          tab && tab !== "login" ? `${adminRoot}#${tab}` : adminRoot;
       } else {
         errorMsg = cleanLoginError(res, await res.text());
       }
-    } catch (e) {
-      errorMsg = $tr('Could not reach the server. Check the connection and try again.');
+    } catch {
+      errorMsg = $tr(
+        "Could not reach the server. Check the connection and try again.",
+      );
     } finally {
       loading = false;
     }
@@ -67,7 +77,9 @@
   onMount(() => tokenInput?.focus());
 </script>
 
-<div class="instrument-grid page-enter min-h-[80vh] flex items-center justify-center px-4">
+<div
+  class="instrument-grid page-enter min-h-[80vh] flex items-center justify-center px-4"
+>
   <Card class="w-full max-w-sm">
     <div class="flex flex-col items-center gap-1 mb-7 text-center">
       <div class="flex items-center gap-2.5 mb-1">
@@ -76,9 +88,14 @@
         >
           <Zap size={16} />
         </span>
-        <span class="text-lg font-semibold text-[var(--fp-text)]">freebuff-proxy</span>
+        <span class="text-lg font-semibold text-[var(--fp-text)]"
+          >freebuff-proxy</span
+        >
       </div>
-      <span class="text-[11px] font-mono uppercase tracking-[0.25em] text-[var(--fp-dim)]">Admin</span>
+      <span
+        class="text-[11px] font-mono uppercase tracking-[0.25em] text-[var(--fp-dim)]"
+        >Admin</span
+      >
     </div>
 
     {#if errorMsg}
@@ -88,7 +105,7 @@
     {/if}
 
     <form onsubmit={handleLogin} class="space-y-5">
-      <Field label={$tr('Admin token')} id="token">
+      <Field label={$tr("Admin token")} id="token">
         <input
           id="token"
           bind:this={tokenInput}
@@ -96,7 +113,7 @@
           type="password"
           autocomplete="off"
           required
-          placeholder={$tr('Enter admin token')}
+          placeholder={$tr("Enter admin token")}
           class="fp-input fp-mono w-full"
         />
       </Field>
@@ -106,18 +123,20 @@
         type="submit"
         class="w-full"
         disabled={loading || !token.trim()}
-        loading={loading}
+        {loading}
       >
-        {$tr('Sign in')}
+        {$tr("Sign in")}
       </Button>
     </form>
 
-    <div class="pt-5 mt-6 border-t border-[var(--fp-border)] text-center space-y-1">
+    <div
+      class="pt-5 mt-6 border-t border-[var(--fp-border)] text-center space-y-1"
+    >
       <p class="text-[11px] text-[var(--fp-dim)] leading-relaxed">
-        {$tr('Enter your admin token to access the dashboard.')}
+        {$tr("Enter your admin token to access the dashboard.")}
       </p>
       <p class="text-[10px] text-[var(--fp-dim)]">
-        {$tr('Set ADMIN_TOKEN in your .env file to configure access.')}
+        {$tr("Set ADMIN_TOKEN in your .env file to configure access.")}
       </p>
     </div>
   </Card>

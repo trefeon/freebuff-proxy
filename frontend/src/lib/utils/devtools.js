@@ -1,4 +1,4 @@
-import { getEnvValue } from './env.js';
+import { getEnvValue } from "./env.js";
 
 /**
  * DEVTOOLS_ENABLED gate (issue #287): the single predicate shared by the
@@ -10,6 +10,6 @@ import { getEnvValue } from './env.js';
  * @returns {boolean}
  */
 export function isDevToolsEnabled(envContent) {
-  const val = (getEnvValue(envContent, 'DEVTOOLS_ENABLED') || '').toLowerCase();
-  return val === 'true' || val === '1';
+  const val = (getEnvValue(envContent, "DEVTOOLS_ENABLED") || "").toLowerCase();
+  return val === "true" || val === "1";
 }

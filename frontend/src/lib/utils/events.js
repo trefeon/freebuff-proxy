@@ -1,5 +1,5 @@
-import { adminApi } from '../api/paths.js';
-import { isSessionDead } from '../stores/session.js';
+import { adminApi } from "../api/paths.js";
+import { isSessionDead } from "../stores/session.js";
 
 /**
  * Subscribe to the real-time server-sent events stream for live dashboard
@@ -17,7 +17,7 @@ import { isSessionDead } from '../stores/session.js';
  * @returns {() => void} Cleanup function to close the stream
  */
 export function useEventStream({ onTokens, onOpen, onError }) {
-  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+  if (typeof window === "undefined" || typeof EventSource === "undefined") {
     return () => {};
   }
   let es = null;
@@ -27,12 +27,12 @@ export function useEventStream({ onTokens, onOpen, onError }) {
     if (closed || isSessionDead() || document.hidden) return;
     try {
       es = new EventSource(adminApi.events);
-      es.addEventListener('tokens', (e) => {
+      es.addEventListener("tokens", (e) => {
         try {
           const data = JSON.parse(e.data);
           onTokens?.(data);
         } catch (err) {
-          console.debug('sse: json parse failed', err);
+          console.debug("sse: json parse failed", err);
         }
       });
       es.onopen = () => {
@@ -62,11 +62,11 @@ export function useEventStream({ onTokens, onOpen, onError }) {
   }
 
   connect();
-  document.addEventListener('visibilitychange', handleVisibility);
+  document.addEventListener("visibilitychange", handleVisibility);
 
   return () => {
     closed = true;
-    document.removeEventListener('visibilitychange', handleVisibility);
+    document.removeEventListener("visibilitychange", handleVisibility);
     disconnect();
   };
 }

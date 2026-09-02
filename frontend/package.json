@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "check": "svelte-check --threshold error",
     "check:all": "svelte-check",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -19,9 +22,15 @@
     "@lucide/svelte": "^1.32.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "~1.62.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.0.6",
+    "eslint": "^10.9.1",
+    "eslint-plugin-svelte": "^3.23.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.20.2",
     "svelte-check": "^4.7.6",
     "tailwindcss": "^4.0.6",
