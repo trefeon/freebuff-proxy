@@ -5,7 +5,7 @@
   let { versionInfo } = $props();
 </script>
 
-<footer class="border-t border-[var(--fp-border)] md:hidden">
+<footer class="border-t border-[var(--fp-border)] shrink-0">
   <div
     class="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4"
   >

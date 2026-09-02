@@ -95,7 +95,7 @@
 </script>
 
 <div
-  class="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)] flex flex-col font-sans selection:bg-[var(--fp-accent)]/30 selection:text-white instrument-grid"
+  class="h-screen overflow-hidden bg-[var(--fp-bg)] text-[var(--fp-text)] flex flex-col font-sans selection:bg-[var(--fp-accent)]/30 selection:text-white instrument-grid"
 >
   <a
     href="#main-content"
@@ -117,7 +117,7 @@
     />
   {/if}
 
-  <div class="flex-1 flex flex-col {activeTab !== 'login' ? 'md:pl-56' : ''}">
+  <div class="flex-1 flex flex-col h-full overflow-y-auto {activeTab !== 'login' ? 'md:pl-56' : ''}">
     <main
       id="main-content"
       tabindex="-1"
