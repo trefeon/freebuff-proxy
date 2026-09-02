@@ -46,7 +46,6 @@ func TestModelAliasesExplicitSuppressesDefaults(t *testing.T) {
 }
 
 // --- #100: FALLBACK_AFTER_MS + FALLBACK_MODEL defaults -----------------------
-
 func TestFallbackAfterDefault(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok-1")
@@ -55,8 +54,8 @@ func TestFallbackAfterDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.FallbackAfter != 10*time.Second {
-		t.Errorf("FallbackAfter = %v, want 10s default", cfg.FallbackAfter)
+	if cfg.FallbackAfter != 0 {
+		t.Errorf("FallbackAfter = %v, want 0 default (disabled)", cfg.FallbackAfter)
 	}
 }
 
@@ -106,15 +105,11 @@ func TestDefaultFallbackModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for model, fb := range defaultFallbackModels() {
-		if got := cfg.FallbackModels[model]; got != fb {
-			t.Errorf("FallbackModels[%q] = %q, want default %q", model, got, fb)
-		}
+	if len(cfg.FallbackModels) != 0 {
+		t.Errorf("FallbackModels = %v, want empty default (no fallback)", cfg.FallbackModels)
 	}
-	// Every default fallback target must exist in the free catalog
-	// (deepseek-v4-flash is the guaranteed-available row).
-	if cfg.FallbackModels["openai/gpt-5.6-luna"] != "deepseek/deepseek-v4-flash" {
-		t.Error("gpt-5.6-luna must fall back to deepseek-v4-flash")
+	if len(cfg.QuotaFallbackModels) != 0 {
+		t.Errorf("QuotaFallbackModels = %v, want empty default (no fallback)", cfg.QuotaFallbackModels)
 	}
 }
 

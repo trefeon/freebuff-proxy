@@ -395,7 +395,7 @@ func defaultRawConfig() rawConfig {
 		RunsDrainTTL:                     "10m",       // #55: draining-runs TTL eviction
 		SessionReAdmitLead:               "60s",       // #99: pre-emptive re-admit lead
 		SessionProbeCacheTTL:             "15s",       // #60: admission probe cache TTL
-		FallbackAfter:                    "10000",     // #100: queue-wait fallback threshold (ms)
+		FallbackAfter:                    "0",         // #100: queue-wait fallback threshold (ms); 0 = disabled by default
 	}
 }
 
@@ -403,27 +403,15 @@ func defaultRawConfig() rawConfig {
 func ptrInt(n int) *int { return &n }
 
 // defaultFallbackModels returns the FALLBACK_MODEL defaults (issue #100):
-// the premium free-catalog row (gpt-5.6-luna) falls back to the always-
-// available flash model once its queue wait passes FALLBACK_AFTER_MS
-// (issue #189). Trigger is queue-wait ≥ FALLBACK_AFTER_MS only — never 429s.
+// empty by default — no automatic model fallback on queue wait.
 func defaultFallbackModels() map[string]string {
-	return map[string]string{
-		"openai/gpt-5.6-luna": "deepseek/deepseek-v4-flash",
-	}
+	return nil
 }
 
 // defaultQuotaFallbackModels returns the QUOTA_FALLBACK_MODELS defaults (issue #155, #183):
-// when a model's session quota is exhausted (all 4 premium sessions used for
-// luna, or unentitled referral-only GLM 5.2), the proxy falls back to an
-// available model (flash for GLM/luna, mimo for flash). Luna fallback (#203)
-// reduces retry pressure on an exhausted quota model that upstream flags as
-// abuse when hammered.
+// empty by default — no automatic model fallback on quota exhaustion.
 func defaultQuotaFallbackModels() map[string]string {
-	return map[string]string{
-		"deepseek/deepseek-v4-flash": "mimo/mimo-v2.5",
-		"z-ai/glm-5.2":               "deepseek/deepseek-v4-flash",
-		"openai/gpt-5.6-luna":        "deepseek/deepseek-v4-flash",
-	}
+	return nil
 }
 
 // EnvFileCandidates returns the ordered candidate paths for the .env file

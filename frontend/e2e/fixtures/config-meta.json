@@ -415,11 +415,11 @@
     "key": "FALLBACK_AFTER_MS",
     "group": "quota",
     "kind": "int",
-    "default": "10000",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 disables fallback. Queue-wait only — never on 429 quota exhaustion."
+    "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 (default) disables fallback. Queue-wait only — never on 429 quota exhaustion."
   },
   {
     "key": "FALLBACK_MODEL",
@@ -429,7 +429,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Unset default: openai/gpt-5.6-luna → deepseek/deepseek-v4-flash."
+    "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
   },
   {
     "key": "MAX_MESSAGES_PER_DAY",
@@ -456,11 +456,11 @@
     "key": "QUOTA_FALLBACK_MODELS",
     "group": "quota",
     "kind": "list",
-    "default": "deepseek/deepseek-v4-flash=mimo/mimo-v2.5,z-ai/glm-5.2=deepseek/deepseek-v4-flash,openai/gpt-5.6-luna=deepseek/deepseek-v4-flash",
+    "default": "",
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Map model → fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs)."
+    "description": "Map model=fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs). Empty default: no fallback (surfaces honest 429 with guidance to switch model)."
   },
   {
     "key": "CACHE_CONTROL_INJECTION",

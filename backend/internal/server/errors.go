@@ -147,7 +147,9 @@ func defaultHintForCode(code, message string) string {
 	case code == "upstream_auth_rejected" || code == "invalid_api_key" || strings.Contains(lowerMsg, "invalid api key"):
 		return "Token invalid or expired. Get a fresh token by running scripts/gen-token.cmd (Windows) or scripts/gen-token.sh (Linux/macOS)"
 	case code == "rate_limited":
-		return "Daily session quota exhausted. Resets at 07:00 UTC (Pacific midnight). Wait for reset or add another token."
+		return "Session quota exhausted. Switch your coding harness to an unlimited model: z-ai/glm-5.3-flash or deepseek/deepseek-v4-flash, or wait for reset at Pacific midnight (07:00 UTC)."
+	case code == "model_ip_limited":
+		return "Model restricted on this egress IP/tier. Limited-tier accounts should switch to 'mimo/mimo-v2.5', or route traffic through a Tier-1 country (US/EU/SG)."
 	case code == "ip_capped":
 		return "Too many distinct users on this egress IP (admission-only). Retry after Retry-After or use a different egress."
 	case code == "load_shedding":
@@ -255,6 +257,21 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		if retryAfter < 0 {
 			retryAfter = 0
 		}
+		if code == "rate_limited" {
+			targetModel := rle.Model
+			if targetModel == "" {
+				targetModel = model
+			}
+			if targetModel == "z-ai/glm-5.2" || strings.Contains(strings.ToLower(rle.Body), "referral") {
+				message = fmt.Sprintf("%s. Model '%s' requires referral entitlement on your account. Please switch your coding harness to an unlimited session model: 'z-ai/glm-5.3-flash' or 'deepseek/deepseek-v4-flash'.", message, targetModel)
+			} else {
+				resetHint := ""
+				if retryAfter > 0 {
+					resetHint = fmt.Sprintf(" Resets in %s at Pacific midnight (07:00 UTC).", formatDuration(retryAfter))
+				}
+				message = fmt.Sprintf("%s. Daily session quota exhausted for '%s'.%s Switch your coding harness to an unlimited session model: 'z-ai/glm-5.3-flash' or 'deepseek/deepseek-v4-flash'.", message, targetModel, resetHint)
+			}
+		}
 	case errors.As(err, &ice):
 		// ip_capped: admission-only (too many distinct users on the egress
 		// IP) — 429, not the quota 429, with the body's retryAfterMs only.
@@ -277,15 +294,18 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		// serve the model. The body's retryAfterMs is surfaced
 		// as Retry-After but does not set the unfit window.
 		status, code = http.StatusConflict, "model_ip_limited"
-		message, retryAfter = lie.Error(), lie.RetryAfter
+		targetModel := lie.Model
+		if targetModel == "" {
+			targetModel = model
+		}
+		message = fmt.Sprintf("%s: model '%s' is unavailable on this egress IP/tier. If your account or IP is on limited tier (non-Tier-1 region), switch your coding harness to 'mimo/mimo-v2.5' (the available model for limited tier), or route traffic via a residential connection in a Tier-1 country (US/UK/EU/SG).", lie.Error(), targetModel)
+		retryAfter = lie.RetryAfter
 		if retryAfter < 0 {
 			retryAfter = 0
 		}
 	case errors.Is(err, upstream.ErrModelIPLimited):
-		// Bare sentinel (registry entry stored without refusal detail):
-		// same 409 contract, no Retry-After to surface.
 		status, code = http.StatusConflict, "model_ip_limited"
-		message = err.Error()
+		message = fmt.Sprintf("%s: model '%s' is unavailable on this egress IP/tier. If your account or IP is on limited tier (non-Tier-1 region), switch your coding harness to 'mimo/mimo-v2.5' (the available model for limited tier), or route traffic via a residential connection in a Tier-1 country (US/UK/EU/SG).", err.Error(), model)
 		retryAfter = 0
 	case errors.As(err, &wr):
 		status, code = http.StatusServiceUnavailable, "waiting_room_queued"
@@ -431,4 +451,23 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		s.logger.Warn("request failed", attrs...)
 	}
 	s.writeClientError(w, r, status, message, code, retryAfter)
+}
+
+func formatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0s"
+	}
+	d = d.Round(time.Minute)
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if h > 0 {
+		if m > 0 {
+			return fmt.Sprintf("%dh %dm", h, m)
+		}
+		return fmt.Sprintf("%dh", h)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%ds", int(d.Seconds()))
 }
