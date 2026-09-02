@@ -18,7 +18,6 @@
   import { usePolling } from "../utils/polling.js";
   import { formatTime, parseLogFields } from "../utils/format.js";
   import { tr } from "../i18n.js";
-  import { SvelteURLSearchParams } from "svelte/reactivity";
 
   /** @type {any} */
   let data = $state(null);
@@ -63,7 +62,8 @@
   });
   async function fetchLogs() {
     try {
-      const query = new SvelteURLSearchParams();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local query builder, not reactive state
+      const query = new URLSearchParams();
       if (filterLevel) query.set("level", filterLevel);
       if (filterMsg.trim()) query.set("msg", filterMsg.trim());
       const res = await fetchAPI(`${adminApi.logs}?${query.toString()}`);

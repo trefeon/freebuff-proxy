@@ -14,7 +14,6 @@
   import { tr } from "../i18n.js";
   import { formatTime } from "../utils/format.js";
   import { parseEnv, setEnvValue as setEnvLine } from "../utils/env.js";
-  import { SvelteSet, SvelteMap } from "svelte/reactivity";
 
   // ---------------------------------------------------------------------------
   // State
@@ -27,8 +26,9 @@
   let rawText = $state(""); // canonical .env document (single source of truth)
   let baseContent = $state(""); // last-saved server env_content
   let formValues = $state({}); // meta key → display value
-  let changedKeys = $state.raw(new SvelteSet()); // form-touched keys — only these are serialized into the document
-  let effectiveMap = $state.raw(new SvelteMap()); // key → { value, secret }
+  // eslint-disable svelte/prefer-svelte-reactivity -- codebase idiom: $state.raw + full reassignment (changedKeys = next etc.), never in-place mutation of the wrapped collection
+  let changedKeys = $state.raw(new Set()); // form-touched keys — only these are serialized into the document
+  let effectiveMap = $state.raw(new Map()); // key → { value, secret }
 
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
@@ -48,13 +48,14 @@
   // Minimalist settings filter & view modes
   let searchQuery = $state("");
   let viewMode = $state("essential"); // 'essential' | 'all'
-  let expandedGroups = $state.raw(new SvelteSet());
+  let expandedGroups = $state.raw(new Set());
 
   function isKeyEssential(entry) {
     return Boolean(entry?.essential);
   }
   function toggleGroup(g) {
-    const next = new SvelteSet(expandedGroups);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient copy, reassigned whole
+    const next = new Set(expandedGroups);
     if (next.has(g)) next.delete(g);
     else next.add(g);
     expandedGroups = next;
@@ -131,7 +132,8 @@
 
   function setField(key, value) {
     formValues[key] = value;
-    const next = new SvelteSet(changedKeys);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient copy, reassigned whole
+    const next = new Set(changedKeys);
     next.add(key);
     changedKeys = next;
     rebuildRaw();
@@ -140,7 +142,7 @@
   function discard() {
     rawText = baseContent;
     formValues = deriveValues(baseContent);
-    changedKeys = new SvelteSet();
+    changedKeys = new Set();
     result = null;
   }
 
@@ -150,7 +152,8 @@
   let validationErrors = $derived.by(() => {
     const errors = [];
     const lines = rawText.split("\n");
-    const seenKeys = new SvelteSet();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local dedup set
+    const seenKeys = new Set();
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line || line.startsWith("#")) continue;
@@ -265,7 +268,8 @@
       meta = Array.isArray(metaRes) ? metaRes : (metaRes?.entries ?? []);
       data = cfgRes;
       baseContent = cfgRes.env_content || "";
-      effectiveMap = new SvelteMap();
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt per load, reassigned whole
+      effectiveMap = new Map();
       for (const kv of cfgRes.effective ?? []) {
         effectiveMap.set(kv.key, kv);
       }
@@ -275,7 +279,7 @@
       // marked unset — the form stays fully editable.
       rawText = baseContent;
       formValues = deriveValues(baseContent);
-      changedKeys = new SvelteSet();
+      changedKeys = new Set();
     } catch (e) {
       error = e.message || $tr("Failed to fetch configuration");
     } finally {
@@ -352,7 +356,7 @@
         // mirror that in the document and the form.
         rawText = baseContent;
         formValues = deriveValues(baseContent);
-        changedKeys = new SvelteSet();
+        changedKeys = new Set();
       }
     } catch (e) {
       result = {
