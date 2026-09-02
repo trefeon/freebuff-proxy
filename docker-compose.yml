@@ -21,6 +21,7 @@ services:
       # env beats the mounted .env file: guarantees the container listens on
       # the mapped port even when the host .env carries a loopback LISTEN_ADDR.
       - LISTEN_ADDR=:3457
+      - ADMIN_INSECURE_HTTP=${ADMIN_INSECURE_HTTP:-false}
     # The process cwd IS the mount, so every cwd-relative path the dashboard
     # and config loader touch persists on the host: ./.env (device-login and
     # add/remove-token writes), ./.freebuff-session-state.json (SESSION_PERSIST),

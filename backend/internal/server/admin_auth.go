@@ -134,7 +134,28 @@ const (
 
 func allowInsecureHTTP() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_INSECURE_HTTP")))
-	return v == "true" || v == "1" || v == "yes"
+	if v == "true" || v == "1" || v == "yes" {
+		return true
+	}
+	// Fallback: inspect .env file directly when the variable is not exported into
+	// the container process environment (e.g. docker-compose volume mount).
+	if _, content, exists, err := config.EnvFileInfo(); err == nil && exists {
+		for _, line := range strings.Split(string(content), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if eq := strings.IndexByte(line, '='); eq > 0 {
+				k := strings.TrimSpace(line[:eq])
+				val := strings.TrimSpace(line[eq+1:])
+				if strings.EqualFold(k, "ADMIN_INSECURE_HTTP") {
+					val = strings.ToLower(strings.Trim(val, `"'`))
+					return val == "true" || val == "1" || val == "yes"
+				}
+			}
+		}
+	}
+	return false
 }
 
 func isSecureCookie(r *http.Request) bool {
