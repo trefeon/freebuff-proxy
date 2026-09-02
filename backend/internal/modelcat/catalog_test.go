@@ -324,8 +324,8 @@ func TestCatalogFactsPinned(t *testing.T) {
 	}
 
 	// Shared premium pool = Luna + Solar Pro 4 (both metered by the shared
-	// 5/day pool; solar additionally has a per-model 1/day cap
-	// solar_pro4). GLM 5.3 Flash unmetered.
+	// 5/day pool). GLM 5.3 Flash unmetered. Solar's per-model count cap
+	// (1/day solar_pro4) closed 2026-09-01, upstream 051fd4d9.
 	wantPremium := []string{"openai/gpt-5.6-luna", "upstage/solar-pro4"}
 	if got := SharedPremiumModels(); !slices.Equal(got, wantPremium) {
 		t.Errorf("SharedPremiumModels() = %v, want %v", got, wantPremium)
@@ -350,17 +350,12 @@ func TestCatalogFactsPinned(t *testing.T) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)
 	}
 
-	// Per-model caps: Solar Pro 4 is the only capped row (freebuff-
-	// spend-ceilings.ts experimental 1-session cap, freebuff-model-
-	// availability.ts copy; pin a6be463).
+	// Per-model count caps: none at this pin. Upstream
+	// FREEBUFF_PER_MODEL_SESSION_CAPS is EMPTY — solar's 1/day trial cap
+	// closed 2026-09-01 (upstream 051fd4d9, its count cap came off; the
+	// per-session $ spend ceiling stays upstream-side).
 	for _, id := range ServedIDs() {
 		limit, pool := PerModelCap(id)
-		if id == "upstage/solar-pro4" {
-			if limit != 1 || pool != "solar_pro4" {
-				t.Errorf("PerModelCap(%q) = (%d, %q), want (1, \"solar_pro4\")", id, limit, pool)
-			}
-			continue
-		}
 		if limit != 0 || pool != "" {
 			t.Errorf("PerModelCap(%q) = (%d, %q), want (0, \"\")", id, limit, pool)
 		}

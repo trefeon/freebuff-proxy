@@ -67,7 +67,7 @@ var Catalog = []ModelInfo{
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
-		Served: true, Premium: true, ContextWindow: 500_000, Cap: 1, CapPool: "solar_pro4"},
+		Served: true, Premium: true, ContextWindow: 500_000},
 	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "z-ai/glm-5.3-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
 		Served: true, ContextWindow: 1_000_000,
@@ -126,7 +126,8 @@ const Glm53ModelID = "z-ai/glm-5.3-flash"
 
 // SolarPro4ModelID mirrors FREEBUFF_SOLAR_PRO_4_MODEL_ID: the Upstage
 // experimental premium row, metered by the shared premium pool (no
-// per-model cap lane, OpenRouter BYOK route).
+// per-model count cap since the 1/day trial window closed 2026-09-01,
+// upstream 051fd4d9; the per-session $ spend ceiling stays upstream-side).
 const SolarPro4ModelID = "upstage/solar-pro4"
 
 // PremiumSessionLimit mirrors upstream FREEBUFF_PREMIUM_SESSION_LIMIT: the
@@ -215,8 +216,9 @@ func IsPremium(id string) bool {
 
 // SharedPremiumModels returns the ids metered by the shared daily premium
 // pool (FREEBUFF_PREMIUM_MODEL_IDS). Luna + Solar Pro 4 share the 5/day
-// premium pool; solar additionally has a per-model cap (1/day, pool
-// solar_pro4) on top of the shared pool. GLM 5.3 Flash is unmetered.
+// premium pool (solar's 1/day per-model cap closed 2026-09-01, upstream
+// 051fd4d9 — the count cap came off, only the $ spend ceiling remains).
+// GLM 5.3 Flash is unmetered.
 func SharedPremiumModels() []string {
 	var out []string
 	for i := range Catalog {
