@@ -141,8 +141,27 @@ const (
 //
 // Setting ADMIN_FORCE_SECURE_COOKIES=true forces Secure: true unconditionally.
 func isSecureCookie(r *http.Request) bool {
-	if strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_FORCE_SECURE_COOKIES"))) == "true" {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_FORCE_SECURE_COOKIES")))
+	if v == "true" || v == "1" || v == "yes" {
 		return true
+	}
+	if _, content, exists, err := config.EnvFileInfo(); err == nil && exists {
+		for _, line := range strings.Split(string(content), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if eq := strings.IndexByte(line, '='); eq > 0 {
+				k := strings.TrimSpace(line[:eq])
+				val := strings.TrimSpace(line[eq+1:])
+				if strings.EqualFold(k, "ADMIN_FORCE_SECURE_COOKIES") {
+					val = strings.ToLower(strings.Trim(val, `"'`))
+					if val == "true" || val == "1" || val == "yes" {
+						return true
+					}
+				}
+			}
+		}
 	}
 	if r == nil {
 		return false
