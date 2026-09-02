@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -419,6 +420,35 @@ func TestServeSPACSPHeader(t *testing.T) {
 				t.Errorf("GET %s CSP %q missing %q", p, csp, want)
 			}
 		}
+	}
+}
+
+// TestServeSPACacheControl pins the cache policy: index.html (direct and
+// fallback) revalidates (no-cache), while Vite content-hashed files under
+// assets/ are served as immutable (#312).
+func TestServeSPACacheControl(t *testing.T) {
+	if !dashboard.HasEmbeddedSPA {
+		t.Skip("SPA not compiled in — build with -tags dashboard")
+	}
+	d := &dashboard.Dashboard{}
+
+	for _, p := range []string{"/admin/index.html", "/admin/overview"} {
+		rec := httptest.NewRecorder()
+		d.ServeSPA(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Errorf("GET %s Cache-Control = %q, want no-cache", p, cc)
+		}
+	}
+
+	assets, err := fs.Glob(dashboard.DistFS(), "assets/*.js")
+	if err != nil || len(assets) == 0 {
+		t.Fatalf("no hashed JS asset in embedded dist: %v (%d matches)", err, len(assets))
+	}
+	rec := httptest.NewRecorder()
+	d.ServeSPA(rec, httptest.NewRequest(http.MethodGet, "/admin/"+assets[0], nil))
+	cc := rec.Header().Get("Cache-Control")
+	if !strings.Contains(cc, "immutable") || !strings.Contains(cc, "max-age=31536000") {
+		t.Errorf("hashed asset Cache-Control = %q, want public, max-age=31536000, immutable", cc)
 	}
 }
 

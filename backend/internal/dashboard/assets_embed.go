@@ -49,6 +49,14 @@ func (d *Dashboard) ServeSPA(w http.ResponseWriter, r *http.Request) {
 		if f, err := dist.Open(reqPath); err == nil {
 			if stat, statErr := f.Stat(); statErr == nil && !stat.IsDir() {
 				if rs, ok := f.(io.ReadSeeker); ok {
+					// Vite content-hashes everything under assets/, so those
+					// files are immutable per build; index.html and any other
+					// root file revalidate (#312).
+					if strings.HasPrefix(reqPath, "assets/") {
+						w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					} else {
+						w.Header().Set("Cache-Control", "no-cache")
+					}
 					http.ServeContent(w, r, reqPath, stat.ModTime(), rs)
 					_ = f.Close()
 					return
@@ -71,6 +79,9 @@ func (d *Dashboard) ServeSPA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// index.html — direct or fallback — must never stay stale across
+	// deploys: the hashed asset URLs it references change per build.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, "index.html", stat.ModTime(), index.(io.ReadSeeker))
 }
