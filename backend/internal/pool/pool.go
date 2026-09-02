@@ -147,6 +147,9 @@ type TokenSnapshot struct {
 	// Referral is the upstream referral block (FreebuffReferralInfo); nil until
 	// the session reports it.
 	Referral *upstream.SessionReferral
+	// Freebucks is the upstream Freebucks allowance block (issue #232); nil until
+	// the session reports it.
+	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
 	// TransientRetries / FingerprintRotations are this token's upstream
 	// client counters (TRANSIENT_RETRIES): retried transport failures and
 	// pinned TLS fingerprint swaps. Surfaced per-token in /metrics.

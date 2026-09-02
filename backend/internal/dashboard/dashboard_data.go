@@ -7,7 +7,7 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/pool"
-)
+	)
 
 // --- overview ---
 
@@ -54,7 +54,6 @@ type upstreamFile struct {
 	VendorSHA string `json:"vendor_sha"`
 	Status    string `json:"status"` // DRIFT | MISSING_UPSTREAM | SAME
 }
-
 type tokenCard struct {
 	Index               int     `json:"index"`
 	Email               string  `json:"email,omitempty"`
@@ -94,6 +93,35 @@ type tokenCard struct {
 	ReferralSessionsLeft   int    `json:"referral_sessions_left"`
 	ReferralGithubLinked   bool   `json:"referral_github_linked"`
 	ReferralResetAt        string `json:"referral_reset_at,omitempty"`
+	// Freebucks (issue #232): balance + daily/weekly/monthly windows +
+	// bindingWindow + prices. Nil when the session has not reported it.
+	Freebucks *freebucksCard `json:"freebucks,omitempty"`
+}
+// freebucksWindowCard is one window of the Freebucks allowance (issue #232):
+// limit/spent/remaining + reset_at (RFC3339 string; empty when zero) +
+// percent_used (spent/limit*100, 0 when limit==0). Mirrors
+// upstream.FreebucksWindow but with string times and snake_case JSON for the
+// dashboard API (daily/weekly/monthly).
+type freebucksWindowCard struct {
+	Limit       float64 `json:"limit"`
+	Spent       float64 `json:"spent"`
+	Remaining   float64 `json:"remaining"`
+	ResetAt     string  `json:"reset_at,omitempty"`
+	PercentUsed float64 `json:"percent_used"`
+}
+
+// freebucksCard is the dashboard view of upstream.FreebucksInfo (issue #232):
+// balance + daily/weekly/monthly windows + binding_window + per-model prices.
+// Nil when the session has not reported Freebucks (nil-safe callers check).
+// Exposed alongside premium_quota, not replacing it.
+type freebucksCard struct {
+	Balance       float64                 `json:"balance"`
+	Daily         freebucksWindowCard     `json:"daily"`
+	Weekly        freebucksWindowCard     `json:"weekly"`
+	Monthly       freebucksWindowCard     `json:"monthly"`
+	BindingWindow string                  `json:"binding_window"`
+	Prices        map[string]float64      `json:"prices,omitempty"`
+	PlanDaily     *float64                `json:"plan_daily,omitempty"`
 }
 
 // standingStepCard is one dashboard-ready earn-back action
@@ -121,8 +149,8 @@ type bridgeTokenCard struct {
 	BanType       string                     `json:"ban_type,omitempty"`
 	BannedUntil   string                     `json:"banned_until,omitempty"`
 	PremiumQuota  *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	Freebucks     *freebucksCard             `json:"freebucks,omitempty"`
 }
-
 func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 	status := "active"
 	if snap.Locked {
@@ -148,6 +176,7 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		BanType:       snap.BanType,
 		BannedUntil:   bannedUntil,
 		PremiumQuota:  snap.PremiumQuota,
+		Freebucks:     freebucksCardFromInfo(snap.Freebucks),
 	}
 }
 

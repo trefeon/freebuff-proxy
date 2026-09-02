@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"freebuff-proxy/backend/internal/pool"
+	"freebuff-proxy/backend/internal/upstream"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,39 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 			card.ReferralResetAt = t.Referral.ResetAt.Format(time.RFC3339)
 		}
 	}
+	if t.Freebucks != nil {
+		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
+	}
+	return card
+}
+
+func freebucksCardFromInfo(info *upstream.FreebucksInfo) *freebucksCard {
+	if info == nil {
+		return nil
+	}
+	return &freebucksCard{
+		Balance:       info.Balance,
+		Daily:         freebucksWindowCardFromWindow(info.Daily),
+		Weekly:        freebucksWindowCardFromWindow(info.Weekly),
+		Monthly:       freebucksWindowCardFromWindow(info.Monthly),
+		BindingWindow: info.BindingWindow,
+		Prices:        info.Prices,
+		PlanDaily:     info.PlanDaily,
+	}
+}
+
+func freebucksWindowCardFromWindow(w upstream.FreebucksWindow) freebucksWindowCard {
+	card := freebucksWindowCard{
+		Limit:     w.Limit,
+		Spent:     w.Spent,
+		Remaining: w.Remaining,
+	}
+	if !w.ResetAt.IsZero() {
+		card.ResetAt = w.ResetAt.Format(time.RFC3339)
+	}
+	if w.Limit != 0 {
+		card.PercentUsed = w.Spent / w.Limit * 100
+	}
 	return card
 }
 
@@ -87,6 +121,31 @@ func formatQuota(v float64) string {
 		return strconv.FormatInt(int64(v), 10)
 	}
 	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// formatFreebucks returns a human summary of the Freebucks allowance.
+// Nil-safe: returns "" when fb is nil.
+func formatFreebucks(fb *freebucksCard) string {
+	if fb == nil {
+		return ""
+	}
+	return fmt.Sprintf("balance %s · daily %s · weekly %s · monthly %s · binding %s",
+		formatQuota(fb.Balance),
+		formatFreebucksWindow(fb.Daily),
+		formatFreebucksWindow(fb.Weekly),
+		formatFreebucksWindow(fb.Monthly),
+		fb.BindingWindow,
+	)
+}
+
+// formatFreebucksWindow formats one Freebucks window as "spent/limit (remaining left)".
+// Zero-limit windows return "spent/limit".
+func formatFreebucksWindow(w freebucksWindowCard) string {
+	base := formatQuota(w.Spent) + "/" + formatQuota(w.Limit)
+	if w.Limit == 0 {
+		return base
+	}
+	return base + " (" + formatQuota(w.Remaining) + " left, " + formatQuota(w.PercentUsed) + "%)"
 }
 
 func formatEntitlement(e map[string]float64) string {

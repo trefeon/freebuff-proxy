@@ -52,6 +52,9 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		if _, _, capped := quotaRemaining(tok, model); capped {
 			return false
 		}
+		if capped, _ := freebucksCapped(tok, model); capped {
+			return false
+		}
 		return true
 	}
 
@@ -94,9 +97,6 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 
 	// Sort matchingHot:
 	// 1. In-flight refreshing/admitting tokens rank first so concurrent requests park on single-flight refreshCh.
-	// 2. Known positive remaining quota: smallest remaining quota first (drain account closest to limit first).
-	// 3. Equal/unknown quota: prefer last-used token for this model (session stickiness for multi-turn chats).
-	// 4. Stable token index preference (lower index first) to avoid round-robin ping-pong across accounts.
 	sort.SliceStable(matchingHot, func(i, j int) bool {
 		a, b := matchingHot[i], matchingHot[j]
 		tokA, tokB := (*toks)[a], (*toks)[b]
@@ -115,6 +115,19 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 		if aKnown && aRem != bRem {
 			return aRem < bRem
+		}
+
+		// Freebucks-aware tie-breaker: drain smallest balance first
+		// (preserve fuller Freebucks allowances), alongside existing quota
+		// logic. Only applies when both tokens price the model.
+		if snapA.Freebucks != nil && snapB.Freebucks != nil {
+			if _, okA := snapA.Freebucks.Prices[model]; okA {
+				if _, okB := snapB.Freebucks.Prices[model]; okB {
+					if snapA.Freebucks.Balance != snapB.Freebucks.Balance {
+						return snapA.Freebucks.Balance < snapB.Freebucks.Balance
+					}
+				}
+			}
 		}
 
 		if hasLastUsed {
@@ -218,6 +231,10 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 		if _, _, capped := quotaRemaining((*toks)[idx], model); capped {
 			quotaLimited = append(quotaLimited, quotaLimitError((*toks)[idx], model))
+			continue
+		}
+		if capped, _ := freebucksCapped((*toks)[idx], model); capped {
+			quotaLimited = append(quotaLimited, freebucksLimitError((*toks)[idx], model))
 		}
 	}
 	return order, quotaLimited

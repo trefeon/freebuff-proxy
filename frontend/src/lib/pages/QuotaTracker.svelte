@@ -55,9 +55,9 @@
   });
 
   // Bridge entries are owned by the Tokens page; this page only reports the
-  // count that currently report premium quota (no bridge cards here).
+  // count that currently report premium quota or freebucks (no bridge cards here).
   const bridgeQuotaCount = $derived(
-    (data?.bridge_token_cards ?? []).filter((c) => c.premium_quota).length,
+    (data?.bridge_token_cards ?? []).filter((c) => c.premium_quota || c.freebucks).length,
   );
 </script>
 
@@ -110,7 +110,9 @@
               : ""}
           >
             <div class="flex flex-col gap-4">
-              {#if token.premium_quota}
+              {#if token.freebucks}
+                <PremiumQuotaBar freebucks={token.freebucks} {now} />
+              {:else if token.premium_quota}
                 <PremiumQuotaBar quota={token.premium_quota} {now} />
               {:else}
                 <p class="text-xs text-[var(--fp-dim)] italic">

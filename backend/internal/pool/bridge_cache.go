@@ -375,6 +375,7 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			SpendDay:      float64(spend.Day),
 			SpendPct:      spendPct,
 			PremiumQuota:  premium,
+			Freebucks:     sess.Freebucks,
 			BanType:       banType,
 			BannedUntil:   bannedUntil,
 		})

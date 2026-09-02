@@ -54,8 +54,11 @@ type SessionSnapshot struct {
 	// Referral is the upstream referral block (FreebuffReferralInfo); nil
 	// until an admission/poll that carried it.
 	Referral *upstream.SessionReferral
+	// Freebucks is the upstream Freebucks allowance block (issue #232);
+	// nil when the response omits it. Carries balance, daily/weekly/monthly
+	// windows, bindingWindow, and per-model prices.
+	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
 }
-
 // QuotaSnapshot is one model's live session quota for healthz/metrics
 // reporting (pool.TokenSnapshot). Mirrors upstream.ModelQuota.
 type QuotaSnapshot struct {

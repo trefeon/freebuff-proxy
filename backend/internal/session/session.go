@@ -189,6 +189,7 @@ type snapshotState struct {
 	savedReferral      *upstream.SessionReferral
 	savedGlmPromo      string
 	savedAccessTier    string
+	savedFreebucks     *upstream.FreebucksInfo
 	invalidationEvents []invalidationEvent
 	reAdmitTriggers    []time.Time
 	lastStormAt        time.Time
@@ -237,8 +238,10 @@ type cachedState struct {
 	// referral is the upstream referral block (FreebuffReferralInfo); nil
 	// until an admission/poll that carried it.
 	referral *upstream.SessionReferral
+	// freebucks is the upstream Freebucks allowance block (issue #232); nil
+	// until an admission/poll that carried it.
+	freebucks *upstream.FreebucksInfo
 }
-
 // NewManager builds a session manager for the given upstream client.
 func NewManager(client *upstream.Client) *Manager {
 	if client == nil {
@@ -310,9 +313,11 @@ func (m *Manager) commit(cs *cachedState) {
 		if m.state.accessTier != "" {
 			m.snap.savedAccessTier = m.state.accessTier
 		}
+		if m.state.freebucks != nil {
+			m.snap.savedFreebucks = m.state.freebucks
+		}
 	}
 	// Restore the previously-seen quota map when the new state omits
-	// rateLimitsByModel (the upstream intermittently drops the field on
 	// re-admission or compact polls — issue #146).  This keeps the
 	// dashboard quota table visible between quota-carrying responses.
 	if cs != nil && cs.quotaByModel == nil && m.snap.savedQuota != nil {
@@ -333,6 +338,9 @@ func (m *Manager) commit(cs *cachedState) {
 	}
 	if cs != nil && cs.referral == nil && m.snap.savedReferral != nil {
 		cs.referral = m.snap.savedReferral
+	}
+	if cs != nil && cs.freebucks == nil && m.snap.savedFreebucks != nil {
+		cs.freebucks = m.snap.savedFreebucks
 	}
 	m.state = cs
 	if m.store != nil && m.key != "" {
@@ -581,6 +589,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			RemainingMs:  m.snap.savedRemainingMs,
 			Referral:     m.snap.savedReferral,
 			AccessTier:   m.snap.savedAccessTier,
+			Freebucks:    m.snap.savedFreebucks,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -621,6 +630,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Standing:           m.state.standing,
 		RemainingMs:        m.state.remainingMs,
 		Referral:           m.state.referral,
+		Freebucks:          m.state.freebucks,
 	}
 }
 
@@ -710,9 +720,13 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 			m.state.accessTier = st.AccessTier
 		}
 	}
+	if st.Freebucks != nil {
+		m.snap.savedFreebucks = st.Freebucks
+		if m.state != nil {
+			m.state.freebucks = st.Freebucks
+		}
+	}
 }
-
-// Invalidate drops the cached session so the next EnsureSession re-creates
 // it. Used when a chat request reports a session-level error. The
 // invalidation is recorded with the canonical 409 reason (the session-invalid
 // chat family); callers that can name a more specific cause use

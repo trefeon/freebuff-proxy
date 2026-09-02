@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"fmt"
 	"time"
 
 	"freebuff-proxy/backend/internal/session"
@@ -103,7 +104,132 @@ func quotaLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
 	return quotaLimitErrorForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
 
-// --- pool quota/snapshot ---
+// freebucksCapped reports whether the token's Freebucks allowance is exhausted
+// for model. When Freebucks is absent or the model has no price, the token
+// is not capped. When balance < price the token is capped and RetryAfter is
+// the time until the earliest window whose remaining < price recovers
+// (bindingWindow's reset is authoritative; fallback to the earliest future
+// window reset where remaining < price).
+func freebucksCapped(acc tokenAccount, model string) (bool, time.Duration) {
+	return freebucksCappedForSnapshot(acc.sessionMgr().Snapshot(), model)
+}
+
+// freebucksCappedForSnapshot is the snapshot-direct form of freebucksCapped
+// (kept for testing and for acquireOrder's quotaLimited loop which already
+// holds a snapshot).
+func freebucksCappedForSnapshot(snap session.SessionSnapshot, model string) (bool, time.Duration) {
+	fb := snap.Freebucks
+	if fb == nil {
+		return false, 0
+	}
+	price, ok := fb.Prices[model]
+	if !ok {
+		return false, 0
+	}
+	if fb.Balance >= price {
+		return false, 0
+	}
+	// Balance insufficient — capped. Derive RetryAfter from the window resets.
+	// The bindingWindow names the authoritative window; when its remaining is
+	// already below price its ResetAt is the correct signal. Otherwise fall
+	// back to the earliest future ResetAt among windows where remaining < price.
+	now := time.Now()
+	var bindingReset time.Time
+	var bindingRemaining float64
+	switch fb.BindingWindow {
+	case "daily":
+		bindingReset = fb.Daily.ResetAt
+		bindingRemaining = fb.Daily.Remaining
+	case "weekly":
+		bindingReset = fb.Weekly.ResetAt
+		bindingRemaining = fb.Weekly.Remaining
+	case "monthly":
+		bindingReset = fb.Monthly.ResetAt
+		bindingRemaining = fb.Monthly.Remaining
+	default:
+		// Unknown bindingWindow: treat daily as authoritative.
+		bindingReset = fb.Daily.ResetAt
+		bindingRemaining = fb.Daily.Remaining
+	}
+	if !bindingReset.IsZero() && bindingReset.After(now) && bindingRemaining < price {
+		return true, time.Until(bindingReset)
+	}
+	// Collect candidate windows where remaining < price.
+	var candidates []time.Time
+	if !fb.Daily.ResetAt.IsZero() && fb.Daily.ResetAt.After(now) && fb.Daily.Remaining < price {
+		candidates = append(candidates, fb.Daily.ResetAt)
+	}
+	if !fb.Weekly.ResetAt.IsZero() && fb.Weekly.ResetAt.After(now) && fb.Weekly.Remaining < price {
+		candidates = append(candidates, fb.Weekly.ResetAt)
+	}
+	if !fb.Monthly.ResetAt.IsZero() && fb.Monthly.ResetAt.After(now) && fb.Monthly.Remaining < price {
+		candidates = append(candidates, fb.Monthly.ResetAt)
+	}
+	if len(candidates) > 0 {
+		earliest := candidates[0]
+		for _, t := range candidates[1:] {
+			if t.Before(earliest) {
+				earliest = t
+			}
+		}
+		return true, time.Until(earliest)
+	}
+	// No window has remaining < price but balance is still < price (e.g. stale
+	// remaining). Fall back to the binding window's reset if future, else the
+	// earliest future reset among all windows.
+	if !bindingReset.IsZero() && bindingReset.After(now) {
+		return true, time.Until(bindingReset)
+	}
+	for _, w := range []upstream.FreebucksWindow{fb.Daily, fb.Weekly, fb.Monthly} {
+		if !w.ResetAt.IsZero() && w.ResetAt.After(now) {
+			candidates = append(candidates, w.ResetAt)
+		}
+	}
+	if len(candidates) > 0 {
+		earliest := candidates[0]
+		for _, t := range candidates[1:] {
+			if t.Before(earliest) {
+				earliest = t
+			}
+		}
+		return true, time.Until(earliest)
+	}
+	return true, 0
+}
+
+// freebucksLimitError builds the 429 surfaced when Freebucks balance is
+// insufficient for model. RetryAfter mirrors freebucksCapped's window-reset
+// signal.
+func freebucksLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
+	return freebucksLimitErrorForSnapshot(acc.sessionMgr().Snapshot(), model)
+}
+
+func freebucksLimitErrorForSnapshot(snap session.SessionSnapshot, model string) *upstream.RateLimitError {
+	fb := snap.Freebucks
+	price := 0.0
+	if fb != nil {
+		if p, ok := fb.Prices[model]; ok {
+			price = p
+		}
+	}
+	capped, retryAfter := freebucksCappedForSnapshot(snap, model)
+	_ = capped
+	body := "freebucks balance insufficient for model"
+	// Surface price vs balance in the diagnostic body when available.
+	if fb != nil {
+		body = body + " (balance " + formatFreebucksBalance(fb.Balance) + " < price " + formatFreebucksBalance(price) + ")"
+	}
+	return &upstream.RateLimitError{
+		Status:     "rate_limited",
+		Model:      model,
+		RetryAfter: retryAfter,
+		Body:       body,
+	}
+}
+
+func formatFreebucksBalance(v float64) string {
+	return fmt.Sprintf("%g", v)
+}
 
 // recordChat appends one successful upstream chat for token and prunes the
 // token's usage history outside the 24h window. The ledger travels with the

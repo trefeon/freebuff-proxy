@@ -15,6 +15,7 @@
   import CopyButton from "../components/CopyButton.svelte";
   import Alert from "../components/Alert.svelte";
   import Button from "../components/Button.svelte";
+  import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
@@ -22,6 +23,7 @@
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
+  let now = $state(Date.now());
 
   async function fetchData() {
     try {
@@ -35,8 +37,13 @@
     }
   }
 
+  let tick = null;
   onMount(() => {
     fetchData();
+    tick = setInterval(() => {
+      now = Date.now();
+    }, 1000);
+    return () => clearInterval(tick);
   });
 
   function retry() {
@@ -46,8 +53,6 @@
   }
 
   usePolling(fetchData, 15000);
-
-  // --- KPIs, derived from real overview fields (no invented fields) ---
   let poolTotal = $derived(data?.tokens?.length ?? 0);
   let busyTokens = $derived(
     data?.tokens?.filter((t) => t.active_runs > 0).length ?? 0,
@@ -64,6 +69,13 @@
 
   let atRiskTokens = $derived(
     (data?.tokens ?? []).filter((t) => t.risk_level && t.risk_level !== "low"),
+  );
+
+  // Freebucks: per-token daily/weekly/monthly + balance + bindingWindow (issue #232)
+  let hasFreebucks = $derived((data?.tokens ?? []).some((t) => t.freebucks));
+  let freebucksTokens = $derived((data?.tokens ?? []).filter((t) => t.freebucks));
+  let hasBridgeFreebucks = $derived(
+    (data?.bridge_token_cards ?? []).some((c) => c.freebucks),
   );
 
   // Dynamic Base URL follows the browser's current host (VPS IP, domain, VPN reverse proxy)
@@ -310,19 +322,45 @@
             {#each data.bridge_token_cards as bc (bc.key)}
               <li class="flex flex-wrap items-center gap-2 text-xs">
                 <StatusBadge status={bc.status} />
-                <code class="fp-num font-mono text-[var(--fp-text)]"
-                  >{bc.key}</code
-                >
+                <code class="fp-num font-mono text-[var(--fp-text)]">{bc.key}</code>
                 {#if bc.model}
-                  <code class="fp-num font-mono text-[var(--fp-muted)]"
-                    >{bc.model}</code
-                  >
+                  <code class="fp-num font-mono text-[var(--fp-muted)]">{bc.model}</code>
                 {/if}
               </li>
             {/each}
           </ul>
         </Card>
       {/if}
+    {/if}
+
+    {#if hasFreebucks || hasBridgeFreebucks}
+      <Card
+        title={$tr("Freebucks — allowance")}
+        description={$tr(
+          "Daily, weekly and monthly windows with balance and binding window — per token",
+        )}
+      >
+        <div class="grid grid-cols-1 gap-4">
+          {#each freebucksTokens as tok, i (tok.index ?? tok.account_id ?? i)}
+            <PremiumQuotaBar
+              freebucks={tok.freebucks}
+              title={$tr("Token #{index} • Freebucks", {
+                index: tok.index ?? i,
+              })}
+              {now}
+            />
+          {/each}
+          {#if hasBridgeFreebucks}
+            {#each (data.bridge_token_cards ?? []).filter((c) => c.freebucks) as bc (bc.key)}
+              <PremiumQuotaBar
+                freebucks={bc.freebucks}
+                title={`${bc.key} • Freebucks`}
+                {now}
+              />
+            {/each}
+          {/if}
+        </div>
+      </Card>
     {/if}
 
     <!-- Universal Client Integration & Endpoints Card (Always Available) -->

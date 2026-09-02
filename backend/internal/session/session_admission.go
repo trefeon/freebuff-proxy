@@ -444,6 +444,9 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				glmPromo:           st.GlmPromo,
 				standing:           st.Standing,
 				accessTier:         st.AccessTier,
+				remainingMs:        st.RemainingMs,
+				referral:           st.Referral,
+				freebucks:          st.Freebucks,
 			})
 			// Issue #60: the successful admission refreshes the probe cache
 			// window — subsequent session poll GETs within the TTL are
@@ -483,9 +486,6 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				pollAt = time.Now().Add(wait)
 			}
 			model := st.Model
-			if model == "" {
-				model = targetModel
-			}
 			m.mu.Lock()
 			m.commit(&cachedState{
 				status:     "queued",
@@ -496,6 +496,8 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				pollAt:     pollAt,
 				glmPromo:   st.GlmPromo,
 				accessTier: st.AccessTier,
+				referral:   st.Referral,
+				freebucks:  st.Freebucks,
 			})
 			m.mu.Unlock()
 			slog.Debug("session queued", "instance_id", st.InstanceID, "model", model,

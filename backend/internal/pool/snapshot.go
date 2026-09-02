@@ -23,6 +23,9 @@ type BridgeTokenSnapshot struct {
 	// PremiumQuota mirrors TokenSnapshot's premium view (quota_tracker.go).
 	// Nil when the bridge entry has no premium quota.
 	PremiumQuota *PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	// Freebucks is the upstream Freebucks allowance block (issue #232); nil
+	// when the bridge entry has no Freebucks quota.
+	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
 	SpendDay     float64               `json:"spend_day"`
 	SpendPct     int                   `json:"spend_pct"`
 	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
@@ -172,6 +175,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			GlmPromo:                ss.GlmPromo,
 			Standing:                ss.Standing,
 			Referral:                ss.Referral,
+			Freebucks:               ss.Freebucks,
 			Locked:                  tok.locked.Load(),
 			Quarantined:             q != nil,
 			QuarantineReason:        quarantineReason,
