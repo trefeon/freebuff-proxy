@@ -278,9 +278,10 @@ func TestAdminLoginTrimsAndBoundsToken(t *testing.T) {
 	}
 }
 
-// TestXForwardedProtoUntrustedPeer pins the untrusted-header rule: an X-Forwarded-Proto: https
-// header from a PUBLIC peer must not turn the session cookie Secure.
-func TestXForwardedProtoUntrustedPeer(t *testing.T) {
+// TestAdminCookieAlwaysSecureBehindSpoofedHeader pins the unconditional
+// Secure rule (#318): even an X-Forwarded-Proto: https header from a
+// PUBLIC peer (a spoofable value) cannot make the login cookie non-Secure.
+func TestAdminCookieAlwaysSecureBehindSpoofedHeader(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, mock)
@@ -306,7 +307,7 @@ func TestXForwardedProtoUntrustedPeer(t *testing.T) {
 	if admin == nil {
 		t.Fatal("login did not set fb_admin")
 	}
-	if admin.Secure {
-		t.Error("fb_admin Secure = true with X-Forwarded-Proto from a public peer, want false (spoofable)")
+	if !admin.Secure {
+		t.Error("fb_admin Secure = false; Secure must be unconditional (#318)")
 	}
 }

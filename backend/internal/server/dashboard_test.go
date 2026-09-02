@@ -85,40 +85,27 @@ func bodyOf(t *testing.T, resp *http.Response) string {
 	return string(b)
 }
 
-// The cookie's Secure flag follows the login transport: HTTPS (or a
-// TLS-terminating proxy via X-Forwarded-Proto) sets it, plain HTTP does not
-// (a Secure cookie over plain HTTP would be rejected and break login).
-func TestDashboardCookieSecureFollowsTransport(t *testing.T) {
+// The cookie's Secure flag is unconditional (#318): secure-by-default even
+// over plain HTTP. Modern browsers still accept Secure cookies on
+// http://localhost / http://127.0.0.1 (trustworthy origins), so loopback
+// dev keeps working; a remote plain-HTTP admin login is refused.
+func TestDashboardCookieAlwaysSecure(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 
 	plain := postLogin(t, ts.URL+"/admin/login", "secret")
 	defer func() { _ = plain.Body.Close() }()
-	if c := plain.Cookies(); len(c) == 1 && c[0].Secure {
-		t.Error("plain-HTTP login set a Secure cookie")
-	}
-
-	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/login", strings.NewReader("token=secret"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-Forwarded-Proto", "https")
-	resp, err := noRedirectClient().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	// The response carries fb_admin plus fb_csrf; only fb_admin's Secure
-	// flag is the subject here.
 	var admin *http.Cookie
-	for _, cc := range resp.Cookies() {
+	for _, cc := range plain.Cookies() {
 		if cc.Name == "fb_admin" {
 			admin = cc
 			break
 		}
 	}
-	if admin == nil || !admin.Secure {
-		t.Error("X-Forwarded-Proto: https login from loopback did not set a Secure fb_admin cookie")
+	if admin == nil {
+		t.Fatal("plain-HTTP login did not set fb_admin")
+	}
+	if !admin.Secure {
+		t.Error("plain-HTTP login did not set a Secure cookie (Secure is unconditional)")
 	}
 }
 

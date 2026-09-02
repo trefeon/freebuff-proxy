@@ -347,7 +347,8 @@ Windows:
 - Loopback-only binding means other machines on your LAN cannot reach
   the proxy. That is intentional. To serve your LAN, set
   `LISTEN_ADDR=:3457` and, if you set `ADMIN_TOKEN`, the dashboard cookie
-  gets the Secure flag automatically.
+  always carries the `Secure` flag (unconditional — loopback dev still
+  works because browsers accept Secure cookies on localhost/127.0.0.1).
 - Windows Defender SmartScreen may flag the unsigned binary. Allow it
   once; the release carries SLSA provenance if you want to verify it
   instead of trusting the popup.

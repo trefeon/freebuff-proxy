@@ -1,9 +1,6 @@
 package server
 
 import (
-	"crypto/tls"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -134,65 +131,6 @@ func TestUpdateAuthTokensEnvRejectsComma(t *testing.T) {
 	}
 	if _, err := updateAuthTokensEnv([]string{"cb-ok", "cb-two"}); err != nil {
 		t.Fatalf("updateAuthTokensEnv clean list = %v, want nil", err)
-	}
-}
-
-// TestTrustedProxyAddr pins the proxy allowlist: loopback, RFC1918, and
-// link-local peers may vouch for X-Forwarded-Proto; everything else cannot.
-func TestTrustedProxyAddr(t *testing.T) {
-	cases := []struct {
-		addr string
-		want bool
-	}{
-		{"127.0.0.1:1234", true},
-		{"127.0.0.1", true},
-		{"[::1]:1234", true},
-		{"10.1.2.3:80", true},
-		{"172.16.5.5:443", true},
-		{"192.168.1.1:8080", true},
-		{"169.254.1.1:80", true},
-		{"[fd00::1]:80", true},
-		{"203.0.113.9:1234", false},
-		{"8.8.8.8", false},
-		{"1.2.3.4:0", false},
-		{"not-an-ip", false},
-		{"", false},
-	}
-	for _, c := range cases {
-		if got := isTrustedProxyAddr(c.addr); got != c.want {
-			t.Errorf("isTrustedProxyAddr(%q) = %v, want %v", c.addr, got, c.want)
-		}
-	}
-}
-
-// TestSecureCookieTrustsOwnProxyOnly pins the trusted-proxy rule end to end:
-// X-Forwarded-Proto lifts Secure only when the peer is loopback/private,
-// and a direct TLS connection always does.
-func TestSecureCookieTrustsOwnProxyOnly(t *testing.T) {
-	req := func(addr string, xfp string) *http.Request {
-		r := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-		r.RemoteAddr = addr
-		if xfp != "" {
-			r.Header.Set("X-Forwarded-Proto", xfp)
-		}
-		return r
-	}
-	if !secureCookie(req("127.0.0.1:1234", "https")) {
-		t.Error("secureCookie(loopback + X-Forwarded-Proto https) = false, want true")
-	}
-	if !secureCookie(req("10.0.0.5:1234", "https")) {
-		t.Error("secureCookie(private peer + X-Forwarded-Proto https) = false, want true")
-	}
-	if secureCookie(req("203.0.113.9:1234", "https")) {
-		t.Error("secureCookie(public peer + X-Forwarded-Proto https) = true, want false (spoofable header)")
-	}
-	r := req("203.0.113.9:1234", "http")
-	r.TLS = &tls.ConnectionState{}
-	if !secureCookie(r) {
-		t.Error("secureCookie(direct TLS) = false, want true")
-	}
-	if secureCookie(req("127.0.0.1:1234", "")) {
-		t.Error("secureCookie(loopback without X-Forwarded-Proto) = true, want false")
 	}
 }
 

@@ -132,10 +132,12 @@ const (
 	loginFailsCap = 1024
 )
 
-func (a *adminAuth) setCookie(w http.ResponseWriter, secure bool) {
-	// fb_admin is intentionally non-Secure over plain-HTTP loopback for local dev; secureCookie() (TLS or X-Forwarded-Proto:https from trusted proxy) ensures Secure for every remote path
-	// codeql[go/cookie-secure-not-set]
-	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: a.cookieValue(time.Now().Add(adminCookieTTL)), Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure, MaxAge: int(adminCookieTTL.Seconds())})
+func (a *adminAuth) setCookie(w http.ResponseWriter) {
+	// Secure is unconditional (#318): modern browsers treat http://localhost
+	// and http://127.0.0.1 as trustworthy and still accept Secure cookies
+	// there, so plain-HTTP loopback dev keeps working; any remote plain-HTTP
+	// admin login is refused by the browser, forcing TLS or a front proxy.
+	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: a.cookieValue(time.Now().Add(adminCookieTTL)), Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: true, MaxAge: int(adminCookieTTL.Seconds())})
 }
 
 func (a *adminAuth) allow(ip string) bool {
@@ -343,35 +345,6 @@ func isLoopbackHost(host string) bool {
 	return host == "localhost"
 }
 
-// isTrustedProxyAddr reports whether the request's peer address is
-// loopback, RFC1918-private, or link-local — the peers allowed to vouch
-// for X-Forwarded-Proto. A TLS-terminating reverse proxy on the same
-// machine or LAN owns the client-facing TLS; a header from any public
-// address is a client-asserted spoof and must not lift the cookie Secure
-// flag.
-func isTrustedProxyAddr(remoteAddr string) bool {
-	host := remoteAddr
-	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
-		host = h
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
-}
-
-// secureCookie reports whether admin cookies should carry the Secure flag:
-// a direct TLS connection, or a TLS-terminating reverse proxy on a
-// loopback/private network advertising X-Forwarded-Proto: https. Header
-// values from any other peer are untrusted.
-func secureCookie(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") && isTrustedProxyAddr(r.RemoteAddr)
-}
-
 // newCSRFToken mints the double-submit CSRF value: 32 bytes of
 // crypto/rand, hex-encoded.
 func newCSRFToken() (string, error) {
@@ -385,18 +358,16 @@ func newCSRFToken() (string, error) {
 // csrfCookie builds the double-submit CSRF cookie. It is deliberately NOT
 // HttpOnly: the SPA reads it from document.cookie and echoes the value as
 // the X-CSRF-Token header on state-changing requests.
-func csrfCookie(r *http.Request, value string) *http.Cookie {
-	// double-submit CSRF cookie is readable JS by design; Secure is set for
-	// direct TLS or when a loopback/private/link-local peer advertises
-	// X-Forwarded-Proto: https; non-Secure otherwise
-	// codeql[go/cookie-secure-not-set]
+func csrfCookie(value string) *http.Cookie {
+	// double-submit CSRF cookie is readable JS by design; Secure is
+	// unconditional (#318) — same rationale as the session cookie.
 	return &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: false,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   secureCookie(r),
+		Secure:   true,
 	}
 }
 
@@ -406,11 +377,7 @@ func csrfCookie(r *http.Request, value string) *http.Cookie {
 func (a *adminHandlers) setCSRFCookieIfAbsent(w http.ResponseWriter, r *http.Request) {
 	if _, err := r.Cookie(csrfCookieName); err != nil {
 		if value, err := newCSRFToken(); err == nil {
-			// CSRF cookie: Secure is set for direct TLS or when a
-			// loopback/private/link-local peer advertises
-			// X-Forwarded-Proto: https; non-Secure otherwise
-			// codeql[go/cookie-secure-not-set]
-			http.SetCookie(w, csrfCookie(r, value))
+			http.SetCookie(w, csrfCookie(value))
 		}
 	}
 }
@@ -534,10 +501,7 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AdminToken)) == 1 {
 		a.adminAuth.clearFails(ip)
-		// secureCookie trusts X-Forwarded-Proto only from a loopback or
-		// private peer; a spoofed header from a public address must
-		// never turn the session cookie Secure over plain HTTP.
-		a.adminAuth.setCookie(w, secureCookie(r))
+		a.adminAuth.setCookie(w)
 		// Double-submit CSRF cookie: the SPA re-reads it from
 		// document.cookie after the login response and echoes it on every
 		// later state-changing request.
@@ -562,12 +526,9 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 // logging out an already-expired session must work — and it is not wrapped
 // in adminSensitive because it exposes nothing.
 func (a *adminHandlers) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
-	// Match the Secure flag with the current transport, same as login.
-	// A clearing cookie without Secure cannot overwrite a Secure cookie
-	// set during an HTTPS login, leaving the session alive.
-	// clearing cookie must mirror login's Secure flag (plain-HTTP loopback => non-Secure; otherwise Secure)
-	// codeql[go/cookie-secure-not-set]
-	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secureCookie(r), MaxAge: -1})
+	// The clearing cookie carries Secure exactly like the login cookie
+	// (unconditional): a non-Secure cookie cannot overwrite a Secure one.
+	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: true, MaxAge: -1})
 	if r.Method == http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
@@ -688,9 +649,8 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 
 	a.applyReloadedConfig(&newCfg)
 
-	// Set updated session cookie (Secure follows the trusted transport;
-	// X-Forwarded-Proto is honored only from a loopback/private peer).
-	a.adminAuth.setCookie(w, secureCookie(r))
+	// Set updated session cookie (Secure is unconditional).
+	a.adminAuth.setCookie(w)
 
 	a.logfunc().Info("admin password changed successfully", "remote", remoteHost(r))
 

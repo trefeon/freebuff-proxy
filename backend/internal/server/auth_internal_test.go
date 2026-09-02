@@ -98,16 +98,10 @@ func TestAdminAuthFailsMapCapped(t *testing.T) {
 func TestAdminCookieSecureFlag(t *testing.T) {
 	a := newAdminAuth()
 	rec := httptest.NewRecorder()
-	a.setCookie(rec, true)
+	a.setCookie(rec)
 	c := rec.Result().Cookies()[0]
 	if !c.Secure {
-		t.Error("cookie Secure flag not set when requested")
-	}
-	rec = httptest.NewRecorder()
-	a.setCookie(rec, false)
-	c = rec.Result().Cookies()[0]
-	if c.Secure {
-		t.Error("cookie Secure flag set for plain-HTTP loopback")
+		t.Error("cookie Secure flag must be set unconditionally (#318)")
 	}
 }
 
