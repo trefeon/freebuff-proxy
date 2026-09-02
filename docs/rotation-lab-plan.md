@@ -45,7 +45,7 @@
 - `env -u AUTH_TOKENS -u ADMIN_TOKEN go vet ./backend/... && go test ./backend/...` (18 paket, `rotation_study_test` 2 skenario)
 - `npm --prefix frontend run build` → `backend/internal/dashboard/dist` (hash baru)
 - `npx --prefix frontend playwright test` 8/8 hermetik (4173 `page.route`, 5-token fixtures lockstep, `reuseExistingServer:true` tapi `hub restart serve-static` sebelum run kalau hash baru)
-- Live `3457` (go-proxy `-tags dashboard` + `ADMIN_TOKEN=dev123`) + `5173` (vite HMR) + `4173` (serve-static) via `hub ps`
+- Live `3457` (go-proxy + `ADMIN_TOKEN=dev123`) + `5173` (vite HMR) + `4173` (serve-static) via `hub ps`
 
 ## Out of Scope
 - Tidak ubah `dataFor('setup')/APIHandler('setup')` (Setup sudah dihapus, `#setup` blank sengaja)

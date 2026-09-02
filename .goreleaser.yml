@@ -12,8 +12,6 @@ builds:
     binary: freebuff-proxy
     env:
       - CGO_ENABLED=0
-    flags:
-      - -tags=dashboard
     goos:
       - linux
       - darwin

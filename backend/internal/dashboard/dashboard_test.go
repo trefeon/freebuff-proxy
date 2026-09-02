@@ -372,9 +372,6 @@ func TestTracesPageRenders(t *testing.T) {
 // /admin/index.html request resolves the real file (no /admin double-nesting
 // 404), and any other /admin/* path falls back to index.html.
 func TestServeSPAFallsBackToIndex(t *testing.T) {
-	if !dashboard.HasEmbeddedSPA {
-		t.Skip("SPA not compiled in — build with -tags dashboard")
-	}
 	d := &dashboard.Dashboard{}
 
 	// /admin/index.html must serve the SPA HTML, not a FileServer 404 caused
@@ -403,9 +400,6 @@ func TestServeSPAFallsBackToIndex(t *testing.T) {
 // both real dist assets and the index.html fallback must carry the CSP
 // (frame-ancestors 'none' blocks clickjacking of the admin panel).
 func TestServeSPACSPHeader(t *testing.T) {
-	if !dashboard.HasEmbeddedSPA {
-		t.Skip("SPA not compiled in — build with -tags dashboard")
-	}
 	d := &dashboard.Dashboard{}
 
 	for _, p := range []string{"/admin/index.html", "/admin/overview"} {
@@ -427,9 +421,6 @@ func TestServeSPACSPHeader(t *testing.T) {
 // fallback) revalidates (no-cache), while Vite content-hashed files under
 // assets/ are served as immutable (#312).
 func TestServeSPACacheControl(t *testing.T) {
-	if !dashboard.HasEmbeddedSPA {
-		t.Skip("SPA not compiled in — build with -tags dashboard")
-	}
 	d := &dashboard.Dashboard{}
 
 	for _, p := range []string{"/admin/index.html", "/admin/overview"} {

@@ -30,7 +30,7 @@ tasks:
   build:proxy:
     desc: Compile the Go proxy binary
     cmds:
-      - go build -tags dashboard -o bin/freebuff-proxy{{exeExt}} ./backend/cmd/freebuff-proxy
+      - go build -o bin/freebuff-proxy{{exeExt}} ./backend/cmd/freebuff-proxy
 
   test:
     desc: Run the hermetic Go test suite
@@ -51,4 +51,4 @@ tasks:
   dev:
     desc: Run proxy server
     cmds:
-      - go run -tags dashboard ./backend/cmd/freebuff-proxy
+      - go run ./backend/cmd/freebuff-proxy

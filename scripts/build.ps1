@@ -40,7 +40,7 @@ if (-not (Test-Path $OutDir)) {
 Write-Host "==> Compiling Go binary to $OutputPath..." -ForegroundColor Yellow
 Push-Location $RepoRoot
 try {
-    go build -tags dashboard -o $OutputPath ./backend/cmd/freebuff-proxy
+    go build -o $OutputPath ./backend/cmd/freebuff-proxy
     Write-Host "==> Build successful: $OutputPath" -ForegroundColor Green
 } finally {
     Pop-Location

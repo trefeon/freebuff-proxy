@@ -8,9 +8,6 @@ import (
 	"strings"
 )
 
-// HasEmbeddedSPA reports whether the binary was compiled with the embedded web dashboard.
-const HasEmbeddedSPA = true
-
 //go:embed all:dist
 var files embed.FS
 

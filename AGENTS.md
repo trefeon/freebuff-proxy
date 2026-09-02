@@ -111,7 +111,7 @@ Official reference specifications and SDKs reside in `reference/` (gitignored).
 
 ```bash
 # Build binary
-go build -tags dashboard -o freebuff-proxy.exe ./backend/cmd/freebuff-proxy
+go build -o freebuff-proxy.exe ./backend/cmd/freebuff-proxy
 
 # Run full hermetic test suite
 env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...
@@ -136,7 +136,7 @@ Single unified trunk on `main`. All features, CLI utilities, and embedded dashbo
 - Feature branches: `feat/<name>`, `fix/<name>`, or `refactor/<name>`.
 - Pull requests target `main`.
 - Never `git push --force` on `main`.
-- The proxy can be compiled with or without the embedded dashboard via Go build tags (`-tags dashboard`) and configured at runtime via `DASHBOARD_ENABLED`.
+- The dashboard SPA is embedded in every build (no build tag) and toggled at runtime via `DASHBOARD_ENABLED`.
 - Rebuild the embedded SPA first with `task frontend:build` before compiling the binary.
 
 ### Reference repo policy (MANDATORY)
