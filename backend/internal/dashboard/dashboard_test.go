@@ -398,6 +398,30 @@ func TestServeSPAFallsBackToIndex(t *testing.T) {
 	}
 }
 
+// TestServeSPACSPHeader pins the security header on every SPA response:
+// both real dist assets and the index.html fallback must carry the CSP
+// (frame-ancestors 'none' blocks clickjacking of the admin panel).
+func TestServeSPACSPHeader(t *testing.T) {
+	if !dashboard.HasEmbeddedSPA {
+		t.Skip("SPA not compiled in — build with -tags dashboard")
+	}
+	d := &dashboard.Dashboard{}
+
+	for _, p := range []string{"/admin/index.html", "/admin/overview"} {
+		rec := httptest.NewRecorder()
+		d.ServeSPA(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		csp := rec.Header().Get("Content-Security-Policy")
+		if csp == "" {
+			t.Fatalf("GET %s: missing Content-Security-Policy header", p)
+		}
+		for _, want := range []string{"default-src 'self'", "frame-ancestors 'none'", "script-src 'self'", "connect-src 'self'"} {
+			if !strings.Contains(csp, want) {
+				t.Errorf("GET %s CSP %q missing %q", p, csp, want)
+			}
+		}
+	}
+}
+
 // --- data-path coverage ---
 
 // pageServer builds a dashboard server mounting the named page over a pool

@@ -22,8 +22,16 @@ func DistFS() fs.FS {
 	return files
 }
 
+// serveCSP is the Content-Security-Policy applied to every embedded SPA
+// response (both real dist files and the index.html fallback). The Vite
+// bundle is external-script based (no inline JS), style-src keeps
+// 'unsafe-inline' for Svelte style: attributes, and frame-ancestors 'none'
+// blocks clickjacking of the admin panel.
+const serveCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+
 // ServeSPA serves the embedded single-page application and static assets from dist/.
 func (d *Dashboard) ServeSPA(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Security-Policy", serveCSP)
 	dist, err := fs.Sub(files, "dist")
 	if err != nil {
 		http.Error(w, "SPA not available", http.StatusInternalServerError)
