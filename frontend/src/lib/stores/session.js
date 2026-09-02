@@ -38,6 +38,11 @@ export function dismissSessionExpired() {
   sessionExpired.set(false);
 }
 
+/** Reset the session latch after a successful login. */
+export function resetSessionState() {
+  sessionDead = false;
+  sessionExpired.set(false);
+}
 /**
  * Reload-loop guard for any remaining automatic (non-user-initiated)
  * navigation to the login page: at most ONE attempt per 30s window; afterwards

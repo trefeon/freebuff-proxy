@@ -7,6 +7,7 @@
   import Card from "../components/Card.svelte";
   import Field from "../components/Field.svelte";
   import { csrfHeader } from "../api/client.js";
+  import { resetSessionState } from "../stores/session.js";
   import { adminActions, adminRoot } from "../api/paths.js";
 
   let token = $state("");
@@ -57,6 +58,7 @@
       });
 
       if (res.ok || res.redirected) {
+        resetSessionState();
         // Return to the tab the user came from (hash carried through
         // the login route by App.svelte's banner, or a direct #tab deep link).
         const tab = window.location.hash.replace("#", "");

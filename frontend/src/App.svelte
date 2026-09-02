@@ -9,13 +9,9 @@
   import Alert from "./lib/components/Alert.svelte";
   import Button from "./lib/components/Button.svelte";
   import EmptyState from "./lib/components/EmptyState.svelte";
-  import { X } from "@lucide/svelte";
   import { fetchAPI } from "./lib/api/client.js";
   import { adminApi, adminActions } from "./lib/api/paths.js";
-  import {
-    sessionExpired,
-    dismissSessionExpired,
-  } from "./lib/stores/session.js";
+  import { sessionExpired } from "./lib/stores/session.js";
   import { tr } from "./lib/i18n.js";
   function getInitialTab() {
     if (typeof window === "undefined") return "overview";
@@ -128,7 +124,7 @@
       class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8"
     >
       {#if $sessionExpired && activeTab !== "login"}
-        <div class="mb-6">
+        <div class="space-y-6 page-enter">
           <Alert tone="error" title={$tr("Session expired")}>
             <div
               class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
@@ -142,59 +138,65 @@
                 <Button variant="secondary" size="sm" onclick={goToLogin}
                   >{$tr("Log in")}</Button
                 >
-                <button
-                  type="button"
-                  class="fp-btn fp-btn-ghost fp-btn-sm"
-                  aria-label={$tr("Dismiss session expired notice")}
-                  onclick={dismissSessionExpired}
-                >
-                  <X size={15} />
-                </button>
               </div>
             </div>
           </Alert>
+
+          <EmptyState
+            title={$tr("Dashboard Locked")}
+            description={$tr(
+              "Your session has ended. All dashboard operations are locked until you sign in again.",
+            )}
+          >
+            {#snippet action()}
+              <Button variant="primary" onclick={goToLogin}>
+                {$tr("Sign in again")}
+              </Button>
+            {/snippet}
+          </EmptyState>
         </div>
-      {/if}
-      {#if isDefaultAdminToken && activeTab !== "login"}
-        <div class="mb-6">
-          <SecurityBanner
-            onChangePassword={() => {
-              showChangePasswordModal = true;
-            }}
-          />
-        </div>
+      {:else}
+        {#if isDefaultAdminToken && activeTab !== "login"}
+          <div class="mb-6">
+            <SecurityBanner
+              onChangePassword={() => {
+                showChangePasswordModal = true;
+              }}
+            />
+          </div>
+        {/if}
+
+        {#key activeTab}
+          <div class="page-enter">
+            {#if pageComponent}
+              {@const ActivePage = pageComponent}
+              <ActivePage />
+            {:else if activeTab === "login"}
+              <Login />
+            {:else}
+              <EmptyState
+                title={$tr("Page not found")}
+                description={$tr(
+                  "This tab does not exist. Pick a page from the sidebar.",
+                )}
+              >
+                {#snippet action()}
+                  <Button
+                    variant="secondary"
+                    onclick={() => (activeTab = "overview")}
+                  >
+                    {$tr("Back to Overview")}
+                  </Button>
+                {/snippet}
+              </EmptyState>
+            {/if}
+          </div>
+        {/key}
       {/if}
 
-      {#key activeTab}
-        <div class="page-enter">
-          {#if pageComponent}
-            {@const ActivePage = pageComponent}
-            <ActivePage />
-          {:else if activeTab === "login"}
-            <Login />
-          {:else}
-            <EmptyState
-              title={$tr("Page not found")}
-              description={$tr(
-                "This tab does not exist. Pick a page from the sidebar.",
-              )}
-            >
-              {#snippet action()}
-                <Button
-                  variant="secondary"
-                  onclick={() => (activeTab = "overview")}
-                >
-                  {$tr("Back to Overview")}
-                </Button>
-              {/snippet}
-            </EmptyState>
-          {/if}
-        </div>
-      {/key}
+      {#if activeTab !== "login"}
+        <Footer {versionInfo} />
+      {/if}
     </main>
-
-    {#if activeTab !== "login"}
-      <Footer {versionInfo} />
-    {/if}
   </div>
 </div>
