@@ -132,34 +132,16 @@ const (
 	loginFailsCap = 1024
 )
 
-func allowInsecureHTTP() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_INSECURE_HTTP")))
-	if v == "true" || v == "1" || v == "yes" {
-		return true
-	}
-	// Fallback: inspect .env file directly when the variable is not exported into
-	// the container process environment (e.g. docker-compose volume mount).
-	if _, content, exists, err := config.EnvFileInfo(); err == nil && exists {
-		for _, line := range strings.Split(string(content), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "#") {
-				continue
-			}
-			if eq := strings.IndexByte(line, '='); eq > 0 {
-				k := strings.TrimSpace(line[:eq])
-				val := strings.TrimSpace(line[eq+1:])
-				if strings.EqualFold(k, "ADMIN_INSECURE_HTTP") {
-					val = strings.ToLower(strings.Trim(val, `"'`))
-					return val == "true" || val == "1" || val == "yes"
-				}
-			}
-		}
-	}
-	return false
-}
-
+// isSecureCookie dynamically determines whether session and CSRF cookies should
+// carry the Secure flag. By default, it adapts to the connection protocol:
+//   - When accessed over HTTPS (direct TLS or reverse-proxy X-Forwarded-Proto: https),
+//     cookies carry Secure: true to protect session credentials from sniffing.
+//   - When accessed over plain HTTP (e.g. self-hosted cloud VPS without TLS),
+//     cookies carry Secure: false so browsers accept them without silent drops.
+//
+// Setting ADMIN_FORCE_SECURE_COOKIES=true forces Secure: true unconditionally.
 func isSecureCookie(r *http.Request) bool {
-	if !allowInsecureHTTP() {
+	if strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_FORCE_SECURE_COOKIES"))) == "true" {
 		return true
 	}
 	if r == nil {

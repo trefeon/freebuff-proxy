@@ -189,7 +189,7 @@ func processEndTurnCalls(chunk map[string]any, endTurnCallIndexes map[int]bool, 
 func newStreamRelay(ctx context.Context, w http.ResponseWriter, r io.Reader) (flusher http.Flusher, keepalive *time.Ticker, lines <-chan lineChunk, lastWrite *time.Time, ok bool) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
+	h.Set("Cache-Control", "no-cache, no-transform")
 	h.Set("X-Accel-Buffering", "no")
 	h.Set("X-Content-Type-Options", "nosniff")
 	flusher, ok = w.(http.Flusher)

@@ -85,13 +85,14 @@ func bodyOf(t *testing.T, resp *http.Response) string {
 	return string(b)
 }
 
-// The cookie's Secure flag is unconditional (#318): secure-by-default even
-// over plain HTTP. Modern browsers still accept Secure cookies on
-// http://localhost / http://127.0.0.1 (trustworthy origins), so loopback
-// dev keeps working; a remote plain-HTTP admin login is refused.
-func TestDashboardCookieAlwaysSecure(t *testing.T) {
+// The cookie's Secure flag adapts to the connection protocol dynamically:
+// on plain HTTP (common in self-hosted cloud VPS environments), Secure is false
+// so browsers accept the cookie without silent drops; when behind an HTTPS
+// reverse proxy (X-Forwarded-Proto: https) or direct TLS, Secure is true.
+func TestDashboardCookieDynamicProtocol(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 
+	// 1. Plain HTTP login -> Secure is false (works out-of-the-box on VPS).
 	plain := postLogin(t, ts.URL+"/admin/login", "secret")
 	defer func() { _ = plain.Body.Close() }()
 	var admin *http.Cookie
@@ -104,8 +105,8 @@ func TestDashboardCookieAlwaysSecure(t *testing.T) {
 	if admin == nil {
 		t.Fatal("plain-HTTP login did not set fb_admin")
 	}
-	if !admin.Secure {
-		t.Error("plain-HTTP login did not set a Secure cookie (Secure is unconditional)")
+	if admin.Secure {
+		t.Error("plain-HTTP login must set Secure=false for zero-friction self-hosted VPS login")
 	}
 }
 

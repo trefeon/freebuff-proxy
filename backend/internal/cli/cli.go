@@ -261,9 +261,6 @@ func Serve(configPath string, verbose bool, version string) int {
 	if w := adminTokenCleartextWarning(cfg.AdminToken, cfg.ListenAddr); w != "" {
 		logger.Warn(w)
 	}
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_INSECURE_HTTP"))); v == "true" || v == "1" || v == "yes" {
-		logger.Warn("ADMIN_INSECURE_HTTP is enabled: admin session cookies will not require HTTPS (cleartext risk on public networks)")
-	}
 	logger.Info("listening", "addr", cfg.ListenAddr)
 
 	// Human-readable startup banner for interactive terminals. Suppressed
