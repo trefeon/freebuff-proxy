@@ -39,7 +39,7 @@ If you don't own a domain name, you can still get a **100% genuine Let's Encrypt
 
 1. In your `.env`, set `DOMAIN=<your-vps-ip>.sslip.io`:
    ```ini
-   DOMAIN=172.188.64.104.sslip.io
+   DOMAIN=203.0.113.10.sslip.io  # replace with your actual VPS public IP
    ACME_EMAIL=admin@example.com
    ```
 2. Start with Caddy:

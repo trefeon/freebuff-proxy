@@ -21,7 +21,7 @@
   } = $props();
 </script>
 
-<section class="fp-card {className}">
+<section class="fp-card overflow-hidden {className}">
   {#if title || description || actions}
     <header class="flex items-start justify-between gap-4 px-5 pt-4">
       <div>
@@ -41,7 +41,7 @@
       {/if}
     </header>
   {/if}
-  <div class="flex-1 flex flex-col {pad === 'md' ? 'p-5' : ''}">
+  <div class="flex-1 min-h-0 flex flex-col {pad === 'md' ? 'p-5' : ''}">
     {#if children}
       {@render children()}
     {/if}

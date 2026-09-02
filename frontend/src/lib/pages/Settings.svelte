@@ -524,7 +524,7 @@
       )}
       pad="none"
     >
-      <div class="overflow-x-auto max-h-96 overflow-y-auto">
+      <div class="overflow-auto max-h-96 min-h-0" style="contain: paint;">
         {#if data?.effective?.length}
           <table class="fp-table">
             <caption class="sr-only"

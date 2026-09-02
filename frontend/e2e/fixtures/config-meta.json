@@ -40,6 +40,7 @@
     "restart_only": true,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Serve the embedded admin dashboard at /admin (false disables all /admin routes with 404). Restart-only: /admin routes are registered once at boot and cannot be torn down at runtime."
   },
   {
@@ -93,6 +94,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr."
   },
   {
@@ -107,6 +109,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Log format: text (key=value, colored) or json (one JSON object per line)."
   },
   {
@@ -231,6 +234,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP)."
   },
   {
@@ -328,6 +332,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "End upstream sessions after this idle period, releasing the token's daily admission slot while the proxy sits unused (0 = disabled, opt-in)."
   },
   {
@@ -386,8 +391,9 @@
     "default": "drain",
     "restart_only": false,
     "secret": false,
-    "essential": true,
-    "description": "Token selection strategy: drain (exhaust a token's session before rotating), round_robin, least_used, or random."
+    "essential": false,
+    "hidden": true,
+    "description": "Token selection strategy: drain (exhaust a token's session before rotating), round_robin, least_used, or random. Managed interactively on the Tokens page."
   },
   {
     "key": "WAITING_ROOM_CHAIN",
@@ -419,6 +425,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 (default) disables fallback. Queue-wait only — never on 429 quota exhaustion."
   },
   {
@@ -429,6 +436,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
   },
   {
@@ -439,6 +447,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement)."
   },
   {
@@ -459,7 +468,8 @@
     "default": "",
     "restart_only": false,
     "secret": false,
-    "essential": true,
+    "essential": false,
+    "hidden": true,
     "description": "Map model=fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs). Empty default: no fallback (surfaces honest 429 with guidance to switch model)."
   },
   {
@@ -470,6 +480,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Add {\"type\":\"ephemeral\"} cache_control to the stable context prefix on DeepSeek requests (prompt-cache cost reduction; default on). Set CACHE_CONTROL_INJECTION=false to disable."
   },
   {
@@ -480,6 +491,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Apply optional prompt \u0026 context compression: middle user/assistant turns beyond the trailing budget are dropped and summarized by one marker (default off)."
   },
   {
@@ -525,6 +537,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "/v1/models prunes models marked unavailable (region/tier demotion, quota exhaustion); off by default so a stale signal never hides a working model."
   },
   {
@@ -621,6 +634,7 @@
     "restart_only": true,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Max additional attempts after a transient transport failure (never retries 429/403/401; 0 disables)."
   },
   {
@@ -652,6 +666,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Access-Control-Allow-Origin for /v1/* responses."
   },
   {
@@ -662,6 +677,7 @@
     "restart_only": true,
     "secret": true,
     "essential": false,
+    "hidden": true,
     "description": "Best-effort alert POSTs for pool_exhausted, token_banned, and agent_model_mismatch_escalation (empty = disabled; at most one POST per event type per 5m; may carry credentials in the URL userinfo)."
   }
 ]

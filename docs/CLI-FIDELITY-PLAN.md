@@ -6,7 +6,7 @@
 
 * `TLS_FINGERPRINT=""` plain `crypto/tls` default (`config_env.go:488` no auto), `Bun/1.3.14` for session / `ai-sdk/openai-compatible/1.0.0/codebuff` for chat (`upstream/client.go:83,122`), `SanitizeHeaders` only, no `ApplyProfileHeaders` (`upstream/client_chat.go:91`).
 * `REQUEST_JITTER 2s → 200ms` (`config_env.go:493`), `ch 64` (`server/stream_shared.go:215`), `Flush per Write` + `keepalive 15s` + byte-preserving fast path (`openai_chunk_pipeline.go`).
-* Hermetic `env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...` `ok`, `sync-upstream --check` `exit 0` (`registry` + `wire` SAMEs), SG `172.188.64.104` `no stealth` logs, `~80-111 tok/s` streaming, `header 2.5-10.6s` upstream-dominated.
+* Hermetic `env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...` `ok`, `sync-upstream --check` `exit 0` (`registry` + `wire` SAMEs), cloud VPS benchmark `no stealth` logs, `~80-111 tok/s` streaming, `header 2.5-10.6s` upstream-dominated.
 
 ## 1. Gap Inventory (CLI vs Proxy)
 
@@ -66,5 +66,5 @@
 
 * **Gate 1 — `bash scripts/sync-upstream.sh --check` then `--test-all`** (`exit 0`, `All pinned files match`, `check-upstream OK`, `registry fallback parity`) before each change (AGENTS.md). `--test-all` also runs `registry` tests; stale `reference` yields wrong wire.
 * **Gate 2 — Hermetic** `env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...` `ok` (`config` expects `TLS ""` + `env_example` empty, `TLSFingerprint` empty CLI-faithful).
-* **Gate 3 — Live SG** `172.188.64.104:3457` `curl -N POST /v1/chat/completions stream:true` timestamp per `data:` → `header 2.5-10s` + `~80-111 tok/s` (`tokens≈chars/4`), `docker logs | grep stealth` `0` lines (plain), `GET /v1/models` 6 available vs 19 registry expected (tier, not TLS).
+* **Gate 3 — Live Cloud VPS** `cloud-vps:3457` `curl -N POST /v1/chat/completions stream:true` timestamp per `data:` → `header 2.5-10s` + `~80-111 tok/s` (`tokens≈chars/4`), `docker logs | grep stealth` `0` lines (plain), `GET /v1/models` 6 available vs 19 registry expected (tier, not TLS).
 * **Dead-code audit:** Browser `stealth` profiles kept opt-in (`TLS_FINGERPRINT=chrome126/etc`) not default; dashboard/metrics kept (admin needed, not dead); `200ms jitter` vs CLI `0` is SafeMode compromise — `REQUEST_JITTER=0` remains CLI-exact opt-in (`SG` already `0`).
