@@ -58,7 +58,7 @@ func Catalog() []KeyDef {
 // ambient proxy env vars without hand-maintaining a parallel list (issue
 // #281).
 func ConfigEnvKeys() []string {
-	keys := make([]string, 0, len(keyCatalog)+1)
+	keys := make([]string, 0, len(keyCatalog))
 	for _, def := range keyCatalog {
 		keys = append(keys, def.Key)
 	}

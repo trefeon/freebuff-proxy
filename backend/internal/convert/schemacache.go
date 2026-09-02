@@ -251,7 +251,7 @@ func normalizeSchemaMap(node map[string]any, defs map[string]any, root map[strin
 		if refStack[ref] {
 			return map[string]any{} // cycle guard: re-entered ref resolves to {}
 		}
-		nextStack := make(map[string]bool, len(refStack)+1)
+		nextStack := make(map[string]bool, len(refStack))
 		for k, v := range refStack {
 			nextStack[k] = v
 		}

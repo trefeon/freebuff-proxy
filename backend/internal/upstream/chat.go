@@ -301,9 +301,7 @@ func ensureCliSystemMarker(payload map[string]any, agentID string) {
 		}
 	}
 
-	newMsgs := make([]any, 0, len(rawMsgs)+1)
-	newMsgs = append(newMsgs, map[string]any{"role": "system", "content": marker})
-	newMsgs = append(newMsgs, rawMsgs...)
+	newMsgs := append([]any{map[string]any{"role": "system", "content": marker}}, rawMsgs...)
 	payload["messages"] = newMsgs
 }
 
