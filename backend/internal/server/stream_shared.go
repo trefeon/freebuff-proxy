@@ -191,6 +191,7 @@ func newStreamRelay(ctx context.Context, w http.ResponseWriter, r io.Reader) (fl
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
 	h.Set("X-Accel-Buffering", "no")
+	h.Set("X-Content-Type-Options", "nosniff")
 	flusher, ok = w.(http.Flusher)
 	if !ok {
 		return nil, nil, nil, nil, false

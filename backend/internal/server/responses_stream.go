@@ -71,16 +71,18 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 		servedModel = model
 	}
 	st := &responsesStreamState{toolByUpIdx: make(map[int]*responsesItem), model: servedModel, toolMap: stats.toolMap}
-	send := func(ev map[string]any) {
+	// send writes one SSE frame. The event name is a separate literal
+	// argument (never taken from the payload map) so the event: line is
+	// always constant; the payload map keeps its "type" key — OpenAI
+	// Responses data frames carry it (conformance contract).
+	send := func(event string, ev map[string]any) {
 		b, _ := json.Marshal(ev)
-		// SSE frames carry the documented event: field (like the Anthropic
-		// relay) so non-JSON-parsing clients can dispatch on the event type.
-		_, _ = io.WriteString(w, "event: "+stringValue(ev["type"])+"\n")
+		_, _ = io.WriteString(w, "event: "+event+"\n")
 		_, _ = w.Write(convert.EncodeSSE(b))
 		flusher.Flush()
 	}
-	send(map[string]any{"type": "response.created", "response": responsesBase(model, respID, createdAt, "in_progress")})
-	send(map[string]any{"type": "response.in_progress", "response": responsesBase(model, respID, createdAt, "in_progress")})
+	send("response.created", map[string]any{"type": "response.created", "response": responsesBase(model, respID, createdAt, "in_progress")})
+	send("response.in_progress", map[string]any{"type": "response.in_progress", "response": responsesBase(model, respID, createdAt, "in_progress")})
 
 	first := true
 	endTurnCallIndexes := make(map[int]bool)
@@ -266,7 +268,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 // done events are emitted — the items stay in_progress and the terminal
 // response.failed carries the error (a failed response must not claim
 // completed items).
-func (s *Server) endResponsesStream(w http.ResponseWriter, send func(map[string]any), st *responsesStreamState, model, respID string, createdAt int64, failed bool, errObj map[string]any) {
+func (s *Server) endResponsesStream(w http.ResponseWriter, send func(string, map[string]any), st *responsesStreamState, model, respID string, createdAt int64, failed bool, errObj map[string]any) {
 	if !failed {
 		// Ensure at least one output item so output is never empty.
 		if len(st.items) == 0 {
@@ -281,21 +283,21 @@ func (s *Server) endResponsesStream(w http.ResponseWriter, send func(map[string]
 					sendResponsesItemAdded(send, item)
 				}
 				part := map[string]any{"type": "output_text", "text": item.text, "annotations": []any{}}
-				send(map[string]any{"type": "response.output_text.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "text": item.text})
-				send(map[string]any{"type": "response.content_part.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "part": part})
-				send(map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "message", "status": "completed", "role": "assistant", "content": []any{part}}})
+				send("response.output_text.done", map[string]any{"type": "response.output_text.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "text": item.text})
+				send("response.content_part.done", map[string]any{"type": "response.content_part.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "part": part})
+				send("response.output_item.done", map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "message", "status": "completed", "role": "assistant", "content": []any{part}}})
 			case "reasoning":
-				send(map[string]any{"type": "response.reasoning_text.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "text": item.text})
-				send(map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "reasoning", "status": "completed", "summary": []any{}, "content": []any{map[string]any{"type": "reasoning_text", "text": item.text}}}})
+				send("response.reasoning_text.done", map[string]any{"type": "response.reasoning_text.done", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "text": item.text})
+				send("response.output_item.done", map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "reasoning", "status": "completed", "summary": []any{}, "content": []any{map[string]any{"type": "reasoning_text", "text": item.text}}}})
 			case "function_call":
 				// The spec's Responses stream sequence for a function call
 				// item is: function_call_arguments.delta*,
 				// function_call_arguments.done, then output_item.done.
 				// The custom_tool_call_input.* pair carries the same
 				// fragments under the newer event name (codex consumes it).
-				send(map[string]any{"type": "response.function_call_arguments.done", "item_id": item.id, "output_index": item.outputIndex, "call_id": item.callID, "name": item.name, "arguments": item.args.String()})
-				send(map[string]any{"type": "response.custom_tool_call_input.done", "item_id": item.id, "output_index": item.outputIndex, "input": item.args.String()})
-				send(map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "function_call", "status": "completed", "call_id": item.callID, "name": item.name, "arguments": item.args.String()}})
+				send("response.function_call_arguments.done", map[string]any{"type": "response.function_call_arguments.done", "item_id": item.id, "output_index": item.outputIndex, "call_id": item.callID, "name": item.name, "arguments": item.args.String()})
+				send("response.custom_tool_call_input.done", map[string]any{"type": "response.custom_tool_call_input.done", "item_id": item.id, "output_index": item.outputIndex, "input": item.args.String()})
+				send("response.output_item.done", map[string]any{"type": "response.output_item.done", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "function_call", "status": "completed", "call_id": item.callID, "name": item.name, "arguments": item.args.String()}})
 			}
 		}
 	}
@@ -338,23 +340,23 @@ func (s *Server) endResponsesStream(w http.ResponseWriter, send func(map[string]
 		if errObj != nil {
 			resp["error"] = errObj
 		}
-		send(map[string]any{"type": "response.failed", "response": resp})
+		send("response.failed", map[string]any{"type": "response.failed", "response": resp})
 		return
 	}
-	send(map[string]any{"type": "response.completed", "response": resp})
+	send("response.completed", map[string]any{"type": "response.completed", "response": resp})
 }
 
 // sendResponsesItemAdded emits the output_item.added + content_part.added
 // pair for a message item.
-func sendResponsesItemAdded(send func(map[string]any), item *responsesItem) {
-	send(map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "message", "status": "in_progress", "role": "assistant", "content": []any{}}})
-	send(map[string]any{"type": "response.content_part.added", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}}})
+func sendResponsesItemAdded(send func(string, map[string]any), item *responsesItem) {
+	send("response.output_item.added", map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "message", "status": "in_progress", "role": "assistant", "content": []any{}}})
+	send("response.content_part.added", map[string]any{"type": "response.content_part.added", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}}})
 }
 
 // accumulateResponsesChunk translates one upstream chat chunk into
 // Responses events: text, reasoning and tool-call argument deltas, creating
 // output items on first use.
-func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[string]any, send func(map[string]any)) {
+func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[string]any, send func(string, map[string]any)) {
 	choices, _ := chunk["choices"].([]any)
 	if len(choices) == 0 {
 		return
@@ -389,7 +391,7 @@ func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[st
 				st.nextIndex++
 				st.toolByUpIdx[upIdx] = item
 				st.items = append(st.items, item)
-				send(map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "function_call", "status": "in_progress", "call_id": "", "name": "", "arguments": ""}})
+				send("response.output_item.added", map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "function_call", "status": "in_progress", "call_id": "", "name": "", "arguments": ""}})
 			}
 			if fn, ok := tc["function"].(map[string]any); ok {
 				if name, ok := fn["name"].(string); ok && name != "" && item.name == "" {
@@ -397,11 +399,11 @@ func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[st
 				}
 				if args, ok := fn["arguments"].(string); ok && args != "" {
 					item.args.WriteString(args)
-					send(map[string]any{"type": "response.function_call_arguments.delta", "item_id": item.id, "output_index": item.outputIndex, "delta": args})
+					send("response.function_call_arguments.delta", map[string]any{"type": "response.function_call_arguments.delta", "item_id": item.id, "output_index": item.outputIndex, "delta": args})
 					// The spec's newer event name for the same fragment: codex
 					// consumes custom_tool_call_input.*, legacy clients consume
 					// function_call_arguments.* — emit both.
-					send(map[string]any{"type": "response.custom_tool_call_input.delta", "item_id": item.id, "output_index": item.outputIndex, "delta": args})
+					send("response.custom_tool_call_input.delta", map[string]any{"type": "response.custom_tool_call_input.delta", "item_id": item.id, "output_index": item.outputIndex, "delta": args})
 				}
 			}
 			if id, ok := tc["id"].(string); ok && id != "" && item.callID == "" {
@@ -429,10 +431,10 @@ func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[st
 		}
 		if !item.started {
 			item.started = true
-			send(map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "reasoning", "status": "in_progress", "summary": []any{}}})
+			send("response.output_item.added", map[string]any{"type": "response.output_item.added", "output_index": item.outputIndex, "item": map[string]any{"id": item.id, "type": "reasoning", "status": "in_progress", "summary": []any{}}})
 		}
 		item.text += reasoning
-		send(map[string]any{"type": "response.reasoning_text.delta", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "delta": reasoning})
+		send("response.reasoning_text.delta", map[string]any{"type": "response.reasoning_text.delta", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "delta": reasoning})
 	}
 	// Text deltas.
 	if content, ok := delta["content"].(string); ok && content != "" {
@@ -453,7 +455,7 @@ func (s *Server) accumulateResponsesChunk(st *responsesStreamState, chunk map[st
 			sendResponsesItemAdded(send, item)
 		}
 		item.text += content
-		send(map[string]any{"type": "response.output_text.delta", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "delta": content})
+		send("response.output_text.delta", map[string]any{"type": "response.output_text.delta", "item_id": item.id, "output_index": item.outputIndex, "content_index": item.contentIdx, "delta": content})
 	}
 }
 
