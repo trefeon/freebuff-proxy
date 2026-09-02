@@ -59,6 +59,7 @@ type SessionSnapshot struct {
 	// windows, bindingWindow, and per-model prices.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
 }
+
 // QuotaSnapshot is one model's live session quota for healthz/metrics
 // reporting (pool.TokenSnapshot). Mirrors upstream.ModelQuota.
 type QuotaSnapshot struct {

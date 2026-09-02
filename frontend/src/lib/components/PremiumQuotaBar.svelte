@@ -1,7 +1,12 @@
 <script>
   import { tr } from "../i18n.js";
 
-  let { quota = null, freebucks = null, title = null, now = Date.now() } = $props();
+  let {
+    quota = null,
+    freebucks = null,
+    title = null,
+    now = Date.now(),
+  } = $props();
 
   // ----- helpers -----
   function fmtRel(iso, nowMs) {
@@ -43,7 +48,12 @@
     const remRaw = win.remaining ?? win.Remaining;
     const remaining = remRaw != null ? remRaw : limit - spent;
     const resetAt =
-      win.reset_at ?? win.resetAt ?? win.reset_at_utc ?? win.resetAtUtc ?? win.resetAtUTC ?? null;
+      win.reset_at ??
+      win.resetAt ??
+      win.reset_at_utc ??
+      win.resetAtUtc ??
+      win.resetAtUTC ??
+      null;
     let pct = win.percent_used ?? win.percentUsed ?? win.percent ?? null;
     if (pct == null && limit > 0) pct = (spent / limit) * 100;
     if (pct == null) pct = 0;
@@ -53,21 +63,29 @@
 
   // ----- Freebucks derived -----
   let hasFreebucks = $derived(!!freebucks);
-  let fbBalance = $derived(
-    freebucks?.balance ?? freebucks?.Balance ?? null
-  );
+  let fbBalance = $derived(freebucks?.balance ?? freebucks?.Balance ?? null);
   let fbBinding = $derived(
-    ((freebucks?.binding_window ?? freebucks?.bindingWindow ?? freebucks?.BindingWindow ?? "") + "").toLowerCase()
+    (
+      (freebucks?.binding_window ??
+        freebucks?.bindingWindow ??
+        freebucks?.BindingWindow ??
+        "") + ""
+    ).toLowerCase(),
   );
   let fbPlanDaily = $derived(
-    freebucks?.plan_daily ?? freebucks?.planDaily ?? freebucks?.PlanDaily ?? null
+    freebucks?.plan_daily ??
+      freebucks?.planDaily ??
+      freebucks?.PlanDaily ??
+      null,
   );
-  let fbPrices = $derived(
-    freebucks?.prices ?? freebucks?.Prices ?? null
-  );
+  let fbPrices = $derived(freebucks?.prices ?? freebucks?.Prices ?? null);
   let fbDaily = $derived(normalizeWindow(freebucks?.daily ?? freebucks?.Daily));
-  let fbWeekly = $derived(normalizeWindow(freebucks?.weekly ?? freebucks?.Weekly));
-  let fbMonthly = $derived(normalizeWindow(freebucks?.monthly ?? freebucks?.Monthly));
+  let fbWeekly = $derived(
+    normalizeWindow(freebucks?.weekly ?? freebucks?.Weekly),
+  );
+  let fbMonthly = $derived(
+    normalizeWindow(freebucks?.monthly ?? freebucks?.Monthly),
+  );
 
   let fbWindows = $derived.by(() => {
     const w = [];
@@ -80,9 +98,25 @@
   let fbLabel = $derived(title ?? $tr("Freebucks"));
   let fbBindingLabel = $derived(fbBinding ? fbBinding : "—");
   // ----- Legacy quota derived (fallback) -----
-  let pct = $derived(Math.min(100, Math.max(0, quota?.percent_used ?? quota?.percentUsed ?? quota?.percent ?? 0)));
+  let pct = $derived(
+    Math.min(
+      100,
+      Math.max(
+        0,
+        quota?.percent_used ?? quota?.percentUsed ?? quota?.percent ?? 0,
+      ),
+    ),
+  );
   let barColor = $derived(pctColor(pct));
-  let rel = $derived(fmtRel(quota?.reset_at ?? quota?.resetAt ?? quota?.reset_at_utc ?? quota?.resetAtUtc, now));
+  let rel = $derived(
+    fmtRel(
+      quota?.reset_at ??
+        quota?.resetAt ??
+        quota?.reset_at_utc ??
+        quota?.resetAtUtc,
+      now,
+    ),
+  );
   let badge = $derived(
     `${quota?.limit ?? "—"}/day ${quota?.period ?? ""}`.trim(),
   );
@@ -90,11 +124,15 @@
 </script>
 
 {#if hasFreebucks}
-  <div class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3">
+  <div
+    class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
+  >
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
       <div class="flex items-center gap-2 min-w-0">
-        <p class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)] truncate">
+        <p
+          class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)] truncate"
+        >
           {fbLabel}
         </p>
         {#if fbBinding}
@@ -114,7 +152,9 @@
         {#if fbBalance != null}
           <span
             class="fp-num text-xs font-medium text-[var(--fp-text)] tabular-nums"
-            >{$tr("Balance")} <span class="text-[var(--fp-accent)]">{fmtNum(fbBalance)}</span></span
+            >{$tr("Balance")}
+            <span class="text-[var(--fp-accent)]">{fmtNum(fbBalance)}</span
+            ></span
           >
         {/if}
       </div>
@@ -138,8 +178,7 @@
               <span
                 class="text-xs font-semibold uppercase tracking-wider {isBinding
                   ? 'text-[var(--fp-accent)]'
-                  : 'text-[var(--fp-text)]'}"
-                >{item.label}</span
+                  : 'text-[var(--fp-text)]'}">{item.label}</span
               >
               {#if isBinding}
                 <span
@@ -149,7 +188,8 @@
               {/if}
             </div>
             <span class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
-              {$tr("Resets in")} {wRel} — {w.resetAt ?? "—"}
+              {$tr("Resets in")}
+              {wRel} — {w.resetAt ?? "—"}
             </span>
           </div>
 
@@ -167,11 +207,19 @@
             ></div>
           </div>
 
-          <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <div
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          >
             <span class="fp-num text-[var(--fp-muted)] tabular-nums">
-              {$tr("Used")} <span class="text-[var(--fp-text)] font-medium">{fmtNum(w.spent)}</span>
+              {$tr("Used")}
+              <span class="text-[var(--fp-text)] font-medium"
+                >{fmtNum(w.spent)}</span
+              >
               / {fmtNum(w.limit)}
-              • {$tr("Remaining")} <span class="text-[var(--fp-text)] font-medium">{fmtNum(w.remaining)}</span>
+              • {$tr("Remaining")}
+              <span class="text-[var(--fp-text)] font-medium"
+                >{fmtNum(w.remaining)}</span
+              >
               • {Math.round(wPct * 100) / 100}%
             </span>
           </div>
@@ -181,7 +229,10 @@
 
     {#if fbPrices && typeof fbPrices === "object" && Object.keys(fbPrices).length > 0}
       <div class="mt-3 fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
-        <span class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]">{$tr("Prices")}: </span>
+        <span
+          class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
+          >{$tr("Prices")}:
+        </span>
         {#each Object.entries(fbPrices).slice(0, 4) as [model, price] (model)}
           <span class="inline-flex items-center gap-1 mr-3">
             <code class="text-[var(--fp-text)] text-[11px]">{model}</code>
@@ -189,13 +240,17 @@
           </span>
         {/each}
         {#if Object.keys(fbPrices).length > 4}
-          <span class="text-[var(--fp-dim)]">+{Object.keys(fbPrices).length - 4} {$tr("more")}</span>
+          <span class="text-[var(--fp-dim)]"
+            >+{Object.keys(fbPrices).length - 4} {$tr("more")}</span
+          >
         {/if}
       </div>
     {/if}
   </div>
 {:else if quota}
-  <div class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3">
+  <div
+    class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
+  >
     <div class="flex items-center justify-between gap-2 mb-2">
       <div class="flex items-center gap-2 min-w-0">
         <p

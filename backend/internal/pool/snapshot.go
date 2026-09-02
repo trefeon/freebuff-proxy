@@ -26,8 +26,8 @@ type BridgeTokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil
 	// when the bridge entry has no Freebucks quota.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
-	SpendDay     float64               `json:"spend_day"`
-	SpendPct     int                   `json:"spend_pct"`
+	SpendDay  float64                 `json:"spend_day"`
+	SpendPct  int                     `json:"spend_pct"`
 	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
 	// (issues #198/#199): "temporary" (auto-lifts at BannedUntil) vs
 	// "hard" (never self-heals); zero values when no ban is active.

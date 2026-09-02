@@ -242,6 +242,7 @@ type cachedState struct {
 	// until an admission/poll that carried it.
 	freebucks *upstream.FreebucksInfo
 }
+
 // NewManager builds a session manager for the given upstream client.
 func NewManager(client *upstream.Client) *Manager {
 	if client == nil {
@@ -727,6 +728,7 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 		}
 	}
 }
+
 // it. Used when a chat request reports a session-level error. The
 // invalidation is recorded with the canonical 409 reason (the session-invalid
 // chat family); callers that can name a more specific cause use

@@ -7,7 +7,7 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/pool"
-	)
+)
 
 // --- overview ---
 
@@ -97,6 +97,7 @@ type tokenCard struct {
 	// bindingWindow + prices. Nil when the session has not reported it.
 	Freebucks *freebucksCard `json:"freebucks,omitempty"`
 }
+
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):
 // limit/spent/remaining + reset_at (RFC3339 string; empty when zero) +
 // percent_used (spent/limit*100, 0 when limit==0). Mirrors
@@ -115,13 +116,13 @@ type freebucksWindowCard struct {
 // Nil when the session has not reported Freebucks (nil-safe callers check).
 // Exposed alongside premium_quota, not replacing it.
 type freebucksCard struct {
-	Balance       float64                 `json:"balance"`
-	Daily         freebucksWindowCard     `json:"daily"`
-	Weekly        freebucksWindowCard     `json:"weekly"`
-	Monthly       freebucksWindowCard     `json:"monthly"`
-	BindingWindow string                  `json:"binding_window"`
-	Prices        map[string]float64      `json:"prices,omitempty"`
-	PlanDaily     *float64                `json:"plan_daily,omitempty"`
+	Balance       float64             `json:"balance"`
+	Daily         freebucksWindowCard `json:"daily"`
+	Weekly        freebucksWindowCard `json:"weekly"`
+	Monthly       freebucksWindowCard `json:"monthly"`
+	BindingWindow string              `json:"binding_window"`
+	Prices        map[string]float64  `json:"prices,omitempty"`
+	PlanDaily     *float64            `json:"plan_daily,omitempty"`
 }
 
 // standingStepCard is one dashboard-ready earn-back action
@@ -151,6 +152,7 @@ type bridgeTokenCard struct {
 	PremiumQuota  *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
 	Freebucks     *freebucksCard             `json:"freebucks,omitempty"`
 }
+
 func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 	status := "active"
 	if snap.Locked {

@@ -73,7 +73,9 @@
 
   // Freebucks: per-token daily/weekly/monthly + balance + bindingWindow (issue #232)
   let hasFreebucks = $derived((data?.tokens ?? []).some((t) => t.freebucks));
-  let freebucksTokens = $derived((data?.tokens ?? []).filter((t) => t.freebucks));
+  let freebucksTokens = $derived(
+    (data?.tokens ?? []).filter((t) => t.freebucks),
+  );
   let hasBridgeFreebucks = $derived(
     (data?.bridge_token_cards ?? []).some((c) => c.freebucks),
   );
@@ -322,9 +324,13 @@
             {#each data.bridge_token_cards as bc (bc.key)}
               <li class="flex flex-wrap items-center gap-2 text-xs">
                 <StatusBadge status={bc.status} />
-                <code class="fp-num font-mono text-[var(--fp-text)]">{bc.key}</code>
+                <code class="fp-num font-mono text-[var(--fp-text)]"
+                  >{bc.key}</code
+                >
                 {#if bc.model}
-                  <code class="fp-num font-mono text-[var(--fp-muted)]">{bc.model}</code>
+                  <code class="fp-num font-mono text-[var(--fp-muted)]"
+                    >{bc.model}</code
+                  >
                 {/if}
               </li>
             {/each}
