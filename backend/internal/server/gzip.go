@@ -9,6 +9,7 @@ package server
 import (
 	"compress/gzip"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -86,8 +87,9 @@ func (g *gzipResponseWriter) Close() {
 	}
 }
 
-// acceptsGzip reports whether the request accepts gzip, honoring a
-// q=0 refusal ("gzip;q=0").
+// acceptsGzip reports whether the request accepts gzip, honoring q-values
+// ("gzip;q=0" refuses, "gzip;q=0.5" accepts). A malformed q is treated as
+// an acceptance (the client expressed interest in gzip).
 func acceptsGzip(r *http.Request) bool {
 	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
 		enc := strings.TrimSpace(strings.ToLower(part))
@@ -95,8 +97,19 @@ func acceptsGzip(r *http.Request) bool {
 		if strings.TrimSpace(name) != "gzip" {
 			continue
 		}
-		if strings.Contains(params, "q=0") {
-			return false
+		if params == "" {
+			return true
+		}
+		for _, p := range strings.Split(params, ";") {
+			k, v, ok := strings.Cut(strings.TrimSpace(p), "=")
+			if !ok || k != "q" {
+				continue
+			}
+			q, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if err != nil {
+				return true // malformed q: client expressed interest
+			}
+			return q > 0
 		}
 		return true
 	}

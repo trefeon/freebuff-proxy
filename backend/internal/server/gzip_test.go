@@ -72,6 +72,22 @@ func TestGzipMiddlewareIdentityWithoutGzip(t *testing.T) {
 	}
 }
 
+// TestGzipMiddlewareFractionalQ pins gzip;q=0.5: a positive fractional
+// q-value still accepts gzip (substring matching "q=0" must not refuse it).
+func TestGzipMiddlewareFractionalQ(t *testing.T) {
+	h := gzipMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"q":0.5}`)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Accept-Encoding", "gzip;q=0.5, br")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if ce := rec.Header().Get("Content-Encoding"); ce != "gzip" {
+		t.Errorf("Content-Encoding = %q, want gzip (q=0.5 accepted)", ce)
+	}
+}
+
 // TestGzipMiddlewareQ0 refuse pins gzip;q=0: the client explicitly
 // refuses gzip, so the response stays identity.
 func TestGzipMiddlewareQ0(t *testing.T) {
