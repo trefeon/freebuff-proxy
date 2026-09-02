@@ -125,6 +125,8 @@ func formatQuota(v float64) string {
 
 // formatFreebucks returns a human summary of the Freebucks allowance.
 // Nil-safe: returns "" when fb is nil.
+//
+//nolint:unused
 func formatFreebucks(fb *freebucksCard) string {
 	if fb == nil {
 		return ""
@@ -140,6 +142,8 @@ func formatFreebucks(fb *freebucksCard) string {
 
 // formatFreebucksWindow formats one Freebucks window as "spent/limit (remaining left)".
 // Zero-limit windows return "spent/limit".
+//
+//nolint:unused
 func formatFreebucksWindow(w freebucksWindowCard) string {
 	base := formatQuota(w.Spent) + "/" + formatQuota(w.Limit)
 	if w.Limit == 0 {
