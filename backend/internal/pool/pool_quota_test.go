@@ -607,10 +607,10 @@ func TestAcquireChatConcurrentTokenMutation(t *testing.T) {
 	if attempts != success+failure {
 		t.Fatalf("attempts=%d but success=%d failure=%d", attempts, success, failure)
 	}
+	t.Logf("hammer: attempts=%d success=%d failure=%d", attempts, success, failure)
 	if success == 0 {
 		t.Fatal("no chat succeeded under the hammer; mutation churn starved the workers")
 	}
-	t.Logf("hammer: attempts=%d success=%d failure=%d", attempts, success, failure)
 }
 
 // TestUsageAccountingConcurrentTokenMutation is the regression guard for
