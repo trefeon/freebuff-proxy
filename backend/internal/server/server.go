@@ -346,7 +346,7 @@ func (s *Server) Handler() http.Handler {
 	// untouched (cookie-authenticated dashboard; SameSite=Strict already
 	// blocks cross-site reads, and an allow-origin would add nothing there).
 	cors := s.corsMiddleware(mux)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		// D1: mint the request's correlation id exactly once here, then
 		// carry it in the request context so every downstream log line
@@ -419,4 +419,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		s.logger.Info("access", attrs...)
 	})
+	// gzip wraps the ENTIRE route table (admin + APIs). Streaming
+	// responses are exempted inside by Content-Type gate; HEAD and
+	// no-body statuses are skipped.
+	return gzipMiddleware(h)
 }
