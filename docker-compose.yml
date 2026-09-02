@@ -58,3 +58,29 @@ services:
       retries: 3
       # Slow first start (registry refresh at boot) must not mark unhealthy.
       start_period: 10s
+
+  # Turnkey automatic HTTPS reverse proxy via Caddy.
+  # Run with: docker compose --profile https up -d
+  # Set DOMAIN=proxy.example.com in .env or environment for auto Let's Encrypt TLS.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles:
+      - https
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - freebuff-proxy
+
+volumes:
+  caddy_data:
+  caddy_config:
