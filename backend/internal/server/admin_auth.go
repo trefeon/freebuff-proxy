@@ -132,12 +132,33 @@ const (
 	loginFailsCap = 1024
 )
 
-func (a *adminAuth) setCookie(w http.ResponseWriter) {
-	// Secure is unconditional (#318): modern browsers treat http://localhost
-	// and http://127.0.0.1 as trustworthy and still accept Secure cookies
-	// there, so plain-HTTP loopback dev keeps working; any remote plain-HTTP
-	// admin login is refused by the browser, forcing TLS or a front proxy.
-	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: a.cookieValue(time.Now().Add(adminCookieTTL)), Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: true, MaxAge: int(adminCookieTTL.Seconds())})
+func allowInsecureHTTP() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("ADMIN_INSECURE_HTTP")))
+	return v == "true" || v == "1" || v == "yes"
+}
+
+func isSecureCookie(r *http.Request) bool {
+	if !allowInsecureHTTP() {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return false
+}
+
+func (a *adminAuth) setCookie(w http.ResponseWriter, r ...*http.Request) {
+	var req *http.Request
+	if len(r) > 0 {
+		req = r[0]
+	}
+	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: a.cookieValue(time.Now().Add(adminCookieTTL)), Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isSecureCookie(req), MaxAge: int(adminCookieTTL.Seconds())})
 }
 
 func (a *adminAuth) allow(ip string) bool {
@@ -358,16 +379,18 @@ func newCSRFToken() (string, error) {
 // csrfCookie builds the double-submit CSRF cookie. It is deliberately NOT
 // HttpOnly: the SPA reads it from document.cookie and echoes the value as
 // the X-CSRF-Token header on state-changing requests.
-func csrfCookie(value string) *http.Cookie {
-	// double-submit CSRF cookie is readable JS by design; Secure is
-	// unconditional (#318) — same rationale as the session cookie.
+func csrfCookie(value string, r ...*http.Request) *http.Cookie {
+	var req *http.Request
+	if len(r) > 0 {
+		req = r[0]
+	}
 	return &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: false,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   true,
+		Secure:   isSecureCookie(req),
 	}
 }
 
@@ -377,7 +400,7 @@ func csrfCookie(value string) *http.Cookie {
 func (a *adminHandlers) setCSRFCookieIfAbsent(w http.ResponseWriter, r *http.Request) {
 	if _, err := r.Cookie(csrfCookieName); err != nil {
 		if value, err := newCSRFToken(); err == nil {
-			http.SetCookie(w, csrfCookie(value))
+			http.SetCookie(w, csrfCookie(value, r))
 		}
 	}
 }
@@ -501,7 +524,7 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AdminToken)) == 1 {
 		a.adminAuth.clearFails(ip)
-		a.adminAuth.setCookie(w)
+		a.adminAuth.setCookie(w, r)
 		// Double-submit CSRF cookie: the SPA re-reads it from
 		// document.cookie after the login response and echoes it on every
 		// later state-changing request.
@@ -526,9 +549,9 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 // logging out an already-expired session must work — and it is not wrapped
 // in adminSensitive because it exposes nothing.
 func (a *adminHandlers) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
-	// The clearing cookie carries Secure exactly like the login cookie
-	// (unconditional): a non-Secure cookie cannot overwrite a Secure one.
-	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: true, MaxAge: -1})
+	// The clearing cookie carries Secure matching the session cookie:
+	// a non-Secure cookie cannot overwrite a Secure one.
+	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isSecureCookie(r), MaxAge: -1})
 	if r.Method == http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
@@ -649,8 +672,8 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 
 	a.applyReloadedConfig(&newCfg)
 
-	// Set updated session cookie (Secure is unconditional).
-	a.adminAuth.setCookie(w)
+	// Set updated session cookie.
+	a.adminAuth.setCookie(w, r)
 
 	a.logfunc().Info("admin password changed successfully", "remote", remoteHost(r))
 

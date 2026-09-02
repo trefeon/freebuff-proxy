@@ -101,7 +101,45 @@ func TestAdminCookieSecureFlag(t *testing.T) {
 	a.setCookie(rec)
 	c := rec.Result().Cookies()[0]
 	if !c.Secure {
-		t.Error("cookie Secure flag must be set unconditionally (#318)")
+		t.Error("cookie Secure flag must be set by default (#318)")
+	}
+}
+
+func TestAdminCookieInsecureHTTPOptIn(t *testing.T) {
+	a := newAdminAuth()
+	reqHTTP := httptest.NewRequest(http.MethodGet, "http://192.168.1.100:3457/admin", nil)
+	reqHTTPS := httptest.NewRequest(http.MethodGet, "http://192.168.1.100:3457/admin", nil)
+	reqHTTPS.Header.Set("X-Forwarded-Proto", "https")
+
+	// 1. Default (ADMIN_INSECURE_HTTP unset/false): both HTTP and HTTPS get Secure cookies.
+	rec1 := httptest.NewRecorder()
+	a.setCookie(rec1, reqHTTP)
+	if !rec1.Result().Cookies()[0].Secure {
+		t.Error("default plain-HTTP must still have Secure: true")
+	}
+	if !csrfCookie("csrf1", reqHTTP).Secure {
+		t.Error("default csrfCookie must still have Secure: true")
+	}
+
+	// 2. Opt-in via ADMIN_INSECURE_HTTP=true: plain-HTTP gets Secure: false, HTTPS stays Secure: true.
+	t.Setenv("ADMIN_INSECURE_HTTP", "true")
+
+	rec2 := httptest.NewRecorder()
+	a.setCookie(rec2, reqHTTP)
+	if rec2.Result().Cookies()[0].Secure {
+		t.Error("ADMIN_INSECURE_HTTP=true plain-HTTP must have Secure: false")
+	}
+	if csrfCookie("csrf2", reqHTTP).Secure {
+		t.Error("ADMIN_INSECURE_HTTP=true plain-HTTP csrfCookie must have Secure: false")
+	}
+
+	rec3 := httptest.NewRecorder()
+	a.setCookie(rec3, reqHTTPS)
+	if !rec3.Result().Cookies()[0].Secure {
+		t.Error("ADMIN_INSECURE_HTTP=true HTTPS must have Secure: true")
+	}
+	if !csrfCookie("csrf3", reqHTTPS).Secure {
+		t.Error("ADMIN_INSECURE_HTTP=true HTTPS csrfCookie must have Secure: true")
 	}
 }
 
