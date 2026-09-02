@@ -56,7 +56,7 @@
         >
         <select
           bind:value={spawnModel}
-          class="fp-input !text-xs !py-1 !px-2 !h-7 !w-44 !inline-block"
+          class="fp-input !text-xs !py-1 !pl-2.5 !h-7 !w-44 !inline-block"
         >
           {#each modelOptions as m (m.id)}
             <option value={m.id}>{m.label}</option>

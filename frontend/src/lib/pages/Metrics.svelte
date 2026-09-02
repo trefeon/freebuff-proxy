@@ -168,10 +168,10 @@
             <thead>
               <tr>
                 <th scope="col">{$tr("Token")}</th>
-                <th scope="col">{$tr("Requests (24h)")}</th>
-                <th scope="col">{$tr("Transient retries")}</th>
-                <th scope="col">{$tr("Fingerprint rotations")}</th>
-                <th scope="col">{$tr("Spend")}</th>
+                <th scope="col" class="num">{$tr("Requests (24h)")}</th>
+                <th scope="col" class="num">{$tr("Transient retries")}</th>
+                <th scope="col" class="num">{$tr("Fingerprint rotations")}</th>
+                <th scope="col" class="num">{$tr("Spend")}</th>
                 <th scope="col">{$tr("Risk")}</th>
               </tr>
             </thead>
@@ -182,16 +182,16 @@
                     ><span class="fp-num font-mono text-xs">#{p.token}</span
                     ></td
                   >
-                  <td class="fp-num"
+                  <td class="num"
                     >{Number(p.requests_24h ?? 0).toLocaleString()}</td
                   >
-                  <td class="fp-num"
+                  <td class="num"
                     >{Number(p.transient_retries ?? 0).toLocaleString()}</td
                   >
-                  <td class="fp-num"
+                  <td class="num"
                     >{Number(p.fingerprint_rotations ?? 0).toLocaleString()}</td
                   >
-                  <td class="fp-num"
+                  <td class="num"
                     >{Number(p.spend_day ?? 0).toLocaleString()}</td
                   >
                   <td>

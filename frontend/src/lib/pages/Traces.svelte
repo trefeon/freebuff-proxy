@@ -75,7 +75,7 @@
                 <th scope="col">{$tr("Token")}</th>
                 <th scope="col">{$tr("Model")}</th>
                 <th scope="col">{$tr("Status")}</th>
-                <th scope="col">{$tr("Latency")}</th>
+                <th scope="col" class="num">{$tr("Latency")}</th>
                 <th scope="col">{$tr("Phases")}</th>
                 <th scope="col">{$tr("Error")}</th>
               </tr>
@@ -101,7 +101,7 @@
                       {t.status || "ok"}
                     </span>
                   </td>
-                  <td class="fp-num">{t.ms || "—"}</td>
+                  <td class="num">{t.ms ? t.ms + "ms" : "—"}</td>
                   <td>
                     {#if t.phases?.length}
                       <div class="flex flex-wrap gap-1">

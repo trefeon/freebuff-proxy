@@ -137,8 +137,8 @@
                       <thead>
                         <tr>
                           <th scope="col">{$tr("model")}</th>
-                          <th scope="col">{$tr("recent")}</th>
-                          <th scope="col">{$tr("limit")}</th>
+                          <th scope="col" class="num">{$tr("recent")}</th>
+                          <th scope="col" class="num">{$tr("limit")}</th>
                           <th scope="col">{$tr("period")}</th>
                           <th scope="col">{$tr("reset")}</th>
                           <th scope="col">{$tr("entitlement")}</th>
@@ -155,12 +155,12 @@
                               ></td
                             >
                             <td
-                              class="fp-num text-xs {q.near_limit
+                              class="num text-xs {q.near_limit
                                 ? 'text-[#f5a623]'
                                 : 'text-[var(--fp-muted)]'}">{q.recent}</td
                             >
                             <td
-                              class="fp-num text-xs {q.near_limit
+                              class="num text-xs {q.near_limit
                                 ? 'text-[#f5a623]'
                                 : 'text-[var(--fp-muted)]'}">{q.limit}</td
                             >
