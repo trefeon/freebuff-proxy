@@ -21,6 +21,7 @@
   import { usePolling } from "../utils/polling.js";
   import { formatTime, parseLogFields } from "../utils/format.js";
   import { copyToClipboard } from "../utils/clipboard.js";
+  import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
   /** @type {any} */
   let data = $state(null);
@@ -333,7 +334,19 @@
             <Button
               variant="ghost"
               size="sm"
-              onclick={() => (clearedBefore = Date.now())}
+              onclick={async () => {
+                const ok = await confirmAction({
+                  title: $tr("Clear Request Console"),
+                  message: $tr(
+                    "Are you sure you want to clear the request console logs? This will clear all current events from your view.",
+                  ),
+                  confirmText: $tr("Clear"),
+                  tone: "warn",
+                });
+                if (ok) {
+                  clearedBefore = Date.now();
+                }
+              }}
               class="!h-8 !text-xs !px-2.5 text-[var(--fp-dim)] hover:text-[var(--fp-error)]"
             >
               <Trash2 size={13} />

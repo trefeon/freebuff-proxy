@@ -11,7 +11,7 @@
   import { generateRandomApiKey } from "../utils/format.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
-
+  import { confirmAction } from "../stores/confirm.js";
   /**
    * ApiKeysEditor - the Client API Keys card (sk-fb- credentials stored in
    * API_KEYS in .env). Split out of Overview.svelte (issue #287) so the
@@ -97,6 +97,15 @@
 
   async function deleteApiKey(target) {
     if (deletingKey) return;
+    const confirmed = await confirmAction({
+      title: $tr("Delete API Key"),
+      message: $tr(
+        "Are you sure you want to delete this client API key? Clients using this key will immediately lose access to the gateway.",
+      ),
+      confirmText: $tr("Delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     deletingKey = target;
     clientKeyMessage = "";
     try {

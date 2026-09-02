@@ -1,10 +1,10 @@
 <script>
   import { onMount } from "svelte";
   import Sidebar from "./lib/Sidebar.svelte";
-  import Footer from "./lib/Footer.svelte";
   import Login from "./lib/pages/Login.svelte";
   import { pageComponentFor } from "./lib/nav.js";
   import ChangePasswordModal from "./lib/components/ChangePasswordModal.svelte";
+  import ConfirmModal from "./lib/components/ConfirmModal.svelte";
   import SecurityBanner from "./lib/components/SecurityBanner.svelte";
   import Alert from "./lib/components/Alert.svelte";
   import Button from "./lib/components/Button.svelte";
@@ -91,7 +91,7 @@
 </script>
 
 <div
-  class="h-screen overflow-hidden bg-[var(--fp-bg)] text-[var(--fp-text)] flex flex-col font-sans selection:bg-[var(--fp-accent)]/30 selection:text-white instrument-grid"
+  class="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)] flex flex-col font-sans selection:bg-[var(--fp-accent)]/30 selection:text-white instrument-grid"
 >
   <a
     href="#main-content"
@@ -113,15 +113,13 @@
     />
   {/if}
 
-  <div
-    class="flex-1 flex flex-col h-full overflow-y-auto {activeTab !== 'login'
-      ? 'md:pl-56'
-      : ''}"
-  >
+  <ConfirmModal />
+
+  <div class="flex-1 {activeTab !== 'login' ? 'md:pl-56' : ''}">
     <main
       id="main-content"
       tabindex="-1"
-      class="flex-1 w-full max-w-[1200px] mx-auto px-6 py-8"
+      class="w-full max-w-[1200px] mx-auto px-6 py-8"
     >
       {#if $sessionExpired && activeTab !== "login"}
         <div class="space-y-6 page-enter">
@@ -192,10 +190,6 @@
             {/if}
           </div>
         {/key}
-      {/if}
-
-      {#if activeTab !== "login"}
-        <Footer {versionInfo} />
       {/if}
     </main>
   </div>
