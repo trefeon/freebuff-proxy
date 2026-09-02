@@ -26,8 +26,14 @@ type BridgeTokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil
 	// when the bridge entry has no Freebucks quota.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
-	SpendDay  float64                 `json:"spend_day"`
-	SpendPct  int                     `json:"spend_pct"`
+	// FreeWindows is the upstream free-tier pool windows block
+	// (issue #319); nil when absent.
+	FreeWindows *upstream.FreeWindowsInfo `json:"free_windows,omitempty"`
+	// Subscription is the upstream subscription usage block (issue #319);
+	// rollout-audience only; nil otherwise.
+	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
+	SpendDay     float64                    `json:"spend_day"`
+	SpendPct     int                        `json:"spend_pct"`
 	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
 	// (issues #198/#199): "temporary" (auto-lifts at BannedUntil) vs
 	// "hard" (never self-heals); zero values when no ban is active.
@@ -110,15 +116,21 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 
 		spend := p.spendSnapshot(i)
 
+		// Countdown: prefer the server-authored absolute expiry over wire
+		// remainingMs. The expiry is monotonic and survives compact polls
+		// (which omit remainingMs — savedRemainingMs would otherwise freeze
+		// the countdown at the admission value). Wire remainingMs still wins
+		// when it is fresher, i.e. when the server explicitly reports it.
+		// The 5s safety margin mirrors sessionUsable/expiryMargin: within it
+		// the row is about to hand over, so a zero countdown is honest.
 		sessionRemaining := int64(0)
-		if ss.RemainingMs > 0 {
-			// Server-authoritative countdown (wire remainingMs) — prefer over
-			// the local expiresAt approximation to avoid clock-skew drift.
-			sessionRemaining = ss.RemainingMs / 1000
-		} else if ss.Status == "active" && !ss.ExpiresAt.IsZero() {
+		if ss.Status == "active" && !ss.ExpiresAt.IsZero() {
 			if rem := time.Until(ss.ExpiresAt); rem > 0 {
 				sessionRemaining = int64(rem.Seconds())
 			}
+		}
+		if sessionRemaining == 0 && ss.RemainingMs > 0 {
+			sessionRemaining = ss.RemainingMs / 1000
 		}
 
 		// Advisory spend ceiling (issue #122): the Pacific-day bucket vs
@@ -165,6 +177,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			SessionQueueDepth:       ss.QueueDepth,
 			SessionModel:            ss.Model,
 			SessionRemainingSeconds: sessionRemaining,
+			SessionExpiresAt:        ss.ExpiresAt,
 			CountryCode:             countryCode,
 			CountryBlockReason:      countryReason,
 			AccessTier:              ss.AccessTier,
@@ -176,6 +189,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Standing:                ss.Standing,
 			Referral:                ss.Referral,
 			Freebucks:               ss.Freebucks,
+			FreeWindows:             ss.FreeWindows,
+			Subscription:            ss.Subscription,
 			Locked:                  tok.locked.Load(),
 			Quarantined:             q != nil,
 			QuarantineReason:        quarantineReason,

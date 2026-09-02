@@ -58,6 +58,14 @@ type SessionSnapshot struct {
 	// nil when the response omits it. Carries balance, daily/weekly/monthly
 	// windows, bindingWindow, and per-model prices.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
+	// FreeWindows is the upstream free-tier pool windows block
+	// (day/week/month; issue #319). Display-only; nil when the response
+	// omits it (quota-exempt, limited access, or older servers).
+	FreeWindows *upstream.FreeWindowsInfo `json:"free_windows,omitempty"`
+	// Subscription is the upstream subscription usage block (day / fiveDay
+	// / month + provider spend USD; issue #319). Rollout-audience only;
+	// nil otherwise.
+	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
 }
 
 // QuotaSnapshot is one model's live session quota for healthz/metrics

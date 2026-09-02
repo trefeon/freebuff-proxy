@@ -317,8 +317,8 @@
       )}
     />
   {:else if data}
-    <Card pad="none">
-      {#if viewMode === "console"}
+    {#if viewMode === "console"}
+      <Card pad="none">
         <!-- Console View Top Bar -->
         <div
           class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex items-center justify-between gap-2.5"
@@ -424,7 +424,9 @@
             {/each}
           {/if}
         </div>
-      {:else}
+      </Card>
+    {:else}
+      <Card pad="none">
         <!-- Integrated Top Toolbar Header for Table -->
         <div
           class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
@@ -599,69 +601,69 @@
             </ul>
           </div>
         {/if}
-      {/if}
-      {#snippet footer()}
-        {#if viewMode === "table"}
-          <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3"
-          >
-            <div class="flex items-center gap-3">
-              <span class="fp-num text-xs text-[var(--fp-muted)]">
-                {rangeStart}–{rangeEnd} of {filteredEntries.length}
-              </span>
-              <label
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-muted)]"
-                for="logs-page-size"
-              >
-                {$tr("Rows per page")}
-                <select
-                  id="logs-page-size"
-                  class="fp-input !h-8 !w-auto min-w-[4.25rem] !py-1 !pl-2.5 text-xs"
-                  value={pageSize}
-                  onchange={(e) => {
-                    pageSize = Number(e.currentTarget.value);
-                    page = 0;
-                  }}
+        {#snippet footer()}
+          {#if viewMode === "table"}
+            <div
+              class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3"
+            >
+              <div class="flex items-center gap-3">
+                <span class="fp-num text-xs text-[var(--fp-muted)]">
+                  {rangeStart}–{rangeEnd} of {filteredEntries.length}
+                </span>
+                <label
+                  class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-muted)]"
+                  for="logs-page-size"
                 >
-                  <option value={10}>10</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
+                  {$tr("Rows per page")}
+                  <select
+                    id="logs-page-size"
+                    class="fp-input !h-8 !w-auto min-w-[4.25rem] !py-1 !pl-2.5 text-xs"
+                    value={pageSize}
+                    onchange={(e) => {
+                      pageSize = Number(e.currentTarget.value);
+                      page = 0;
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="fp-num"
+                  disabled={page === 0}
+                  onclick={() => page--}
+                >
+                  <ChevronLeft size={14} />
+                  {$tr("Prev")}
+                </Button>
+                <span
+                  class="fp-num text-xs text-[var(--fp-muted)] whitespace-nowrap"
+                >
+                  {$tr("Page {current} / {total}", {
+                    current: page + 1,
+                    total: totalPages,
+                  })}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="fp-num"
+                  disabled={page >= totalPages - 1}
+                  onclick={() => page++}
+                >
+                  <ChevronRight size={14} />
+                  {$tr("Next")}
+                </Button>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                class="fp-num"
-                disabled={page === 0}
-                onclick={() => page--}
-              >
-                <ChevronLeft size={14} />
-                {$tr("Prev")}
-              </Button>
-              <span
-                class="fp-num text-xs text-[var(--fp-muted)] whitespace-nowrap"
-              >
-                {$tr("Page {current} / {total}", {
-                  current: page + 1,
-                  total: totalPages,
-                })}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                class="fp-num"
-                disabled={page >= totalPages - 1}
-                onclick={() => page++}
-              >
-                <ChevronRight size={14} />
-                {$tr("Next")}
-              </Button>
-            </div>
-          </div>
-        {/if}
-      {/snippet}
-    </Card>
+          {/if}
+        {/snippet}
+      </Card>
+    {/if}
   {/if}
 </div>

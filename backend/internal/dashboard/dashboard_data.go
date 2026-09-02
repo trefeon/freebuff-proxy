@@ -96,6 +96,12 @@ type tokenCard struct {
 	// Freebucks (issue #232): balance + daily/weekly/monthly windows +
 	// bindingWindow + prices. Nil when the session has not reported it.
 	Freebucks *freebucksCard `json:"freebucks,omitempty"`
+	// FreeWindows (issue #319): free-tier session-pool day/week/month
+	// windows. Display-only; nil when the session has not reported it.
+	FreeWindows *freeWindowsCard `json:"free_windows,omitempty"`
+	// Subscription (issue #319): subscriber usage rings + provider spend,
+	// rollout-audience only; nil otherwise.
+	Subscription *subscriptionCard `json:"subscription,omitempty"`
 }
 
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):
@@ -123,6 +129,39 @@ type freebucksCard struct {
 	BindingWindow string              `json:"binding_window"`
 	Prices        map[string]float64  `json:"prices,omitempty"`
 	PlanDaily     *float64            `json:"plan_daily,omitempty"`
+}
+
+// freeWindowsCard is the dashboard view of upstream.FreeWindowsInfo
+// (issue #319): free-tier session-pool day/week/month used/limit windows.
+type freeWindowsCard struct {
+	DayUsed      float64 `json:"day_used"`
+	DayLimit     float64 `json:"day_limit"`
+	WeekUsed     float64 `json:"week_used"`
+	WeekLimit    float64 `json:"week_limit"`
+	MonthUsed    float64 `json:"month_used"`
+	MonthLimit   float64 `json:"month_limit"`
+	DayResetAt   string  `json:"day_reset_at,omitempty"`
+	MonthResetAt string  `json:"month_reset_at,omitempty"`
+}
+
+// subscriptionCard is the dashboard view of upstream.SubscriptionInfo
+// (issue #319): subscriber day / five-day / month usage rings + provider
+// spend USD. Rollout-audience only.
+type subscriptionCard struct {
+	DayUsed            float64  `json:"day_used"`
+	DayLimit           float64  `json:"day_limit"`
+	FiveDayUsed        float64  `json:"five_day_used"`
+	FiveDayLimit       float64  `json:"five_day_limit"`
+	MonthUsed          float64  `json:"month_used"`
+	MonthLimit         float64  `json:"month_limit"`
+	DayPremiumUsed     float64  `json:"day_premium_used"`
+	DayPremiumLimit    float64  `json:"day_premium_limit"`
+	DayResetAt         string   `json:"day_reset_at,omitempty"`
+	PeriodEndsAt       string   `json:"period_ends_at,omitempty"`
+	MonthSpendUsd      float64  `json:"month_spend_usd"`
+	MonthSpendLimitUsd float64  `json:"month_spend_limit_usd"`
+	FreeDayUsed        *float64 `json:"free_day_used,omitempty"`
+	FreeDayLimit       *float64 `json:"free_day_limit,omitempty"`
 }
 
 // standingStepCard is one dashboard-ready earn-back action

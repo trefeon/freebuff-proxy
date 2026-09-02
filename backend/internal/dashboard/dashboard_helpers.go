@@ -68,6 +68,60 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 	if t.Freebucks != nil {
 		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
 	}
+	if t.FreeWindows != nil {
+		card.FreeWindows = freeWindowsCardFromInfo(t.FreeWindows)
+	}
+	if t.Subscription != nil {
+		card.Subscription = subscriptionCardFromInfo(t.Subscription)
+	}
+	return card
+}
+
+func freeWindowsCardFromInfo(info *upstream.FreeWindowsInfo) *freeWindowsCard {
+	if info == nil {
+		return nil
+	}
+	card := &freeWindowsCard{
+		DayUsed:    info.DayUsed,
+		DayLimit:   info.DayLimit,
+		WeekUsed:   info.WeekUsed,
+		WeekLimit:  info.WeekLimit,
+		MonthUsed:  info.MonthUsed,
+		MonthLimit: info.MonthLimit,
+	}
+	if !info.DayResetAt.IsZero() {
+		card.DayResetAt = info.DayResetAt.Format(time.RFC3339)
+	}
+	if !info.MonthResetAt.IsZero() {
+		card.MonthResetAt = info.MonthResetAt.Format(time.RFC3339)
+	}
+	return card
+}
+
+func subscriptionCardFromInfo(info *upstream.SubscriptionInfo) *subscriptionCard {
+	if info == nil {
+		return nil
+	}
+	card := &subscriptionCard{
+		DayUsed:            info.DayUsed,
+		DayLimit:           info.DayLimit,
+		FiveDayUsed:        info.FiveDayUsed,
+		FiveDayLimit:       info.FiveDayLimit,
+		MonthUsed:          info.MonthUsed,
+		MonthLimit:         info.MonthLimit,
+		DayPremiumUsed:     info.DayPremiumUsed,
+		DayPremiumLimit:    info.DayPremiumLimit,
+		MonthSpendUsd:      info.MonthSpendUsd,
+		MonthSpendLimitUsd: info.MonthSpendLimitUsd,
+		FreeDayUsed:        info.FreeDayUsed,
+		FreeDayLimit:       info.FreeDayLimit,
+	}
+	if !info.DayResetAt.IsZero() {
+		card.DayResetAt = info.DayResetAt.Format(time.RFC3339)
+	}
+	if !info.PeriodEndsAt.IsZero() {
+		card.PeriodEndsAt = info.PeriodEndsAt.Format(time.RFC3339)
+	}
 	return card
 }
 

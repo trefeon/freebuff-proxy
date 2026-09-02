@@ -1097,7 +1097,7 @@ func TestPausedModelWithdrawnMessage(t *testing.T) {
 	defer mock.Close()
 	ts, _ := newTestServer(t, nil, mock)
 
-	const wantMsg = "MiniMax M3 is no longer available in Freebuff. We recommend using GLM 5.3 Flash instead."
+	const wantMsg = "MiniMax M3 is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
 
 	t.Run("openai chat", func(t *testing.T) {
 		body := `{"model":"minimax/minimax-m3","messages":[{"role":"user","content":"hi"}]}`
@@ -1149,7 +1149,7 @@ func TestPausedModelWithdrawnMessage(t *testing.T) {
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400: %s", resp.StatusCode, data)
 		}
-		if !strings.Contains(string(data), "GLM 5.3 Flash") {
+		if !strings.Contains(string(data), "DeepSeek V4 Flash") {
 			t.Errorf("body missing replacement model: %s", data)
 		}
 	})

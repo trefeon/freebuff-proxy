@@ -79,6 +79,18 @@
   let hasBridgeFreebucks = $derived(
     (data?.bridge_token_cards ?? []).some((c) => c.freebucks),
   );
+  // Free session pools (issue #319): any token/bridge reporting the
+  // free_windows or subscription block shows the pool card even without
+  // Freebucks data.
+  let hasFreePools = $derived(
+    (data?.tokens ?? []).some((t) => t.free_windows || t.subscription) ||
+      (data?.bridge_token_cards ?? []).some(
+        (c) => c.free_windows || c.subscription,
+      ),
+  );
+  let freePoolTokens = $derived(
+    (data?.tokens ?? []).filter((t) => t.free_windows || t.subscription),
+  );
 
   // Dynamic Base URL follows the browser's current host (VPS IP, domain, VPN reverse proxy)
   // as computed dynamically by the backend from the request headers (Host, X-Forwarded-Host/Proto).
@@ -353,6 +365,8 @@
               title={$tr("Token #{index} • Freebucks", {
                 index: tok.index ?? i,
               })}
+              freeWindows={tok.free_windows}
+              subscription={tok.subscription}
               {now}
             />
           {/each}
@@ -361,10 +375,42 @@
               <PremiumQuotaBar
                 freebucks={bc.freebucks}
                 title={`${bc.key} • Freebucks`}
+                freeWindows={bc.free_windows}
+                subscription={bc.subscription}
                 {now}
               />
             {/each}
           {/if}
+        </div>
+      </Card>
+    {/if}
+
+    {#if hasFreePools}
+      <Card
+        title={$tr("Free session pools — day / week / month")}
+        description={$tr(
+          "Free-tier pool windows with subscription usage where upstream reports them (issue #319)",
+        )}
+      >
+        <div class="grid grid-cols-1 gap-4">
+          {#each freePoolTokens as tok, i (tok.index ?? tok.account_id ?? i)}
+            <PremiumQuotaBar
+              freeWindows={tok.free_windows}
+              subscription={tok.subscription}
+              title={$tr("Token #{index} • Free pools", {
+                index: tok.index ?? i,
+              })}
+              {now}
+            />
+          {/each}
+          {#each (data.bridge_token_cards ?? []).filter((c) => c.free_windows || c.subscription) as bc (bc.key)}
+            <PremiumQuotaBar
+              freeWindows={bc.free_windows}
+              subscription={bc.subscription}
+              title={`${bc.key} • Free pools`}
+              {now}
+            />
+          {/each}
         </div>
       </Card>
     {/if}

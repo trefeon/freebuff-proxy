@@ -20,6 +20,7 @@ import {
   FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID,
   FREEBUFF_MINIMAX_M3_MODEL_ID,
   FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID,
+  FREEBUFF_MUSE_SPARK_13_CONTRIBUTOR_MODEL_ID,
   FREEBUFF_OX_ALPHA_MODEL_ID,
   FREEBUFF_SOLAR_PRO_4_MODEL_ID,
   LIMITED_FREEBUFF_MODEL_ID,
@@ -129,7 +130,10 @@ export const FREEBUFF_WEB_BASE3_AGENT_ID_BY_MODEL: Record<string, string> = {
   [FREEBUFF_GLM_V53_FLASH_MODEL_ID]: 'base3-free-glm-5-3-flash',
   [FREEBUFF_KIMI_K3_ECO_MODEL_ID]: 'base3-free-kimi-k3-eco',
   [FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]: 'base3-free-luna-es',
+  // 1.2 is retired from the picker (2026-09-02) and this entry stays while
+  // its sessions drain; 1.3 is the live row. Both Web/Cloud only.
   [FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID]: 'base3-free-muse-spark',
+  [FREEBUFF_MUSE_SPARK_13_CONTRIBUTOR_MODEL_ID]: 'base3-free-muse-spark-1-3',
   [FREEBUFF_OX_ALPHA_MODEL_ID]: 'base3-free-ox-alpha',
   [FREEBUFF_SOLAR_PRO_4_MODEL_ID]: 'base3-free-solar-pro4',
 }
@@ -202,7 +206,11 @@ export const FREEBUFF_BASE3_AGENT_IDS: ReadonlySet<string> = new Set([
 export const CLOUD_PLANNER_AGENT_ID = 'base2-free-cloud-planner'
 export const CLOUD_PLANNER_MODEL_ID = FALLBACK_FREEBUFF_MODEL_ID
 export const CLOUD_PLANNER_LIMITED_AGENT_ID = 'base2-free-cloud-planner-limited'
-export const CLOUD_PLANNER_LIMITED_MODEL_ID = LIMITED_FREEBUFF_MODEL_ID
+/** The unlimited model, not LIMITED_FREEBUFF_MODEL_ID: the planner and build
+ *  are the token-heavy paths and want the cheapest row (see
+ *  CLOUD_BUILD_MODEL_ID). Must be in LIMITED_FREEBUFF_MODEL_IDS, or limited
+ *  planner turns fail admission — a test pins that. */
+export const CLOUD_PLANNER_LIMITED_MODEL_ID = FALLBACK_FREEBUFF_MODEL_ID
 
 /**
  * The model the build runs on after "Start building".
@@ -333,10 +341,13 @@ export const FREEBUFF_ROOT_AGENT_IDS = [
   'base2-free-deepseek-pro-max',
   'base2-free-deepseek-flash-max',
   'base2-free-luna-max',
-  // Freebuff Web only (Meta Muse Spark 1.2 Contributor). Listed here like every
-  // other root so its subagents pass the hierarchy gate; the model, not this
-  // list, is what keeps it off the CLI and Desktop.
+  // Muse Spark roots, Web/Cloud only. 1.2's root stays while its Web
+  // sessions drain (the model is retired from the picker as of 2026-09-02);
+  // 1.3's is the live one. Listed here like every other root so their
+  // subagents pass the hierarchy gate; the model, not this list, is what keeps
+  // them off the CLI and Desktop.
   'base2-free-muse-spark',
+  'base2-free-muse-spark-1-3',
   // Ox Alpha's root. The model was WITHDRAWN on 2026-08-27 (see
   // FREEBUFF_PAUSED_FREE_MODEL_IDS) and this entry stays on purpose, exactly
   // like the Fable note below it: withdrawal is enforced at ADMISSION, so a
@@ -375,6 +386,7 @@ export const FREEBUFF_ROOT_AGENT_IDS = [
   'base3-free-kimi-k3-eco',
   'base3-free-luna-es',
   'base3-free-muse-spark',
+  'base3-free-muse-spark-1-3',
   'base3-free-ox-alpha',
   // Freebuff CLI base3 roots. Every other id it needs is already above,
   // shared with Web; Fable is the one model the CLI offers and Web does not.
@@ -401,6 +413,7 @@ export const FREEBUFF_ROOT_AGENT_ID_BY_MODEL: Record<string, string> = {
   [FREEBUFF_GPT_5_6_LUNA_ES_MODEL_ID]: 'base2-free-luna-es',
   [FREEBUFF_FABLE_5_MODEL_ID]: 'base2-free-fable',
   [FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID]: 'base2-free-muse-spark',
+  [FREEBUFF_MUSE_SPARK_13_CONTRIBUTOR_MODEL_ID]: 'base2-free-muse-spark-1-3',
   [FREEBUFF_OX_ALPHA_MODEL_ID]: 'base2-free-ox-alpha',
 }
 
@@ -576,6 +589,13 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   'base2-free-muse-spark': new Set([
     FREEBUFF_MUSE_SPARK_12_CONTRIBUTOR_MODEL_ID,
   ]),
+  // 1.3's root, pinned to its one model for the same reason. NOT a superset
+  // of 1.2's: the two draw on one rate-limit bucket but are different models,
+  // and a root allowed both would let a request on the retired id escape the
+  // retirement one turn at a time.
+  'base2-free-muse-spark-1-3': new Set([
+    FREEBUFF_MUSE_SPARK_13_CONTRIBUTOR_MODEL_ID,
+  ]),
   // Ox Alpha's root, pinned to its one model like every other. The pinning
   // matters even now that the model is withdrawn: an agent id is the handle a
   // hand-written caller reaches for, and a root allowed more than one model is
@@ -595,7 +615,7 @@ export const FREE_MODE_AGENT_MODELS: Record<string, Set<string>> = {
   // Freebuff Cloud custom-stack planner (freebuff_bundled_agents.ts). One
   // variant per model, each allowed exactly the model its definition pins.
   'base2-free-cloud-planner': new Set([CLOUD_PLANNER_MODEL_ID]),
-  'base2-free-cloud-planner-limited': new Set([LIMITED_FREEBUFF_MODEL_ID]),
+  'base2-free-cloud-planner-limited': new Set([CLOUD_PLANNER_LIMITED_MODEL_ID]),
 
   // base3 roots: exactly the one model each is pinned to, like every other
   // per-model root. Derived from the maps rather than written out, so a model
@@ -865,11 +885,11 @@ export function isFreeModeAllowedAgentModel(
  *
  * Cannot be an escalation, which is what the allowlist exists to prevent. Both
  * accepted targets are models the server picks for users it is stepping DOWN,
- * never up: the limited tier's only model, and the always-available fallback
- * every surface lands on when a premium pool is spent. They name the same model
- * today; they are checked separately because that is a coincidence of the
- * current catalog rather than a rule, and the day it stops being true this
- * must keep accepting both.
+ * never up: the limited tier's default (DeepSeek V4 Flash since 2026-09-02),
+ * and the always-available fallback every surface lands on when a premium pool
+ * is spent (MiMo 2.5). They named the same model from 2026-08-18 to 09-02 and
+ * are checked separately because that was a coincidence of the catalog rather
+ * than a rule; both are unmetered, so admitting either meters nothing.
  */
 export function isLimitedTierSubstitutedModel(
   fullAgentId: string,

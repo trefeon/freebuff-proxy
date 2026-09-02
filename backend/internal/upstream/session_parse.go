@@ -70,6 +70,47 @@ type SessionState struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232),
 	// parsed from the session response's "freebucks" field; nil when omitted.
 	Freebucks *FreebucksInfo
+	// FreeWindows is the upstream free-tier session-pool windows block
+	// (day/week/month; issue #319). Display-only upstream (nothing refuses
+	// on the week or month yet); nil when the response omits it — quota-
+	// exempt accounts, limited access, or older servers.
+	FreeWindows *FreeWindowsInfo
+	// Subscription is the upstream subscription usage block (day / fiveDay /
+	// month windows plus provider spend USD; issue #319). Sent only to
+	// callers in the rollout audience; nil otherwise.
+	Subscription *SubscriptionInfo
+}
+
+// FreeWindowsInfo mirrors upstream FreebuffFreeWindowsInfo (free-tier
+// session pool windows; display-only).
+type FreeWindowsInfo struct {
+	DayUsed      float64   `json:"dayUsed"`
+	DayLimit     float64   `json:"dayLimit"`
+	WeekUsed     float64   `json:"weekUsed"`
+	WeekLimit    float64   `json:"weekLimit"`
+	MonthUsed    float64   `json:"monthUsed"`
+	MonthLimit   float64   `json:"monthLimit"`
+	DayResetAt   time.Time `json:"dayResetAt"`
+	MonthResetAt time.Time `json:"monthResetAt"`
+}
+
+// SubscriptionInfo mirrors upstream FreebuffSubscriptionUsage (subscriber
+// usage rings + provider spend; rollout audience only).
+type SubscriptionInfo struct {
+	DayUsed            float64   `json:"dayUsed"`
+	DayLimit           float64   `json:"dayLimit"`
+	FiveDayUsed        float64   `json:"fiveDayUsed"`
+	FiveDayLimit       float64   `json:"fiveDayLimit"`
+	MonthUsed          float64   `json:"monthUsed"`
+	MonthLimit         float64   `json:"monthLimit"`
+	DayPremiumUsed     float64   `json:"dayPremiumUsed"`
+	DayPremiumLimit    float64   `json:"dayPremiumLimit"`
+	DayResetAt         time.Time `json:"dayResetAt"`
+	PeriodEndsAt       time.Time `json:"periodEndsAt"`
+	MonthSpendUsd      float64   `json:"monthSpendUsd"`
+	MonthSpendLimitUsd float64   `json:"monthSpendLimitUsd"`
+	FreeDayUsed        *float64  `json:"freeDayUsed,omitempty"`
+	FreeDayLimit       *float64  `json:"freeDayLimit,omitempty"`
 }
 
 // SessionReferral mirrors the upstream FreebuffReferralInfo wire block.
@@ -350,6 +391,34 @@ type rawFreebucks struct {
 	Prices        map[string]float64 `json:"prices"`
 }
 
+type rawFreeWindows struct {
+	DayUsed      float64 `json:"dayUsed"`
+	DayLimit     float64 `json:"dayLimit"`
+	WeekUsed     float64 `json:"weekUsed"`
+	WeekLimit    float64 `json:"weekLimit"`
+	MonthUsed    float64 `json:"monthUsed"`
+	MonthLimit   float64 `json:"monthLimit"`
+	DayResetAt   any     `json:"dayResetAt"`
+	MonthResetAt any     `json:"monthResetAt"`
+}
+
+type rawSubscription struct {
+	DayUsed            float64  `json:"dayUsed"`
+	DayLimit           float64  `json:"dayLimit"`
+	FiveDayUsed        float64  `json:"fiveDayUsed"`
+	FiveDayLimit       float64  `json:"fiveDayLimit"`
+	MonthUsed          float64  `json:"monthUsed"`
+	MonthLimit         float64  `json:"monthLimit"`
+	DayPremiumUsed     float64  `json:"dayPremiumUsed"`
+	DayPremiumLimit    float64  `json:"dayPremiumLimit"`
+	DayResetAt         any      `json:"dayResetAt"`
+	PeriodEndsAt       any      `json:"periodEndsAt"`
+	MonthSpendUsd      float64  `json:"monthSpendUsd"`
+	MonthSpendLimitUsd float64  `json:"monthSpendLimitUsd"`
+	FreeDayUsed        *float64 `json:"freeDayUsed"`
+	FreeDayLimit       *float64 `json:"freeDayLimit"`
+}
+
 // parseSessionResponse decodes a session control response body into a
 // SessionState: the 404 create/poll mapping, JSON decode, quota/standing/
 // availability-window parsing, and the passive ban-risk feed (#64). Errors
@@ -409,6 +478,8 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		Standing               *rawStanding             `json:"standing"`
 		Referral               *rawReferral             `json:"referral"`
 		Freebucks              *rawFreebucks            `json:"freebucks"`
+		FreeWindows            *rawFreeWindows          `json:"freeWindows"`
+		Subscription           *rawSubscription         `json:"subscription"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -482,6 +553,46 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			fb.Weekly = windowFromRaw(raw.Freebucks.Weekly)
 			fb.Monthly = windowFromRaw(raw.Freebucks.Monthly)
 			state.Freebucks = fb
+		}
+		if raw.FreeWindows != nil {
+			fw := &FreeWindowsInfo{
+				DayUsed:    raw.FreeWindows.DayUsed,
+				DayLimit:   raw.FreeWindows.DayLimit,
+				WeekUsed:   raw.FreeWindows.WeekUsed,
+				WeekLimit:  raw.FreeWindows.WeekLimit,
+				MonthUsed:  raw.FreeWindows.MonthUsed,
+				MonthLimit: raw.FreeWindows.MonthLimit,
+			}
+			if t, err := parseFlexTime(raw.FreeWindows.DayResetAt); err == nil {
+				fw.DayResetAt = t
+			}
+			if t, err := parseFlexTime(raw.FreeWindows.MonthResetAt); err == nil {
+				fw.MonthResetAt = t
+			}
+			state.FreeWindows = fw
+		}
+		if raw.Subscription != nil {
+			sub := &SubscriptionInfo{
+				DayUsed:            raw.Subscription.DayUsed,
+				DayLimit:           raw.Subscription.DayLimit,
+				FiveDayUsed:        raw.Subscription.FiveDayUsed,
+				FiveDayLimit:       raw.Subscription.FiveDayLimit,
+				MonthUsed:          raw.Subscription.MonthUsed,
+				MonthLimit:         raw.Subscription.MonthLimit,
+				DayPremiumUsed:     raw.Subscription.DayPremiumUsed,
+				DayPremiumLimit:    raw.Subscription.DayPremiumLimit,
+				MonthSpendUsd:      raw.Subscription.MonthSpendUsd,
+				MonthSpendLimitUsd: raw.Subscription.MonthSpendLimitUsd,
+				FreeDayUsed:        raw.Subscription.FreeDayUsed,
+				FreeDayLimit:       raw.Subscription.FreeDayLimit,
+			}
+			if t, err := parseFlexTime(raw.Subscription.DayResetAt); err == nil {
+				sub.DayResetAt = t
+			}
+			if t, err := parseFlexTime(raw.Subscription.PeriodEndsAt); err == nil {
+				sub.PeriodEndsAt = t
+			}
+			state.Subscription = sub
 		}
 		if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
 			state.ExpiresAt = time.Time{}

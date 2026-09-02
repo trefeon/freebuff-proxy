@@ -78,7 +78,9 @@
 
   const st = $derived(statusFor(token));
 
-  // Live session countdown (same tick model as the desktop card).
+  // Live session countdown (same tick model as the desktop card). Anchor to
+  // the server's ABSOLUTE expiry when present (relative re-anchors every
+  // poll); fall back for older backends.
   let nowTick = $state(Date.now());
   $effect(() => {
     const t = setInterval(() => {
@@ -87,7 +89,9 @@
     return () => clearInterval(t);
   });
   const sessionEndsAtMs = $derived(
-    Date.now() + (token.session_remaining_seconds || 0) * 1000,
+    token.session_expires_at
+      ? new Date(token.session_expires_at).getTime()
+      : Date.now() + (token.session_remaining_seconds || 0) * 1000,
   );
   const sessionRemaining = $derived(
     Math.max(0, Math.floor((sessionEndsAtMs - nowTick) / 1000)),

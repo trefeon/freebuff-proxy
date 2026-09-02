@@ -4,6 +4,8 @@
   let {
     quota = null,
     freebucks = null,
+    freeWindows = null,
+    subscription = null,
     title = null,
     now = Date.now(),
   } = $props();
@@ -97,6 +99,98 @@
 
   let fbLabel = $derived(title ?? $tr("Freebucks"));
   let fbBindingLabel = $derived(fbBinding ? fbBinding : "—");
+
+  // ----- Free session windows (issue #319) -----
+  let fw = $derived(freeWindows ?? (freebucks ? null : null) ?? null);
+  let fwWindows = $derived.by(() => {
+    if (!fw) return [];
+    const w = [];
+    if (fw.day_limit != null)
+      w.push({
+        key: "day",
+        label: $tr("Day"),
+        used: fw.day_used,
+        limit: fw.day_limit,
+        resetAt: fw.day_reset_at,
+      });
+    if (fw.week_limit != null)
+      w.push({
+        key: "week",
+        label: $tr("Week"),
+        used: fw.week_used,
+        limit: fw.week_limit,
+        resetAt: null,
+      });
+    if (fw.month_limit != null)
+      w.push({
+        key: "month",
+        label: $tr("Month"),
+        used: fw.month_used,
+        limit: fw.month_limit,
+        resetAt: fw.month_reset_at,
+      });
+    return w;
+  });
+  let fwPct = (used, limit) =>
+    limit > 0 ? Math.min(100, Math.max(0, (used / limit) * 100)) : 0;
+
+  // ----- Subscription windows (issue #319) -----
+  let sub = $derived(subscription ?? null);
+  let subWindows = $derived.by(() => {
+    if (!sub) return [];
+    const w = [];
+    if (sub.day_limit != null)
+      w.push({
+        key: "day",
+        label: $tr("Day"),
+        used: sub.day_used,
+        limit: sub.day_limit,
+        resetAt: sub.day_reset_at,
+      });
+    if (sub.five_day_limit != null)
+      w.push({
+        key: "5d",
+        label: $tr("5-day"),
+        used: sub.five_day_used,
+        limit: sub.five_day_limit,
+        resetAt: null,
+      });
+    if (sub.month_limit != null)
+      w.push({
+        key: "month",
+        label: $tr("Month"),
+        used: sub.month_used,
+        limit: sub.month_limit,
+        resetAt: sub.period_ends_at,
+      });
+    if (sub.day_premium_limit != null)
+      w.push({
+        key: "premium",
+        label: $tr("Premium"),
+        used: sub.day_premium_used,
+        limit: sub.day_premium_limit,
+        resetAt: null,
+      });
+    return w;
+  });
+  let subSpend = $derived(
+    sub && sub.month_spend_limit_usd != null
+      ? {
+          used: sub.month_spend_usd,
+          limit: sub.month_spend_limit_usd,
+          pct:
+            sub.month_spend_limit_usd > 0
+              ? Math.min(
+                  100,
+                  Math.max(
+                    0,
+                    (sub.month_spend_usd / sub.month_spend_limit_usd) * 100,
+                  ),
+                )
+              : 0,
+        }
+      : null,
+  );
   // ----- Legacy quota derived (fallback) -----
   let pct = $derived(
     Math.min(
@@ -247,7 +341,152 @@
       </div>
     {/if}
   </div>
-{:else if quota}
+{/if}
+{#if fwWindows.length > 0 || subWindows.length > 0 || subSpend}
+  <div
+    class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <p
+          class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)] truncate"
+        >
+          {$tr("Free session pools")}
+        </p>
+      </div>
+      {#if subSpend}
+        <span
+          class="fp-num text-xs font-medium text-[var(--fp-text)] tabular-nums"
+          >{$tr("Spend")}
+          <span class="text-[var(--fp-accent)]">${fmtNum(subSpend.used)}</span>
+          / ${fmtNum(subSpend.limit)}</span
+        >
+      {/if}
+    </div>
+    <div class="space-y-3">
+      {#each fwWindows as item (item.key)}
+        {@const wp = fwPct(item.used, item.limit)}
+        {@const wc = pctColor(wp)}
+        {@const wr = fmtRel(item.resetAt, now)}
+        <div
+          class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)]"
+              >{item.label}</span
+            >
+            <span class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
+              {$tr("Resets in")}
+              {wr} — {item.resetAt ?? "—"}
+            </span>
+          </div>
+          <div
+            class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.round(wp)}
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="{item.label} {Math.round(wp)}% used"
+          >
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              style="width: {wp}%; background: {wc}"
+            ></div>
+          </div>
+          <div
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          >
+            <span class="fp-num text-[var(--fp-muted)] tabular-nums">
+              {$tr("Used")}
+              <span class="text-[var(--fp-text)] font-medium"
+                >{fmtNum(item.used)}</span
+              >
+              / {fmtNum(item.limit)} • {Math.round(wp * 100) / 100}%
+            </span>
+          </div>
+        </div>
+      {/each}
+      {#each subWindows as item (item.key)}
+        {@const wp = fwPct(item.used, item.limit)}
+        {@const wc = pctColor(wp)}
+        {@const wr = fmtRel(item.resetAt, now)}
+        <div
+          class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)]"
+              >{$tr("Subscription")} {item.label}</span
+            >
+            <span class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
+              {$tr("Resets in")}
+              {wr}
+            </span>
+          </div>
+          <div
+            class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.round(wp)}
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="{item.label} {Math.round(wp)}% used"
+          >
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              style="width: {wp}%; background: {wc}"
+            ></div>
+          </div>
+          <div
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          >
+            <span class="fp-num text-[var(--fp-muted)] tabular-nums">
+              {$tr("Used")}
+              <span class="text-[var(--fp-text)] font-medium"
+                >{fmtNum(item.used)}</span
+              >
+              / {fmtNum(item.limit)} • {Math.round(wp * 100) / 100}%
+            </span>
+          </div>
+        </div>
+      {/each}
+      {#if subSpend}
+        <div
+          class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
+        >
+          <div
+            class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.round(subSpend.pct)}
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="{$tr('Monthly spend')} {Math.round(subSpend.pct)}% used"
+          >
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              style="width: {subSpend.pct}%; background: {pctColor(
+                subSpend.pct,
+              )}"
+            ></div>
+          </div>
+          <div
+            class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+          >
+            <span class="fp-num text-[var(--fp-muted)] tabular-nums">
+              {$tr("Monthly spend")}
+              <span class="text-[var(--fp-text)] font-medium"
+                >${fmtNum(subSpend.used)}</span
+              >
+              / ${fmtNum(subSpend.limit)} • {Math.round(subSpend.pct * 100) /
+                100}%
+            </span>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+{#if quota && !hasFreebucks && fwWindows.length === 0 && subWindows.length === 0 && !subSpend}
   <div
     class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
   >

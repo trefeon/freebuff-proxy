@@ -96,7 +96,11 @@
     return "default";
   }
 
-  // Live session countdown (freebuff TUI parity).
+  // Live session countdown (freebuff TUI parity). Anchor to the server's
+  // ABSOLUTE expiry when the snapshot carries one (issue: a relative
+  // `now + remaining_seconds` re-anchors on every poll and freezes the
+  // timer at the admission value); fall back to the relative form for
+  // older backends.
   let nowTick = $state(Date.now());
   $effect(() => {
     const t = setInterval(() => {
@@ -105,7 +109,9 @@
     return () => clearInterval(t);
   });
   const sessionEndsAtMs = $derived(
-    Date.now() + (token.session_remaining_seconds || 0) * 1000,
+    token.session_expires_at
+      ? new Date(token.session_expires_at).getTime()
+      : Date.now() + (token.session_remaining_seconds || 0) * 1000,
   );
   const sessionRemaining = $derived(
     Math.max(0, Math.floor((sessionEndsAtMs - nowTick) / 1000)),
