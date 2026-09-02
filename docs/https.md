@@ -34,6 +34,20 @@ Caddy will:
 
 Access your dashboard at `https://proxy.yourdomain.com/admin`.
 
+### No Domain? Use Magic DNS (`sslip.io` / `nip.io`)
+If you don't own a domain name, you can still get a **100% genuine Let's Encrypt SSL certificate (green padlock)** using free wildcard DNS services:
+
+1. In your `.env`, set `DOMAIN=<your-vps-ip>.sslip.io`:
+   ```ini
+   DOMAIN=172.188.64.104.sslip.io
+   ACME_EMAIL=admin@example.com
+   ```
+2. Start with Caddy:
+   ```bash
+   docker compose --profile https up -d
+   ```
+`sslip.io` automatically resolves `<ip>.sslip.io` to `<ip>`, allowing Let's Encrypt to verify domain ownership via port 80 and issue a real SSL certificate without buying or configuring any domain.
+
 ---
 
 ## Option 2: Cloudflare Tunnel (No Open Ports or Dynamic IP)
