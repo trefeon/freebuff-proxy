@@ -28,7 +28,7 @@
   let loading = $state(true);
   let error = $state("");
   let manualRefresh = $state(false);
-  let viewMode = $state("table"); // 'table' | 'console'
+  let viewMode = $state("console"); // 'table' | 'console' — console (inference /v1 traffic) is the default (issue #322 follow-up)
   let clearedBefore = $state(0);
   let copiedConsole = $state(false);
   let consoleEl = $state(null);
@@ -47,9 +47,36 @@
     return CIRCLE_EMOJIS[h % CIRCLE_EMOJIS.length];
   }
 
+  // Console is the specialized inference-traffic view: ONLY /v1 lines.
+  // Access entries carry fields.path, so /v1 access lines self-identify;
+  // sibling pipeline lines (routing/done/failed) join via req_id against
+  // the /v1 access entries seen in the same batch. Pathless lines without
+  // a req_id keep legacy behavior (rare pipeline logs with no routing
+  // context). Admin (/admin/*) lines never enter the console — use Table.
   let requestLogs = $derived.by(() => {
     const raw = data?.entries || [];
     const chrono = [...raw].reverse();
+    // Pass 1: req_ids that belong to /v1 access entries.
+    const v1ReqIds = new Set();
+    for (let i = 0; i < chrono.length; i++) {
+      const e = chrono[i];
+      if ((e.message || "") !== "access") continue;
+      const parsed = parseLogFields(e.fields);
+      let path = "";
+      let reqId = "";
+      for (let j = 0; j < parsed.length; j++) {
+        if (parsed[j].key === "path") path = String(parsed[j].value || "");
+        if (parsed[j].key === "req_id" || parsed[j].key === "client_request_id")
+          reqId = parsed[j].value;
+      }
+      if (path.includes("/v1/") && reqId) v1ReqIds.add(reqId);
+    }
+    const isV1Line = (msg, path, reqId) => {
+      if (path && !path.includes("/v1/")) return false;
+      if (path.includes("/v1/")) return true;
+      if (reqId) return v1ReqIds.has(reqId);
+      return true;
+    };
     const lines = [];
 
     for (let i = 0; i < chrono.length; i++) {
@@ -65,15 +92,17 @@
       }
 
       const reqId = fields.req_id || fields.client_request_id || "";
+      const pathStr = String(fields.path || "");
       const circle = circleFor(reqId || fields.token || fields.model);
       const msg = e.message || "";
 
       if (
-        msg.includes("request") ||
-        msg.includes("routing") ||
-        (msg === "access" &&
-          fields.method === "POST" &&
-          String(fields.path || "").includes("/v1/"))
+        (msg.includes("request") ||
+          msg.includes("routing") ||
+          (msg === "access" &&
+            fields.method === "POST" &&
+            pathStr.includes("/v1/"))) &&
+        isV1Line(msg, pathStr, reqId)
       ) {
         const model = fields.model || "chat";
         const agent = fields.served_model
@@ -101,7 +130,10 @@
           text: lineText,
           type: "req",
         });
-      } else if (msg.includes("done") || msg === "chat trace") {
+      } else if (
+        (msg.includes("done") || msg === "chat trace") &&
+        isV1Line(msg, pathStr, reqId)
+      ) {
         const ms = fields.ms || fields.total_ms || "0";
         const ttft = fields.upstream_ttfb_ms || fields.ttft_ms || "";
         const ttftPart = ttft ? ` · TTFT ${ttft}ms` : "";
@@ -126,8 +158,9 @@
           type: "done",
         });
       } else if (
-        msg.includes("failed") ||
-        (msg === "access" && Number(fields.status) >= 400)
+        (msg.includes("failed") ||
+          (msg === "access" && Number(fields.status) >= 400)) &&
+        isV1Line(msg, pathStr, reqId)
       ) {
         const status = fields.status || "";
         const err =
@@ -327,7 +360,7 @@
             <span class="led {requestLogs.length > 0 ? 'led-good' : 'led-idle'}"
             ></span>
             <span class="font-mono text-xs text-[var(--fp-muted)]"
-              >{requestLogs.length} {$tr("request events")}</span
+              >{requestLogs.length} {$tr("request events")} · /v1 only</span
             >
           </div>
           <div class="flex items-center gap-2">

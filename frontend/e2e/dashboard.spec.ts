@@ -360,7 +360,10 @@ test.describe("dashboard hermetic mocks", () => {
     await page.goto("http://127.0.0.1:4173/admin/#logs");
     await expect(page.getByRole("heading", { name: "Logs" })).toBeVisible();
 
-    // Filter by msg substring via input #log-msg
+    // Console (/v1 inference traffic) is the default view; table filtering
+    // and pagination live in the Table view, so switch there first.
+    await page.getByRole("button", { name: "Table" }).click();
+
     const msgInput = page.locator("#log-msg");
     await expect(msgInput).toBeVisible();
     await msgInput.fill("upstream timeout");
@@ -497,8 +500,11 @@ test.describe("dashboard hermetic mocks", () => {
       page.locator('section[aria-label="At-risk tokens"]'),
     ).toBeVisible();
 
-    // Navigate to Logs and check filter labelling + live region
+    // Navigate to Logs and check filter labelling + live region. Console is
+    // the default view; the labelled filter inputs and entry text live in
+    // the Table view.
     await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await page.getByRole("button", { name: "Table" }).click();
     await page
       .waitForResponse((r) => r.url().includes("/admin/api/logs"), {
         timeout: 5000,
@@ -506,7 +512,6 @@ test.describe("dashboard hermetic mocks", () => {
       .catch(() => {});
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
-    // Log entries list should be present and aria labelling via table caption / sr-only
     await expect(
       page
         .getByText("request 0")
