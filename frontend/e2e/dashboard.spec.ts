@@ -30,7 +30,9 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("Pool total")).toBeVisible();
     // At-risk cards moved to Tokens page (Account # labels, 1-based): overview
     // must not render the risk section anymore.
-    await expect(page.locator('section[aria-label="At-risk tokens"]')).toHaveCount(0);
+    await expect(
+      page.locator('section[aria-label="At-risk tokens"]'),
+    ).toHaveCount(0);
 
     // Verify polling: the hot poll hits ?view=live within 17s (15s interval +
     // buffer) while the once-per-mount full fetch carries the static fields
@@ -184,8 +186,12 @@ test.describe("dashboard hermetic mocks", () => {
     ).toBeVisible();
 
     // Per-account cards: one per pooled account (1-based Account # labels)
-    await expect(page.getByRole("heading", { name: "Account #1" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Account #5" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #5" }),
+    ).toBeVisible();
     // Account 1 fixture carries premium_quota → Premium pool bar renders
     await expect(page.getByText("Premium pool").first()).toBeVisible();
     await expect(page.getByText("4/day pacific_day")).toBeVisible();
@@ -234,7 +240,9 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByRole("heading", { name: "Quota Tracker", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Account #1" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
     // Stale note renders, and the restored rows render with it (no empty
     // state for a token that carries last-seen quota).
     await expect(page.getByText("before restart").first()).toBeVisible();
@@ -549,7 +557,9 @@ test.describe("dashboard hermetic mocks", () => {
 
     // Models fixture has 6 rows
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByText("deepseek/deepseek-v4-flash").first()).toBeVisible();
+    await expect(
+      page.getByText("deepseek/deepseek-v4-flash").first(),
+    ).toBeVisible();
     await expect(page.getByText("upstage/solar-pro4").first()).toBeVisible();
     await expect(page.getByText("z-ai/glm-5.3-flash").first()).toBeVisible();
     // Count rows: header + 6 data rows
@@ -635,7 +645,9 @@ test.describe("dashboard hermetic mocks", () => {
     await overviewResp;
     // Overview loading skeleton used aria-live="polite" and aria-busy="true"
     // Risk section moved to Tokens page: overview must not render it, Tokens must.
-    await expect(page.locator('section[aria-label="At-risk tokens"]')).toHaveCount(0);
+    await expect(
+      page.locator('section[aria-label="At-risk tokens"]'),
+    ).toHaveCount(0);
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
     await expect(
       page.locator('section[aria-label="At-risk tokens"]'),

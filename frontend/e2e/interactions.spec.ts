@@ -114,13 +114,13 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const last = rows.filter({ hasText: "Account #3" });
 
     // Boundary states: nothing above the first account, nothing below the last.
-    await expect(
-      first.getByRole("button", { name: "Move Up" }),
-    ).toBeDisabled();
+    await expect(first.getByRole("button", { name: "Move Up" })).toBeDisabled();
     await expect(
       first.getByRole("button", { name: "Move Down" }),
     ).toBeEnabled();
-    await expect(last.getByRole("button", { name: "Move Down" })).toBeDisabled();
+    await expect(
+      last.getByRole("button", { name: "Move Down" }),
+    ).toBeDisabled();
     await expect(last.getByRole("button", { name: "Move Up" })).toBeEnabled();
 
     // Move Down on Account #1 swaps positions 0 and 1 (no confirm dialog).
@@ -132,9 +132,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     expect(swaps).toEqual([{ from: 0, to: 1 }]);
     await expect(page.getByText("Pool order updated.")).toBeVisible();
     // The second account's email now leads the table.
-    await expect(
-      rows.first().getByText("acct1@example.com"),
-    ).toBeVisible();
+    await expect(rows.first().getByText("acct1@example.com")).toBeVisible();
 
     // Move Up on the (new) second row posts the reverse swap.
     const refetch2 = page.waitForResponse(
@@ -194,7 +192,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(row.getByRole("button", { name: "Clear" })).toBeVisible();
 
     const unlockReq = page.waitForRequest(
-      (r) => r.method() === "POST" && r.url().includes("/admin/tokens/0/unlock"),
+      (r) =>
+        r.method() === "POST" && r.url().includes("/admin/tokens/0/unlock"),
     );
     const refetch = page.waitForResponse(
       (r) => r.url().includes("/admin/api/tokens") && r.status() === 200,
@@ -204,9 +203,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await unlockReq;
     await refetch;
     await expect(page.getByText("Cooldown cleared.")).toBeVisible();
-    await expect(
-      row.getByRole("button", { name: "Clear" }),
-    ).toHaveCount(0);
+    await expect(row.getByRole("button", { name: "Clear" })).toHaveCount(0);
   });
 
   // -------------------------------------------------------------------------
@@ -450,9 +447,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
   // -------------------------------------------------------------------------
   // 8. Logs table: rows-per-page select collapses pagination.
   // -------------------------------------------------------------------------
-  test("logs: rows-per-page select collapses pagination", async ({
-    page,
-  }) => {
+  test("logs: rows-per-page select collapses pagination", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
@@ -559,9 +554,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await metaResp;
-    await expect(
-      page.getByRole("heading", { name: "Security" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
 
     // Eye toggles reveal the password text.
     const eyes = page.getByRole("button", { name: "Show password" });
@@ -588,8 +581,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(submit).toBeEnabled();
     const changeReq = page.waitForRequest(
       (r) =>
-        r.method() === "POST" &&
-        r.url().includes("/admin/api/change-password"),
+        r.method() === "POST" && r.url().includes("/admin/api/change-password"),
     );
     await submit.click();
     const req = await changeReq;
@@ -613,7 +605,9 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await mockDashboard(page, f);
     await page.goto("http://127.0.0.1:4173/admin/setup");
     await expect(page.getByText("pool size")).toBeVisible();
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     const keyInput = page.locator("#setup-api-key");
     await expect(keyInput).toHaveValue("not-needed");
     const reset = page.getByRole("button", { name: "Reset" });
@@ -682,13 +676,9 @@ test.describe("operator interactions (hermetic mocks)", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#overview");
-    await expect(
-      page.getByRole("button", { name: "Retry" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
     await page.getByRole("button", { name: "Retry" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Overview" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
     await expect(page.getByText("Pool total")).toBeVisible();
   });
 });

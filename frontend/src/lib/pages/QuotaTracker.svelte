@@ -244,15 +244,20 @@
                   <!-- Mobile: stacked per-model entries (< md) — no horizontal scrolling -->
                   <ul
                     class="md:hidden flex flex-col gap-2.5"
-                    aria-label={$tr("Session quota by model for account {index}", {
-                      index: idx + 1,
-                    })}
+                    aria-label={$tr(
+                      "Session quota by model for account {index}",
+                      {
+                        index: idx + 1,
+                      },
+                    )}
                   >
                     {#each token.quota as q (q.model)}
                       <li
                         class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0"
                       >
-                        <div class="flex items-start justify-between gap-2 min-w-0">
+                        <div
+                          class="flex items-start justify-between gap-2 min-w-0"
+                        >
                           <code
                             class="fp-num text-xs break-all min-w-0 {q.near_limit
                               ? 'text-[#f5a623] font-medium'
@@ -262,11 +267,13 @@
                             class="fp-num text-xs shrink-0 rounded-full border border-[var(--fp-border)] px-2 py-0.5 {q.near_limit
                               ? 'text-[#f5a623]'
                               : 'text-[var(--fp-muted)]'}"
-                            aria-label={$tr("{recent} of {limit} sessions used", {
-                              recent: q.recent,
-                              limit: q.limit,
-                            })}
-                            >{q.recent}/{q.limit}</span
+                            aria-label={$tr(
+                              "{recent} of {limit} sessions used",
+                              {
+                                recent: q.recent,
+                                limit: q.limit,
+                              },
+                            )}>{q.recent}/{q.limit}</span
                           >
                         </div>
                         {#if q.has_bar}
@@ -306,8 +313,10 @@
                           <dd
                             class="fp-num text-right break-words min-w-0 {q.near_limit
                               ? 'text-[#f5a623]'
-                              : 'text-[var(--fp-dim)]'}">{q.period}</dd
+                              : 'text-[var(--fp-dim)]'}"
                           >
+                            {q.period}
+                          </dd>
                           <dt class="text-[var(--fp-dim)]">
                             {$tr("entitlement")}
                           </dt>
@@ -315,8 +324,9 @@
                             class="fp-num text-right break-words min-w-0 {q.near_limit
                               ? 'text-[#f5a623]'
                               : 'text-[var(--fp-dim)]'}"
-                            >{q.has_entitlement ? q.entitled : "—"}</dd
                           >
+                            {q.has_entitlement ? q.entitled : "—"}
+                          </dd>
                         </dl>
                       </li>
                     {/each}

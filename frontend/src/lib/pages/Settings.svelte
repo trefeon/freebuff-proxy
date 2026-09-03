@@ -330,7 +330,6 @@
     window.removeEventListener("beforeunload", handleBeforeUnload);
     window.removeEventListener("keydown", handleKeyDown);
   });
-
 </script>
 
 <div class="space-y-6 page-enter">

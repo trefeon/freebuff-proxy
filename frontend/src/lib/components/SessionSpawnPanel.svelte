@@ -79,7 +79,11 @@
       size="sm"
       disabled={actionPending}
       onclick={() =>
-        triggerAction("test", {}, $tr("Probe account #{idx}?", { idx: idx + 1 }))}
+        triggerAction(
+          "test",
+          {},
+          $tr("Probe account #{idx}?", { idx: idx + 1 }),
+        )}
     >
       <RefreshCw size={13} />
       <span>{$tr("Probe")}</span>

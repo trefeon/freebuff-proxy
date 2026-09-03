@@ -117,11 +117,19 @@
           value={logLevel}
           onchange={(e) => onField("LOG_LEVEL", e.currentTarget.value)}
         >
-          <option value="info" class="bg-[#141a25] text-[#e9edf3]">info (recommended)</option>
-          <option value="debug" class="bg-[#141a25] text-[#e9edf3]">debug</option>
+          <option value="info" class="bg-[#141a25] text-[#e9edf3]"
+            >info (recommended)</option
+          >
+          <option value="debug" class="bg-[#141a25] text-[#e9edf3]"
+            >debug</option
+          >
           <option value="warn" class="bg-[#141a25] text-[#e9edf3]">warn</option>
-          <option value="error" class="bg-[#141a25] text-[#e9edf3]">error</option>
-          <option value="trace" class="bg-[#141a25] text-[#e9edf3]">trace</option>
+          <option value="error" class="bg-[#141a25] text-[#e9edf3]"
+            >error</option
+          >
+          <option value="trace" class="bg-[#141a25] text-[#e9edf3]"
+            >trace</option
+          >
         </select>
       </div>
     </div>
@@ -161,7 +169,10 @@
             aria-label="BRIDGE_ENABLED"
             checked={bridgeEnabled}
             onchange={(e) =>
-              onField("BRIDGE_ENABLED", e.currentTarget.checked ? "true" : "false")}
+              onField(
+                "BRIDGE_ENABLED",
+                e.currentTarget.checked ? "true" : "false",
+              )}
             class="h-5 w-5 rounded border-[var(--fp-border-bright)] bg-[var(--fp-input-bg)] text-[var(--fp-accent)] accent-[var(--fp-accent)] cursor-pointer focus:ring-2 focus:ring-[var(--fp-accent)] focus:ring-offset-1 transition-transform active:scale-95"
           />
           <span class="text-xs text-[var(--fp-muted)] min-w-[52px]">

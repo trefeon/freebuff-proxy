@@ -310,9 +310,12 @@
             if (pollData.status === "completed") {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: $tr("Account #{idx} added to pool and saved to .env.", {
-                  idx: pollData.token_index + 1,
-                }),
+                message: $tr(
+                  "Account #{idx} added to pool and saved to .env.",
+                  {
+                    idx: pollData.token_index + 1,
+                  },
+                ),
                 type: "success",
               };
               oauthStarting = false;

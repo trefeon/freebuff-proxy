@@ -160,7 +160,6 @@
     data?.tokens?.reduce((s, t) => s + (t.requests || 0), 0) ?? 0,
   );
 
-
   // Freebucks: per-token daily/weekly/monthly + balance + bindingWindow (issue #232)
   let hasFreebucks = $derived((data?.tokens ?? []).some((t) => t.freebucks));
   let freebucksTokens = $derived(

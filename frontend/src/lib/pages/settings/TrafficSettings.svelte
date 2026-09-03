@@ -122,7 +122,10 @@
             aria-label="RATE_LIMIT_FAILOVER"
             checked={rateLimitFailover}
             onchange={(e) =>
-              onField("RATE_LIMIT_FAILOVER", e.currentTarget.checked ? "true" : "false")}
+              onField(
+                "RATE_LIMIT_FAILOVER",
+                e.currentTarget.checked ? "true" : "false",
+              )}
             class="h-5 w-5 rounded border-[var(--fp-border-bright)] bg-[var(--fp-input-bg)] text-[var(--fp-accent)] accent-[var(--fp-accent)] cursor-pointer focus:ring-2 focus:ring-[var(--fp-accent)] focus:ring-offset-1 transition-transform active:scale-95"
           />
           <span class="text-xs text-[var(--fp-muted)] min-w-[52px]">

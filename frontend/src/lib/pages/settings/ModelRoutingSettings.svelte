@@ -18,8 +18,8 @@
   let reasoningInContent = $derived(
     Boolean(
       formValues.REASONING_IN_CONTENT &&
-        formValues.REASONING_IN_CONTENT !== "false" &&
-        formValues.REASONING_IN_CONTENT !== "off",
+      formValues.REASONING_IN_CONTENT !== "false" &&
+      formValues.REASONING_IN_CONTENT !== "off",
     ),
   );
   let modelLocks = $derived(formValues.MODEL_LOCKS ?? "");
@@ -159,7 +159,10 @@
             aria-label="REASONING_IN_CONTENT"
             checked={reasoningInContent}
             onchange={(e) =>
-              onField("REASONING_IN_CONTENT", e.currentTarget.checked ? "true" : "")}
+              onField(
+                "REASONING_IN_CONTENT",
+                e.currentTarget.checked ? "true" : "",
+              )}
             class="h-5 w-5 rounded border-[var(--fp-border-bright)] bg-[var(--fp-input-bg)] text-[var(--fp-accent)] accent-[var(--fp-accent)] cursor-pointer focus:ring-2 focus:ring-[var(--fp-accent)] focus:ring-offset-1 transition-transform active:scale-95"
           />
           <span class="text-xs text-[var(--fp-muted)] min-w-[52px]">

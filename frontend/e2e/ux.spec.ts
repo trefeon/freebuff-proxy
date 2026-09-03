@@ -337,7 +337,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
-    const row0 = page.locator("table tbody tr").filter({ hasText: "Account #1" });
+    const row0 = page
+      .locator("table tbody tr")
+      .filter({ hasText: "Account #1" });
     await expect(page.locator("table tbody tr")).toHaveCount(2);
     await expect(row0.getByRole("button", { name: "Lock" })).toBeVisible();
 
@@ -544,7 +546,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toBeVisible();
 
     // --- lock token 1 (POST /admin/tokens/1/lock) ---
-    const row1 = page.locator("table tbody tr").filter({ hasText: "Account #2" });
+    const row1 = page
+      .locator("table tbody tr")
+      .filter({ hasText: "Account #2" });
     const lockReq = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/tokens/1/lock"),
     );
@@ -553,7 +557,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await lockReq;
 
     // --- remove token 0 (POST /admin/tokens/remove) ---
-    const row0 = page.locator("table tbody tr").filter({ hasText: "Account #1" });
+    const row0 = page
+      .locator("table tbody tr")
+      .filter({ hasText: "Account #1" });
     const removeReq = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/tokens/remove"),
     );
@@ -713,8 +719,12 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toBeVisible();
 
     // Accounts are pooled, so per-account cards render (not the empty pool state).
-    await expect(page.getByRole("heading", { name: "Account #1" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Account #2" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #2" }),
+    ).toBeVisible();
     await expect(page.getByText("No tokens in pool")).toHaveCount(0);
 
     // No quota data yet: the per-token hint renders for every pooled token.

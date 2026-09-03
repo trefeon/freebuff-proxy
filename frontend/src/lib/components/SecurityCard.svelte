@@ -55,7 +55,6 @@
     return true;
   });
 
-
   async function handleSubmit(e) {
     e.preventDefault();
     errorMsg = "";
