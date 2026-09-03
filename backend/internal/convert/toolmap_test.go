@@ -169,3 +169,108 @@ func TestToolMapperCounts(t *testing.T) {
 		t.Error("garbage body counts nonzero")
 	}
 }
+
+// TestAllHarnessToolsBidirectionalMapping verifies that every tool from all 12
+// harnesses in reference/harnesses renames to an official signature tool for upstream
+// and restores cleanly back to the client's original casing/name downstream.
+func TestAllHarnessToolsBidirectionalMapping(t *testing.T) {
+	testCases := []struct {
+		harness      string
+		clientTool   string
+		wantOfficial string
+	}{
+		// Qwen-Code
+		{"Qwen-Code", "run_shell_command", "run_terminal_command"},
+		{"Qwen-Code", "grep_search", "code_search"},
+		{"Qwen-Code", "todo_write", "write_todos"},
+		{"Qwen-Code", "web_fetch", "read_url"},
+		// Goose
+		{"Goose", "developer__shell", "run_terminal_command"},
+		{"Goose", "developer__bash", "run_terminal_command"},
+		{"Goose", "developer__text_editor", "str_replace"},
+		{"Goose", "developer__read", "read_files"},
+		{"Goose", "developer__write", "write_file"},
+		{"Goose", "developer__edit", "str_replace"},
+		{"Goose", "computer__execute", "run_terminal_command"},
+		// Continue (camelCase client tools)
+		{"Continue", "readFile", "read_files"},
+		{"Continue", "editFile", "str_replace"},
+		{"Continue", "createNewFile", "write_file"},
+		{"Continue", "runTerminalCommand", "run_terminal_command"},
+		{"Continue", "grepSearch", "code_search"},
+		{"Continue", "globSearch", "glob"},
+		{"Continue", "fetchUrlContent", "read_url"},
+		{"Continue", "searchWeb", "web_search"},
+		{"Continue", "viewSubdirectory", "list_directory"},
+		{"Continue", "singleFindAndReplace", "str_replace"},
+		// Roo-Code / Cline
+		{"Roo-Code", "apply_diff", "apply_patch"},
+		{"Roo-Code", "edit_file", "str_replace"},
+		{"Roo-Code", "search_replace", "str_replace"},
+		{"Roo-Code", "search_and_replace", "str_replace"},
+		{"Roo-Code", "codebase_search", "code_search"},
+		{"Roo-Code", "update_todo_list", "write_todos"},
+		{"Roo-Code", "read_command_output", "run_terminal_command"},
+		{"Cline", "editor", "str_replace"},
+		{"Cline", "fetch_web", "read_url"},
+		{"Cline", "search", "code_search"},
+		// Aider
+		{"Aider", "replace_lines", "str_replace"},
+		// Codex
+		{"Codex", "exec_command", "run_terminal_command"},
+		{"Codex", "exec", "run_terminal_command"},
+		// Pi / OMP
+		{"Pi", "powershell", "run_terminal_command"},
+		{"Pi", "find", "find_files"},
+		{"Pi", "edit-diff", "apply_patch"},
+		// Kilocode / OpenCode
+		{"Kilocode", "execute_bash", "run_terminal_command"},
+		{"Kilocode", "fuzzy_search", "code_search"},
+		{"Kilocode", "list_dir", "list_directory"},
+		{"Kilocode", "websearch", "web_search"},
+		{"Kilocode", "webfetch", "read_url"},
+		// Gemini-CLI
+		{"Gemini-CLI", "read_many_files", "read_files"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.harness+"/"+tc.clientTool, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{
+				"model":    "m",
+				"messages": []any{map[string]any{"role": "user", "content": "hi"}},
+				"tools": []any{
+					map[string]any{
+						"type": "function",
+						"function": map[string]any{
+							"name":       tc.clientTool,
+							"parameters": map[string]any{"type": "object"},
+						},
+					},
+				},
+			})
+
+			norm, mapper, err := NormalizeRequestMapped(body, "")
+			if err != nil {
+				t.Fatalf("NormalizeRequestMapped failed: %v", err)
+			}
+
+			var parsed map[string]any
+			if err := json.Unmarshal(norm, &parsed); err != nil {
+				t.Fatalf("unmarshal normalized failed: %v", err)
+			}
+
+			tools := parsed["tools"].([]any)
+			fn := tools[0].(map[string]any)["function"].(map[string]any)
+			gotOfficial := fn["name"].(string)
+			if gotOfficial != tc.wantOfficial {
+				t.Errorf("normalized tool name = %q, want %q", gotOfficial, tc.wantOfficial)
+			}
+
+			// Downstream restoration must restore the client's exact name
+			restored := mapper.RestoreName(gotOfficial)
+			if restored != tc.clientTool {
+				t.Errorf("RestoreName(%q) = %q, want %q", gotOfficial, restored, tc.clientTool)
+			}
+		})
+	}
+}

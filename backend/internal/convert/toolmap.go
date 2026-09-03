@@ -47,20 +47,76 @@ var clientToOfficial = map[string]string{
 	"todowrite": "write_todos",
 
 	// Cline / Roo Code
-	"read_file":       "read_files",
-	"write_to_file":   "write_file",
-	"replace_in_file": "str_replace",
-	"execute_command": "run_terminal_command",
-	"list_files":      "list_directory",
-	"search_files":    "code_search",
+	"read_file":            "read_files",
+	"write_to_file":        "write_file",
+	"replace_in_file":      "str_replace",
+	"execute_command":      "run_terminal_command",
+	"list_files":           "list_directory",
+	"search_files":         "code_search",
+	"apply_diff":           "apply_patch",
+	"edit_file":            "str_replace",
+	"search_replace":       "str_replace",
+	"search_and_replace":   "str_replace",
+	"codebase_search":      "code_search",
+	"update_todo_list":     "write_todos",
+	"read_command_output":  "run_terminal_command",
+	"editor":               "str_replace",
+	"fetch_web":            "read_url",
+	"search":               "code_search",
 
 	// Codex / OpenAI harnesses
 	"shell":          "run_terminal_command",
 	"local_shell":    "run_terminal_command",
 	"container_exec": "run_terminal_command",
+	"exec_command":   "run_terminal_command",
+	"exec":           "run_terminal_command",
 
-	// Aider / misc
-	"command": "run_terminal_command",
+	// Aider
+	"command":       "run_terminal_command",
+	"replace_lines": "str_replace",
+
+	// Qwen-Code
+	"run_shell_command": "run_terminal_command",
+	"grep_search":       "code_search",
+	"todo_write":        "write_todos",
+	"web_fetch":         "read_url",
+	"save_memory":       "write_todos",
+
+	// Goose
+	"developer__shell":       "run_terminal_command",
+	"developer__bash":        "run_terminal_command",
+	"developer__text_editor": "str_replace",
+	"developer__read":        "read_files",
+	"developer__write":       "write_file",
+	"developer__edit":        "str_replace",
+	"computer__execute":      "run_terminal_command",
+
+	// Continue (keys are matched lowercase)
+	"readfile":             "read_files",
+	"editfile":             "str_replace",
+	"createnewfile":        "write_file",
+	"runterminalcommand":   "run_terminal_command",
+	"grepsearch":           "code_search",
+	"globsearch":           "glob",
+	"fetchurlcontent":      "read_url",
+	"searchweb":            "web_search",
+	"viewsubdirectory":     "list_directory",
+	"singlefindandreplace": "str_replace",
+
+	// Pi / Oh My Pi (OMP)
+	"powershell": "run_terminal_command",
+	"find":       "find_files",
+	"edit-diff":  "apply_patch",
+
+	// Kilocode / OpenCode
+	"execute_bash": "run_terminal_command",
+	"fuzzy_search": "code_search",
+	"list_dir":     "list_directory",
+	"websearch":    "web_search",
+	"webfetch":     "read_url",
+
+	// Gemini-CLI
+	"read_many_files": "read_files",
 }
 
 // officialTools is the set of official codebuff signature tool names a
