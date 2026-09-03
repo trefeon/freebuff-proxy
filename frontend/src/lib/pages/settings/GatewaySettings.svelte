@@ -113,15 +113,15 @@
       <div class="shrink-0 w-full sm:w-48">
         <select
           aria-label="LOG_LEVEL"
-          class="fp-input fp-select w-full !text-xs !h-9 !pl-3 !pr-8 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none"
+          class="fp-input w-full !text-xs !h-9 !pl-3 !pr-8 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none"
           value={logLevel}
           onchange={(e) => onField("LOG_LEVEL", e.currentTarget.value)}
         >
-          <option value="info">info (recommended)</option>
-          <option value="debug">debug</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-          <option value="trace">trace</option>
+          <option value="info" class="bg-[#141a25] text-[#e9edf3]">info (recommended)</option>
+          <option value="debug" class="bg-[#141a25] text-[#e9edf3]">debug</option>
+          <option value="warn" class="bg-[#141a25] text-[#e9edf3]">warn</option>
+          <option value="error" class="bg-[#141a25] text-[#e9edf3]">error</option>
+          <option value="trace" class="bg-[#141a25] text-[#e9edf3]">trace</option>
         </select>
       </div>
     </div>
