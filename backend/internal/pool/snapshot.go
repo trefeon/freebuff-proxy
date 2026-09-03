@@ -198,6 +198,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			AccessTier:              ss.AccessTier,
 			SessionActiveUsersForIP: ss.ActiveUsersForIP,
 			QuotaByModel:            ss.QuotaByModel,
+			QuotaStale:              ss.QuotaStale,
+			QuotaSavedAt:            ss.QuotaSavedAt,
 			PremiumQuota:            premium,
 			Entitlement:             ss.Entitlement,
 			GlmPromo:                ss.GlmPromo,

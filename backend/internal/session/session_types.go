@@ -43,6 +43,11 @@ type SessionSnapshot struct {
 	// upstream wire nests entitlement inside each rate-limit entry.
 	QuotaByModel map[string]QuotaSnapshot
 	Entitlement  map[string]float64
+	// QuotaStale reports the quota map was restored from the on-disk entry
+	// after a restart (no live admission yet this process); QuotaSavedAt is
+	// when that entry was last polled. The dashboard labels it last-seen.
+	QuotaStale   bool
+	QuotaSavedAt time.Time
 	// GlmPromo carries the raw upstream glmPromo block ({dailySessions,
 	// endsAt}) from the last admission/poll (issue #178); "" when absent.
 	// Kept as a string so callers render the shape without the upstream

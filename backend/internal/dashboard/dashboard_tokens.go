@@ -23,13 +23,17 @@ type tokensData struct {
 
 type tokenDetail struct {
 	tokenCard
-	SessionInstance         string                     `json:"session_instance"`
-	SessionModel            string                     `json:"session_model"`
-	SessionRemainingSeconds int64                      `json:"session_remaining_seconds"`
-	SessionExpiresAt        string                     `json:"session_expires_at,omitempty"`
-	Quota                   []quotaRow                 `json:"quota"`
-	HasQuota                bool                       `json:"has_quota"`
-	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	SessionInstance         string     `json:"session_instance"`
+	SessionModel            string     `json:"session_model"`
+	SessionRemainingSeconds int64      `json:"session_remaining_seconds"`
+	SessionExpiresAt        string     `json:"session_expires_at,omitempty"`
+	Quota                   []quotaRow `json:"quota"`
+	HasQuota                bool       `json:"has_quota"`
+	// QuotaStale labels quota restored from the on-disk session entry
+	// after a restart; QuotaSavedAt is when it was last polled.
+	QuotaStale   bool                       `json:"quota_stale,omitempty"`
+	QuotaSavedAt string                     `json:"quota_saved_at,omitempty"`
+	PremiumQuota *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
 }
 
 type quotaRow struct {
@@ -72,6 +76,8 @@ func (d *Dashboard) tokensData() tokensData {
 			SessionModel:            t.SessionModel,
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
 			SessionExpiresAt:        utcAttr(t.SessionExpiresAt),
+			QuotaStale:              t.QuotaStale,
+			QuotaSavedAt:            utcAttr(t.QuotaSavedAt),
 			PremiumQuota:            t.PremiumQuota,
 		}
 		for model, q := range t.QuotaByModel {
@@ -186,6 +192,8 @@ type tokenLiveDetail struct {
 	SessionExpiresAt        string                     `json:"session_expires_at,omitempty"`
 	Quota                   []quotaRow                 `json:"quota"`
 	HasQuota                bool                       `json:"has_quota"`
+	QuotaStale              bool                       `json:"quota_stale,omitempty"`
+	QuotaSavedAt            string                     `json:"quota_saved_at,omitempty"`
 	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
 }
 
@@ -232,13 +240,13 @@ func (d *Dashboard) tokensLiveData() tokensLiveData {
 				FreeWindows:      c.FreeWindows,
 				Subscription:     c.Subscription,
 			},
-			SessionInstance:         tok.SessionInstance,
-			SessionModel:            tok.SessionModel,
-			SessionRemainingSeconds: tok.SessionRemainingSeconds,
-			SessionExpiresAt:        tok.SessionExpiresAt,
-			Quota:                   tok.Quota,
-			HasQuota:                tok.HasQuota,
-			PremiumQuota:            tok.PremiumQuota,
+			SessionInstance: tok.SessionInstance,
+			SessionModel:    tok.SessionModel,
+			Quota:           tok.Quota,
+			HasQuota:        tok.HasQuota,
+			QuotaStale:      tok.QuotaStale,
+			QuotaSavedAt:    tok.QuotaSavedAt,
+			PremiumQuota:    tok.PremiumQuota,
 		})
 	}
 	return live

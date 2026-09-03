@@ -112,6 +112,18 @@
               : ""}
           >
             <div class="flex flex-col gap-4">
+              {#if token.quota_stale}
+                <p class="text-xs text-[#f5a623]">
+                  {$tr(
+                    "Last seen {when} — before restart. Refreshes on the next request.",
+                    {
+                      when:
+                        formatLocalDate(token.quota_saved_at) ||
+                        token.quota_saved_at,
+                    },
+                  )}
+                </p>
+              {/if}
               {#if token.freebucks}
                 <PremiumQuotaBar
                   freebucks={token.freebucks}
