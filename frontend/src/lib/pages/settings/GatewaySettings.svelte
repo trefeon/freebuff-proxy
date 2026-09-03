@@ -113,7 +113,7 @@
       <div class="shrink-0 w-full sm:w-48">
         <select
           aria-label="LOG_LEVEL"
-          class="fp-select w-full !text-xs !py-1.5"
+          class="fp-input fp-select w-full !text-xs !h-9 !pl-3 !pr-8 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none"
           value={logLevel}
           onchange={(e) => onField("LOG_LEVEL", e.currentTarget.value)}
         >
