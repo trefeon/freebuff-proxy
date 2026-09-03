@@ -1,7 +1,18 @@
 <script>
-  import { Zap, RefreshCw, Check, ExternalLink } from "@lucide/svelte";
+  import {
+    Zap,
+    RefreshCw,
+    Check,
+    ExternalLink,
+    X,
+    Plus,
+    Lock,
+  } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import { fetchAPI, postForm } from "../api/client.js";
+  import { adminApi, adminActions } from "../api/paths.js";
+  import { refreshTokens } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
   import { onMount } from "svelte";
 
@@ -33,6 +44,90 @@
   onMount(() => {
     fetchModelOptions().then((rows) => (modelOptions = rows));
   });
+  // --- Per-token model-lock editor (MODEL_LOCKS slot syntax) ---
+  // Reads/writes the canonical .env through the existing config endpoints
+  // (same round-trip as Settings save) and hot-applies via pool.SetConfig —
+  // no new backend route, no restart.
+  let lockSaving = $state(false);
+  let lockError = $state("");
+  let pinSelect = $state("");
+
+  function parseLocks(envText) {
+    const locks = {};
+    const line = String(envText || "")
+      .split(/\r?\n/)
+      .find((l) => l.startsWith("MODEL_LOCKS="));
+    if (!line) return locks;
+    for (const part of line.slice("MODEL_LOCKS=".length).split(";")) {
+      const i = part.indexOf(":");
+      if (i < 0) continue;
+      const slot = Number(part.slice(0, i).trim());
+      const models = part
+        .slice(i + 1)
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean);
+      if (Number.isInteger(slot) && models.length) locks[slot] = models;
+    }
+    return locks;
+  }
+
+  function serializeLocks(locks) {
+    return Object.keys(locks)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map((slot) => `${slot}:${locks[slot].join(",")}`)
+      .join(";");
+  }
+
+  function patchEnvLocks(envText, slot, models) {
+    const locks = parseLocks(envText);
+    if (models.length) locks[slot] = models;
+    else delete locks[slot];
+    const value = serializeLocks(locks);
+    const lines = String(envText || "").split(/\r?\n/);
+    const at = lines.findIndex((l) => l.startsWith("MODEL_LOCKS="));
+    if (value === "") {
+      if (at >= 0) lines.splice(at, 1);
+    } else if (at >= 0) {
+      lines[at] = `MODEL_LOCKS=${value}`;
+    } else {
+      lines.push(`MODEL_LOCKS=${value}`);
+    }
+    return lines.join("\n");
+  }
+
+  async function saveLocks(models) {
+    const slot = token.index;
+    if (slot == null || lockSaving) return;
+    lockSaving = true;
+    lockError = "";
+    try {
+      const cfg = await fetchAPI(adminApi.config);
+      const next = patchEnvLocks(cfg?.env_content || "", slot, models);
+      const res = await postForm(adminActions.configSave, { content: next });
+      const json = await res.json();
+      if (!(res.ok && json?.ok)) {
+        throw new Error(json?.message || "Save rejected");
+      }
+      pinSelect = "";
+      await refreshTokens();
+    } catch (e) {
+      lockError = e?.message || String(e);
+    } finally {
+      lockSaving = false;
+    }
+  }
+
+  function pinModel(id) {
+    if (!id) return;
+    const cur = token.allowed_models?.length ? [...token.allowed_models] : [];
+    if (!cur.includes(id)) saveLocks([...cur, id]);
+  }
+
+  function unpinModel(id) {
+    saveLocks((token.allowed_models || []).filter((m) => m !== id));
+  }
 
   function fmtCountdown(totalSeconds) {
     const h = Math.floor(totalSeconds / 3600);
@@ -195,16 +290,41 @@
       {/if}
     </div>
   {/if}
-  {#if token.allowed_models?.length}
-    <div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
-      <div
-        class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-1"
+  <div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
+    <div
+      class="flex items-center justify-between gap-2 text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-1"
+    >
+      <span class="inline-flex items-center gap-1.5"
+        ><Lock size={12} />{$tr("Pinned models")}</span
       >
-        {$tr("Pinned models")}
-      </div>
+      {#if token.allowed_models?.length}
+        <button
+          type="button"
+          class="normal-case font-medium text-[var(--fp-accent)] hover:underline disabled:opacity-50"
+          disabled={lockSaving}
+          onclick={() => saveLocks([])}
+        >
+          {$tr("Clear pins")}
+        </button>
+      {/if}
+    </div>
+    {#if token.allowed_models?.length}
       <div class="flex flex-wrap gap-1.5">
         {#each token.allowed_models as m (m)}
-          <code class="fp-num text-xs text-[var(--fp-text)]">{m}</code>
+          <span
+            class="inline-flex items-center gap-1 rounded bg-[var(--fp-surface)] border border-[var(--fp-border)] px-1.5 py-0.5"
+          >
+            <code class="fp-num text-xs text-[var(--fp-text)]">{m}</code>
+            <button
+              type="button"
+              class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] disabled:opacity-50"
+              aria-label={$tr("Unpin {model}", { model: m })}
+              disabled={lockSaving}
+              onclick={() => unpinModel(m)}
+            >
+              <X size={12} />
+            </button>
+          </span>
         {/each}
       </div>
       {#if token.allowlist_skips > 0}
@@ -214,8 +334,40 @@
           })}
         </p>
       {/if}
+    {:else}
+      <p class="text-xs text-[var(--fp-dim)]">
+        {$tr(
+          "Unlocked — serves any model. Pin models to dedicate this account.",
+        )}
+      </p>
+    {/if}
+    <div class="mt-1.5 flex items-center gap-1.5">
+      <select
+        bind:value={pinSelect}
+        class="fp-input !text-xs !py-1 !pl-2 !h-7 flex-1 min-w-0"
+        aria-label={$tr("Pin a model to this token")}
+        disabled={lockSaving}
+      >
+        <option value="">{$tr("Pin a model…")}</option>
+        {#each modelOptions.filter((o) => !(token.allowed_models || []).includes(o.id)) as o (o.id)}
+          <option value={o.id}>{o.label}</option>
+        {/each}
+      </select>
+      <Button
+        variant="secondary"
+        size="sm"
+        class="!h-7 !text-xs !px-2.5"
+        disabled={lockSaving || !pinSelect}
+        onclick={() => pinModel(pinSelect)}
+      >
+        <Plus size={12} />
+        <span>{lockSaving ? $tr("Saving…") : $tr("Pin")}</span>
+      </Button>
     </div>
-  {/if}
+    {#if lockError}
+      <p class="mt-1 text-xs text-red-400">{lockError}</p>
+    {/if}
+  </div>
   {#if !devToolsEnabled && !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
     <p class="text-xs text-[var(--fp-dim)] italic">
       {$tr("No active session or run for this auth token.")}
