@@ -146,6 +146,11 @@ type TokenSnapshot struct {
 	// from the token's last admission (issue #178); "" when absent. The
 	// dashboard synthesizes the z-ai/glm-5.2 promo quota row from it.
 	GlmPromo string
+	// QuotaStale marks quota restored from the on-disk session entry after
+	// a restart (no live admission yet this process); QuotaSavedAt is when
+	// that entry was last polled. The dashboard labels it last-seen.
+	QuotaStale   bool
+	QuotaSavedAt time.Time
 	// Standing is the upstream account standing block (issue #96); nil until
 	// the session reports it.
 	Standing *upstream.SessionStanding

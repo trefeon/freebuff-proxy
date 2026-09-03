@@ -184,7 +184,12 @@ type Manager struct {
 // from the core cachedState + single-flight lifecycle so every new dashboard
 // field has a single home.
 type snapshotState struct {
-	savedQuota         map[string]upstream.ModelQuota
+	savedQuota map[string]upstream.ModelQuota
+	// savedQuotaStale marks quota restored from the on-disk entry after a
+	// restart (no live admission yet this process); savedQuotaAt is when
+	// that entry was last polled. Cleared by the first live quota commit.
+	savedQuotaStale    bool
+	savedQuotaAt       time.Time
 	savedRemainingMs   int64
 	savedReferral      *upstream.SessionReferral
 	savedGlmPromo      string
@@ -332,6 +337,9 @@ func (m *Manager) commit(cs *cachedState) {
 			m.snap.savedSubscription = m.state.subscription
 		}
 	}
+	// Freshness for the stale-mark clear below: captured BEFORE the
+	// restore, so a re-applied saved map does not pose as fresh quota.
+	freshQuota := cs != nil && cs.quotaByModel != nil
 	// Restore the previously-seen quota map when the new state omits
 	// re-admission or compact polls — issue #146).  This keeps the
 	// dashboard quota table visible between quota-carrying responses.
@@ -364,6 +372,12 @@ func (m *Manager) commit(cs *cachedState) {
 		cs.subscription = m.snap.savedSubscription
 	}
 	m.state = cs
+	// Fresh quota-carrying state clears the restart-restored stale mark;
+	// the tracker is live again (freshQuota was captured before the
+	// saved-map restore, so a re-applied map stays marked).
+	if freshQuota {
+		m.snap.savedQuotaStale = false
+	}
 	if m.store != nil && m.key != "" {
 		if cs == nil {
 			m.persistRemoveLocked(oldInstance)
@@ -581,12 +595,44 @@ func (m *Manager) EnsureSessionForModel(ctx context.Context, model string) (stri
 	return "", errors.New("session: not ready after repeated refreshes")
 }
 
+// restorePersistedQuotaLocked seeds the saved quota from the on-disk entry
+// when this process has never seen live quota (restart with lazy session
+// resume). Caller must hold m.mu. Store.Load is in-memory after the first
+// read, so the per-poll Snapshot cost is one map lookup until live data
+// arrives and the live commit clears the stale mark.
+func (m *Manager) restorePersistedQuotaLocked() {
+	if m.store == nil || m.key == "" || len(m.snap.savedQuota) > 0 {
+		return
+	}
+	cs := m.store.Load(m.key)
+	if cs == nil {
+		return
+	}
+	// quotaByModel/pollAt/glmPromo are unexported but reachable: same package.
+	if len(cs.quotaByModel) == 0 {
+		return
+	}
+	m.snap.savedQuota = cs.quotaByModel
+	if cs.glmPromo != "" && m.snap.savedGlmPromo == "" {
+		m.snap.savedGlmPromo = cs.glmPromo
+	}
+	m.snap.savedQuotaStale = true
+	m.snap.savedQuotaAt = cs.pollAt
+	if m.snap.savedQuotaAt.IsZero() {
+		m.snap.savedQuotaAt = time.Now()
+	}
+}
+
 // Snapshot returns a best-effort view of the cached session state. All
 // fields may be zero when no session has been created yet. Added for
 func (m *Manager) Snapshot() SessionSnapshot {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.state == nil {
+		// Restart with lazy session resume: no admission yet this process,
+		// so seed the last-seen quota from the on-disk entry (quota tracker
+		// stays populated instead of empty until the next request re-polls).
+		m.restorePersistedQuotaLocked()
 		var quota map[string]QuotaSnapshot
 		if len(m.snap.savedQuota) > 0 {
 			quota = make(map[string]QuotaSnapshot, len(m.snap.savedQuota))
@@ -606,6 +652,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		return SessionSnapshot{
 			Refreshing:   m.refreshing,
 			QuotaByModel: quota,
+			QuotaStale:   m.snap.savedQuotaStale && len(quota) > 0,
+			QuotaSavedAt: m.snap.savedQuotaAt,
 			GlmPromo:     m.snap.savedGlmPromo,
 			RemainingMs:  m.snap.savedRemainingMs,
 			Referral:     m.snap.savedReferral,
@@ -649,13 +697,18 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		ExpiresAt:          m.state.expiresAt,
 		GracePeriodEndsAt:  m.state.gracePeriodEndsAt,
 		QuotaByModel:       quota,
-		GlmPromo:           m.state.glmPromo,
-		Standing:           m.state.standing,
-		RemainingMs:        m.state.remainingMs,
-		Referral:           m.state.referral,
-		Freebucks:          m.state.freebucks,
-		FreeWindows:        m.state.freeWindows,
-		Subscription:       m.state.subscription,
+		// A quota-less compact commit re-applies the saved map (issue
+		// #146): when that map is restart-restored, it stays marked until
+		// genuinely fresh quota lands.
+		QuotaStale:   m.snap.savedQuotaStale && len(quota) > 0,
+		QuotaSavedAt: m.snap.savedQuotaAt,
+		GlmPromo:     m.state.glmPromo,
+		Standing:     m.state.standing,
+		RemainingMs:  m.state.remainingMs,
+		Referral:     m.state.referral,
+		Freebucks:    m.state.freebucks,
+		FreeWindows:  m.state.freeWindows,
+		Subscription: m.state.subscription,
 	}
 }
 
@@ -723,6 +776,8 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 	}
 	if len(st.RateLimitsByModel) > 0 {
 		m.snap.savedQuota = st.RateLimitsByModel
+		// Live probe contact clears the restart-restored stale mark.
+		m.snap.savedQuotaStale = false
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel
 		}

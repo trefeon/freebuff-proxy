@@ -161,6 +161,27 @@ test.describe("dashboard hermetic mocks", () => {
     expect(tokensCount).toBeGreaterThanOrEqual(2);
   });
 
+  test("Quota Tracker labels restart-restored quota as last-seen", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    // Simulate a post-restart snapshot: quota rows present but stale.
+    const staleTokens = JSON.parse(JSON.stringify(f.tokens));
+    staleTokens.tokens[0].quota_stale = true;
+    staleTokens.tokens[0].quota_saved_at = "2026-09-03T10:00:00Z";
+    await mockDashboard(page, f, { tokens: staleTokens });
+
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(
+      page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Token #0" })).toBeVisible();
+    // Stale note renders, and the restored rows render with it (no empty
+    // state for a token that carries last-seen quota).
+    await expect(page.getByText("before restart").first()).toBeVisible();
+    await expect(page.getByText("stealth/ox-alpha").first()).toBeVisible();
+  });
+
   test("Settings renders catalog groups and saves a toggled bool into the .env", async ({
     page,
   }) => {
