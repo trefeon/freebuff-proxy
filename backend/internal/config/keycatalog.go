@@ -257,13 +257,13 @@ var keyCatalog = []KeyDef{
 		Description: `Upstream API endpoint (codebuff.com is normalized to www.codebuff.com).`},
 
 	// ── security ─────────────────────────────────────────────────────────
-	{Key: "ADMIN_TOKEN", Group: GroupSecurity, Kind: "secret", Secret: true, Essential: true,
+	{Key: "ADMIN_TOKEN", Group: GroupSecurity, Kind: "secret", Secret: true, Hidden: true,
 		Default:     "123456",
-		Description: `Login password for the admin dashboard and the bearer token POST /admin/reload requires. Defaults to the factory password 123456 — rotate it; while the factory default is active, sensitive dashboard routes additionally require a loopback client.`},
+		Description: `Login password for the admin dashboard and the bearer token POST /admin/reload requires. Managed via the Security settings card.`},
 	{Key: "CORS_ALLOWED_ORIGIN", Group: GroupSecurity, Kind: "text", Hidden: true,
 		Default:     "*",
 		Description: `Access-Control-Allow-Origin for /v1/* responses.`},
-	{Key: "DASHBOARD_REQUIRE_LOGIN", Group: GroupSecurity, Kind: "bool", Essential: true,
+	{Key: "DASHBOARD_REQUIRE_LOGIN", Group: GroupSecurity, Kind: "bool", Hidden: true,
 		Default:     "true",
 		Description: `Enforce password authentication for the admin dashboard. When false, loopback clients access the dashboard without login (open mode). When true, dashboard requires password. Defaults to true.`},
 	{Key: "WEBHOOK_URL", Group: GroupSecurity, Kind: "text", Secret: true, RestartOnly: true, Hidden: true,

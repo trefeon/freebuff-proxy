@@ -676,8 +676,9 @@
     "default": "123456",
     "restart_only": false,
     "secret": true,
-    "essential": true,
-    "description": "Login password for the admin dashboard and the bearer token POST /admin/reload requires. Defaults to the factory password 123456 — rotate it; while the factory default is active, sensitive dashboard routes additionally require a loopback client."
+    "essential": false,
+    "hidden": true,
+    "description": "Login password for the admin dashboard and the bearer token POST /admin/reload requires. Managed via the Security settings card."
   },
   {
     "key": "CORS_ALLOWED_ORIGIN",
@@ -697,7 +698,8 @@
     "default": "true",
     "restart_only": false,
     "secret": false,
-    "essential": true,
+    "essential": false,
+    "hidden": true,
     "description": "Enforce password authentication for the admin dashboard. When false, loopback clients access the dashboard without login (open mode). When true, dashboard requires password. Defaults to true."
   },
   {

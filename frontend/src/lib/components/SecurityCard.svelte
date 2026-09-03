@@ -6,24 +6,18 @@
   import { postAPI, fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { tr } from "../i18n.js";
-  import { confirmAction } from "../stores/confirm.js";
   import { updateAuthState } from "../stores/session.js";
 
   /**
    * @prop {boolean} [isDefaultAdminToken]
-   * @prop {boolean} [requireLogin]
    * @prop {boolean} [hasPassword]
    * @prop {() => void} [onSuccess]
-   * @prop {(enabled: boolean) => void} [onRequireLoginChange]
    */
   let {
     isDefaultAdminToken = $bindable(false),
-    requireLogin = $bindable(true),
     hasPassword = $bindable(true),
     onSuccess,
-    onRequireLoginChange,
   } = $props();
-
   let currentPassword = $state("");
   let newPassword = $state("");
   let confirmPassword = $state("");
@@ -33,10 +27,8 @@
   let showConfirmPassword = $state(false);
 
   let submitting = $state(false);
-  let togglingRequireLogin = $state(false);
   let errorMsg = $state("");
   let successMsg = $state("");
-  let toggleMsg = $state("");
 
   onMount(async () => {
     try {
@@ -45,15 +37,11 @@
         if (data.is_default_admin_token !== undefined) {
           isDefaultAdminToken = Boolean(data.is_default_admin_token);
         }
-        if (data.require_login !== undefined) {
-          requireLogin = Boolean(data.require_login);
-        }
         if (data.has_password !== undefined) {
           hasPassword = Boolean(data.has_password);
         }
         updateAuthState({
           isDefaultAdminToken: Boolean(data.is_default_admin_token),
-          requireLogin: Boolean(data.require_login),
           hasPassword: Boolean(data.has_password),
         });
       }
@@ -67,54 +55,11 @@
     return true;
   });
 
-  async function handleToggleRequireLogin() {
-    if (togglingRequireLogin) return;
-    toggleMsg = "";
-    errorMsg = "";
-
-    const nextState = !requireLogin;
-
-    if (!nextState) {
-      // Disabling login requirement: ask confirmation
-      const confirmed = await confirmAction({
-        title: $tr("Disable Dashboard Login?"),
-        message: $tr(
-          "When login is disabled, the dashboard is open to anyone on loopback (local access) without authentication. Remote access will be blocked.",
-        ),
-        confirmText: $tr("Disable Login"),
-        tone: "warn",
-      });
-      if (!confirmed) return;
-    }
-
-    togglingRequireLogin = true;
-    try {
-      const res = await postAPI(adminApi.requireLogin, {
-        require_login: nextState,
-      });
-
-      if (res.ok) {
-        requireLogin = res.require_login ?? nextState;
-        toggleMsg = res.message || $tr("Dashboard login requirement updated.");
-        updateAuthState({ requireLogin });
-        onRequireLoginChange?.(requireLogin);
-      } else {
-        errorMsg = res.message || $tr("Failed to update login requirement.");
-      }
-    } catch (err) {
-      errorMsg =
-        err.message ||
-        $tr("Could not update login requirement. Check connection.");
-    } finally {
-      togglingRequireLogin = false;
-    }
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     errorMsg = "";
     successMsg = "";
-    toggleMsg = "";
 
     if (hasPassword && !currentPassword.trim()) {
       errorMsg = $tr("Please enter your current password.");
@@ -147,11 +92,9 @@
         confirmPassword = "";
         isDefaultAdminToken = false;
         hasPassword = true;
-        requireLogin = true;
         updateAuthState({
           isDefaultAdminToken: false,
           hasPassword: true,
-          requireLogin: true,
         });
         onSuccess?.();
       } else {
@@ -180,52 +123,8 @@
   </div>
 
   <div class="flex flex-col gap-4">
-    <!-- Require login Switch Row -->
-    <div class="flex items-start sm:items-center justify-between gap-4">
-      <div class="flex-1 min-w-0">
-        <p class="font-medium text-sm sm:text-base text-[var(--fp-text)]">
-          {$tr("Require login")}
-        </p>
-        <p class="text-xs sm:text-sm text-text-muted">
-          {$tr(
-            "When ON, dashboard requires password. When OFF, access without login.",
-          )}
-        </p>
-      </div>
-      <div class="flex items-center gap-3">
-        <!-- Switch Toggle -->
-        <button
-          type="button"
-          role="switch"
-          aria-checked={requireLogin}
-          disabled={togglingRequireLogin}
-          onclick={handleToggleRequireLogin}
-          aria-label={$tr("Toggle require login")}
-          class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fp-accent)] focus-visible:ring-offset-2 {requireLogin
-            ? 'bg-[var(--fp-accent)]'
-            : 'bg-[var(--fp-border-bright)]'} {togglingRequireLogin
-            ? 'opacity-50 cursor-not-allowed'
-            : ''}"
-        >
-          <span
-            aria-hidden="true"
-            class="pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition duration-200 ease-in-out {requireLogin
-              ? 'translate-x-5'
-              : 'translate-x-0'}"
-          ></span>
-        </button>
-      </div>
-    </div>
-
-    {#if toggleMsg}
-      <Alert tone="info">{toggleMsg}</Alert>
-    {/if}
-
     <!-- Password Change Form -->
-    <form
-      onsubmit={handleSubmit}
-      class="flex flex-col gap-4 pt-4 border-t border-border-subtle/50"
-    >
+    <form onsubmit={handleSubmit} class="flex flex-col gap-4">
       {#if hasPassword}
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
