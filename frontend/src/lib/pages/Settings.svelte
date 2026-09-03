@@ -1,15 +1,17 @@
 <script>
   import { onMount, onDestroy } from "svelte";
-  import { RefreshCw, Save, X } from "@lucide/svelte";
+  import { RefreshCw, Save, X, Info } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import Button from "../components/Button.svelte";
   import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import CopyButton from "../components/CopyButton.svelte";
-  import ConfigEditor from "./settings/ConfigEditor.svelte";
   import RawEditor from "./settings/RawEditor.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
+  import GatewaySettings from "./settings/GatewaySettings.svelte";
+  import TrafficSettings from "./settings/TrafficSettings.svelte";
+  import ModelRoutingSettings from "./settings/ModelRoutingSettings.svelte";
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
@@ -35,33 +37,7 @@
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
   let lastSavedTime = $state(null);
-  let reveal = $state({}); // secret key → revealed
 
-  // Fallback group order used only when the catalog is absent; the live
-  // catalog order (issue #291) is canonical whenever meta is present.
-  const FALLBACK_GROUP_ORDER = [
-    "general",
-    "pool",
-    "quota",
-    "upstream",
-    "security",
-  ];
-
-  // Minimalist settings filter & view modes
-  let searchQuery = $state("");
-  let viewMode = $state("essential"); // 'essential' | 'all'
-  let expandedGroups = $state.raw(new Set());
-
-  function isKeyEssential(entry) {
-    return Boolean(entry?.essential);
-  }
-  function toggleGroup(g) {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient copy, reassigned whole
-    const next = new Set(expandedGroups);
-    if (next.has(g)) next.delete(g);
-    else next.add(g);
-    expandedGroups = next;
-  }
   // ---------------------------------------------------------------------------
   // .env parsing / merging — shared contract in ../utils/env.js (issue #234):
   // line-replace, comments preserved for untouched lines.
@@ -206,52 +182,6 @@
     return n;
   });
 
-  // Group order from the server-emitted catalog (issue #291): entries appear
-  // in catalog order, so groups are ordered by first appearance. Only when the
-  // catalog is absent do we fall back to the documented order.
-  let groupOrder = $derived.by(() => {
-    const seen = [];
-    for (const e of meta) {
-      if (e.group && !seen.includes(e.group)) seen.push(e.group);
-    }
-    return seen.length ? seen : FALLBACK_GROUP_ORDER;
-  });
-
-  let groups = $derived.by(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return groupOrder
-      .map((g) => {
-        let entries = meta.filter((e) => e.group === g && !e.hidden);
-        if (q) {
-          entries = entries.filter(
-            (e) =>
-              e.key.toLowerCase().includes(q) ||
-              (e.description && e.description.toLowerCase().includes(q)),
-          );
-        }
-        if (!entries.length) return null;
-
-        const essential = entries.filter((e) => isKeyEssential(e));
-        const advanced = entries.filter((e) => !isKeyEssential(e));
-        const isExpanded =
-          viewMode === "all" || Boolean(q) || expandedGroups.has(g);
-        const displayed = isExpanded
-          ? entries
-          : essential.length
-            ? essential
-            : entries;
-
-        return {
-          name: g,
-          entries,
-          essential,
-          advanced,
-          isExpanded,
-          displayed,
-        };
-      })
-      .filter(Boolean);
-  });
   let lastSavedTimeStr = $derived(
     lastSavedTime ? formatTime(lastSavedTime) : "",
   );
@@ -401,23 +331,27 @@
     window.removeEventListener("keydown", handleKeyDown);
   });
 
-  function toggleReveal(key) {
-    reveal[key] = !reveal[key];
-  }
 </script>
 
 <div class="space-y-6 page-enter">
   <PageHeader
     title={$tr("Settings")}
     description={$tr(
-      "Runtime configuration — Save writes the .env file and reloads the running proxy.",
+      "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
     )}
   >
     {#snippet actions()}
-      <Button variant="ghost" onclick={fetchData}>
-        <RefreshCw size={15} />
-        {$tr("Refresh")}
-      </Button>
+      {#if dirty}
+        <Button variant="ghost" onclick={discard} disabled={saving}>
+          <X size={15} />
+          {$tr("Discard")}
+        </Button>
+      {:else}
+        <Button variant="ghost" onclick={fetchData}>
+          <RefreshCw size={15} />
+          {$tr("Refresh")}
+        </Button>
+      {/if}
       <Button
         variant="primary"
         onclick={saveConfig}
@@ -425,7 +359,7 @@
         loading={saving}
       >
         <Save size={15} />
-        {$tr("Save")}
+        {$tr("Save Changes")}
       </Button>
     {/snippet}
   </PageHeader>
@@ -484,7 +418,7 @@
         >
           <span
             >{$tr(
-              "{count} key(s) differ from the saved .env. Save to persist, or Discard to reset.",
+              "{count} setting(s) modified. Click Save Changes to apply them immediately.",
               { count: changedKeysCount },
             )}</span
           >
@@ -500,28 +434,29 @@
 
     <SecurityCard onSuccess={fetchData} />
 
-    <ConfigEditor
-      {meta}
-      {groups}
-      {formValues}
-      {rawText}
-      {reveal}
-      {searchQuery}
-      {viewMode}
-      onSearch={(v) => {
-        searchQuery = v;
-      }}
-      onViewMode={(m) => {
-        viewMode = m;
-      }}
-      onField={setField}
-      onToggleReveal={toggleReveal}
-      onToggleGroup={toggleGroup}
-      onResetFilters={() => {
-        searchQuery = "";
-        viewMode = "essential";
-      }}
-    />
+    <!-- 2. Gateway & Protection (General - live reload) -->
+    <GatewaySettings {formValues} {rawText} onField={setField} />
+
+    <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
+    <TrafficSettings {formValues} {rawText} onField={setField} />
+
+    <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
+    <ModelRoutingSettings {formValues} {rawText} onField={setField} />
+
+    <!-- 5. Container Bootstrap Notice -->
+    <Alert tone="info">
+      <div class="flex items-start gap-2">
+        <Info size={16} class="shrink-0 mt-0.5" />
+        <div class="text-xs leading-relaxed">
+          <strong class="font-semibold block mb-0.5"
+            >{$tr("Container Bootstrap Notice")}</strong
+          >
+          {$tr(
+            "Settings like LISTEN_ADDR (:3457) and SESSION_PERSIST are fixed at container boot. To change container-level bootstrap parameters, update your docker-compose.yml or container environment and restart the container.",
+          )}
+        </div>
+      </div>
+    </Alert>
 
     <!-- Current values: read-only effective config, secrets masked -->
     <Card
