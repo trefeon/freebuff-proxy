@@ -1082,11 +1082,11 @@ func TestRequestCorrelationIDs(t *testing.T) {
 	for i := range entries {
 		e := &entries[i]
 		switch e.Message {
-		case "access", "chat routing", "chat done", "chat trace":
+		case "access", "chat request", "chat routing", "chat done", "chat trace":
 			byMsg[e.Message] = e
 		}
 	}
-	for _, want := range []string{"access", "chat routing", "chat done", "chat trace"} {
+	for _, want := range []string{"access", "chat request", "chat routing", "chat done", "chat trace"} {
 		if byMsg[want] == nil {
 			t.Fatalf("missing %q entry in the log ring", want)
 		}
@@ -1099,10 +1099,17 @@ func TestRequestCorrelationIDs(t *testing.T) {
 	if !uuidRe.MatchString(reqID) {
 		t.Errorf("access req_id = %q, want UUIDv4 shape", reqID)
 	}
-	for _, m := range []string{"chat routing", "chat done", "chat trace"} {
+	for _, m := range []string{"chat request", "chat routing", "chat done", "chat trace"} {
 		if got := entryField(*byMsg[m], "req_id"); got != reqID {
 			t.Errorf("%s req_id = %q, want the access req_id %q", m, got, reqID)
 		}
+	}
+	// Console "N MSG · M TOOL" segments: chatBody carries 1 message, no tools.
+	if got := entryField(*byMsg["chat request"], "msgs"); got != "1" {
+		t.Errorf("chat request msgs = %q, want 1", got)
+	}
+	if got := entryField(*byMsg["chat request"], "tools"); got != "0" {
+		t.Errorf("chat request tools = %q, want 0", got)
 	}
 	for _, m := range []string{"access", "chat trace"} {
 		if got := entryField(*byMsg[m], "client_request_id"); got != "abc" {

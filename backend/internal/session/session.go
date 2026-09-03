@@ -190,6 +190,8 @@ type snapshotState struct {
 	savedGlmPromo      string
 	savedAccessTier    string
 	savedFreebucks     *upstream.FreebucksInfo
+	savedFreeWindows   *upstream.FreeWindowsInfo
+	savedSubscription  *upstream.SubscriptionInfo
 	invalidationEvents []invalidationEvent
 	reAdmitTriggers    []time.Time
 	lastStormAt        time.Time
@@ -241,6 +243,12 @@ type cachedState struct {
 	// freebucks is the upstream Freebucks allowance block (issue #232); nil
 	// until an admission/poll that carried it.
 	freebucks *upstream.FreebucksInfo
+	// freeWindows is the upstream free-tier pool windows block (issue #319);
+	// nil until an admission/poll that carried it.
+	freeWindows *upstream.FreeWindowsInfo
+	// subscription is the upstream subscription usage block (issue #319);
+	// nil until an admission/poll that carried it.
+	subscription *upstream.SubscriptionInfo
 }
 
 // NewManager builds a session manager for the given upstream client.
@@ -317,6 +325,12 @@ func (m *Manager) commit(cs *cachedState) {
 		if m.state.freebucks != nil {
 			m.snap.savedFreebucks = m.state.freebucks
 		}
+		if m.state.freeWindows != nil {
+			m.snap.savedFreeWindows = m.state.freeWindows
+		}
+		if m.state.subscription != nil {
+			m.snap.savedSubscription = m.state.subscription
+		}
 	}
 	// Restore the previously-seen quota map when the new state omits
 	// re-admission or compact polls — issue #146).  This keeps the
@@ -342,6 +356,12 @@ func (m *Manager) commit(cs *cachedState) {
 	}
 	if cs != nil && cs.freebucks == nil && m.snap.savedFreebucks != nil {
 		cs.freebucks = m.snap.savedFreebucks
+	}
+	if cs != nil && cs.freeWindows == nil && m.snap.savedFreeWindows != nil {
+		cs.freeWindows = m.snap.savedFreeWindows
+	}
+	if cs != nil && cs.subscription == nil && m.snap.savedSubscription != nil {
+		cs.subscription = m.snap.savedSubscription
 	}
 	m.state = cs
 	if m.store != nil && m.key != "" {
@@ -591,6 +611,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			Referral:     m.snap.savedReferral,
 			AccessTier:   m.snap.savedAccessTier,
 			Freebucks:    m.snap.savedFreebucks,
+			FreeWindows:  m.snap.savedFreeWindows,
+			Subscription: m.snap.savedSubscription,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -632,6 +654,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		RemainingMs:        m.state.remainingMs,
 		Referral:           m.state.referral,
 		Freebucks:          m.state.freebucks,
+		FreeWindows:        m.state.freeWindows,
+		Subscription:       m.state.subscription,
 	}
 }
 
@@ -725,6 +749,18 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 		m.snap.savedFreebucks = st.Freebucks
 		if m.state != nil {
 			m.state.freebucks = st.Freebucks
+		}
+	}
+	if st.FreeWindows != nil {
+		m.snap.savedFreeWindows = st.FreeWindows
+		if m.state != nil {
+			m.state.freeWindows = st.FreeWindows
+		}
+	}
+	if st.Subscription != nil {
+		m.snap.savedSubscription = st.Subscription
+		if m.state != nil {
+			m.state.subscription = st.Subscription
 		}
 	}
 }

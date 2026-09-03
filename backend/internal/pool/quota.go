@@ -105,11 +105,12 @@ func quotaLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
 }
 
 // freebucksCapped reports whether the token's Freebucks allowance is exhausted
-// for model. When Freebucks is absent or the model has no price, the token
-// is not capped. When balance < price the token is capped and RetryAfter is
-// the time until the earliest window whose remaining < price recovers
-// (bindingWindow's reset is authoritative; fallback to the earliest future
-// window reset where remaining < price).
+// for model (issue #321 wire drift: balance is now the server-computed
+// spendable = daily.remaining + wallet.balance). When Freebucks is absent or
+// the model has no price, the token is not capped. When balance < price the
+// token is capped and RetryAfter is the earliest future recovery instant:
+// the daily pool refill (daily.ResetAt), else the plan bonus landing
+// (wallet.nextBonusAt, plan accounts only).
 func freebucksCapped(acc tokenAccount, model string) (bool, time.Duration) {
 	return freebucksCappedForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
@@ -129,72 +130,24 @@ func freebucksCappedForSnapshot(snap session.SessionSnapshot, model string) (boo
 	if fb.Balance >= price {
 		return false, 0
 	}
-	// Balance insufficient — capped. Derive RetryAfter from the window resets.
-	// The bindingWindow names the authoritative window; when its remaining is
-	// already below price its ResetAt is the correct signal. Otherwise fall
-	// back to the earliest future ResetAt among windows where remaining < price.
+	// Balance insufficient — capped. The never-expiring wallet balance is
+	// already counted in Balance, so the only recovery signals are the
+	// daily pool refill and the plan's next wallet bonus. take the earliest
+	// future instant; when neither is known, surface 0.
 	now := time.Now()
-	var bindingReset time.Time
-	var bindingRemaining float64
-	switch fb.BindingWindow {
-	case "daily":
-		bindingReset = fb.Daily.ResetAt
-		bindingRemaining = fb.Daily.Remaining
-	case "weekly":
-		bindingReset = fb.Weekly.ResetAt
-		bindingRemaining = fb.Weekly.Remaining
-	case "monthly":
-		bindingReset = fb.Monthly.ResetAt
-		bindingRemaining = fb.Monthly.Remaining
-	default:
-		// Unknown bindingWindow: treat daily as authoritative.
-		bindingReset = fb.Daily.ResetAt
-		bindingRemaining = fb.Daily.Remaining
-	}
-	if !bindingReset.IsZero() && bindingReset.After(now) && bindingRemaining < price {
-		return true, time.Until(bindingReset)
-	}
-	// Collect candidate windows where remaining < price.
-	var candidates []time.Time
-	if !fb.Daily.ResetAt.IsZero() && fb.Daily.ResetAt.After(now) && fb.Daily.Remaining < price {
-		candidates = append(candidates, fb.Daily.ResetAt)
-	}
-	if !fb.Weekly.ResetAt.IsZero() && fb.Weekly.ResetAt.After(now) && fb.Weekly.Remaining < price {
-		candidates = append(candidates, fb.Weekly.ResetAt)
-	}
-	if !fb.Monthly.ResetAt.IsZero() && fb.Monthly.ResetAt.After(now) && fb.Monthly.Remaining < price {
-		candidates = append(candidates, fb.Monthly.ResetAt)
-	}
-	if len(candidates) > 0 {
-		earliest := candidates[0]
-		for _, t := range candidates[1:] {
-			if t.Before(earliest) {
-				earliest = t
-			}
+	earliest := time.Time{}
+	for _, t := range []time.Time{fb.Daily.ResetAt, fb.Wallet.NextBonusAt} {
+		if t.IsZero() || !t.After(now) {
+			continue
 		}
-		return true, time.Until(earliest)
-	}
-	// No window has remaining < price but balance is still < price (e.g. stale
-	// remaining). Fall back to the binding window's reset if future, else the
-	// earliest future reset among all windows.
-	if !bindingReset.IsZero() && bindingReset.After(now) {
-		return true, time.Until(bindingReset)
-	}
-	for _, w := range []upstream.FreebucksWindow{fb.Daily, fb.Weekly, fb.Monthly} {
-		if !w.ResetAt.IsZero() && w.ResetAt.After(now) {
-			candidates = append(candidates, w.ResetAt)
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
 		}
 	}
-	if len(candidates) > 0 {
-		earliest := candidates[0]
-		for _, t := range candidates[1:] {
-			if t.Before(earliest) {
-				earliest = t
-			}
-		}
-		return true, time.Until(earliest)
+	if earliest.IsZero() {
+		return true, 0
 	}
-	return true, 0
+	return true, time.Until(earliest)
 }
 
 // freebucksLimitError builds the 429 surfaced when Freebucks balance is

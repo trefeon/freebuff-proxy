@@ -207,6 +207,30 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		order = append(order, mismatchedHot...)
 	}
 
+	// Smart availability (rate-limit handling): demote tokens that are
+	// cooling down or banned behind tokens that can serve right now, and
+	// order the unavailable ones by earliest unblock so the failover loop
+	// reaches an available account first and, when every token is limited,
+	// the surfaced 429 carries the shortest retry. The per-model quota
+	// exemption mirrors the failover loop (acquire.go): a cooldown caused
+	// by a DIFFERENT model's quota cap still leaves this token available
+	// for `model`.
+	sort.SliceStable(order, func(i, j int) bool {
+		ai := tokenAvailable((*toks)[order[i]], model)
+		aj := tokenAvailable((*toks)[order[j]], model)
+		if ai != aj {
+			return ai
+		}
+		if !ai {
+			ci := (*toks)[order[i]].runs.CooldownUntil()
+			cj := (*toks)[order[j]].runs.CooldownUntil()
+			if !ci.Equal(cj) {
+				return ci.Before(cj)
+			}
+		}
+		return false
+	})
+
 	if len(order) == 0 {
 		// All tokens are cooling down or capped: fallback to round-robin
 		// so the failover loop visits them and records their errors.
@@ -238,6 +262,26 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 	}
 	return order, quotaLimited
+}
+
+// tokenAvailable reports whether tok can serve model right now, for ordering
+// (not gating): a locked, cooling, or banned token is demoted behind
+// available ones. The per-model quota exemption mirrors the failover loop's
+// cooldown skip in leaseFromOrder: a cooldown caused by a DIFFERENT model's
+// quota exhaustion (quota errors carry the model) leaves the token available
+// for this request.
+func tokenAvailable(tok *tokenEntry, model string) bool {
+	if tok.locked.Load() {
+		return false
+	}
+	until := tok.runs.CooldownUntil()
+	if !until.IsZero() && time.Now().Before(until) {
+		if rle := tok.runs.RateLimitError(); rle != nil && rle.Model != "" && rle.Model != model && isQuotaExhaustedError(rle) {
+			return true
+		}
+		return false
+	}
+	return tok.runs.BanError() == nil
 }
 
 // bestWaitingRoom picks the queue entry with the lowest position; ties break

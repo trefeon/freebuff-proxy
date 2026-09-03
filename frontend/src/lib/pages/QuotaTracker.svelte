@@ -113,9 +113,19 @@
           >
             <div class="flex flex-col gap-4">
               {#if token.freebucks}
-                <PremiumQuotaBar freebucks={token.freebucks} {now} />
+                <PremiumQuotaBar
+                  freebucks={token.freebucks}
+                  freeWindows={token.free_windows}
+                  subscription={token.subscription}
+                  {now}
+                />
               {:else if token.premium_quota}
-                <PremiumQuotaBar quota={token.premium_quota} {now} />
+                <PremiumQuotaBar
+                  quota={token.premium_quota}
+                  freeWindows={token.free_windows}
+                  subscription={token.subscription}
+                  {now}
+                />
               {:else}
                 <p class="text-xs text-[var(--fp-dim)] italic">
                   {$tr(

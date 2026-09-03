@@ -55,20 +55,20 @@ type ModelInfo struct {
 // test enforces it.
 var Catalog = []ModelInfo{
 	{ID: "stealth/ox-alpha", DisplayName: "Ox Alpha",
-		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 1_000_000,
+		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 1_000_000,
 		Efforts: []string{"low", "high", "max"}},
 	{ID: "deepseek/deepseek-v4-pro", DisplayName: "DeepSeek V4 Pro",
-		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 1_048_576,
+		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 1_048_576,
 		Efforts: []string{"low", "high", "max"}},
 	{ID: "minimax/minimax-m3", DisplayName: "MiniMax M3",
-		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 524_288,
+		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 524_288,
 		Efforts: []string{"high"}},
 	{ID: "openai/gpt-5.6-luna", DisplayName: "GPT-5.6 Luna",
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
 		Served: true, Premium: true, ContextWindow: 500_000},
-	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "z-ai/glm-5.3-flash"},
+	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "deepseek/deepseek-v4-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
 		Served: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "high", "max"}},
@@ -86,11 +86,10 @@ var Catalog = []ModelInfo{
 }
 
 // DefaultModelID mirrors upstream DEFAULT_FREEBUFF_MODEL_ID, pinned to
-// FREEBUFF_MODELS[0] (GLM 5.3 Flash leads the picker since 2026-08-30). It is
-// what the upstream CLI resolves a blank model pick to. The move is explicit
-// vendor policy: the default must be open at every hour and joinable with an
-// empty wallet, and this row is unmetered and always available.
-const DefaultModelID = "z-ai/glm-5.3-flash"
+// FREEBUFF_MODELS[0] (DeepSeek V4 Flash leads the picker as of 2026-09-02;
+// see upstream freebuff-models.ts's note on the move). It is what the
+// upstream CLI resolves a blank model pick to.
+const DefaultModelID = "deepseek/deepseek-v4-flash"
 
 // FallbackModelID mirrors upstream FALLBACK_FREEBUFF_MODEL_ID: the model
 // guaranteed available on EVERY tier that unavailable picks are coerced to.

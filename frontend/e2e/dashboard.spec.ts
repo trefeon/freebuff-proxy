@@ -360,7 +360,10 @@ test.describe("dashboard hermetic mocks", () => {
     await page.goto("http://127.0.0.1:4173/admin/#logs");
     await expect(page.getByRole("heading", { name: "Logs" })).toBeVisible();
 
-    // Filter by msg substring via input #log-msg
+    // Console (/v1 inference traffic) is the default view; table filtering
+    // and pagination live in the Table view, so switch there first.
+    await page.getByRole("button", { name: "Table" }).click();
+
     const msgInput = page.locator("#log-msg");
     await expect(msgInput).toBeVisible();
     await msgInput.fill("upstream timeout");
@@ -390,6 +393,50 @@ test.describe("dashboard hermetic mocks", () => {
         { timeout: 5000 },
       );
     }
+  });
+
+  test("Logs console survives same-second duplicate request lines", async ({
+    page,
+  }) => {
+    // Live entries share second-precision timestamps: one request emits
+    // chat request + routing + access + trace + done with the same req_id
+    // and time. Console line ids must stay unique or Svelte throws
+    // each_key_duplicate and the view breaks.
+    const t = new Date().toISOString();
+    const E = (message: string, fields: string) => ({
+      time: t,
+      level: "INFO",
+      message,
+      fields,
+    });
+    const f = loadFixtures();
+    const pageErrors: string[] = [];
+    page.on("pageerror", (e) => pageErrors.push(String(e)));
+    await mockDashboard(page, f, {
+      logs: {
+        entries: [
+          E(
+            "chat request",
+            "req_id=dup  model=openai/gpt-5.6-luna  msgs=3  tools=2",
+          ),
+          E("chat routing", "req_id=dup  agent=stealth/ox-alpha"),
+          E(
+            "access",
+            "req_id=dup  method=POST  path=/v1/chat/completions  status=200  ms=100",
+          ),
+          E("chat trace", "req_id=dup  total_ms=100"),
+          E("chat done", "req_id=dup  ms=100"),
+        ],
+      },
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    // Console is the default view: all five /v1 lines render with the
+    // MSG/TOOL counts, no crash.
+    await expect(page.getByText("5 request events")).toBeVisible();
+    await expect(page.getByText(/3 MSG · 2 TOOL/)).toBeVisible();
+    await expect(page.getByText("openai/gpt-5.6-luna").first()).toBeVisible();
+    expect(pageErrors).toEqual([]);
   });
 
   test("Models lists 6 served models", async ({ page }) => {
@@ -497,8 +544,11 @@ test.describe("dashboard hermetic mocks", () => {
       page.locator('section[aria-label="At-risk tokens"]'),
     ).toBeVisible();
 
-    // Navigate to Logs and check filter labelling + live region
+    // Navigate to Logs and check filter labelling + live region. Console is
+    // the default view; the labelled filter inputs and entry text live in
+    // the Table view.
     await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await page.getByRole("button", { name: "Table" }).click();
     await page
       .waitForResponse((r) => r.url().includes("/admin/api/logs"), {
         timeout: 5000,
@@ -506,7 +556,6 @@ test.describe("dashboard hermetic mocks", () => {
       .catch(() => {});
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
-    // Log entries list should be present and aria labelling via table caption / sr-only
     await expect(
       page
         .getByText("request 0")

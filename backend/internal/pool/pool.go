@@ -92,12 +92,17 @@ type TokenSnapshot struct {
 	SessionQueueDepth       int
 	SessionModel            string
 	SessionRemainingSeconds int64
-	ActiveRuns              int
-	Requests                int
-	Messages24h             int    // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
-	DailyLimit              int    // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
-	UsagePct                int    // percentage of daily limit used (0 when unlimited)
-	RiskLevel               string // "low", "moderate", "high", "critical" account safety indicator (#6)
+	// SessionExpiresAt is the server-authored absolute session expiry
+	// (wire expiresAt). Monotonic across compact polls, unlike the wire
+	// remainingMs which only rides full admissions; the dashboard countdown
+	// derives from it so a poll cycle can never re-anchor the timer.
+	SessionExpiresAt time.Time `json:"session_expires_at,omitempty"`
+	ActiveRuns       int
+	Requests         int
+	Messages24h      int    // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
+	DailyLimit       int    // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
+	UsagePct         int    // percentage of daily limit used (0 when unlimited)
+	RiskLevel        string // "low", "moderate", "high", "critical" account safety indicator (#6)
 	// Spend24h / SpendDay / SpendWeek / SpendMonth are the local per-token
 	// spend ledger (issue #87/#122): tokens spent in the rolling 24h window
 	// and the current Pacific day/week/month buckets (with rollover —
@@ -150,6 +155,12 @@ type TokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil until
 	// the session reports it.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
+	// FreeWindows is the upstream free-tier pool windows block
+	// (day/week/month; issue #319). Display-only; nil until reported.
+	FreeWindows *upstream.FreeWindowsInfo `json:"free_windows,omitempty"`
+	// Subscription is the upstream subscription usage block (issue #319);
+	// rollout-audience only; nil until reported.
+	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
 	// TransientRetries / FingerprintRotations are this token's upstream
 	// client counters (TRANSIENT_RETRIES): retried transport failures and
 	// pinned TLS fingerprint swaps. Surfaced per-token in /metrics.

@@ -129,10 +129,13 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 
 	agentID, _ := s.reg.AgentForModel(model)
 	reqAttrs := []any{
+		"req_id", reqID,
 		"model", model,
 		"agent", agentID,
 		"stream", stream,
 		"remote", remoteHost(r),
+		"msgs", toolMap.MsgCount(),
+		"tools", toolMap.ToolCount(),
 	}
 	if reasoningEffort != "" {
 		reqAttrs = append(reqAttrs, "reasoning_effort", reasoningEffort)

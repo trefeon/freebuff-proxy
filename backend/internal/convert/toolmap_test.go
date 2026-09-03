@@ -140,3 +140,32 @@ func TestToolMapperSignatureCoverage(t *testing.T) {
 		}
 	}
 }
+
+// TestToolMapperCounts pins the console MSG/TOOL segments: NewToolMapper
+// retains the client message and tool counts from its single body parse
+// (Responses input[] counts as messages). Zero value and garbage bodies
+// report 0 so the console omits the segments.
+func TestToolMapperCounts(t *testing.T) {
+	chat := NewToolMapper([]byte(`{"model":"m","messages":[{"role":"u"},{"role":"a"},{"role":"u"}],"tools":[{"function":{"name":"a"}},{"function":{"name":"b"}}]}`))
+	if chat.MsgCount() != 3 {
+		t.Errorf("chat msgs = %d, want 3", chat.MsgCount())
+	}
+	if chat.ToolCount() != 2 {
+		t.Errorf("chat tools = %d, want 2", chat.ToolCount())
+	}
+	resp := NewToolMapper([]byte(`{"model":"m","input":[{"role":"u"},{"role":"u"}],"tools":[]}`))
+	if resp.MsgCount() != 2 {
+		t.Errorf("responses msgs = %d, want 2 (input[])", resp.MsgCount())
+	}
+	if resp.ToolCount() != 0 {
+		t.Errorf("responses tools = %d, want 0", resp.ToolCount())
+	}
+	var zero ToolMapper
+	if zero.MsgCount() != 0 || zero.ToolCount() != 0 {
+		t.Error("zero mapper counts nonzero")
+	}
+	bad := NewToolMapper([]byte(`not json`))
+	if bad.MsgCount() != 0 || bad.ToolCount() != 0 {
+		t.Error("garbage body counts nonzero")
+	}
+}

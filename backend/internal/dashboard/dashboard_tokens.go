@@ -26,6 +26,7 @@ type tokenDetail struct {
 	SessionInstance         string                     `json:"session_instance"`
 	SessionModel            string                     `json:"session_model"`
 	SessionRemainingSeconds int64                      `json:"session_remaining_seconds"`
+	SessionExpiresAt        string                     `json:"session_expires_at,omitempty"`
 	Quota                   []quotaRow                 `json:"quota"`
 	HasQuota                bool                       `json:"has_quota"`
 	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
@@ -70,6 +71,7 @@ func (d *Dashboard) tokensData() tokensData {
 			SessionInstance:         t.SessionInstanceID,
 			SessionModel:            t.SessionModel,
 			SessionRemainingSeconds: t.SessionRemainingSeconds,
+			SessionExpiresAt:        utcAttr(t.SessionExpiresAt),
 			PremiumQuota:            t.PremiumQuota,
 		}
 		for model, q := range t.QuotaByModel {

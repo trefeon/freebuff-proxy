@@ -101,14 +101,26 @@ func init() {
 // client names). Zero value is valid: nothing maps, relays pass through.
 type ToolMapper struct {
 	upstreamToClient map[string]string // response path: official → original
+	msgs             int               // len(messages) (or len(input) for Responses) in the scanned body
+	tools            int               // len(tools) in the scanned body
 }
+
+// MsgCount is the client message count retained by NewToolMapper (0 when the
+// body had no messages/input array). Feeds the console "N MSG" segment.
+func (m ToolMapper) MsgCount() int { return m.msgs }
+
+// ToolCount is the client tool count retained by NewToolMapper (0 when the
+// body had no tools array). Feeds the console "N TOOL" segment.
+func (m ToolMapper) ToolCount() int { return m.tools }
 
 // NewToolMapper scans a raw request body for function-tool names and returns
 // the mapper for it. Names that are already official (or unknown) produce no
 // entry — they round-trip unchanged. body may be nil/invalid (returns empty).
 func NewToolMapper(body []byte) ToolMapper {
 	var payload struct {
-		Tools []struct {
+		Messages []json.RawMessage `json:"messages"`
+		Input    []json.RawMessage `json:"input"`
+		Tools    []struct {
 			Function struct {
 				Name string `json:"name"`
 			} `json:"function"`
@@ -118,6 +130,11 @@ func NewToolMapper(body []byte) ToolMapper {
 		return ToolMapper{}
 	}
 	m := ToolMapper{upstreamToClient: make(map[string]string)}
+	m.msgs = len(payload.Messages)
+	if m.msgs == 0 {
+		m.msgs = len(payload.Input) // Responses API carries input[], not messages[]
+	}
+	m.tools = len(payload.Tools)
 	for _, t := range payload.Tools {
 		name := t.Function.Name
 		if name == "" {

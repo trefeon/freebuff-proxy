@@ -55,6 +55,7 @@ var expectedFallback = map[string]string{
 	"deepseek/deepseek-v4-flash-max":  "base2-free-deepseek-flash-max",
 	"openai/gpt-5.6-luna-max":         "base2-free-luna-max",
 	"meta/muse-spark-1.2-contributor": "base2-free-muse-spark",
+	"meta/muse-spark-1.3-contributor": "base2-free-muse-spark-1-3",
 	"anthropic/claude-fable-5":        "base2-free-fable",
 	"openai/gpt-5.6-luna-es":          "base2-free-luna-es",
 	"stealth/ox-alpha":                "base2-free-ox-alpha",
@@ -994,11 +995,11 @@ func TestPausedModelPolicy(t *testing.T) {
 	}
 
 	got := modelcat.WithdrawnModelMessage("minimax/minimax-m3")
-	want := "MiniMax M3 is no longer available in Freebuff. We recommend using GLM 5.3 Flash instead."
+	want := "MiniMax M3 is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
 	if got != want {
 		t.Errorf("WithdrawnModelMessage = %q, want %q (mirror freebuffWithdrawnModelMessage)", got, want)
 	}
-	if got := modelcat.WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "GLM 5.3 Flash") {
-		t.Errorf("WithdrawnModelMessage(ox-alpha) = %q, want GLM 5.3 Flash replacement", got)
+	if got := modelcat.WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "DeepSeek V4 Flash") {
+		t.Errorf("WithdrawnModelMessage(ox-alpha) = %q, want DeepSeek V4 Flash replacement", got)
 	}
 }

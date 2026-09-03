@@ -28,7 +28,7 @@
   let loading = $state(true);
   let error = $state("");
   let manualRefresh = $state(false);
-  let viewMode = $state("table"); // 'table' | 'console'
+  let viewMode = $state("console"); // 'table' | 'console' — console (inference /v1 traffic) is the default (issue #322 follow-up)
   let clearedBefore = $state(0);
   let copiedConsole = $state(false);
   let consoleEl = $state(null);
@@ -47,10 +47,53 @@
     return CIRCLE_EMOJIS[h % CIRCLE_EMOJIS.length];
   }
 
+  // Console is the specialized inference-traffic view: ONLY /v1 lines.
+  // Access entries carry fields.path, so /v1 access lines self-identify;
+  // sibling pipeline lines (routing/done/failed) join via req_id against
+  // the /v1 access entries seen in the same batch. Pathless lines without
+  // a req_id keep legacy behavior (rare pipeline logs with no routing
+  // context). Admin (/admin/*) lines never enter the console — use Table.
   let requestLogs = $derived.by(() => {
     const raw = data?.entries || [];
     const chrono = [...raw].reverse();
+    // Pass 1: req_ids that belong to /v1 access entries.
+    const v1ReqIds = new Set();
+    for (let i = 0; i < chrono.length; i++) {
+      const e = chrono[i];
+      if ((e.message || "") !== "access") continue;
+      const parsed = parseLogFields(e.fields);
+      let path = "";
+      let reqId = "";
+      for (let j = 0; j < parsed.length; j++) {
+        if (parsed[j].key === "path") path = String(parsed[j].value || "");
+        if (parsed[j].key === "req_id" || parsed[j].key === "client_request_id")
+          reqId = parsed[j].value;
+      }
+      if (path.includes("/v1/") && reqId) v1ReqIds.add(reqId);
+    }
+    const isV1Line = (msg, path, reqId) => {
+      if (path && !path.includes("/v1/")) return false;
+      if (path.includes("/v1/")) return true;
+      if (reqId) return v1ReqIds.has(reqId);
+      return true;
+    };
     const lines = [];
+    // Live entries share second-precision timestamps, so several lines for
+    // one request (chat request + routing + access + trace + done) can
+    // produce identical semantic ids — Svelte {#each} throws
+    // each_key_duplicate and the console breaks. Suffix collisions.
+    const usedIds = new Set();
+    const uid = (kind, reqId, time, i) => {
+      const base = kind + "-" + (reqId || i) + "-" + time;
+      let id = base;
+      let n = 1;
+      while (usedIds.has(id)) {
+        n += 1;
+        id = base + "~" + n;
+      }
+      usedIds.add(id);
+      return id;
+    };
 
     for (let i = 0; i < chrono.length; i++) {
       const e = chrono[i];
@@ -65,15 +108,17 @@
       }
 
       const reqId = fields.req_id || fields.client_request_id || "";
+      const pathStr = String(fields.path || "");
       const circle = circleFor(reqId || fields.token || fields.model);
       const msg = e.message || "";
 
       if (
-        msg.includes("request") ||
-        msg.includes("routing") ||
-        (msg === "access" &&
-          fields.method === "POST" &&
-          String(fields.path || "").includes("/v1/"))
+        (msg.includes("request") ||
+          msg.includes("routing") ||
+          (msg === "access" &&
+            fields.method === "POST" &&
+            pathStr.includes("/v1/"))) &&
+        isV1Line(msg, pathStr, reqId)
       ) {
         const model = fields.model || "chat";
         const agent = fields.served_model
@@ -87,21 +132,29 @@
           : "openai→openai";
         const stream =
           fields.stream === "true" || fields.stream === "1" ? "STREAM" : "SYNC";
+        const msgCount = Number(fields.msgs) || 0;
+        const toolCount = Number(fields.tools) || 0;
+        const counts =
+          (msgCount > 0 ? ` · ${msgCount} MSG` : "") +
+          (toolCount > 0 ? ` · ${toolCount} TOOL` : "");
         const effort = fields.reasoning_effort
           ? ` · THINK:${fields.reasoning_effort}`
           : "";
         const acc = fields.token ? ` · ACC:${fields.token}` : "";
         const lineText =
-          `[${timeStr}] ${circle} ▶ POST ${model} ${agent} · FMT: ${fmt} · ${stream}${effort}${acc}`.replace(
+          `[${timeStr}] ${circle} ▶ POST ${model} ${agent} · FMT: ${fmt} · ${stream}${counts}${effort}${acc}`.replace(
             /\s+/g,
             " ",
           );
         lines.push({
-          id: "req-" + (reqId || i) + "-" + e.time,
+          id: uid("req", reqId, e.time, i),
           text: lineText,
           type: "req",
         });
-      } else if (msg.includes("done") || msg === "chat trace") {
+      } else if (
+        (msg.includes("done") || msg === "chat trace") &&
+        isV1Line(msg, pathStr, reqId)
+      ) {
         const ms = fields.ms || fields.total_ms || "0";
         const ttft = fields.upstream_ttfb_ms || fields.ttft_ms || "";
         const ttftPart = ttft ? ` · TTFT ${ttft}ms` : "";
@@ -121,20 +174,21 @@
           "";
         const outPart = outTok ? ` · OUT ${outTok}` : "";
         lines.push({
-          id: "done-" + (reqId || i) + "-" + e.time,
+          id: uid("done", reqId, e.time, i),
           text: `[${timeStr}] ${circle} 📊 DONE ${ms}ms${ttftPart}${inPart}${cachePart}${outPart}`,
           type: "done",
         });
       } else if (
-        msg.includes("failed") ||
-        (msg === "access" && Number(fields.status) >= 400)
+        (msg.includes("failed") ||
+          (msg === "access" && Number(fields.status) >= 400)) &&
+        isV1Line(msg, pathStr, reqId)
       ) {
         const status = fields.status || "";
         const err =
           fields.reason || fields.error || fields.message || "request failed";
         const ms = fields.ms ? ` · ${fields.ms}ms` : "";
         lines.push({
-          id: "err-" + (reqId || i) + "-" + e.time,
+          id: uid("err", reqId, e.time, i),
           text: `[${timeStr}] ${circle} ✗ ERROR ${status} · ${err}${ms}`,
           type: "err",
         });
@@ -317,8 +371,8 @@
       )}
     />
   {:else if data}
-    <Card pad="none">
-      {#if viewMode === "console"}
+    {#if viewMode === "console"}
+      <Card pad="none">
         <!-- Console View Top Bar -->
         <div
           class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex items-center justify-between gap-2.5"
@@ -327,7 +381,7 @@
             <span class="led {requestLogs.length > 0 ? 'led-good' : 'led-idle'}"
             ></span>
             <span class="font-mono text-xs text-[var(--fp-muted)]"
-              >{requestLogs.length} {$tr("request events")}</span
+              >{requestLogs.length} {$tr("request events")} · /v1 only</span
             >
           </div>
           <div class="flex items-center gap-2">
@@ -424,7 +478,9 @@
             {/each}
           {/if}
         </div>
-      {:else}
+      </Card>
+    {:else}
+      <Card pad="none">
         <!-- Integrated Top Toolbar Header for Table -->
         <div
           class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
@@ -599,69 +655,69 @@
             </ul>
           </div>
         {/if}
-      {/if}
-      {#snippet footer()}
-        {#if viewMode === "table"}
-          <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3"
-          >
-            <div class="flex items-center gap-3">
-              <span class="fp-num text-xs text-[var(--fp-muted)]">
-                {rangeStart}–{rangeEnd} of {filteredEntries.length}
-              </span>
-              <label
-                class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-muted)]"
-                for="logs-page-size"
-              >
-                {$tr("Rows per page")}
-                <select
-                  id="logs-page-size"
-                  class="fp-input !h-8 !w-auto min-w-[4.25rem] !py-1 !pl-2.5 text-xs"
-                  value={pageSize}
-                  onchange={(e) => {
-                    pageSize = Number(e.currentTarget.value);
-                    page = 0;
-                  }}
+        {#snippet footer()}
+          {#if viewMode === "table"}
+            <div
+              class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3"
+            >
+              <div class="flex items-center gap-3">
+                <span class="fp-num text-xs text-[var(--fp-muted)]">
+                  {rangeStart}–{rangeEnd} of {filteredEntries.length}
+                </span>
+                <label
+                  class="inline-flex items-center gap-1.5 text-xs text-[var(--fp-muted)]"
+                  for="logs-page-size"
                 >
-                  <option value={10}>10</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
+                  {$tr("Rows per page")}
+                  <select
+                    id="logs-page-size"
+                    class="fp-input !h-8 !w-auto min-w-[4.25rem] !py-1 !pl-2.5 text-xs"
+                    value={pageSize}
+                    onchange={(e) => {
+                      pageSize = Number(e.currentTarget.value);
+                      page = 0;
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="fp-num"
+                  disabled={page === 0}
+                  onclick={() => page--}
+                >
+                  <ChevronLeft size={14} />
+                  {$tr("Prev")}
+                </Button>
+                <span
+                  class="fp-num text-xs text-[var(--fp-muted)] whitespace-nowrap"
+                >
+                  {$tr("Page {current} / {total}", {
+                    current: page + 1,
+                    total: totalPages,
+                  })}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="fp-num"
+                  disabled={page >= totalPages - 1}
+                  onclick={() => page++}
+                >
+                  <ChevronRight size={14} />
+                  {$tr("Next")}
+                </Button>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                class="fp-num"
-                disabled={page === 0}
-                onclick={() => page--}
-              >
-                <ChevronLeft size={14} />
-                {$tr("Prev")}
-              </Button>
-              <span
-                class="fp-num text-xs text-[var(--fp-muted)] whitespace-nowrap"
-              >
-                {$tr("Page {current} / {total}", {
-                  current: page + 1,
-                  total: totalPages,
-                })}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                class="fp-num"
-                disabled={page >= totalPages - 1}
-                onclick={() => page++}
-              >
-                <ChevronRight size={14} />
-                {$tr("Next")}
-              </Button>
-            </div>
-          </div>
-        {/if}
-      {/snippet}
-    </Card>
+          {/if}
+        {/snippet}
+      </Card>
+    {/if}
   {/if}
 </div>
