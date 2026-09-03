@@ -88,7 +88,7 @@
         <thead>
           <tr>
             <th class="w-8"></th>
-            <th>{$tr("Token")}</th>
+            <th>{$tr("Account")}</th>
             <th>{$tr("Status")}</th>
             <th>{$tr("Instance")}</th>
             <th class="num">{$tr("Cooldown")}</th>

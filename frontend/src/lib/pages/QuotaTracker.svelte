@@ -106,7 +106,7 @@
         {#each data.tokens as token, ti (token.index ?? ti)}
           {@const idx = token.index ?? ti}
           <Card
-            title={$tr("Token #{index}", { index: idx })}
+            title={$tr("Account #{index}", { index: idx + 1 })}
             description={token.session_model
               ? $tr("Session: {model}", { model: token.session_model })
               : ""}
@@ -156,8 +156,8 @@
                   <div class="overflow-x-auto">
                     <table class="fp-table">
                       <caption class="sr-only"
-                        >{$tr("Session quota by model for token {index}", {
-                          index: idx,
+                        >{$tr("Session quota by model for account {index}", {
+                          index: idx + 1,
                         })}</caption
                       >
                       <thead>

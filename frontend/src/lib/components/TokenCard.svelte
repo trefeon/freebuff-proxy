@@ -154,8 +154,8 @@
         onclick={onToggle}
         aria-expanded={expanded}
         aria-label={expanded
-          ? `Collapse details for token ${idx}`
-          : `Expand details for token ${idx}`}
+          ? `Collapse details for account ${idx + 1}`
+          : `Expand details for account ${idx + 1}`}
         class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] transition-colors"
       >
         {#if expanded}
@@ -170,7 +170,7 @@
     <div class="flex flex-col gap-0.5">
       <div class="flex items-center gap-1.5">
         <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
-          >#{idx}</span
+          >Account #{idx + 1}</span
         >
         {#if idx === 0}
           <span

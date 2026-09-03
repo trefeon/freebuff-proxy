@@ -46,20 +46,32 @@
     return null;
   }
 
+  let nowTick = $state(Date.now());
+  $effect(() => {
+    const timer = setInterval(() => {
+      nowTick = Date.now();
+    }, 1000);
+    return () => clearInterval(timer);
+  });
+
   function formatCooldown(until) {
-    if (!until) return "";
-    const diff = new Date(until).getTime() - Date.now();
-    if (diff <= 0) return "";
-    const h = Math.floor(diff / 3_600_000);
-    const m = Math.floor((diff % 3_600_000) / 60_000);
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    if (!until) return null;
+    const diff = new Date(until).getTime() - nowTick;
+    if (diff <= 0) return { label: $tr("expiring..."), active: false };
+    const s = Math.floor(diff / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return { label: `${h}h ${m}m`, active: true };
+    if (m > 0) return { label: `${m}m ${sec}s`, active: true };
+    return { label: `${sec}s`, active: true };
   }
 </script>
 
 <section aria-label="At-risk tokens">
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-lg font-semibold text-[var(--fp-text)]">
-      {$tr("Token risk")}
+      {$tr("Account risk")}
     </h2>
     <span class="fp-num text-xs text-[var(--fp-dim)]"
       >{tokens.length}/{total}</span
@@ -73,7 +85,7 @@
           <div class="space-y-3">
             <div class="flex items-center justify-between gap-2">
               <span class="fp-num text-sm font-semibold text-[var(--fp-text)]"
-                >Token #{t.index}</span
+                >{$tr("Account #{num}", { num: (t.index ?? 0) + 1 })}</span
               >
               {#if banBadge(t)}
                 <StatusBadge
@@ -91,13 +103,18 @@
             </div>
 
             {#if t.cooldown_active}
-              <div
-                class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-warning)]"
-              >
-                {$tr("Cooldown")} —
-                <span class="fp-num">{formatCooldown(t.cooldown_until)}</span>
-                {$tr("remaining")}
-              </div>
+              {@const cd = formatCooldown(t.cooldown_until)}
+              {#if cd}
+                <div
+                  class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-warning)]"
+                >
+                  {$tr("Cooldown")} —
+                  <span class="fp-num">{cd.label}</span>
+                  {#if cd.active}
+                    {$tr("remaining")}
+                  {/if}
+                </div>
+              {/if}
             {/if}
 
             <div class="fp-inset px-2.5 py-2 text-xs text-[var(--fp-muted)]">

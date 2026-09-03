@@ -8,7 +8,6 @@
   import { RefreshCw, ExternalLink } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import ApiKeysEditor from "../components/ApiKeysEditor.svelte";
-  import RiskCards from "../components/RiskCards.svelte";
   import StatusBadge from "../components/StatusBadge.svelte";
   import Stat from "../components/Stat.svelte";
   import Card from "../components/Card.svelte";
@@ -161,9 +160,6 @@
     data?.tokens?.reduce((s, t) => s + (t.requests || 0), 0) ?? 0,
   );
 
-  let atRiskTokens = $derived(
-    (data?.tokens ?? []).filter((t) => t.risk_level && t.risk_level !== "low"),
-  );
 
   // Freebucks: per-token daily/weekly/monthly + balance + bindingWindow (issue #232)
   let hasFreebucks = $derived((data?.tokens ?? []).some((t) => t.freebucks));
@@ -350,9 +346,6 @@
           {/if}
         </Card>
       {/if}
-
-      <!-- Token risk cards -->
-      <RiskCards tokens={atRiskTokens} total={poolTotal} />
     {:else}
       <!-- Bridge mode / empty pool summary -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -444,8 +437,8 @@
           {#each freebucksTokens as tok, i (tok.index ?? tok.account_id ?? i)}
             <PremiumQuotaBar
               freebucks={tok.freebucks}
-              title={$tr("Token #{index} • Freebucks", {
-                index: tok.index ?? i,
+              title={$tr("Account #{index} • Freebucks", {
+                index: (tok.index ?? i) + 1,
               })}
               {now}
             />

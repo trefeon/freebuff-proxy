@@ -65,8 +65,8 @@
         triggerAction(
           "session",
           { model: spawnModel },
-          $tr("Spawn upstream session on token #{idx} for {model}?", {
-            idx,
+          $tr("Spawn upstream session on account #{idx} for {model}?", {
+            idx: idx + 1,
             model: spawnModel,
           }),
         )}
@@ -79,7 +79,7 @@
       size="sm"
       disabled={actionPending}
       onclick={() =>
-        triggerAction("test", {}, $tr("Probe token #{idx}?", { idx }))}
+        triggerAction("test", {}, $tr("Probe account #{idx}?", { idx: idx + 1 }))}
     >
       <RefreshCw size={13} />
       <span>{$tr("Probe")}</span>
@@ -92,7 +92,7 @@
         triggerAction(
           "finish",
           {},
-          $tr("Finish runs on token #{idx}?", { idx }),
+          $tr("Finish runs on account #{idx}?", { idx: idx + 1 }),
         )}
     >
       <Check size={13} />

@@ -8,6 +8,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
+  import RiskCards from "../components/RiskCards.svelte";
   import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
@@ -96,6 +97,10 @@
   let spawnModels = $state({});
   let actionPending = $state(false);
   let now = $state(Date.now());
+  let poolTotal = $derived(data?.tokens?.length ?? 0);
+  let atRiskTokens = $derived(
+    (data?.tokens ?? []).filter((t) => t.risk_level && t.risk_level !== "low"),
+  );
 
   const tokenValid = $derived(
     newToken.trim() === ""
@@ -185,8 +190,8 @@
           tokenActions.unlock(idx),
           {},
           $tr(
-            "Clear cooldown for token {idx}? Only do this if the lock is stale.",
-            { idx },
+            "Clear cooldown for account {idx}? Only do this if the lock is stale.",
+            { idx: idx + 1 },
           ),
           $tr("Clear Cooldown"),
           "warn",
@@ -196,8 +201,8 @@
         return triggerAction(
           tokenActions.unlockLock(idx),
           {},
-          $tr("Unlock token {idx}? It will rejoin the active rotation.", {
-            idx,
+          $tr("Unlock account {idx}? It will rejoin the active rotation.", {
+            idx: idx + 1,
           }),
           $tr("Unlock Token"),
           "neutral",
@@ -208,8 +213,8 @@
           tokenActions.lock(idx),
           {},
           $tr(
-            "Lock token {idx}? It will be excluded from rotation until unlocked.",
-            { idx },
+            "Lock account {idx}? It will be excluded from rotation until unlocked.",
+            { idx: idx + 1 },
           ),
           $tr("Lock Token"),
           "warn",
@@ -220,8 +225,8 @@
           adminActions.tokenRemove,
           { token: idx },
           $tr(
-            "Remove token {idx} from the pool and .env? The account must be re-added to use it again.",
-            { idx },
+            "Remove account {idx} from the pool and .env? The account must be re-added to use it again.",
+            { idx: idx + 1 },
           ),
           $tr("Remove Token"),
           "danger",
@@ -236,8 +241,8 @@
     triggerAction(
       tokenActions.session(idx),
       { model: m },
-      $tr("Create upstream session for token #{idx} on {model}?", {
-        idx,
+      $tr("Create upstream session for account #{idx} on {model}?", {
+        idx: idx + 1,
         model: m,
       }),
     );
@@ -248,13 +253,13 @@
       return triggerAction(
         tokenActions.test(idx),
         {},
-        $tr("Probe token #{idx} against upstream?", { idx }),
+        $tr("Probe account #{idx} against upstream?", { idx: idx + 1 }),
       );
     }
     return triggerAction(
       tokenActions.finish(idx),
       {},
-      $tr("Finish active runs on token #{idx}?", { idx }),
+      $tr("Finish active runs on account #{idx}?", { idx: idx + 1 }),
     );
   }
   function handleDropSession(idx) {
@@ -262,8 +267,8 @@
       tokenActions.dropSession(idx),
       {},
       $tr(
-        "Drop active session on token #{idx}? This ends the current session upstream (e.g. luna) so the next request admits fresh for the model you want. Use this when you need to switch models immediately.",
-        { idx },
+        "Drop active session on account #{idx}? This ends the current session upstream (e.g. luna) so the next request admits fresh for the model you want. Use this when you need to switch models immediately.",
+        { idx: idx + 1 },
       ),
     );
   }
@@ -305,8 +310,8 @@
             if (pollData.status === "completed") {
               clearInterval(oauthTimer);
               oauthStatus = {
-                message: $tr("Token #{idx} added to pool and saved to .env.", {
-                  idx: pollData.token_index,
+                message: $tr("Account #{idx} added to pool and saved to .env.", {
+                  idx: pollData.token_index + 1,
                 }),
                 type: "success",
               };
@@ -407,6 +412,10 @@
         "Upstream credentials, device login, client API keys, and per-token session quotas",
       )}
     />
+
+    {#if atRiskTokens.length > 0}
+      <RiskCards tokens={atRiskTokens} total={poolTotal} />
+    {/if}
 
     {#if actionMessage}
       <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
