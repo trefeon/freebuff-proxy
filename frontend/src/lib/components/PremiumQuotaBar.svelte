@@ -23,6 +23,11 @@
     const mins = Math.floor(ms / 60000);
     const h = Math.floor(mins / 60);
     const m = mins % 60;
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      const hr = h % 24;
+      return hr > 0 ? `${d}d ${hr}h` : `${d}d`;
+    }
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m`;
     return `${Math.max(1, Math.floor(ms / 1000))}s`;

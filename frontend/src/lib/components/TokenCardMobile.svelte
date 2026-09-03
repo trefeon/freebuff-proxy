@@ -107,6 +107,11 @@
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      const hr = h % 24;
+      return hr > 0 ? `${d}d ${hr}h` : `${d}d`;
+    }
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${sec}s`;
     return `${sec}s`;

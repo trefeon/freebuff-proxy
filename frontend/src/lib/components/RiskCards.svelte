@@ -62,6 +62,11 @@
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = s % 60;
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      const hr = h % 24;
+      return { label: hr > 0 ? `${d}d ${hr}h` : `${d}d`, active: true };
+    }
     if (h > 0) return { label: `${h}h ${m}m`, active: true };
     if (m > 0) return { label: `${m}m ${sec}s`, active: true };
     return { label: `${sec}s`, active: true };

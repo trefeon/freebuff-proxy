@@ -313,6 +313,14 @@ func humanDuration(d time.Duration) string {
 	}
 	h := int(d.Hours())
 	m := int(d.Minutes()) % 60
+	if h >= 24 {
+		dd := h / 24
+		hr := h % 24
+		if hr > 0 {
+			return fmt.Sprintf("%dd %dh", dd, hr)
+		}
+		return fmt.Sprintf("%dd", dd)
+	}
 	switch {
 	case h > 0 && m > 0:
 		return fmt.Sprintf("%dh %dm", h, m)

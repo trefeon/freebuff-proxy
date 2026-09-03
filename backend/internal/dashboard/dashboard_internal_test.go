@@ -75,6 +75,9 @@ func TestHumanDuration(t *testing.T) {
 		{90 * time.Second, "2m"},
 		{3 * time.Hour, "3h"},
 		{5*time.Hour + 59*time.Minute, "5h 59m"},
+		{25 * time.Hour, "1d 1h"},
+		{48 * time.Hour, "2d"},
+		{658*time.Hour + 12*time.Minute, "27d 10h"},
 	}
 	for _, tc := range cases {
 		if got := humanDuration(tc.in); got != tc.want {

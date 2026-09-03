@@ -143,6 +143,11 @@
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      const hr = h % 24;
+      return hr > 0 ? `${d}d ${hr}h remaining` : `${d}d remaining`;
+    }
     if (h > 0) return `${h}h ${m}m ${s}s remaining`;
     return `${m}m ${s}s remaining`;
   }
