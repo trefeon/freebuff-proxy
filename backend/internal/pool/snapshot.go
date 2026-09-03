@@ -119,17 +119,32 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 		// Countdown: prefer the server-authored absolute expiry over wire
 		// remainingMs. The expiry is monotonic and survives compact polls
 		// (which omit remainingMs — savedRemainingMs would otherwise freeze
-		// the countdown at the admission value). Wire remainingMs still wins
-		// when it is fresher, i.e. when the server explicitly reports it.
-		// The 5s safety margin mirrors sessionUsable/expiryMargin: within it
-		// the row is about to hand over, so a zero countdown is honest.
+		// the countdown at the admission value). RemainingMs is only trusted
+		// when the server never sent an expiry (legacy state): when
+		// ExpiresAt is set and already past, the session is dead — falling
+		// back to the frozen admission RemainingMs would resurrect a
+		// zombie "3600s remaining" row (the exact stale-state report behind
+		// the 0m 0s-remaining drawer on an expired session).
 		sessionRemaining := int64(0)
+		sessionStatus := ss.Status
 		if ss.Status == "active" && !ss.ExpiresAt.IsZero() {
 			if rem := time.Until(ss.ExpiresAt); rem > 0 {
 				sessionRemaining = int64(rem.Seconds())
+			} else if !ss.GracePeriodEndsAt.IsZero() && time.Now().Before(ss.GracePeriodEndsAt) {
+				// Expiry crossed but the grace drain is still open: the
+				// row serves in-flight runs until graceEndsAt. Report the
+				// drain honestly rather than a live window.
+				sessionStatus = "grace"
+			} else {
+				// Expiry and grace both passed with the cache still
+				// "active": report the honest terminal state instead of a
+				// live row. The pool re-admits on the next request
+				// (sessionUsable → false) or the next liveness poll
+				// observes it once polls resume.
+				sessionStatus = "expired"
 			}
 		}
-		if sessionRemaining == 0 && ss.RemainingMs > 0 {
+		if sessionRemaining == 0 && ss.ExpiresAt.IsZero() && ss.RemainingMs > 0 {
 			sessionRemaining = ss.RemainingMs / 1000
 		}
 
@@ -171,7 +186,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			DailyLimit:              dailyLimit,
 			UsagePct:                usagePct,
 			RiskLevel:               riskLevel,
-			SessionStatus:           ss.Status,
+			SessionStatus:           sessionStatus,
 			SessionInstanceID:       ss.InstanceID,
 			SessionQueuePosition:    ss.QueuePosition,
 			SessionQueueDepth:       ss.QueueDepth,

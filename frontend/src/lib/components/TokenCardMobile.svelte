@@ -73,6 +73,8 @@
       return { label: $tr("leased"), tone: "good", pulse: true };
     if (s === "queued") return { label: $tr("queued"), tone: "info" };
     if (s === "banned") return { label: $tr("banned"), tone: "bad" };
+    if (s === "expired") return { label: $tr("expired"), tone: "idle" };
+    if (s === "grace") return { label: $tr("grace drain"), tone: "warn" };
     return { label: $tr("idle"), tone: "idle" };
   }
 
