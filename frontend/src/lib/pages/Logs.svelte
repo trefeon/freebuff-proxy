@@ -147,10 +147,25 @@
             /\s+/g,
             " ",
           );
+        const chips = [
+          `FMT ${fmt}`,
+          stream,
+          ...(msgCount > 0 ? [`${msgCount} MSG`] : []),
+          ...(toolCount > 0 ? [`${toolCount} TOOL`] : []),
+          ...(fields.reasoning_effort
+            ? [`THINK ${fields.reasoning_effort}`]
+            : []),
+          ...(fields.token ? [`ACC ${fields.token}`] : []),
+        ];
         lines.push({
           id: uid("req", reqId, e.time, i),
           text: lineText,
           type: "req",
+          time: timeStr,
+          circle,
+          model,
+          agent: agent.replace(/^→\s*/, ""),
+          chips,
         });
       } else if (
         (msg.includes("done") || msg === "chat trace") &&
@@ -174,10 +189,20 @@
           fields.chunks ||
           "";
         const outPart = outTok ? ` · OUT ${outTok}` : "";
+        const doneChips = [
+          ...(ttft ? [`TTFT ${ttft}ms`] : []),
+          ...(inTok ? [`IN ${inTok}`] : []),
+          ...(cacheTok ? [`CACHE ↻${cacheTok}`] : []),
+          ...(outTok ? [`OUT ${outTok}`] : []),
+        ];
         lines.push({
           id: uid("done", reqId, e.time, i),
           text: `[${timeStr}] ${circle} 📊 DONE ${ms}ms${ttftPart}${inPart}${cachePart}${outPart}`,
           type: "done",
+          time: timeStr,
+          circle,
+          ms: String(ms),
+          chips: doneChips,
         });
       } else if (
         (msg.includes("failed") ||
@@ -201,6 +226,13 @@
           id: uid("err", reqId, e.time, i),
           text: `[${timeStr}] ${circle} ✗ ERROR ${status}${model} · ${err}${retry}${ms}`,
           type: "err",
+          time: timeStr,
+          circle,
+          status: String(status || ""),
+          model: String(fields.model || ""),
+          errMsg: String(err),
+          retry: String(fields.retry_after || ""),
+          ms: String(fields.ms || ""),
         });
       }
     }
@@ -383,18 +415,23 @@
   {:else if data}
     {#if viewMode === "console"}
       <Card pad="none">
-        <!-- Console View Top Bar -->
+        <!-- Console View Top Bar: stacks on mobile so 4 actions never overflow -->
         <div
-          class="p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex items-center justify-between gap-2.5"
+          class="p-2.5 sm:p-3 bg-[var(--fp-surface)] border-b border-[var(--fp-border)] flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div class="flex items-center gap-2">
-            <span class="led {requestLogs.length > 0 ? 'led-good' : 'led-idle'}"
+          <div class="flex items-center gap-2 min-w-0">
+            <span
+              class="led {requestLogs.length > 0
+                ? 'led-good'
+                : 'led-idle'} shrink-0"
             ></span>
-            <span class="font-mono text-xs text-[var(--fp-muted)]"
+            <span class="font-mono text-xs text-[var(--fp-muted)] truncate"
               >{requestLogs.length} {$tr("request events")} · /v1 only</span
             >
           </div>
-          <div class="flex items-center gap-2">
+          <div
+            class="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:justify-end"
+          >
             <Button
               variant="ghost"
               size="sm"
@@ -411,23 +448,23 @@
                   clearedBefore = Date.now();
                 }
               }}
-              class="!h-8 !text-xs !px-2.5 text-[var(--fp-dim)] hover:text-[var(--fp-error)]"
+              class="!h-8 !text-xs !px-2 sm:!px-2.5 text-[var(--fp-dim)] hover:text-[var(--fp-error)]"
             >
               <Trash2 size={13} />
-              <span>{$tr("Clear")}</span>
+              <span class="hidden min-[480px]:inline">{$tr("Clear")}</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onclick={copyConsoleLogs}
-              class="!h-8 !text-xs !px-2.5"
+              class="!h-8 !text-xs !px-2 sm:!px-2.5"
             >
               {#if copiedConsole}
                 <Check size={13} class="text-[var(--fp-success)]" />
                 <span class="text-[var(--fp-success)]">{$tr("Copied")}</span>
               {:else}
                 <Copy size={13} />
-                <span>{$tr("Copy")}</span>
+                <span class="hidden min-[480px]:inline">{$tr("Copy")}</span>
               {/if}
             </Button>
             <Button
@@ -435,7 +472,7 @@
               size="sm"
               aria-pressed={autoPoll}
               onclick={() => (autoPoll = !autoPoll)}
-              class="!h-8 !text-xs !px-2.5"
+              class="!h-8 !text-xs !px-2 sm:!px-2.5"
               title={autoPoll
                 ? $tr("Auto-refreshing every 1s")
                 : $tr("Auto-refresh paused")}
@@ -450,21 +487,21 @@
               loading={manualRefresh}
               onclick={refresh}
               disabled={loading && !data}
-              class="!h-8 !text-xs !px-2.5"
+              class="!h-8 !text-xs !px-2 sm:!px-2.5"
             >
               <RefreshCw size={13} />
-              <span>{$tr("Refresh")}</span>
+              <span class="hidden min-[480px]:inline">{$tr("Refresh")}</span>
             </Button>
           </div>
         </div>
-        <!-- Terminal Console View -->
+        <!-- Terminal Console View: structured rows wrap (never truncate, never break-all) -->
         <div
           bind:this={consoleEl}
-          class="bg-black rounded-b-lg p-4 font-mono text-xs h-[calc(100vh-280px)] min-h-[420px] overflow-y-auto space-y-1 select-text border-t border-[var(--fp-border)]"
+          class="bg-black rounded-b-lg p-2 sm:p-4 font-mono text-[11px] sm:text-xs h-[60vh] min-h-[320px] sm:h-[calc(100vh-280px)] sm:min-h-[420px] overflow-x-hidden overflow-y-auto space-y-1.5 select-text border-t border-[var(--fp-border)] max-w-full"
         >
           {#if requestLogs.length === 0}
             <div
-              class="h-full flex flex-col items-center justify-center text-zinc-500 italic py-16"
+              class="h-full flex flex-col items-center justify-center text-zinc-500 italic py-16 px-4 text-center"
             >
               <p>{$tr("No request activity recorded yet.")}</p>
               <p class="text-[11px] mt-1 text-zinc-600">
@@ -476,17 +513,64 @@
           {:else}
             {#each requestLogs as line (line.id)}
               <div
-                class="hover:bg-zinc-900/70 px-1 py-0.5 rounded transition-colors leading-relaxed break-all"
+                class="hover:bg-zinc-900/70 px-1.5 py-1 rounded transition-colors leading-relaxed min-w-0 overflow-hidden"
               >
-                <span
-                  class={line.type === "err"
-                    ? "text-red-400 font-medium"
-                    : line.type === "done"
-                      ? "text-amber-300"
-                      : "text-green-400"}
-                >
-                  {line.text}
-                </span>
+                {#if line.type === "req"}
+                  <div class="break-words">
+                    <span class="text-zinc-500">[{line.time}]</span>
+                    <span class="text-zinc-300">{line.circle} ▶ </span><span
+                      class="text-green-400 font-medium">POST {line.model}</span
+                    >
+                    {#if line.agent}<span class="text-zinc-400">
+                        → {line.agent}</span
+                      >{/if}
+                  </div>
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    {#each line.chips as chip, j (j)}
+                      <span
+                        class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {chip ===
+                        'STREAM'
+                          ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                          : chip === 'SYNC'
+                            ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
+                            : 'border-zinc-700/80 bg-zinc-900 text-zinc-300'}"
+                        >{chip}</span
+                      >
+                    {/each}
+                  </div>
+                {:else if line.type === "done"}
+                  <div class="break-words">
+                    <span class="text-zinc-500">[{line.time}]</span>
+                    <span class="text-zinc-300">{line.circle} 📊 </span><span
+                      class="text-amber-300 font-medium">DONE {line.ms}ms</span
+                    >
+                  </div>
+                  {#if line.chips.length > 0}
+                    <div class="flex flex-wrap gap-1 mt-1">
+                      {#each line.chips as chip, j (j)}
+                        <span
+                          class="inline-flex items-center rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] leading-4 whitespace-nowrap text-amber-200"
+                          >{chip}</span
+                        >
+                      {/each}
+                    </div>
+                  {/if}
+                {:else}
+                  <div class="break-words">
+                    <span class="text-zinc-500">[{line.time}]</span>
+                    <span class="text-zinc-300">{line.circle} ✗ </span><span
+                      class="text-red-400 font-medium"
+                      >ERROR{#if line.status}
+                        {line.status}{/if}{#if line.model}
+                        [{line.model}]{/if}</span
+                    >
+                    <span class="text-red-300/90">
+                      · {line.errMsg}{#if line.retry}
+                        · RETRY {line.retry}s{/if}{#if line.ms}
+                        · {line.ms}ms{/if}</span
+                    >
+                  </div>
+                {/if}
               </div>
             {/each}
           {/if}
@@ -658,10 +742,10 @@
                     <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 pl-1">
                       {#each fields as f (f.key)}
                         <span
-                          class="font-mono text-[11px] text-[var(--fp-muted)]"
+                          class="font-mono text-[11px] text-[var(--fp-muted)] min-w-0 break-words"
                         >
                           <span class="text-[var(--fp-dim)]">{f.key}</span
-                          >=<span>{f.value}</span>
+                          >=<span class="break-words">{f.value}</span>
                         </span>
                       {/each}
                     </div>

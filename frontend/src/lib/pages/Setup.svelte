@@ -261,7 +261,7 @@
             <span class="fp-num">{data.models.length}</span> served
           </p>
           <div class="flex flex-wrap gap-2">
-            {#each data.models as m (m.id)}
+            {#each data.models as m (m)}
               <button
                 type="button"
                 onclick={() => copyModel(m)}

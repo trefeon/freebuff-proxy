@@ -216,18 +216,21 @@ in `.env` if you want the login page; without it, the read-only pages
 
 What a healthy dashboard shows:
 
-- **Overview**: uptime, a token risk card per token. `low` risk is
-  healthy; `high` is worth a look at what changed (new egress, new
-  device).
-- **Tokens**: per-model session quota tables.
-- **Logs**: a rolling ring of recent log lines, no `level=ERROR` spam.
+- **Overview**: uptime, 6 KPI counters, client-integration base URL. (Account
+  risk cards live on the Tokens page, not here.)
+- **Tokens**: `Account #1, #2, …` rows (1-based pool order) with live
+  cooldown countdowns, per-account Lock/Remove/Move actions, rotation
+  radios, and the at-risk account cards. `low` risk is healthy; `high`
+  is worth a look at what changed (new egress, new device).
+- **Quota Tracker**: per-account premium-pool bars and session-quota tables.
+- **Logs**: console (live `/v1` traffic, 1s auto-refresh) plus the table
+  view of the newest 200 ring entries, no `level=ERROR` spam.
 - **Metrics**: live SVG sparklines of requests, runs, and usage.
-- **Playground**: a chat box that hits your own proxy through the
-  browser. Same result as the section 3 curl, but without the terminal.
+- **Setup**: mode card, client API key field, and per-model copy buttons.
 
-The dashboard auto-polls every 5 seconds. If the overview numbers freeze
-while the proxy still answers curl, the dashboard is stale and a restart
-clears it.
+Polling is per-page (Overview 15s, Tokens live store, Logs 1s). If one
+page's numbers freeze while the proxy still answers curl, reload that
+page; a proxy restart clears everything.
 
 ## 6. Service mode (run forever)
 
@@ -325,8 +328,8 @@ or one glance.
 3. `curl /v1/models` → non-empty model list.
 4. One non-streaming chat → 200, real content, `usage.total_tokens` > 0.
 5. One streaming chat → `data:` lines, ends `[DONE]`, no mid-stream error.
-6. Dashboard overview → tokens listed, risk cards render, no ERROR spam
-   in logs.
+6. Dashboard Tokens page → `Account #1, #2, …` rows listed, at-risk cards
+   render when present, no ERROR spam in logs.
 7. Logs show startup banner with `auth_tokens=N` matching your `.env`.
 8. `-test-token` exits 0 with `token OK`. (A quota 429 exits 1 — that is
    a quota day, not a proxy fault; the checklist then reads as "healthy

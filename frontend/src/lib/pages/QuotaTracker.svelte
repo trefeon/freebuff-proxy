@@ -153,7 +153,7 @@
                   {$tr("Session quota by model")}
                 </h3>
                 {#if token.quota?.length}
-                  <div class="overflow-x-auto">
+                  <div class="hidden md:block overflow-x-auto">
                     <table class="fp-table">
                       <caption class="sr-only"
                         >{$tr("Session quota by model for account {index}", {
@@ -241,6 +241,86 @@
                       </tbody>
                     </table>
                   </div>
+                  <!-- Mobile: stacked per-model entries (< md) — no horizontal scrolling -->
+                  <ul
+                    class="md:hidden flex flex-col gap-2.5"
+                    aria-label={$tr("Session quota by model for account {index}", {
+                      index: idx + 1,
+                    })}
+                  >
+                    {#each token.quota as q (q.model)}
+                      <li
+                        class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0"
+                      >
+                        <div class="flex items-start justify-between gap-2 min-w-0">
+                          <code
+                            class="fp-num text-xs break-all min-w-0 {q.near_limit
+                              ? 'text-[#f5a623] font-medium'
+                              : 'text-[var(--fp-text)]'}">{q.model}</code
+                          >
+                          <span
+                            class="fp-num text-xs shrink-0 rounded-full border border-[var(--fp-border)] px-2 py-0.5 {q.near_limit
+                              ? 'text-[#f5a623]'
+                              : 'text-[var(--fp-muted)]'}"
+                            aria-label={$tr("{recent} of {limit} sessions used", {
+                              recent: q.recent,
+                              limit: q.limit,
+                            })}
+                            >{q.recent}/{q.limit}</span
+                          >
+                        </div>
+                        {#if q.has_bar}
+                          <div
+                            class="h-1.5 w-full rounded-full overflow-hidden {q.near_limit
+                              ? 'bg-[#f5a623]/20'
+                              : 'bg-[var(--fp-inset)]'}"
+                            role="progressbar"
+                            aria-valuenow={q.usage_pct}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-label={$tr(
+                              "{model} session quota {pct}% used",
+                              { model: q.model, pct: q.usage_pct },
+                            )}
+                          >
+                            <div
+                              class="h-full rounded-full transition-all duration-300"
+                              style={`width: ${Math.min(100, Math.max(0, q.usage_pct))}%; background: ${q.near_limit ? "#ef4444" : "var(--fp-accent)"}`}
+                            ></div>
+                          </div>
+                        {/if}
+                        <dl
+                          class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs min-w-0"
+                        >
+                          <dt class="text-[var(--fp-dim)]">{$tr("reset")}</dt>
+                          <dd
+                            class="fp-num text-right break-words min-w-0 {q.near_limit
+                              ? 'text-[#f5a623] font-medium'
+                              : 'text-[var(--fp-dim)]'}"
+                          >
+                            {formatLocalDate(q.reset_at_utc) ||
+                              q.reset_at}{#if q.resets_in}
+                              ({q.resets_in}){/if}
+                          </dd>
+                          <dt class="text-[var(--fp-dim)]">{$tr("period")}</dt>
+                          <dd
+                            class="fp-num text-right break-words min-w-0 {q.near_limit
+                              ? 'text-[#f5a623]'
+                              : 'text-[var(--fp-dim)]'}">{q.period}</dd
+                          >
+                          <dt class="text-[var(--fp-dim)]">
+                            {$tr("entitlement")}
+                          </dt>
+                          <dd
+                            class="fp-num text-right break-words min-w-0 {q.near_limit
+                              ? 'text-[#f5a623]'
+                              : 'text-[var(--fp-dim)]'}"
+                            >{q.has_entitlement ? q.entitled : "—"}</dd
+                          >
+                        </dl>
+                      </li>
+                    {/each}
+                  </ul>
                 {:else}
                   <p class="text-xs text-[var(--fp-dim)] italic">
                     {$tr("No quota data available for this session.")}

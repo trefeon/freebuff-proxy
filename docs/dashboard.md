@@ -19,12 +19,14 @@ The session cookie is stateless (HMAC-signed expiry with a per-process random ke
 
 ---
 
-## Pages & Navigation (6 Curated Sections)
+## Pages & Navigation (9 Sections)
 
-The dashboard provides 6 focused operational sections:
+The dashboard provides 9 focused operational sections. Pool accounts are
+labeled **Account #1, #2, …** everywhere (1-based, in pool order) so the
+first credential reads as account 1, never index 0.
 
 ### 1. Overview
-- **System Status Line**: Live badge displaying active mode (`Pooled` or `Bridge`), proxy version, process uptime, and request count.
+- **System Status Line**: Live badge displaying active mode (`Pooled`, `Bridge` or `Hybrid`), proxy version, process uptime, and request count.
 - **Key Performance Indicators (KPIs)**: 6 tabular-mono counters:
   - Total Pool Tokens
   - Active / Busy Tokens
@@ -32,40 +34,47 @@ The dashboard provides 6 focused operational sections:
   - Banned Tokens
   - Requests Served Today
   - Served Models Count
-- **Token Risk Cards**: Surfaces tokens with active cooldowns, elevated ban risk scores, or rate limits.
+- **Client Integration**: Universal base URL (`/v1`) with copy button plus OpenAI and Anthropic endpoint shapes.
+- **Bridge Relay Card** (hybrid mode): active bridge-client count.
+- **Freebucks Allowance**: per-account daily allowance windows when reported upstream.
 
-### 2. Tokens & Quotas
-- **Token Table**: Lists all managed tokens with masked short IDs (`cb_...`), status badges, instance IDs, active runs, cooldown countdown timers, and per-token actions:
-  - **Test Token**: Zero-cost upstream validity probe.
-  - **Unlock**: Clears cooldown locks and re-admits the token.
-  - **Remove**: Deletes token from the pool.
-- **Add Token Form**: Input form to append new FreeBuff auth tokens (`cb_...`) directly to `.env`.
+### 2. Tokens
+- **Account Table**: Every pooled credential as `Account #N` with status badge, session instance, live cooldown countdown (ticks every second; `45s`, `2m 10s`, `expiring…`, rolling over to `27d 10h` past 24h), and per-account actions:
+  - **Move Up / Move Down**: Reorder pool priority (`POST /admin/tokens/swap`); Move Up is disabled on the first account, Move Down on the last.
+  - **Clear**: Clears a stale cooldown lock.
+  - **Lock / Unlock**: Excludes an account from rotation until unlocked.
+  - **Remove**: Deletes the account from the pool and `.env` (confirm dialog; dismissing sends nothing).
+  - Expandable rows: active-session countdown with **Drop Session**, model allowlist pinning, and (with `DEVTOOLS_ENABLED=true`) a session-spawn toolbar with **Make Session**, **Probe**, and **Finish Runs**.
+- **Account Risk Cards**: At-risk accounts (active cooldowns, elevated ban risk) with live cooldown countdowns — moved here from Overview so all account health lives on one page.
+- **Token Rotation Policy**: `Drain (safest)` / `Round Robin (1:1)` / `Least Used` / `Random` radios plus the **Auto Failover on Rate Limit (429)** switch, both persisted to `.env`.
+- **Add Token Form**: Appends new FreeBuff auth tokens directly to `.env`.
 - **OAuth Login Wizard**: One-click device-code browser login flow for minting fresh tokens without the CLI.
-- **Per-Model Quota Breakdown**: Expandable rows showing real-time upstream quota limits, recent usage counts, period reset countdowns (Pacific midnight), and entitlement tiers.
 
-### 3. Models Registry
-- Live catalog of all models available on FreeBuff.
-- Upstream agent routing targets (`freebuff/deepseek/deepseek-v4-flash`, `mimo/mimo-v2.5`, `openai/gpt-5.6-luna`, `minimax/minimax-m3`, etc.).
-- Access tier annotations (`Full Tier` vs `Limited Tier`).
-- 1-click model ID copy actions for quick client configuration.
+### 3. Quota Tracker
+- **Per-Account Cards** (`Account #1…`): premium-pool bars and per-model session-quota tables with live upstream limits, recent usage, period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them.
 
-### 4. Configuration Studio
-- **Visual `.env` Editor**: In-browser monospace editor for live configuration changes.
-- **Validation & Safe Save**:
-  - **Validate**: Checks syntax, port availability, and token formats before applying.
-  - **Save & Reload**: Writes `.env` atomically via temp-file rename (mode `0600`) and triggers hot reload (`POST /admin/reload`) without dropping active connections.
-  - **Rollback**: Automatically reverts to the previous valid configuration if validation fails.
-  - **Restart-only keys**: A save reports which keys only take effect after a restart (`TLS_FINGERPRINT`, `TRANSIENT_RETRIES`, `UPSTREAM_BASE_URL`, and the other construction-time knobs) instead of implying a fully live update.
-- **Effective Configuration Table**: Read-only breakdown of active in-memory settings with automatic secret redaction (`AUTH_TOKENS`, `ADMIN_TOKEN`, `API_KEYS` masked).
+### 4. Models
+- Live catalog of served models with upstream agent bindings and session quotas; 1-click model ID copy actions.
 
-### 5. In-Memory Logs
-- Live circular log ring buffer (last 500 entries) capturing structured slog output.
-- Log level filtering (`ALL`, `INFO`, `DEBUG`, `WARN`, `ERROR`).
-- Real-time substring search and automatic live polling.
-- Horizontal scroll with mono formatting and level indicator dots.
+### 5. Logs
+- **Console** (default): live inference-traffic stream (`/v1` only) with structured per-request rows and status chips, auto-refreshing every 1s with pause, manual refresh, clear, and copy controls.
+- **Table**: newest 200 ring entries with log-level select (`INFO`, `DEBUG`, `WARN`, `ERROR`), message search (`?msg=`), Hide-admin toggle, clear-filters, rows-per-page select, and Next/Prev pagination.
+### 6. Metrics
+- Tabular stat cards with SVG sparklines and a direct link to the raw `/metrics` Prometheus feed.
 
-### 6. Setup & Client Integration
-- Mode-aware quick-start cards with one-click copy snippets for major AI harnesses:
+### 7. Traces
+- Recent chat traces with per-phase latency breakdowns (token, model, status, duration, error class).
+
+### 8. Settings
+- Intent-driven cards whose values apply live on save (no container restart):
+  - **Security**: admin password change with inline validation (minimum 6 characters, mismatch detection, show/hide toggles).
+  - **General**: Anti-Ban Safe Mode, server log level, bridge-mode toggle.
+  - **Pool**: per-IP rate limit, 429 auto-failover.
+  - **Upstream**: model aliases, allowed-models filter, reasoning-in-content, model token locks.
+- **Advanced: raw `.env` editor** (collapsible): direct editing with server-side validation; rejected writes roll back. Unsaved-changes banner with **Save Changes** / **Discard**.
+
+### 9. Setup
+- Mode-aware client setup: universal Base URL, client API key field with **Generate** / **Reset**, per-model 1-click copy buttons, and copy-paste snippets for major AI harnesses:
   - **OpenCode** (`opencode.json`)
   - **Claude Code CLI** (`ANTHROPIC_BASE_URL` & `ANTHROPIC_API_KEY`)
   - **Cursor / VS Code Continue / Cline** (OpenAI endpoint)

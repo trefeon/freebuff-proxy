@@ -127,11 +127,11 @@
 
   <ConfirmModal />
 
-  <div class="flex-1 {activeTab !== 'login' ? 'md:pl-56' : ''}">
+  <div class="flex-1 min-w-0 {activeTab !== 'login' ? 'md:pl-56' : ''}">
     <main
       id="main-content"
       tabindex="-1"
-      class="w-full max-w-[1200px] mx-auto px-6 py-8"
+      class="w-full max-w-[1200px] mx-auto px-4 py-6 sm:px-6 sm:py-8"
     >
       {#if $sessionExpired && activeTab !== "login"}
         <div class="space-y-6 page-enter">

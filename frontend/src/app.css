@@ -70,6 +70,8 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  /* Page never scrolls sideways; inner tables/code keep their own overflow-x-auto */
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -288,7 +290,6 @@ pre,
   background: rgba(248, 113, 113, 0.12);
   border-color: var(--fp-error);
 }
-
 .fp-btn.fp-btn-sm,
 .fp-btn-sm {
   padding: 0.25rem 0.625rem;
@@ -298,6 +299,13 @@ pre,
   min-width: auto;
   font-size: 12px;
   gap: 5px;
+}
+
+/* Icon-only copy button (table cells, mobile cards): square tap target, no caption */
+.fp-btn.fp-copy-icon {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  min-width: 36px;
 }
 
 .fp-input {

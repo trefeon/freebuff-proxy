@@ -528,7 +528,8 @@ test.describe("dashboard hermetic mocks", () => {
     // Console is the default view: all five /v1 lines render with the
     // MSG/TOOL counts, no crash.
     await expect(page.getByText("5 request events")).toBeVisible();
-    await expect(page.getByText(/3 MSG · 2 TOOL/)).toBeVisible();
+    await expect(page.getByText("3 MSG", { exact: true })).toBeVisible();
+    await expect(page.getByText("2 TOOL", { exact: true })).toBeVisible();
     await expect(page.getByText("openai/gpt-5.6-luna").first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
@@ -548,9 +549,9 @@ test.describe("dashboard hermetic mocks", () => {
 
     // Models fixture has 6 rows
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByText("deepseek/deepseek-v4-flash")).toBeVisible();
-    await expect(page.getByText("upstage/solar-pro4")).toBeVisible();
-    await expect(page.getByText("z-ai/glm-5.3-flash")).toBeVisible();
+    await expect(page.getByText("deepseek/deepseek-v4-flash").first()).toBeVisible();
+    await expect(page.getByText("upstage/solar-pro4").first()).toBeVisible();
+    await expect(page.getByText("z-ai/glm-5.3-flash").first()).toBeVisible();
     // Count rows: header + 6 data rows
     const rows = page.locator("table tbody tr");
     await expect(rows).toHaveCount(6);

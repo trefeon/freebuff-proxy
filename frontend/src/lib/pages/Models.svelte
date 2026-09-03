@@ -77,7 +77,8 @@
 
     {#if data.models.length > 0}
       <Card title={$tr("Model Catalog")} pad="none">
-        <div class="overflow-x-auto">
+        <!-- Desktop: table (md+) -->
+        <div class="hidden md:block overflow-x-auto">
           <table class="fp-table">
             <thead>
               <tr>
@@ -98,7 +99,11 @@
                         title={$tr("Click copy button to copy model ID")}
                         >{m.id}</span
                       >
-                      <CopyButton text={m.id} label={$tr("Copy model ID")} />
+                      <CopyButton
+                        text={m.id}
+                        label={$tr("Copy model ID")}
+                        iconOnly
+                      />
                     </div>
                   </td>
                   <td>
@@ -126,6 +131,56 @@
             </tbody>
           </table>
         </div>
+        <!-- Mobile: stacked cards (< md) — no horizontal scrolling -->
+        <ul
+          class="md:hidden flex flex-col gap-2.5 p-3.5"
+          aria-label={$tr("Model Catalog")}
+        >
+          {#each data.models as m (m.id)}
+            {@const bound = Boolean(m.agent)}
+            <li class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0">
+              <div class="flex items-start justify-between gap-2 min-w-0">
+                <code
+                  class="fp-num text-[13px] break-all min-w-0 text-[var(--fp-text)]"
+                  >{m.id}</code
+                >
+                <span class="shrink-0 -mr-1 -mt-1">
+                  <CopyButton
+                    text={m.id}
+                    label={$tr("Copy model ID")}
+                    iconOnly
+                  />
+                </span>
+              </div>
+              <div
+                class="flex items-center justify-between gap-2 border-t border-[var(--fp-border)] pt-2"
+              >
+                <StatusBadge
+                  status={bound ? $tr("served") : $tr("unbound")}
+                  tone={bound ? "good" : "idle"}
+                />
+                <span
+                  class="fp-num text-xs text-[var(--fp-muted)] text-right break-words min-w-0"
+                  >{m.quota || "unlimited session"}</span
+                >
+              </div>
+              <div
+                class="flex items-center justify-between gap-2 text-xs min-w-0"
+              >
+                <span class="text-[var(--fp-dim)] shrink-0">{$tr("Agent")}</span
+                >
+                {#if bound}
+                  <span
+                    class="fp-mono text-[var(--fp-muted)] text-right break-all min-w-0"
+                    >{m.agent}</span
+                  >
+                {:else}
+                  <span class="text-[var(--fp-dim)]">—</span>
+                {/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
       </Card>
     {:else}
       <EmptyState

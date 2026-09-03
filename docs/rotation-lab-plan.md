@@ -42,11 +42,10 @@
 
 ## Verification
 
-- `env -u AUTH_TOKENS -u ADMIN_TOKEN go vet ./backend/... && go test ./backend/...` (18 paket, `rotation_study_test` 2 skenario)
+- `env -u AUTH_TOKENS -u ADMIN_TOKEN go vet ./backend/... && go test ./backend/...` (hermetik; `rotation_study_test` 2 skenario)
 - `npm --prefix frontend run build` → `backend/internal/dashboard/dist` (hash baru)
-- `npx --prefix frontend playwright test` 8/8 hermetik (4173 `page.route`, 5-token fixtures lockstep, `reuseExistingServer:true` tapi `hub restart serve-static` sebelum run kalau hash baru)
-- Live `3457` (go-proxy + `ADMIN_TOKEN=dev123`) + `5173` (vite HMR) + `4173` (serve-static) via `hub ps`
+- `npx --prefix frontend playwright test` hermetik penuh (dashboard + ux + interactions suites via 4173 `page.route` fixtures, `reuseExistingServer:true`)
+- Live `3457` (go-proxy) + `5173` (vite HMR) + `4173` (serve-static)
 
 ## Out of Scope
-- Tidak ubah `dataFor('setup')/APIHandler('setup')` (Setup sudah dihapus, `#setup` blank sengaja)
 - Tidak ubah `freebuff-models.ts` pin — bukan registry work
