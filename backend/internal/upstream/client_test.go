@@ -17,9 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/andybalholm/brotli"
-	"github.com/klauspost/compress/zstd"
-
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
 )
@@ -201,20 +198,8 @@ func TestWrapDecompress(t *testing.T) {
 		// Multi-value Content-Encoding is rejected with a clear error, not
 		// silently mis-decoded.
 		{"multi-value encoding rejected", "gzip, br", nil, "unsupported Content-Encoding"},
-		{"brotli", "br", func(b []byte) []byte {
-			var buf bytes.Buffer
-			zw := brotli.NewWriter(&buf)
-			_, _ = zw.Write(b)
-			_ = zw.Close()
-			return buf.Bytes()
-		}, ""},
-		{"zstd", "zstd", func(b []byte) []byte {
-			var buf bytes.Buffer
-			zw, _ := zstd.NewWriter(&buf)
-			_, _ = zw.Write(b)
-			_ = zw.Close()
-			return buf.Bytes()
-		}, ""},
+		{"brotli rejected", "br", nil, "unsupported Content-Encoding"},
+		{"zstd rejected", "zstd", nil, "unsupported Content-Encoding"},
 		{"unsupported encoding", "lz4", nil, "unsupported Content-Encoding"},
 	}
 	for _, tc := range cases {
@@ -306,37 +291,6 @@ func TestDumpRedactsTokenHeaders(t *testing.T) {
 	// stays for any future setter).
 	if strings.Contains(strings.ToLower(dump), "x-codebuff-api-key") {
 		t.Errorf("dump file contains an x-codebuff-api-key header line (absent on the chat path):\n%s", dump)
-	}
-}
-
-// TestWrapDecompressZstdDecoderClosed guards the zstd decoder lifecycle: closing a
-// zstd-wrapped response body must release the per-response decoder, not just
-// the underlying socket (decoder buffers would otherwise linger until GC).
-func TestWrapDecompressZstdDecoderClosed(t *testing.T) {
-	var buf bytes.Buffer
-	zw, _ := zstd.NewWriter(&buf)
-	_, _ = zw.Write([]byte(`{"status":"active"}`))
-	_ = zw.Close()
-
-	resp := &http.Response{
-		Header: http.Header{"Content-Encoding": []string{"zstd"}},
-		Body:   io.NopCloser(bytes.NewReader(buf.Bytes())),
-	}
-	if err := wrapDecompress(resp); err != nil {
-		t.Fatal(err)
-	}
-	dc, ok := resp.Body.(*decompressCloser)
-	if !ok {
-		t.Fatalf("body = %T, want *decompressCloser", resp.Body)
-	}
-	if dc.closeFn == nil {
-		t.Error("zstd decompressCloser has no closeFn: decoder resources leak until GC")
-	}
-	if _, err := io.ReadAll(dc); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if err := dc.Close(); err != nil {
-		t.Fatalf("close: %v", err)
 	}
 }
 

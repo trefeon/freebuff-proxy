@@ -51,7 +51,7 @@ var (
 		SecChUA:         `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`,
 		SecChUAPlatform: `"Windows"`,
 		AcceptLanguage:  "en-US,en;q=0.9",
-		AcceptEncoding:  "gzip, deflate, br",
+		AcceptEncoding:  "gzip, deflate",
 	}
 
 	// ProfileChrome126 mimics Chrome 126 on Windows (2024+).
@@ -62,7 +62,7 @@ var (
 		SecChUA:         `"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"`,
 		SecChUAPlatform: `"Windows"`,
 		AcceptLanguage:  "en-US,en;q=0.9",
-		AcceptEncoding:  "gzip, deflate, br, zstd",
+		AcceptEncoding:  "gzip, deflate",
 	}
 
 	// ProfileSafari17 mimics Safari 17 on macOS.
@@ -72,7 +72,7 @@ var (
 		CustomSpec:     safari17Spec(),
 		UserAgent:      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
 		AcceptLanguage: "en-US,en;q=0.9",
-		AcceptEncoding: "gzip, deflate, br",
+		AcceptEncoding: "gzip, deflate",
 	}
 
 	// ProfileSafari18 mimics Safari 18 on macOS (2024+).
@@ -82,7 +82,7 @@ var (
 		CustomSpec:     safari17Spec(),
 		UserAgent:      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
 		AcceptLanguage: "en-US,en;q=0.9",
-		AcceptEncoding: "gzip, deflate, br",
+		AcceptEncoding: "gzip, deflate",
 	}
 
 	// ProfileFirefox120 mimics Firefox 120 on Linux.
@@ -91,7 +91,7 @@ var (
 		ClientHelloID:  utls.HelloFirefox_120,
 		UserAgent:      "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
 		AcceptLanguage: "en-US,en;q=0.5",
-		AcceptEncoding: "gzip, deflate, br",
+		AcceptEncoding: "gzip, deflate",
 	}
 
 	// ProfileFirefox128 mimics Firefox 128 ESR on Linux (2024+).
@@ -100,7 +100,7 @@ var (
 		ClientHelloID:  utls.HelloFirefox_120,
 		UserAgent:      "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
 		AcceptLanguage: "en-US,en;q=0.5",
-		AcceptEncoding: "gzip, deflate, br, zstd",
+		AcceptEncoding: "gzip, deflate",
 	}
 
 	// ProfileEdge126 mimics Microsoft Edge 126 on Windows (2024+).
@@ -111,7 +111,7 @@ var (
 		SecChUA:         `"Not/A)Brand";v="8", "Chromium";v="126", "Microsoft Edge";v="126"`,
 		SecChUAPlatform: `"Windows"`,
 		AcceptLanguage:  "en-US,en;q=0.9",
-		AcceptEncoding:  "gzip, deflate, br, zstd",
+		AcceptEncoding:  "gzip, deflate",
 	}
 
 	// ProfileRandom picks a random fingerprint per connection.
@@ -119,7 +119,7 @@ var (
 		ID:             ProfileIDRandom,
 		ClientHelloID:  utls.HelloRandomized,
 		AcceptLanguage: "en-US,en;q=0.9",
-		AcceptEncoding: "gzip, deflate, br",
+		AcceptEncoding: "gzip, deflate",
 	}
 
 	// ProfileAuto rotates across modern profiles per connection.

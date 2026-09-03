@@ -24,9 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andybalholm/brotli"
-	"github.com/klauspost/compress/zstd"
-
 	"freebuff-proxy/backend/internal/stealth"
 	"freebuff-proxy/backend/internal/telemetry"
 )
@@ -345,12 +342,10 @@ func (c *Client) retryDelay() time.Duration {
 }
 
 // wrapDecompress replaces resp.Body with a transparent decompressing reader
-// when the upstream compresses the response. This is REQUIRED with the
-// stealth profile: the browser Accept-Encoding ("gzip, deflate, br") makes
-// Go's transport skip its automatic gzip handling (that only kicks in when
-// Go itself set the header), so compressed bodies would arrive as garbage.
-// The plain transport sends no Accept-Encoding and is unaffected (Go
-// decompresses its own gzip transparently and strips the header).
+// when the upstream compresses the response (gzip/deflate only — stdlib).
+// newRequest intentionally sends no browser Accept-Encoding (CLI fidelity),
+// so live upstream wire is Go-default gzip handled here; an uninvited
+// br/zstd/lz4 errors as unsupported Content-Encoding, same as before.
 func wrapDecompress(resp *http.Response) error {
 	enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
 	if enc == "" || enc == "identity" {
@@ -384,19 +379,6 @@ func wrapDecompress(resp *http.Response) error {
 		} else {
 			resp.Body = &decompressCloser{Reader: flate.NewReader(br), underlying: underlying}
 		}
-	case "br":
-		resp.Body = &decompressCloser{Reader: brotli.NewReader(underlying), underlying: underlying}
-	case "zstd":
-		// The stealth profiles advertise zstd in Accept-Encoding, so the
-		// upstream may legitimately respond with it.
-		zr, err := zstd.NewReader(underlying, zstd.WithDecoderConcurrency(1))
-		if err != nil {
-			return fmt.Errorf("zstd: %w", err)
-		}
-		// zstd decoders are stateful (per-response buffers), unlike
-		// gzip/brotli: Close must release the decoder's resources, not just
-		// the underlying socket.
-		resp.Body = &decompressCloser{Reader: zr, underlying: underlying, closeFn: func() error { zr.Close(); return nil }}
 	default:
 		return fmt.Errorf("unsupported Content-Encoding %q", enc)
 	}
@@ -406,19 +388,14 @@ func wrapDecompress(resp *http.Response) error {
 }
 
 // decompressCloser bridges a decompressing reader back to the underlying
-// response body so Close always reaches the socket. closeFn optionally
-// releases decoder-local resources (e.g. a zstd decoder's buffers) that are
-// distinct from the underlying stream.
+// response body so Close always reaches the socket. The stdlib decoders
+// (gzip/zlib/flate) need no per-response cleanup beyond that.
 type decompressCloser struct {
 	io.Reader
 	underlying io.ReadCloser
-	closeFn    func() error
 }
 
 func (d *decompressCloser) Close() error {
-	if d.closeFn != nil {
-		_ = d.closeFn()
-	}
 	return d.underlying.Close()
 }
 

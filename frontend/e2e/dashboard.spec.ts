@@ -115,6 +115,44 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("z-ai/glm-5.2").first()).toBeVisible();
   });
 
+  test("Token drawer pins a model through MODEL_LOCKS save", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/config");
+    await page.route("**/admin/api/config", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          env_content: "AUTH_TOKENS=tok0,tok1\n",
+          has_env_file: true,
+        }),
+      });
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    const table = page.locator("table.fp-table");
+    await expect(table.getByText("#0")).toBeVisible({ timeout: 10000 });
+    await table.locator('button[aria-label*="Expand details"]').first().click();
+    await expect(
+      page.getByText("Unlocked — serves any model.").first(),
+    ).toBeVisible();
+
+    const postReqPromise = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().includes("/admin/config"),
+    );
+    await table
+      .getByLabel("Pin a model to this token")
+      .selectOption("mimo/mimo-v2.5");
+    await table.getByRole("button", { name: "Pin" }).click();
+    const postReq = await postReqPromise;
+    expect(decodeURIComponent(postReq.postData() ?? "")).toContain(
+      "MODEL_LOCKS=0:mimo/mimo-v2.5",
+    );
+  });
+
   test("Quota Tracker shows premium pool and per-model session quota", async ({
     page,
   }) => {
