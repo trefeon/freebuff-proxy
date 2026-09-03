@@ -287,10 +287,10 @@
     handleFilterChange();
   }
 
-  // Auto-poll every 5s while enabled; manual refresh / filter changes always fetch.
+  // Auto-poll every 1s while enabled; manual refresh / filter changes always fetch.
   usePolling(async () => {
     if (autoPoll) await fetchLogs();
-  }, 5000);
+  }, 1000);
 
   function levelTone(level) {
     switch (level) {
@@ -434,9 +434,10 @@
               aria-pressed={autoPoll}
               onclick={() => (autoPoll = !autoPoll)}
               class="!h-8 !text-xs !px-2.5"
+              title={autoPoll ? $tr("Auto-refreshing every 1s") : $tr("Auto-refresh paused")}
             >
               {$tr("Auto {state}", {
-                state: autoPoll ? $tr("on") : $tr("off"),
+                state: autoPoll ? "1s" : $tr("off"),
               })}
             </Button>
             <Button
@@ -575,9 +576,10 @@
               aria-pressed={autoPoll}
               onclick={() => (autoPoll = !autoPoll)}
               class="!h-8 !text-xs !px-2.5"
+              title={autoPoll ? $tr("Auto-refreshing every 1s") : $tr("Auto-refresh paused")}
             >
               {$tr("Auto {state}", {
-                state: autoPoll ? $tr("on") : $tr("off"),
+                state: autoPoll ? "1s" : $tr("off"),
               })}
             </Button>
 
