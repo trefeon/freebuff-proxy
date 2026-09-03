@@ -240,13 +240,15 @@ func (d *Dashboard) tokensLiveData() tokensLiveData {
 				FreeWindows:      c.FreeWindows,
 				Subscription:     c.Subscription,
 			},
-			SessionInstance: tok.SessionInstance,
-			SessionModel:    tok.SessionModel,
-			Quota:           tok.Quota,
-			HasQuota:        tok.HasQuota,
-			QuotaStale:      tok.QuotaStale,
-			QuotaSavedAt:    tok.QuotaSavedAt,
-			PremiumQuota:    tok.PremiumQuota,
+			SessionInstance:         tok.SessionInstance,
+			SessionModel:            tok.SessionModel,
+			SessionRemainingSeconds: tok.SessionRemainingSeconds,
+			SessionExpiresAt:        tok.SessionExpiresAt,
+			Quota:                   tok.Quota,
+			HasQuota:                tok.HasQuota,
+			QuotaStale:              tok.QuotaStale,
+			QuotaSavedAt:            tok.QuotaSavedAt,
+			PremiumQuota:            tok.PremiumQuota,
 		})
 	}
 	return live

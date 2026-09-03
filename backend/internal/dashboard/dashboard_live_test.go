@@ -1,7 +1,9 @@
 package dashboard_test
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -162,5 +164,87 @@ func TestLiveViewTokensOmitsStatic(t *testing.T) {
 		if _, ok := card[k]; !ok {
 			t.Errorf("live token detail missing live %q", k)
 		}
+	}
+}
+
+// TestLiveViewCarriesSessionCountdown pins the #322 live-poll contract for
+// the session timers: after a real admission, the live shape must carry the
+// same nonzero session_remaining_seconds / session_expires_at as the full
+// shape, or merged tokens lose their countdowns after the first poll.
+func TestLiveViewCarriesSessionCountdown(t *testing.T) {
+	mock := testutil.NewMock()
+	t.Cleanup(mock.Close)
+	mock.ChatBody = testutil.SSEEvent(`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-flash","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`) +
+		testutil.SSEEvent(`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"deepseek/deepseek-v4-flash","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`)
+	cfg := &config.Config{
+		AuthTokens:         []string{"tok-0"},
+		ListenAddr:         "127.0.0.1:3457",
+		RotationInterval:   time.Hour,
+		RequestTimeout:     15 * time.Minute,
+		SessionCallTimeout: 5 * time.Second,
+		RegistryRefresh:    6 * time.Hour,
+		UpstreamBaseURL:    mock.URL(),
+	}
+	client, err := upstream.New("tok-0", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := session.NewManager(client)
+	reg := registry.New(cfg, nil)
+	reg.LoadFallback()
+	p, err := pool.New(cfg, []*upstream.Client{client}, []*session.Manager{sess}, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := dashboard.New(func() *config.Config { return cfg }, p, reg, nil, nil)
+
+	// Real admission so the session carries a live expiry countdown.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	lease, err := p.Acquire(ctx, "deepseek/deepseek-v4-flash")
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	up, err := p.Chat(ctx, lease, upstream.ChatOptions{Model: "deepseek/deepseek-v4-flash", RunID: lease.Run.RunID, SessionInstanceID: lease.SessionInstanceID},
+		[]byte(`{"model":"deepseek/deepseek-v4-flash","messages":[{"role":"user","content":"ping"}]}`))
+	if err != nil {
+		t.Fatalf("chat: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, up)
+	_ = up.Close()
+	p.LeaseRelease(lease)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /admin/api/tokens", d.APIHandler("tokens"))
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+
+	full := getJSON(t, ts.URL+"/admin/api/tokens")
+	live := getJSON(t, ts.URL+"/admin/api/tokens?view=live")
+	fullToks, _ := full["tokens"].([]any)
+	liveToks, _ := live["tokens"].([]any)
+	if len(fullToks) != 1 || len(liveToks) != 1 {
+		t.Fatalf("tokens len full=%d live=%d, want 1/1", len(fullToks), len(liveToks))
+	}
+	fullCard, _ := fullToks[0].(map[string]any)
+	liveCard, _ := liveToks[0].(map[string]any)
+	fullRem, _ := fullCard["session_remaining_seconds"].(float64)
+	liveRem, liveHasRem := liveCard["session_remaining_seconds"].(float64)
+	if fullRem <= 0 {
+		t.Fatalf("full session_remaining_seconds = %v, want >0 (mock expires in 30m)", fullRem)
+	}
+	if !liveHasRem {
+		t.Fatalf("live token missing session_remaining_seconds (full=%v)", fullRem)
+	}
+	if liveRem != fullRem {
+		t.Errorf("live session_remaining_seconds = %v, want full %v", liveRem, fullRem)
+	}
+	fullExp, _ := fullCard["session_expires_at"].(string)
+	liveExp, _ := liveCard["session_expires_at"].(string)
+	if fullExp == "" {
+		t.Fatalf("full session_expires_at empty, want live expiry")
+	}
+	if liveExp != fullExp {
+		t.Errorf("live session_expires_at = %q, want full %q", liveExp, fullExp)
 	}
 }

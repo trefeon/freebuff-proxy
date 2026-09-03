@@ -704,6 +704,7 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		QuotaSavedAt: m.snap.savedQuotaAt,
 		GlmPromo:     m.state.glmPromo,
 		Standing:     m.state.standing,
+		RemainingMs:  m.state.remainingMs,
 		Referral:     m.state.referral,
 		Freebucks:    m.state.freebucks,
 		FreeWindows:  m.state.freeWindows,

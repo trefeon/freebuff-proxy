@@ -81,8 +81,9 @@ func TestSnapshotRestoresPersistedQuotaStale(t *testing.T) {
 	// A live quota-carrying commit clears the mark.
 	mgr2.mu.Lock()
 	mgr2.commit(&cachedState{
-		status:     "active",
-		instanceID: "inst-quota-1",
+		status:      "active",
+		instanceID:  "inst-quota-1",
+		remainingMs: 42 * 60 * 1000,
 		quotaByModel: map[string]upstream.ModelQuota{
 			"mimo/mimo-v2.5": {Model: "mimo/mimo-v2.5", Limit: 5, RecentCount: 3},
 		},
@@ -90,6 +91,11 @@ func TestSnapshotRestoresPersistedQuotaStale(t *testing.T) {
 	mgr2.mu.Unlock()
 	if snap := mgr2.Snapshot(); snap.QuotaStale {
 		t.Errorf("QuotaStale after live commit = true, want false")
+	}
+	// Live countdowns survive alongside the quota (dashboard ?view=live
+	// carries the session timers every poll).
+	if snap := mgr2.Snapshot(); snap.RemainingMs != 42*60*1000 {
+		t.Errorf("RemainingMs after live commit = %d, want %d", snap.RemainingMs, 42*60*1000)
 	}
 }
 
