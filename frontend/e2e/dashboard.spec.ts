@@ -415,7 +415,10 @@ test.describe("dashboard hermetic mocks", () => {
     await mockDashboard(page, f, {
       logs: {
         entries: [
-          E("chat request", "req_id=dup  model=openai/gpt-5.6-luna"),
+          E(
+            "chat request",
+            "req_id=dup  model=openai/gpt-5.6-luna  msgs=3  tools=2",
+          ),
           E("chat routing", "req_id=dup  agent=stealth/ox-alpha"),
           E(
             "access",
@@ -428,11 +431,11 @@ test.describe("dashboard hermetic mocks", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view: all five /v1 lines render, no crash.
+    // Console is the default view: all five /v1 lines render with the
+    // MSG/TOOL counts, no crash.
     await expect(page.getByText("5 request events")).toBeVisible();
-    await expect(
-      page.getByText("openai/gpt-5.6-luna").first(),
-    ).toBeVisible();
+    await expect(page.getByText(/3 MSG · 2 TOOL/)).toBeVisible();
+    await expect(page.getByText("openai/gpt-5.6-luna").first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 

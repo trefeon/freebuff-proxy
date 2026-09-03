@@ -132,12 +132,17 @@
           : "openai→openai";
         const stream =
           fields.stream === "true" || fields.stream === "1" ? "STREAM" : "SYNC";
+        const msgCount = Number(fields.msgs) || 0;
+        const toolCount = Number(fields.tools) || 0;
+        const counts =
+          (msgCount > 0 ? ` · ${msgCount} MSG` : "") +
+          (toolCount > 0 ? ` · ${toolCount} TOOL` : "");
         const effort = fields.reasoning_effort
           ? ` · THINK:${fields.reasoning_effort}`
           : "";
         const acc = fields.token ? ` · ACC:${fields.token}` : "";
         const lineText =
-          `[${timeStr}] ${circle} ▶ POST ${model} ${agent} · FMT: ${fmt} · ${stream}${effort}${acc}`.replace(
+          `[${timeStr}] ${circle} ▶ POST ${model} ${agent} · FMT: ${fmt} · ${stream}${counts}${effort}${acc}`.replace(
             /\s+/g,
             " ",
           );
