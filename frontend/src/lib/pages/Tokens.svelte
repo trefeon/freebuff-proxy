@@ -380,7 +380,9 @@
           : "drain";
 
         const failoverVal = getEnvValue(envContent, "RATE_LIMIT_FAILOVER");
-        rateLimitFailover = failoverVal ? failoverVal.toLowerCase() !== "false" : true;
+        rateLimitFailover = failoverVal
+          ? failoverVal.toLowerCase() !== "false"
+          : true;
       } catch {
         devToolsEnabled = false;
         tokenRotation = "drain";
@@ -660,8 +662,7 @@
               <span class="text-xs font-semibold text-[var(--fp-text)]">
                 {$tr("Auto Failover on Rate Limit (429)")}
               </span>
-              <span
-                class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
+              <span class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
               ></span>
             </div>
             <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">

@@ -193,7 +193,9 @@
           (fields.code ? `[${fields.code}]` : "") ||
           (msg === "access" ? `HTTP ${status}` : "request failed");
         const ms = fields.ms ? ` · ${fields.ms}ms` : "";
-        const retry = fields.retry_after ? ` · RETRY ${fields.retry_after}s` : "";
+        const retry = fields.retry_after
+          ? ` · RETRY ${fields.retry_after}s`
+          : "";
         const model = fields.model ? ` [${fields.model}]` : "";
         lines.push({
           id: uid("err", reqId, e.time, i),
@@ -434,7 +436,9 @@
               aria-pressed={autoPoll}
               onclick={() => (autoPoll = !autoPoll)}
               class="!h-8 !text-xs !px-2.5"
-              title={autoPoll ? $tr("Auto-refreshing every 1s") : $tr("Auto-refresh paused")}
+              title={autoPoll
+                ? $tr("Auto-refreshing every 1s")
+                : $tr("Auto-refresh paused")}
             >
               {$tr("Auto {state}", {
                 state: autoPoll ? "1s" : $tr("off"),
@@ -576,7 +580,9 @@
               aria-pressed={autoPoll}
               onclick={() => (autoPoll = !autoPoll)}
               class="!h-8 !text-xs !px-2.5"
-              title={autoPoll ? $tr("Auto-refreshing every 1s") : $tr("Auto-refresh paused")}
+              title={autoPoll
+                ? $tr("Auto-refreshing every 1s")
+                : $tr("Auto-refresh paused")}
             >
               {$tr("Auto {state}", {
                 state: autoPoll ? "1s" : $tr("off"),

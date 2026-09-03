@@ -322,6 +322,10 @@ func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byt
 			if cfg := s.cfg.Load(); cfg != nil {
 				failover = cfg.RateLimitFailover
 			}
+			// Bridge mode uses a single client-provided token — no alternative pool token exists.
+			if _, isBridge := backend.(bridgeBackend); isBridge {
+				failover = false
+			}
 			if !failover || attempts > 1 || ctx.Err() != nil {
 				return nil, nil, err
 			}

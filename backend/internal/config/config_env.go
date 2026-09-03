@@ -459,6 +459,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		CacheControlInjection:            parseCacheControlInjection(raw.CacheControlInjection),
 		ReasoningInContent:               parseReasoningInContent(raw.ReasoningInContent),
 		RateLimitFailover:                raw.RateLimitFailover == nil || *raw.RateLimitFailover,
+		EnvFile:                          envFileUsed,
 	}
 
 	// Auto-discover CLI token if a discovery hook was wired (LoadOpts,

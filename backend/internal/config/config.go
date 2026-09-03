@@ -377,8 +377,8 @@ func defaultRawConfig() rawConfig {
 		RotationInterval:                 "6h",
 		RequestTimeout:                   "15m",
 		SessionCallTimeout:               "30s",
-	TokenRotation:                    "drain",
-	RateLimitFailover:                new(true),
+		TokenRotation:                    "drain",
+		RateLimitFailover:                new(true),
 		CostMode:                         "free",
 		RegistryRefresh:                  "6h",
 		MaxSpendPerDay:                   nil,   // 0 = unlimited advisory spend ceiling (never enforced)
