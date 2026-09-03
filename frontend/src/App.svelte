@@ -11,7 +11,11 @@
   import EmptyState from "./lib/components/EmptyState.svelte";
   import { fetchAPI } from "./lib/api/client.js";
   import { adminApi, adminActions } from "./lib/api/paths.js";
-  import { sessionExpired, authState, updateAuthState } from "./lib/stores/session.js";
+  import {
+    sessionExpired,
+    authState,
+    updateAuthState,
+  } from "./lib/stores/session.js";
   import { tr } from "./lib/i18n.js";
   function getInitialTab() {
     if (typeof window === "undefined") return "overview";
@@ -30,7 +34,7 @@
 
   let activeTab = $state(getInitialTab());
   let versionInfo = $state(null);
-  let isDefaultAdminToken = $state(false);
+  let isDefaultAdminToken = $derived($authState.isDefaultAdminToken);
   let showChangePasswordModal = $state(false);
 
   // Page mount resolved from the same nav registry the Sidebar filters
@@ -40,9 +44,6 @@
   function syncTabFromURL() {
     activeTab = getInitialTab();
   }
-  $effect(() => {
-    isDefaultAdminToken = $authState.isDefaultAdminToken;
-  });
 
   $effect(() => {
     if (
@@ -115,7 +116,11 @@
     <ChangePasswordModal
       bind:open={showChangePasswordModal}
       onSuccess={() => {
-        updateAuthState({ isDefaultAdminToken: false, hasPassword: true, requireLogin: true });
+        updateAuthState({
+          isDefaultAdminToken: false,
+          hasPassword: true,
+          requireLogin: true,
+        });
       }}
     />
   {/if}

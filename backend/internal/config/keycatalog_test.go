@@ -42,7 +42,7 @@ var dotenvKeys = map[string]bool{
 	"FALLBACK_MODEL": true, "ADOPT_CLI_SESSION": true, "WAITING_ROOM_CHAIN": true,
 	"RATE_LIMIT_PER_IP": true, "RATE_LIMIT_BURST": true, "TOKEN_ROTATION": true, "RATE_LIMIT_FAILOVER": true,
 	"DASHBOARD_ENABLED": true, "DASHBOARD_REQUIRE_LOGIN": true,
-	"COMPRESS_PROMPT":   true, "CACHE_CONTROL_INJECTION": true, "REASONING_IN_CONTENT": true,
+	"COMPRESS_PROMPT": true, "CACHE_CONTROL_INJECTION": true, "REASONING_IN_CONTENT": true,
 }
 
 // catalogExtras are documented keys the catalog may hold beyond the
