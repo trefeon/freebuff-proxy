@@ -191,6 +191,11 @@ type TokenSnapshot struct {
 	// the operator sees exactly which fixed token is dead and why.
 	Quarantined      bool   `json:"quarantined,omitempty"`
 	QuarantineReason string `json:"quarantine_reason,omitempty"`
+	// AllowedModels is the slot's MODEL_LOCKS allowlist (issue #325); nil
+	// when unlocked. AllowlistSkips counts Acquire-time skips for models
+	// outside it.
+	AllowedModels  []string `json:"allowed_models,omitempty"`
+	AllowlistSkips int64    `json:"allowlist_skips,omitempty"`
 	// PremiumQuota is the 5/day premium-pool quota (pacific_day) derived from
 	// the live QuotaByModel entry for the premium models. Nil when no premium
 	// quota has been reported.
@@ -387,6 +392,10 @@ type tokenEntry struct {
 	// locked is set by LockToken/UnlockLockToken to administratively
 	// exclude a token from Acquire without clearing its cooldown state.
 	locked atomic.Bool
+	// allowlistSkips counts Acquire-time model-allowlist skips for this slot
+	// (MODEL_LOCKS, issue #325): requests for models the slot is not locked
+	// to. Surfaced per-token in snapshots, cards, and metrics.
+	allowlistSkips atomic.Int64
 
 	// quarantine, when non-nil, marks this fixed pooled token permanently
 	// ineligible for leasing: its account reached a terminal state (banned,

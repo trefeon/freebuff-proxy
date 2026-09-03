@@ -114,6 +114,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
 	overrideString(&raw.TokenRotation, "TOKEN_ROTATION")
+	overrideString(&raw.ModelLocks, "MODEL_LOCKS")
 	overrideBool(&raw.DashboardEnabled, "DASHBOARD_ENABLED")
 	// Convert feature-translation modes (issue #277): COMPRESS_PROMPT,
 	// CACHE_CONTROL_INJECTION and REASONING_IN_CONTENT are resolved once
@@ -390,6 +391,11 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		return Config{}, fmt.Errorf("invalid TOKEN_ROTATION: %q (must be drain, round_robin, least_used, or random)", raw.TokenRotation)
 	}
 
+	modelLocks, err := parseModelLocks(raw.ModelLocks)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
 		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
 		UpstreamBaseURL:                  upstreamBaseURL,
@@ -398,6 +404,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		RequestTimeout:                   requestTimeout,
 		SessionCallTimeout:               sessionCallTimeout,
 		TokenRotation:                    tokenRotation,
+		ModelLocks:                       modelLocks,
 		APIKeys:                          dedupeStrings(raw.APIKeys),
 		AdminToken:                       adminToken,
 		HTTP2Upstream:                    raw.HTTP2Upstream,
@@ -561,6 +568,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.RequestTimeout, get, "REQUEST_TIMEOUT")
 	overrideStringFrom(&raw.SessionCallTimeout, get, "SESSION_CALL_TIMEOUT")
 	overrideStringFrom(&raw.TokenRotation, get, "TOKEN_ROTATION")
+	overrideStringFrom(&raw.ModelLocks, get, "MODEL_LOCKS")
 	overrideCSVFrom(&raw.APIKeys, get, "API_KEYS")
 	overrideStringFrom(&raw.AdminToken, get, "ADMIN_TOKEN")
 	overrideStringFrom(&raw.CostMode, get, "COST_MODE")

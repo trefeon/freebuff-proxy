@@ -54,6 +54,7 @@ const STATIC_TOKEN_KEYS = [
   "referral_sessions_left",
   "referral_github_linked",
   "referral_reset_at",
+  "allowed_models",
 ];
 let staticTop = null;
 let staticTokensByIndex = {};

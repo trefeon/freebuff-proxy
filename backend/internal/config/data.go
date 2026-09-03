@@ -103,6 +103,8 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.SessionStateFile, false
 	case "TOKEN_ROTATION":
 		return c.TokenRotation, false
+	case "MODEL_LOCKS":
+		return formatModelLocks(c.ModelLocks), false
 	case "BRIDGE_ENABLED":
 		return strconv.FormatBool(c.BridgeEnabled), false
 	case "BRIDGE_IDLE_EVICT":
@@ -180,6 +182,24 @@ func joinPairs(m map[string]string, sep string) string {
 	}
 	sort.Strings(pairs)
 	return strings.Join(pairs, ",")
+}
+
+// formatModelLocks renders the parsed MODEL_LOCKS map back to canonical
+// "idx:model,model;..." form (slots ascending) for dashboard display.
+func formatModelLocks(locks map[int][]string) string {
+	if len(locks) == 0 {
+		return ""
+	}
+	idxs := make([]int, 0, len(locks))
+	for idx := range locks {
+		idxs = append(idxs, idx)
+	}
+	sort.Ints(idxs)
+	parts := make([]string, 0, len(idxs))
+	for _, idx := range idxs {
+		parts = append(parts, strconv.Itoa(idx)+":"+strings.Join(locks[idx], ","))
+	}
+	return strings.Join(parts, ";")
 }
 
 // boolWord is the canonical set/unset wording for presence-sensitive keys.

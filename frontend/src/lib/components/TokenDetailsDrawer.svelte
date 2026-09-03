@@ -195,6 +195,27 @@
       {/if}
     </div>
   {/if}
+  {#if token.allowed_models?.length}
+    <div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
+      <div
+        class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-1"
+      >
+        {$tr("Pinned models")}
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        {#each token.allowed_models as m (m)}
+          <code class="fp-num text-xs text-[var(--fp-text)]">{m}</code>
+        {/each}
+      </div>
+      {#if token.allowlist_skips > 0}
+        <p class="mt-1 text-xs text-[var(--fp-dim)]">
+          {$tr("{count} request(s) routed elsewhere by this pin", {
+            count: token.allowlist_skips,
+          })}
+        </p>
+      {/if}
+    </div>
+  {/if}
   {#if !devToolsEnabled && !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
     <p class="text-xs text-[var(--fp-dim)] italic">
       {$tr("No active session or run for this auth token.")}

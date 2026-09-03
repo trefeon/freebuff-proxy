@@ -250,6 +250,26 @@ func TestCardFromSnapshotStanding(t *testing.T) {
 	}
 }
 
+// TestCardFromSnapshotAllowlist pins the MODEL_LOCKS card fields (issue
+// #325): the allowlist rides the full card, the skip counter rides both the
+// full card (via TokenSnapshot) and the live card.
+func TestCardFromSnapshotAllowlist(t *testing.T) {
+	snap := pool.TokenSnapshot{
+		Token:          0,
+		RiskLevel:      "low",
+		AllowedModels:  []string{"z-ai/glm-5.2"},
+		AllowlistSkips: 7,
+	}
+	card := cardFromSnapshot(snap)
+	if len(card.AllowedModels) != 1 || card.AllowedModels[0] != "z-ai/glm-5.2" {
+		t.Errorf("AllowedModels = %v, want [z-ai/glm-5.2]", card.AllowedModels)
+	}
+	live := liveCardFromSnapshot(snap)
+	if live.AllowlistSkips != 7 {
+		t.Errorf("live AllowlistSkips = %d, want 7", live.AllowlistSkips)
+	}
+}
+
 // TestCardFromSnapshotBanAndLocked pins the #198/#199 ban mapping: an active
 // temporary ban lands ban_type + RFC3339 banned_until on the card, a hard
 // ban carries only the type, and Locked is copied through (previously

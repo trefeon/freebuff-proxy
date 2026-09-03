@@ -102,6 +102,9 @@ type tokenCard struct {
 	// Subscription (issue #319): subscriber usage rings + provider spend,
 	// rollout-audience only; nil otherwise.
 	Subscription *subscriptionCard `json:"subscription,omitempty"`
+	// AllowedModels is the slot's MODEL_LOCKS allowlist (issue #325); nil
+	// when unlocked. Config-static: rides the full fetch, cached by the SPA.
+	AllowedModels []string `json:"allowed_models,omitempty"`
 }
 
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):

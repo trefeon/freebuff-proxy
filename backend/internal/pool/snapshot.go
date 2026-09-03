@@ -63,6 +63,12 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 	out := make([]TokenSnapshot, 0, len(*toks))
 	dailyLimit := p.cfg.Load().MaxMessagesPerDay
 	spendLimit := p.cfg.Load().MaxSpendPerDay
+	// Model-allowlist view (MODEL_LOCKS, issue #325): per-slot lists for
+	// the dashboard + metrics. Read once per snapshot; hot-reload safe.
+	var modelLocks map[int][]string
+	if c := p.cfg.Load(); c != nil {
+		modelLocks = c.ModelLocks
+	}
 	for i, tok := range *toks {
 		rs := tok.runs.Snapshot()
 		ss := tok.session.Snapshot()
@@ -211,6 +217,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Locked:                  tok.locked.Load(),
 			Quarantined:             q != nil,
 			QuarantineReason:        quarantineReason,
+			AllowedModels:           append([]string(nil), modelLocks[i]...),
+			AllowlistSkips:          tok.allowlistSkips.Load(),
 			TransientRetries:        tok.client.TransientRetries(),
 			FingerprintRotations:    tok.client.FingerprintRotations(),
 			RateLimitEvents:         tok.client.RateLimitEvents(),

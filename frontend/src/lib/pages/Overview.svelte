@@ -68,6 +68,7 @@
     "referral_sessions_left",
     "referral_github_linked",
     "referral_reset_at",
+    "allowed_models",
   ];
   let staticPart = null;
   let staticTokensByIndex = {};

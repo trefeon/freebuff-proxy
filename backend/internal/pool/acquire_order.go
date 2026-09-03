@@ -46,6 +46,13 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		if tok.locked.Load() {
 			return false
 		}
+		// Model-allowlist routing (MODEL_LOCKS, issue #325): slots locked
+		// to other models are skipped for this request (as if unavailable),
+		// never demoted or punished. Unlocked slots serve anything.
+		if lockedOutByModel(p.cfg.Load(), p.reg, idx, model) {
+			tok.allowlistSkips.Add(1)
+			return false
+		}
 		// Quota-capped tokens are excluded from BOTH the hot set and the
 		// cold fallback: their rate-limit reasons ride back in quotaLimited,
 		// so the pool surfaces a real 429 when every token is capped.
