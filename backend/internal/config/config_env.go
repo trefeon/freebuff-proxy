@@ -117,6 +117,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBoolPtr(&raw.RateLimitFailover, "RATE_LIMIT_FAILOVER")
 	overrideString(&raw.ModelLocks, "MODEL_LOCKS")
 	overrideBool(&raw.DashboardEnabled, "DASHBOARD_ENABLED")
+	overrideBool(&raw.DashboardRequireLogin, "DASHBOARD_REQUIRE_LOGIN")
 	// Convert feature-translation modes (issue #277): COMPRESS_PROMPT,
 	// CACHE_CONTROL_INJECTION and REASONING_IN_CONTENT are resolved once
 	// here (so the dashboard config form and /admin/reload swaps apply) and
@@ -373,8 +374,12 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		logFormat = "text"
 	}
 
+	dashboardRequireLogin := raw.DashboardRequireLogin
 	adminToken := strings.TrimSpace(raw.AdminToken)
-	if adminToken == "" {
+	if !dashboardRequireLogin || strings.EqualFold(adminToken, "none") || strings.EqualFold(adminToken, "off") || strings.EqualFold(adminToken, "false") {
+		dashboardRequireLogin = false
+		adminToken = ""
+	} else if adminToken == "" {
 		adminToken = DefaultAdminToken
 	}
 
@@ -408,6 +413,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		ModelLocks:                       modelLocks,
 		APIKeys:                          dedupeStrings(raw.APIKeys),
 		AdminToken:                       adminToken,
+		DashboardRequireLogin:            dashboardRequireLogin,
 		HTTP2Upstream:                    raw.HTTP2Upstream,
 		CostMode:                         strings.TrimSpace(raw.CostMode),
 		ActingUserID:                     strings.TrimSpace(raw.ActingUserID),
@@ -455,11 +461,11 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		RateLimitPerIP:                   rateLimitPerIP,
 		RateLimitBurst:                   rateLimitBurst,
 		DashboardEnabled:                 raw.DashboardEnabled,
+		EnvFile:                          envFileUsed,
 		CompressPrompt:                   parseCompressPrompt(raw.CompressPrompt),
 		CacheControlInjection:            parseCacheControlInjection(raw.CacheControlInjection),
 		ReasoningInContent:               parseReasoningInContent(raw.ReasoningInContent),
 		RateLimitFailover:                raw.RateLimitFailover == nil || *raw.RateLimitFailover,
-		EnvFile:                          envFileUsed,
 	}
 
 	// Auto-discover CLI token if a discovery hook was wired (LoadOpts,
@@ -626,6 +632,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
 	overrideBoolFrom(&raw.DashboardEnabled, get, "DASHBOARD_ENABLED")
+	overrideBoolFrom(&raw.DashboardRequireLogin, get, "DASHBOARD_REQUIRE_LOGIN")
 	// Convert feature-translation modes (issue #277), mirroring Load.
 	overrideStringFrom(&raw.CompressPrompt, get, "COMPRESS_PROMPT")
 	overrideStringFrom(&raw.CacheControlInjection, get, "CACHE_CONTROL_INJECTION")

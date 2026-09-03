@@ -16,6 +16,19 @@ import { writable } from "svelte/store";
  * Drives the "Session expired" banner in App.svelte.
  */
 export const sessionExpired = writable(false);
+/**
+ * Shared admin auth state for default admin token and require login.
+ */
+export const authState = writable({
+  isDefaultAdminToken: false,
+  requireLogin: true,
+  hasPassword: true,
+});
+
+export function updateAuthState(partial) {
+  authState.update((s) => ({ ...s, ...partial }));
+}
+
 
 // Module-level latch: once a 401 / auth redirect is observed, background
 // polling halts for the life of the page. Dismissing the banner hides it but

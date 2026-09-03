@@ -97,6 +97,8 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.Itoa(c.TransientRetries), false
 	case "DASHBOARD_ENABLED":
 		return strconv.FormatBool(c.DashboardEnabled), false
+	case "DASHBOARD_REQUIRE_LOGIN":
+		return strconv.FormatBool(c.DashboardRequireLogin), false
 	case "SESSION_PERSIST":
 		return strconv.FormatBool(c.SessionPersist), false
 	case "SESSION_STATE_FILE":

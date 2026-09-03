@@ -25,6 +25,7 @@ export const adminApi = {
   version: "/admin/api/version",
   authStatus: "/admin/api/auth/status",
   changePassword: "/admin/api/change-password",
+  requireLogin: "/admin/api/require-login",
   upstreamDrift: "/admin/api/upstream-drift",
   events: "/admin/api/events",
   loginStatus: "/admin/login/status",

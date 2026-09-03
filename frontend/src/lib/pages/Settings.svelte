@@ -9,6 +9,7 @@
   import CopyButton from "../components/CopyButton.svelte";
   import ConfigEditor from "./settings/ConfigEditor.svelte";
   import RawEditor from "./settings/RawEditor.svelte";
+  import SecurityCard from "../components/SecurityCard.svelte";
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
@@ -496,6 +497,11 @@
         </div>
       </Alert>
     {/if}
+
+    <SecurityCard
+      onSuccess={fetchData}
+      onRequireLoginChange={fetchData}
+    />
 
     <ConfigEditor
       {meta}

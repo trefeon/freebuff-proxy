@@ -691,6 +691,16 @@
     "description": "Access-Control-Allow-Origin for /v1/* responses."
   },
   {
+    "key": "DASHBOARD_REQUIRE_LOGIN",
+    "group": "security",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": true,
+    "description": "Enforce password authentication for the admin dashboard. When false, loopback clients access the dashboard without login (open mode). When true, dashboard requires password. Defaults to true."
+  },
+  {
     "key": "WEBHOOK_URL",
     "group": "security",
     "kind": "text",

@@ -320,6 +320,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.admin.handleDiag)
 	case "POST /admin/api/change-password":
 		return http.HandlerFunc(s.admin.handleAdminChangePassword)
+	case "POST /admin/api/require-login":
+		return http.HandlerFunc(s.admin.handleAdminRequireLogin)
 	case "POST /admin/smoke":
 		return http.HandlerFunc(s.admin.handleSmoke)
 	case "GET /admin/assets/":

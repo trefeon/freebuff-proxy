@@ -593,6 +593,8 @@ func (a *adminHandlers) handleAdminAuthStatus(w http.ResponseWriter, r *http.Req
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"authenticated":          true,
 		"is_default_admin_token": cfg.IsDefaultAdminToken(),
+		"require_login":          cfg.RequireLogin(),
+		"has_password":           cfg.AdminToken != "",
 	})
 }
 
@@ -627,10 +629,12 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 
 	cfg := a.cfgLoad()
 
-	// Verify current password with constant-time comparison
-	if subtle.ConstantTimeCompare([]byte(req.CurrentPassword), []byte(cfg.AdminToken)) != 1 {
-		a.dash.RenderResult(w, http.StatusBadRequest, false, "Current password is incorrect.", "invalid_credentials")
-		return
+	// Verify current password with constant-time comparison if a password is currently configured
+	if cfg.AdminToken != "" {
+		if subtle.ConstantTimeCompare([]byte(req.CurrentPassword), []byte(cfg.AdminToken)) != 1 {
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "Current password is incorrect.", "invalid_credentials")
+			return
+		}
 	}
 
 	if len(req.NewPassword) < 6 {
@@ -664,7 +668,10 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 	defer a.adminSaveMu.Unlock()
 
 	oldBytes, oldErr := os.ReadFile(".env")
-	_, err := updateEnvKeys([]config.EnvUpdate{{Key: "ADMIN_TOKEN", Value: req.NewPassword}})
+	_, err := updateEnvKeys([]config.EnvUpdate{
+		{Key: "ADMIN_TOKEN", Value: req.NewPassword},
+		{Key: "DASHBOARD_REQUIRE_LOGIN", Value: "true"},
+	})
 	if err != nil {
 		a.dash.RenderResult(w, http.StatusInternalServerError, false, "Failed to update .env: "+err.Error(), "env_write_failed")
 		return
@@ -703,5 +710,104 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":      true,
 		"message": "Admin password updated successfully.",
+	})
+}
+
+func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		RequireLogin *bool `json:"require_login"`
+		Enabled      *bool `json:"enabled"`
+	}
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "application/json") {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
+		if err != nil {
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "failed to read request body", "invalid_request")
+			return
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			a.dash.RenderResult(w, http.StatusBadRequest, false, "invalid request JSON", "invalid_json")
+			return
+		}
+	} else {
+		r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+		val := r.FormValue("require_login")
+		if val == "" {
+			val = r.FormValue("enabled")
+		}
+		if val != "" {
+			b := val == "true" || val == "1" || val == "on" || val == "yes"
+			req.RequireLogin = &b
+		}
+	}
+
+	target := true
+	if req.RequireLogin != nil {
+		target = *req.RequireLogin
+	} else if req.Enabled != nil {
+		target = *req.Enabled
+	}
+
+	// Security restriction: open mode is loopback-only. Disabling login from
+	// a remote client would immediately lock out remote access (403).
+	if !target && (!isLoopbackAddr(r.RemoteAddr) || !isLoopbackHost(r.Host)) {
+		a.dash.RenderResult(w, http.StatusBadRequest, false,
+			"Cannot disable login requirement from a remote client: open mode is restricted to loopback clients only, which would immediately lock out remote access.",
+			"remote_open_mode_forbidden")
+		return
+	}
+
+	valStr := "true"
+	if !target {
+		valStr = "false"
+	}
+
+	a.adminSaveMu.Lock()
+	defer a.adminSaveMu.Unlock()
+
+	oldBytes, oldErr := os.ReadFile(".env")
+	_, err := updateEnvKeys([]config.EnvUpdate{
+		{Key: "DASHBOARD_REQUIRE_LOGIN", Value: valStr},
+	})
+	if err != nil {
+		a.dash.RenderResult(w, http.StatusInternalServerError, false, "Failed to update .env: "+err.Error(), "env_write_failed")
+		return
+	}
+
+	newCfg, err := config.Load(a.configPath)
+	if err != nil {
+		restoreEnvFile(oldBytes, oldErr)
+		a.logfunc().Warn("admin require login reload failed; restored .env", "err", err)
+		a.dash.RenderResult(w, http.StatusInternalServerError, false, "Failed to reload configuration: "+err.Error(), "reload_failed")
+		return
+	}
+
+	if newCfg.RequireLogin() != target {
+		restoreEnvFile(oldBytes, oldErr)
+		a.logfunc().Warn("admin require login shadowed by environment; restored .env")
+		a.dash.RenderResult(w, http.StatusConflict, false,
+			"DASHBOARD_REQUIRE_LOGIN is overridden by the process environment or -config JSON — the .env write was rolled back and the running credential is unchanged",
+			"require_login_overridden")
+		return
+	}
+
+	a.applyReloadedConfig(&newCfg)
+
+	msg := "Dashboard login requirement enabled."
+	if !target {
+		msg = "Dashboard login requirement disabled (open mode on loopback)."
+	}
+
+	a.logfunc().Info("admin require login updated", "require_login", newCfg.RequireLogin(), "remote", remoteHost(r))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":            true,
+		"require_login": newCfg.RequireLogin(),
+		"message":       msg,
 	})
 }

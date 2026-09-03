@@ -23,16 +23,17 @@ import (
 
 // Config is the fully-resolved, validated runtime configuration.
 type Config struct {
-	ListenAddr         string
-	UpstreamBaseURL    string
-	AuthTokens         []string
-	RotationInterval   time.Duration
-	RequestTimeout     time.Duration
-	SessionCallTimeout time.Duration
-	APIKeys            []string
-	AdminToken         string // bearer token required for POST /admin/reload (defaults to "123456" when unset/empty)
-	HTTP2Upstream      bool   // true = negotiate HTTP/2 with the upstream so the ALPN matches real browsers (HTTP2_UPSTREAM); false forces HTTP/1.1 (#51)
-	CostMode           string // "" (omit) or "free"; A/B pending, PRD §8
+	ListenAddr            string
+	UpstreamBaseURL       string
+	AuthTokens            []string
+	RotationInterval      time.Duration
+	RequestTimeout        time.Duration
+	SessionCallTimeout    time.Duration
+	APIKeys               []string
+	AdminToken            string // bearer token required for POST /admin/reload (defaults to "123456" when unset/empty)
+	DashboardRequireLogin bool   // true = dashboard requires password authentication (DASHBOARD_REQUIRE_LOGIN); defaults to true
+	HTTP2Upstream         bool   // true = negotiate HTTP/2 with the upstream so the ALPN matches real browsers (HTTP2_UPSTREAM); false forces HTTP/1.1 (#51)
+	CostMode              string // "" (omit) or "free"; A/B pending, PRD §8
 	// ActingUserID is the optional FreeBuff account id sent as
 	// x-freebuff-acting-user-id (ACTING_USER_ID; empty = header omitted).
 	// BAN RISK: the official CLI sends the account's OWN id here, derived
@@ -216,6 +217,12 @@ func (c *Config) IsDefaultAdminToken() bool {
 	return c != nil && c.AdminToken == DefaultAdminToken
 }
 
+// RequireLogin reports whether the admin dashboard enforces login authentication.
+// It is true when DashboardRequireLogin is true and AdminToken is non-empty.
+func (c *Config) RequireLogin() bool {
+	return c != nil && c.DashboardRequireLogin && c.AdminToken != ""
+}
+
 // BridgeMode reports whether the proxy runs without any AUTH_TOKENS: every
 // client supplies their own FreeBuff token per request (Authorization: Bearer
 // or x-api-key), and the proxy relays with that token upstream.
@@ -320,6 +327,7 @@ type rawConfig struct {
 	RateLimitFailover                *bool                   `json:"RATE_LIMIT_FAILOVER"`
 	ModelLocks                       string                  `json:"MODEL_LOCKS"`
 	DashboardEnabled                 bool                    `json:"DASHBOARD_ENABLED"`
+	DashboardRequireLogin            bool                    `json:"DASHBOARD_REQUIRE_LOGIN"`
 	CompressPrompt                   string                  `json:"COMPRESS_PROMPT"`
 	CacheControlInjection            string                  `json:"CACHE_CONTROL_INJECTION"`
 	ReasoningInContent               string                  `json:"REASONING_IN_CONTENT"`
@@ -388,6 +396,7 @@ func defaultRawConfig() rawConfig {
 		SafeMode:                         true,  // anti-ban presets on by default; set SAFE_MODE=false to disable
 		SessionIdleEnd:                   "",    // "" = disabled (opt-in: ending a session forces a fresh admission when the user returns)
 		DashboardEnabled:                 true,  // dashboard on by default; set DASHBOARD_ENABLED=false to disable
+		DashboardRequireLogin:            true,  // require login on by default; set DASHBOARD_REQUIRE_LOGIN=false to disable
 		LogAccess:                        true,
 		DevToolsEnabled:                  false,       // per-request access lines on by default; LOG_ACCESS=false disables them
 		LogRingSize:                      ptrInt(500), // dashboard log viewer ring capacity (T19)

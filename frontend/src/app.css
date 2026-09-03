@@ -10,6 +10,10 @@
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-surface: var(--fp-surface);
+  --color-border-subtle: var(--fp-border);
+  --color-text-muted: var(--fp-muted);
+  --color-primary: var(--fp-accent);
 }
 
 /* ── Design Tokens (see DESIGN.md) ─────────────────────────────── */
@@ -52,6 +56,9 @@
 
   /* Focus ring — the only shadow allowed */
   --fp-ring: 0 0 0 2px var(--fp-bg), 0 0 0 4px var(--fp-accent);
+
+  /* Soft card shadow */
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
 }
 
 /* ── Base ─────────────────────────────────────────────────────── */

@@ -50,6 +50,7 @@
   {"method": "POST", "path": "/admin/mode", "auth": "sensitive", "js": {"export": "adminActions", "key": "mode"}},
   {"method": "POST", "path": "/admin/diag", "auth": "sensitive", "js": {"export": "adminActions", "key": "diag"}},
   {"method": "POST", "path": "/admin/api/change-password", "auth": "sensitive", "js": {"export": "adminApi", "key": "changePassword"}},
+  {"method": "POST", "path": "/admin/api/require-login", "auth": "sensitive", "js": {"export": "adminApi", "key": "requireLogin"}},
   {"method": "POST", "path": "/admin/smoke", "auth": "sensitive", "js": {"export": "adminActions", "key": "smoke"}},
 
   {"method": "GET", "path": "/admin/assets/", "auth": "none", "js": null}

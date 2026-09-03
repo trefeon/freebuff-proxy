@@ -1,5 +1,5 @@
 <script>
-  import { X, Lock, Key } from "@lucide/svelte";
+  import { X, Lock, Key, Eye, EyeOff } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import Alert from "./Alert.svelte";
   import Field from "./Field.svelte";
@@ -18,6 +18,9 @@
   let newPassword = $state("");
   let confirmPassword = $state("");
   let submitting = $state(false);
+  let showCurrentPassword = $state(false);
+  let showNewPassword = $state(false);
+  let showConfirmPassword = $state(false);
   let errorMsg = $state("");
   let successMsg = $state("");
   let dialogEl = $state(null);
@@ -255,15 +258,29 @@
       <!-- Form -->
       <form onsubmit={handleSubmit} class="space-y-4">
         <Field label={$tr("Current Password")} id="current-password">
-          <input
-            id="current-password"
-            type="password"
-            autocomplete="current-password"
-            bind:value={currentPassword}
-            placeholder={$tr("Enter current password (default: 123456)")}
-            required
-            class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-          />
+          <div class="relative">
+            <input
+              id="current-password"
+              type={showCurrentPassword ? "text" : "password"}
+              autocomplete="current-password"
+              bind:value={currentPassword}
+              placeholder={$tr("Enter current password (default: 123456)")}
+              required
+              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+              onclick={() => (showCurrentPassword = !showCurrentPassword)}
+              aria-label={showCurrentPassword ? $tr("Hide password") : $tr("Show password")}
+            >
+              {#if showCurrentPassword}
+                <EyeOff size={16} />
+              {:else}
+                <Eye size={16} />
+              {/if}
+            </button>
+          </div>
         </Field>
 
         <Field
@@ -271,29 +288,57 @@
           id="new-password"
           hint={$tr("Minimum 6 characters")}
         >
-          <input
-            id="new-password"
-            type="password"
-            autocomplete="new-password"
-            bind:value={newPassword}
-            placeholder={$tr("Enter secure new password")}
-            required
-            minlength="6"
-            class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-          />
+          <div class="relative">
+            <input
+              id="new-password"
+              type={showNewPassword ? "text" : "password"}
+              autocomplete="new-password"
+              bind:value={newPassword}
+              placeholder={$tr("Enter secure new password")}
+              required
+              minlength="6"
+              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+              onclick={() => (showNewPassword = !showNewPassword)}
+              aria-label={showNewPassword ? $tr("Hide password") : $tr("Show password")}
+            >
+              {#if showNewPassword}
+                <EyeOff size={16} />
+              {:else}
+                <Eye size={16} />
+              {/if}
+            </button>
+          </div>
         </Field>
 
         <Field label={$tr("Confirm New Password")} id="confirm-password">
-          <input
-            id="confirm-password"
-            type="password"
-            autocomplete="new-password"
-            bind:value={confirmPassword}
-            placeholder={$tr("Re-enter new password")}
-            required
-            minlength="6"
-            class="w-full px-3 py-2 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-          />
+          <div class="relative">
+            <input
+              id="confirm-password"
+              type={showConfirmPassword ? "text" : "password"}
+              autocomplete="new-password"
+              bind:value={confirmPassword}
+              placeholder={$tr("Re-enter new password")}
+              required
+              minlength="6"
+              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+              onclick={() => (showConfirmPassword = !showConfirmPassword)}
+              aria-label={showConfirmPassword ? $tr("Hide password") : $tr("Show password")}
+            >
+              {#if showConfirmPassword}
+                <EyeOff size={16} />
+              {:else}
+                <Eye size={16} />
+              {/if}
+            </button>
+          </div>
         </Field>
 
         <div

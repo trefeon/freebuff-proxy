@@ -11,7 +11,7 @@
   import EmptyState from "./lib/components/EmptyState.svelte";
   import { fetchAPI } from "./lib/api/client.js";
   import { adminApi, adminActions } from "./lib/api/paths.js";
-  import { sessionExpired } from "./lib/stores/session.js";
+  import { sessionExpired, authState, updateAuthState } from "./lib/stores/session.js";
   import { tr } from "./lib/i18n.js";
   function getInitialTab() {
     if (typeof window === "undefined") return "overview";
@@ -40,6 +40,9 @@
   function syncTabFromURL() {
     activeTab = getInitialTab();
   }
+  $effect(() => {
+    isDefaultAdminToken = $authState.isDefaultAdminToken;
+  });
 
   $effect(() => {
     if (
@@ -80,7 +83,11 @@
     // Check if using default admin token (for security banner)
     fetchAPI(adminApi.authStatus)
       .then((data) => {
-        isDefaultAdminToken = data?.is_default_admin_token ?? false;
+        updateAuthState({
+          isDefaultAdminToken: Boolean(data?.is_default_admin_token),
+          requireLogin: Boolean(data?.require_login),
+          hasPassword: Boolean(data?.has_password),
+        });
       })
       .catch(() => {});
 
@@ -108,7 +115,7 @@
     <ChangePasswordModal
       bind:open={showChangePasswordModal}
       onSuccess={() => {
-        isDefaultAdminToken = false;
+        updateAuthState({ isDefaultAdminToken: false, hasPassword: true, requireLogin: true });
       }}
     />
   {/if}

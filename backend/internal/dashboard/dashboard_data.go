@@ -28,6 +28,7 @@ type overviewData struct {
 	Tokens               []tokenCard       `json:"tokens"`
 	HasTokens            bool              `json:"has_tokens"`
 	IsDefaultAdminToken  bool              `json:"is_default_admin_token"`
+	RequireLogin         bool              `json:"require_login"`
 	// UpstreamSync summarises the latest .github/workflows/upstream-drift
 	// run (compiled into the binary). Users on an out-of-date build see
 	// HasDrift=true + DriftedFiles and know to update.
@@ -327,6 +328,7 @@ func (d *Dashboard) overviewData(r *http.Request) overviewData {
 		FingerprintRotations: ps.FingerprintRotations,
 		BridgeTokens:         d.pool.BridgeCount(),
 		IsDefaultAdminToken:  cfg.IsDefaultAdminToken(),
+		RequireLogin:         cfg.RequireLogin(),
 	}
 	for _, t := range ps.Tokens {
 		od.Tokens = append(od.Tokens, cardFromSnapshot(t))
