@@ -1,7 +1,7 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
-  "upstream_sha": "31335e9c4d5b0845f0bd7ee3fc99a9b1f11ae78a",
-  "checked_at": "2026-09-03T11:16:23Z",
+  "upstream_sha": "c5e1aad6ee58ba77c3af7bd0ce237bd37af49b64",
+  "checked_at": "2026-09-03T16:26:57Z",
   "vendor_version": "0.0.167",
   "vendor_version_pinned": "0.0.167",
   "files": [
@@ -20,7 +20,7 @@
     {"group":"wire","file":"common/src/types/freebuff-session.ts","pinned_sha":"","vendor_sha":"dd616f4af457","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/constants.ts","pinned_sha":"","vendor_sha":"233ab67d1922","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/prompt-agent-stream.ts","pinned_sha":"","vendor_sha":"7bf7ca49fb51","status":"SAME"},
-    {"group":"wire","file":"packages/agent-runtime/src/run-agent-step.ts","pinned_sha":"","vendor_sha":"0b7d580c1349","status":"DRIFT"},
+    {"group":"wire","file":"packages/agent-runtime/src/run-agent-step.ts","pinned_sha":"","vendor_sha":"0b7d580c1349","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/run-programmatic-step.ts","pinned_sha":"","vendor_sha":"9e70a0780edc","status":"SAME"},
     {"group":"wire","file":"common/src/tools/constants.ts","pinned_sha":"","vendor_sha":"c2508c4590f2","status":"SAME"}
   ]
