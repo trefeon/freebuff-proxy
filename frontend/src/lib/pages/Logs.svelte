@@ -20,6 +20,7 @@
   import { adminApi, adminRoot } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
   import { formatTime, parseLogFields } from "../utils/format.js";
+  import { SvelteSet } from "svelte/reactivity";
   import { copyToClipboard } from "../utils/clipboard.js";
   import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
@@ -57,7 +58,7 @@
     const raw = data?.entries || [];
     const chrono = [...raw].reverse();
     // Pass 1: req_ids that belong to /v1 access entries.
-    const v1ReqIds = new Set();
+    const v1ReqIds = new SvelteSet();
     for (let i = 0; i < chrono.length; i++) {
       const e = chrono[i];
       if ((e.message || "") !== "access") continue;
@@ -82,7 +83,7 @@
     // one request (chat request + routing + access + trace + done) can
     // produce identical semantic ids — Svelte {#each} throws
     // each_key_duplicate and the console breaks. Suffix collisions.
-    const usedIds = new Set();
+    const usedIds = new SvelteSet();
     const uid = (kind, reqId, time, i) => {
       const base = kind + "-" + (reqId || i) + "-" + time;
       let id = base;
