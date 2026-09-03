@@ -98,6 +98,23 @@ test.describe("dashboard hermetic mocks", () => {
     );
   });
 
+  test("Tokens drawer shows pinned models for locked slots", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    const lockedTokens = JSON.parse(JSON.stringify(f.tokens));
+    lockedTokens.tokens[0].allowed_models = ["z-ai/glm-5.2"];
+    lockedTokens.tokens[0].allowlist_skips = 3;
+    await mockDashboard(page, f, { tokens: lockedTokens });
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    const table = page.locator("table.fp-table");
+    await expect(table.getByText("#0")).toBeVisible({ timeout: 10000 });
+    await table.locator('button[aria-label*="Expand details"]').first().click();
+    await expect(page.getByText("Pinned models").first()).toBeVisible();
+    await expect(page.getByText("z-ai/glm-5.2").first()).toBeVisible();
+  });
+
   test("Quota Tracker shows premium pool and per-model session quota", async ({
     page,
   }) => {

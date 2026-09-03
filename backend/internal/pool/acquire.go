@@ -71,8 +71,20 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		return nil, err
 	}
 
-	start := int(p.rr.Add(1)-1) % len(*toks)
+	// Model-allowlist fail-fast (MODEL_LOCKS, issue #325): when every slot
+	// is locked away from the requested model, no admission can succeed —
+	// surface the routing error without touching upstream at all.
+	if allLockedOut(toks, cfg, p.reg, model) {
+		// The ordering/filter stages are bypassed entirely here, so count
+		// the skip decision per slot (the counter tracks decisions, not
+		// requests — a slot can count twice across filter + failover).
+		for _, tok := range *toks {
+			tok.allowlistSkips.Add(1)
+		}
+		return nil, lockFailFastError(model, len(*toks))
+	}
 
+	start := int(p.rr.Add(1)-1) % len(*toks)
 	// Issue #191: leader-election gate per model. The first Acquire for a
 	// model registers as the leader (creates a gate); concurrent
 	// followers block on it. When the leader picks a token (or fails), it
@@ -222,6 +234,18 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 					countryBlocked = append(countryBlocked, terr)
 				}
 			}
+			continue
+		}
+		// Model-allowlist routing (MODEL_LOCKS, issue #325): a slot locked
+		// to other models is skipped before any session/run contact, so a
+		// request never burns the wrong account's quota or churns its
+		// session (upstream model_locked 409). Sits after the quarantine
+		// gate so terminal states keep their error-bucket precedence, and
+		// mirrors the eligible() filter for custom-order callers.
+		if lockedOutByModel(cfg, p.reg, idx, model) {
+			tok.allowlistSkips.Add(1)
+			errs = append(errs, fmt.Sprintf("%s: model %q not in token allowlist", name, model))
+			p.logger.Debug("pool: token skipped (model allowlist)", "token", idx+1, "model", model)
 			continue
 		}
 
@@ -534,6 +558,12 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	// surfaces a real 429 with the earliest window reset instead of a
 	// generic combined error.
 	rateLimited = append(rateLimited, quotaLimited...)
+	// Every slot locked away from the model (direct-order callers reach
+	// here via the loop gates): the dedicated routing error beats the
+	// generic combined one.
+	if allLockedOut(toks, cfg, p.reg, model) {
+		return nil, lockFailFastError(model, len(*toks))
+	}
 	if len(banned) > 0 {
 		return nil, banned[0]
 	}

@@ -316,6 +316,15 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sb.WriteString("\n")
+	sb.WriteString("# HELP freebuff_proxy_allowlist_skips_total Acquire-time model-allowlist skips per token (MODEL_LOCKS)\n")
+	sb.WriteString("# TYPE freebuff_proxy_allowlist_skips_total counter\n")
+	for _, snap := range snaps {
+		if snap.AllowlistSkips > 0 {
+			fmt.Fprintf(&sb, "freebuff_proxy_allowlist_skips_total{token=\"%d\"} %d\n",
+				snap.Token+1, snap.AllowlistSkips)
+		}
+	}
+	sb.WriteString("\n")
 
 	// Premium quota metrics (quota_tracker.go): one gauge family per field,
 	// emitted only when the premium snapshot is present (nil means no data).

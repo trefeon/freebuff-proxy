@@ -720,3 +720,30 @@ func TestMetricsModelLockedTotal(t *testing.T) {
 		t.Errorf("metrics missing %s in:\n%s", want, body)
 	}
 }
+
+// TestMetricsAllowlistSkipsTotal pins the MODEL_LOCKS metrics surface
+// (issue #325): a chat for a model slot 0 is locked away from skips slot 0
+// and serves slot 1, rendering freebuff_proxy_allowlist_skips_total.
+func TestMetricsAllowlistSkipsTotal(t *testing.T) {
+	mock0 := testutil.NewMock()
+	defer mock0.Close()
+	mock1 := testutil.NewMock()
+	defer mock1.Close()
+	const other = "mimo/mimo-v2.5"
+	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.ModelLocks = map[int][]string{0: {modelA}}
+	}, mock0, mock1)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(other), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("chat %s status = %d, want 200: %s", other, resp.StatusCode, truncate(string(data), 200))
+	}
+
+	resp, data = doJSON(t, http.MethodGet, ts.URL+"/metrics", nil, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("metrics status = %d, want 200: %s", resp.StatusCode, truncate(string(data), 200))
+	}
+	if want := `freebuff_proxy_allowlist_skips_total{token="1"} 1`; !strings.Contains(string(data), want) {
+		t.Errorf("metrics missing %s", want)
+	}
+}
