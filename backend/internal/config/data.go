@@ -103,6 +103,8 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.SessionStateFile, false
 	case "TOKEN_ROTATION":
 		return c.TokenRotation, false
+	case "RATE_LIMIT_FAILOVER":
+		return strconv.FormatBool(c.RateLimitFailover), false
 	case "MODEL_LOCKS":
 		return formatModelLocks(c.ModelLocks), false
 	case "BRIDGE_ENABLED":

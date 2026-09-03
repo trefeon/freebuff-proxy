@@ -419,6 +419,8 @@ func effectiveConfigKV(cfg *config.Config) map[string]string {
 		"ADOPT_CLI_SESSION":           strconv.FormatBool(cfg.AdoptCLISession),
 		"WAITING_ROOM_CHAIN":          strconv.FormatBool(cfg.WaitingRoomChain),
 		"QUOTA_FALLBACK_MODELS":       strconv.Itoa(len(cfg.QuotaFallbackModels)),
+		"TOKEN_ROTATION":              cfg.TokenRotation,
+		"RATE_LIMIT_FAILOVER":         strconv.FormatBool(cfg.RateLimitFailover),
 		"BRIDGE_ENABLED":              strconv.FormatBool(cfg.BridgeEnabled),
 		"BRIDGE_IDLE_EVICT":           cfg.BridgeIdleEvict.String(),
 	}

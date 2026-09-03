@@ -318,7 +318,14 @@ func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byt
 				backend.CooldownRateLimit(lease, rle)
 			}
 			release()
-			return nil, nil, err
+			failover := true
+			if cfg := s.cfg.Load(); cfg != nil {
+				failover = cfg.RateLimitFailover
+			}
+			if !failover || attempts > 1 || ctx.Err() != nil {
+				return nil, nil, err
+			}
+			transientErr = err
 		case errors.Is(err, upstream.ErrIpCapped):
 			// ip_capped is admission-only (too many distinct users on the
 			// egress IP), NOT a quota reset: cool the token via

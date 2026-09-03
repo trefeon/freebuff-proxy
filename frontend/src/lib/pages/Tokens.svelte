@@ -38,7 +38,9 @@
   // Token rotation strategy (TOKEN_ROTATION in .env)
   let tokenRotation = $state("drain");
   let savingRotation = $state(false);
-
+  // Auto failover to another token on rate limit (RATE_LIMIT_FAILOVER in .env)
+  let rateLimitFailover = $state(true);
+  let savingFailover = $state(false);
   async function setTokenRotation(newMode) {
     if (savingRotation || tokenRotation === newMode) return;
     savingRotation = true;
@@ -56,6 +58,31 @@
       console.warn("Failed to update token rotation", e);
     } finally {
       savingRotation = false;
+    }
+  }
+
+  async function toggleRateLimitFailover() {
+    if (savingFailover) return;
+    savingFailover = true;
+    const nextVal = !rateLimitFailover;
+    try {
+      const cfgRes = await fetchAPI(adminApi.config);
+      const envContent = cfgRes?.env_content || "";
+      const newContent = setEnvValue(
+        envContent,
+        "RATE_LIMIT_FAILOVER",
+        String(nextVal),
+      );
+      const save = await postForm(adminActions.configSave, {
+        content: newContent,
+      });
+      if (save.ok) {
+        rateLimitFailover = nextVal;
+      }
+    } catch (e) {
+      console.warn("Failed to update rate limit failover", e);
+    } finally {
+      savingFailover = false;
     }
   }
 
@@ -351,9 +378,13 @@
         ].includes(rotVal)
           ? rotVal
           : "drain";
+
+        const failoverVal = getEnvValue(envContent, "RATE_LIMIT_FAILOVER");
+        rateLimitFailover = failoverVal ? failoverVal.toLowerCase() !== "false" : true;
       } catch {
         devToolsEnabled = false;
         tokenRotation = "drain";
+        rateLimitFailover = true;
       }
     })();
     return () => {
@@ -618,6 +649,43 @@
               )}
             </p>
           {/if}
+        </div>
+
+        <!-- Rate Limit Auto-Failover Toggle -->
+        <div
+          class="pt-3 border-t border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-[var(--fp-text)]">
+                {$tr("Auto Failover on Rate Limit (429)")}
+              </span>
+              <span
+                class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
+              ></span>
+            </div>
+            <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
+              {$tr(
+                "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.",
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={rateLimitFailover}
+            disabled={savingFailover}
+            onclick={toggleRateLimitFailover}
+            class="fp-btn {rateLimitFailover
+              ? 'fp-btn-primary'
+              : 'fp-btn-ghost'} fp-btn-sm text-xs shrink-0"
+          >
+            {#if savingFailover}
+              {$tr("Saving...")}
+            {:else}
+              {rateLimitFailover ? $tr("Enabled") : $tr("Disabled")}
+            {/if}
+          </button>
         </div>
       </div>
     </Card>

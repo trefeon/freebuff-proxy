@@ -114,6 +114,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
 	overrideString(&raw.TokenRotation, "TOKEN_ROTATION")
+	overrideBoolPtr(&raw.RateLimitFailover, "RATE_LIMIT_FAILOVER")
 	overrideString(&raw.ModelLocks, "MODEL_LOCKS")
 	overrideBool(&raw.DashboardEnabled, "DASHBOARD_ENABLED")
 	// Convert feature-translation modes (issue #277): COMPRESS_PROMPT,
@@ -457,7 +458,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		CompressPrompt:                   parseCompressPrompt(raw.CompressPrompt),
 		CacheControlInjection:            parseCacheControlInjection(raw.CacheControlInjection),
 		ReasoningInContent:               parseReasoningInContent(raw.ReasoningInContent),
-		EnvFile:                          envFileUsed,
+		RateLimitFailover:                raw.RateLimitFailover == nil || *raw.RateLimitFailover,
 	}
 
 	// Auto-discover CLI token if a discovery hook was wired (LoadOpts,
@@ -568,6 +569,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.RequestTimeout, get, "REQUEST_TIMEOUT")
 	overrideStringFrom(&raw.SessionCallTimeout, get, "SESSION_CALL_TIMEOUT")
 	overrideStringFrom(&raw.TokenRotation, get, "TOKEN_ROTATION")
+	overrideBoolPtrFrom(&raw.RateLimitFailover, get, "RATE_LIMIT_FAILOVER")
 	overrideStringFrom(&raw.ModelLocks, get, "MODEL_LOCKS")
 	overrideCSVFrom(&raw.APIKeys, get, "API_KEYS")
 	overrideStringFrom(&raw.AdminToken, get, "ADMIN_TOKEN")
@@ -753,6 +755,22 @@ func overrideBool(target *bool, envName string) {
 
 func overrideBoolFrom(target *bool, get func(string) string, envName string) {
 	override(target, get, envName, parseBool)
+}
+
+func overrideBoolPtr(target **bool, envName string) {
+	override(target, os.Getenv, envName, parseBoolPtr)
+}
+
+func overrideBoolPtrFrom(target **bool, get func(string) string, envName string) {
+	override(target, get, envName, parseBoolPtr)
+}
+
+func parseBoolPtr(s string) (*bool, bool) {
+	b, ok := parseBool(s)
+	if !ok {
+		return nil, false
+	}
+	return new(b), true
 }
 
 // overrideInt sets target from MAX_MESSAGES_PER_DAY-style env vars; unset or

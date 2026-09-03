@@ -248,6 +248,17 @@
     "description": "Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP)."
   },
   {
+    "key": "RATE_LIMIT_FAILOVER",
+    "group": "pool",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Automatically rotate and lease another available token when an in-flight request encounters a 429 rate limit (default true)."
+  },
+  {
     "key": "RATE_LIMIT_PER_IP",
     "group": "pool",
     "kind": "text",

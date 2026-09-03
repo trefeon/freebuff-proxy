@@ -88,6 +88,7 @@ type Config struct {
 	RequestJitter     time.Duration // random delay range [0, RequestJitter) before upstream chat calls
 	CLIVersion        string        // upstream CLI version string (default: 0.10.7)
 	TokenRotation     string        // "drain" (default) | "round_robin" | "least_used" | "random"
+	RateLimitFailover bool          // true = automatically lease another token when an in-flight request encounters 429 rate limit (RATE_LIMIT_FAILOVER; default true)
 	// ModelLocks pins pool slots to models (MODEL_LOCKS, issue #325):
 	// map from AUTH_TOKENS slot index to the model ids that slot may
 	// serve, e.g. {0: ["z-ai/glm-5.2"]}. Slots without an entry are
@@ -316,6 +317,7 @@ type rawConfig struct {
 	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
 	TokenRotation                    string                  `json:"TOKEN_ROTATION"`
+	RateLimitFailover                *bool                   `json:"RATE_LIMIT_FAILOVER"`
 	ModelLocks                       string                  `json:"MODEL_LOCKS"`
 	DashboardEnabled                 bool                    `json:"DASHBOARD_ENABLED"`
 	CompressPrompt                   string                  `json:"COMPRESS_PROMPT"`
@@ -375,7 +377,8 @@ func defaultRawConfig() rawConfig {
 		RotationInterval:                 "6h",
 		RequestTimeout:                   "15m",
 		SessionCallTimeout:               "30s",
-		TokenRotation:                    "drain",
+	TokenRotation:                    "drain",
+	RateLimitFailover:                new(true),
 		CostMode:                         "free",
 		RegistryRefresh:                  "6h",
 		MaxSpendPerDay:                   nil,   // 0 = unlimited advisory spend ceiling (never enforced)
