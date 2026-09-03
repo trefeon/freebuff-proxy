@@ -174,6 +174,13 @@ func (c *Client) StartRun(ctx context.Context, agentID string) (string, error) {
 		return "", fmt.Errorf("upstream: parse START response %q: %w", truncate(body, 200), err)
 	}
 	if parsed.RunID == "" {
+		// Wire parity (packages/agent-runtime/src/run-agent-step.ts
+		// @0b7d580c, issue #323): registration ending on the run's abort
+		// signal is a cancel, not a failure — surface the context error
+		// so callers drop it instead of classifying an upstream failure.
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		return "", fmt.Errorf("upstream: START response missing runId: %q", truncate(body, 200))
 	}
 	return parsed.RunID, nil
