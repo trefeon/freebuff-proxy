@@ -50,6 +50,7 @@
   // no new backend route, no restart.
   let lockSaving = $state(false);
   let lockError = $state("");
+  let lockNotice = $state("");
   let pinSelect = $state("");
 
   function parseLocks(envText) {
@@ -102,12 +103,21 @@
     if (slot == null || lockSaving) return;
     lockSaving = true;
     lockError = "";
+    lockNotice = "";
     try {
       const cfg = await fetchAPI(adminApi.config);
       const next = patchEnvLocks(cfg?.env_content || "", slot, models);
       const res = await postForm(adminActions.configSave, { content: next });
       const json = await res.json();
       if (!(res.ok && json?.ok)) {
+        // Fail-loud override/restart-only saves (ok:false with a message):
+        // the file write succeeded but the live config did not move.
+        // Surface as a warning, not a silent success or a red error.
+        if (res.ok && json?.message) {
+          lockNotice = json.message;
+          await refreshTokens();
+          return;
+        }
         throw new Error(json?.message || "Save rejected");
       }
       pinSelect = "";
@@ -366,6 +376,9 @@
     </div>
     {#if lockError}
       <p class="mt-1 text-xs text-red-400">{lockError}</p>
+    {/if}
+    {#if lockNotice}
+      <p class="mt-1 text-xs text-amber-300">{lockNotice}</p>
     {/if}
   </div>
   {#if !devToolsEnabled && !(token.session_remaining_seconds > 0 && token.session_model) && !token.has_standing}
