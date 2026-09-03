@@ -29,7 +29,6 @@ export function updateAuthState(partial) {
   authState.update((s) => ({ ...s, ...partial }));
 }
 
-
 // Module-level latch: once a 401 / auth redirect is observed, background
 // polling halts for the life of the page. Dismissing the banner hides it but
 // does NOT resume hammering a dead endpoint; recovery is an explicit

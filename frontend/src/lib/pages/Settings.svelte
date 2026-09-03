@@ -498,10 +498,7 @@
       </Alert>
     {/if}
 
-    <SecurityCard
-      onSuccess={fetchData}
-      onRequireLoginChange={fetchData}
-    />
+    <SecurityCard onSuccess={fetchData} onRequireLoginChange={fetchData} />
 
     <ConfigEditor
       {meta}

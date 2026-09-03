@@ -272,7 +272,9 @@
               type="button"
               class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
               onclick={() => (showCurrentPassword = !showCurrentPassword)}
-              aria-label={showCurrentPassword ? $tr("Hide password") : $tr("Show password")}
+              aria-label={showCurrentPassword
+                ? $tr("Hide password")
+                : $tr("Show password")}
             >
               {#if showCurrentPassword}
                 <EyeOff size={16} />
@@ -303,7 +305,9 @@
               type="button"
               class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
               onclick={() => (showNewPassword = !showNewPassword)}
-              aria-label={showNewPassword ? $tr("Hide password") : $tr("Show password")}
+              aria-label={showNewPassword
+                ? $tr("Hide password")
+                : $tr("Show password")}
             >
               {#if showNewPassword}
                 <EyeOff size={16} />
@@ -330,7 +334,9 @@
               type="button"
               class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
               onclick={() => (showConfirmPassword = !showConfirmPassword)}
-              aria-label={showConfirmPassword ? $tr("Hide password") : $tr("Show password")}
+              aria-label={showConfirmPassword
+                ? $tr("Hide password")
+                : $tr("Show password")}
             >
               {#if showConfirmPassword}
                 <EyeOff size={16} />

@@ -103,7 +103,8 @@
       }
     } catch (err) {
       errorMsg =
-        err.message || $tr("Could not update login requirement. Check connection.");
+        err.message ||
+        $tr("Could not update login requirement. Check connection.");
     } finally {
       togglingRequireLogin = false;
     }
