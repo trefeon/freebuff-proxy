@@ -186,11 +186,18 @@
       ) {
         const status = fields.status || "";
         const err =
-          fields.reason || fields.error || fields.message || "request failed";
+          fields.err ||
+          fields.reason ||
+          fields.error ||
+          fields.message ||
+          (fields.code ? `[${fields.code}]` : "") ||
+          (msg === "access" ? `HTTP ${status}` : "request failed");
         const ms = fields.ms ? ` · ${fields.ms}ms` : "";
+        const retry = fields.retry_after ? ` · RETRY ${fields.retry_after}s` : "";
+        const model = fields.model ? ` [${fields.model}]` : "";
         lines.push({
           id: uid("err", reqId, e.time, i),
-          text: `[${timeStr}] ${circle} ✗ ERROR ${status} · ${err}${ms}`,
+          text: `[${timeStr}] ${circle} ✗ ERROR ${status}${model} · ${err}${retry}${ms}`,
           type: "err",
         });
       }
