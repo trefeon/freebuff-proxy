@@ -173,3 +173,73 @@ func (d *Dashboard) tokensData() tokensData {
 	}
 	return td
 }
+
+// tokenLiveDetail is the hot-poll subset of tokenDetail (issue #322): the
+// live card plus session and quota rows. Account-stable card fields
+// (email, account_id, daily_limit, standing_*, referral_*) ride the
+// once-per-mount full fetch; the SPA merges them back by index.
+type tokenLiveDetail struct {
+	tokenLiveCard
+	SessionInstance         string                     `json:"session_instance"`
+	SessionModel            string                     `json:"session_model"`
+	SessionRemainingSeconds int64                      `json:"session_remaining_seconds"`
+	SessionExpiresAt        string                     `json:"session_expires_at,omitempty"`
+	Quota                   []quotaRow                 `json:"quota"`
+	HasQuota                bool                       `json:"has_quota"`
+	PremiumQuota            *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+}
+
+// tokensLiveData is the hot-poll subset of tokensData: live numbers only.
+type tokensLiveData struct {
+	BridgeTokens     int               `json:"bridge_tokens"`
+	BridgeTokenCards []bridgeTokenCard `json:"bridge_token_cards,omitempty"`
+	TokenCount       int               `json:"token_count"`
+	Tokens           []tokenLiveDetail `json:"tokens"`
+	HasTokens        bool              `json:"has_tokens"`
+}
+
+// tokensLiveData builds the 10s hot-poll payload by stripping the
+// account-stable card fields off the full snapshot. Quota-row synthesis
+// stays single-sourced in tokensData; this only projects.
+func (d *Dashboard) tokensLiveData() tokensLiveData {
+	full := d.tokensData()
+	live := tokensLiveData{
+		BridgeTokens:     full.BridgeTokens,
+		BridgeTokenCards: full.BridgeTokenCards,
+		TokenCount:       full.TokenCount,
+		HasTokens:        full.HasTokens,
+	}
+	for _, tok := range full.Tokens {
+		c := tok.tokenCard
+		live.Tokens = append(live.Tokens, tokenLiveDetail{
+			tokenLiveCard: tokenLiveCard{
+				Index:            c.Index,
+				SessionStatus:    c.SessionStatus,
+				QueuePosition:    c.QueuePosition,
+				QueueDepth:       c.QueueDepth,
+				ActiveRuns:       c.ActiveRuns,
+				Requests:         c.Requests,
+				Messages24h:      c.Messages24h,
+				UsagePct:         c.UsagePct,
+				RiskLevel:        c.RiskLevel,
+				CooldownActive:   c.CooldownActive,
+				CooldownUntil:    c.CooldownUntil,
+				Locked:           c.Locked,
+				BanType:          c.BanType,
+				BannedUntil:      c.BannedUntil,
+				TransientRetries: c.TransientRetries,
+				Freebucks:        c.Freebucks,
+				FreeWindows:      c.FreeWindows,
+				Subscription:     c.Subscription,
+			},
+			SessionInstance:         tok.SessionInstance,
+			SessionModel:            tok.SessionModel,
+			SessionRemainingSeconds: tok.SessionRemainingSeconds,
+			SessionExpiresAt:        tok.SessionExpiresAt,
+			Quota:                   tok.Quota,
+			HasQuota:                tok.HasQuota,
+			PremiumQuota:            tok.PremiumQuota,
+		})
+	}
+	return live
+}

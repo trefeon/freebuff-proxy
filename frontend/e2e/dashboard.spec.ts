@@ -31,10 +31,15 @@ test.describe("dashboard hermetic mocks", () => {
     // At-risk token card from overview fixture (index 1 has risk_level high)
     await expect(page.getByText("Token #1")).toBeVisible();
 
-    // Verify polling: wait for second request within 17s (15s interval + buffer)
-    // Keep timeout generous but still proves periodic fetch rather than one-shot.
+    // Verify polling: the hot poll hits ?view=live within 17s (15s interval +
+    // buffer) while the once-per-mount full fetch carries the static fields
+    // (issue #322). The mock answers the live URL with the full shape, so the
+    // merge path renders the same cards.
     await page.waitForResponse(
-      (r) => r.url().includes("/admin/api/overview") && r.status() === 200,
+      (r) =>
+        r.url().includes("/admin/api/overview") &&
+        r.url().includes("view=live") &&
+        r.status() === 200,
       { timeout: 17000 },
     );
     expect(overviewCount).toBeGreaterThanOrEqual(2);
@@ -82,6 +87,15 @@ test.describe("dashboard hermetic mocks", () => {
       .catch(() => {});
     await table.locator('button[aria-label*="Expand details"]').first().click();
     await expect(table.getByText("Dev Session:")).toBeVisible();
+    // Issue #322: the 10s hot poll hits ?view=live (static fields ride the
+    // once-per-mount full fetch).
+    await page.waitForResponse(
+      (r) =>
+        r.url().includes("/admin/api/tokens") &&
+        r.url().includes("view=live") &&
+        r.status() === 200,
+      { timeout: 12000 },
+    );
   });
 
   test("Quota Tracker shows premium pool and per-model session quota", async ({

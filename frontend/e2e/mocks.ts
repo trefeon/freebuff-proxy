@@ -93,8 +93,9 @@ export async function mockDashboard(
   const pick = (key: keyof Fixtures) =>
     overrides[key] ?? (fixtures as Record<string, unknown>)[key];
 
-  // Overview
-  await page.route("**/admin/api/overview", async (route) => {
+  // Overview (also matches ?view=live hot polls: the mock answers the full
+  // shape and the SPA merges it like an old server would).
+  await page.route("**/admin/api/overview*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -102,8 +103,8 @@ export async function mockDashboard(
     });
   });
 
-  // Tokens
-  await page.route("**/admin/api/tokens", async (route) => {
+  // Tokens (also matches ?view=live hot polls, same full-shape answer).
+  await page.route("**/admin/api/tokens*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

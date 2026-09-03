@@ -25,9 +25,102 @@
   let error = $state("");
   let now = $state(Date.now());
 
+  // Issue #322: restart/deploy-only fields (mode, model_count, safe_mode,
+  // transient_retries, max_messages_per_day, upstream_sync) and account-stable
+  // card fields (email, standing_*, referral_*) ride a once-per-mount full
+  // fetch; the 15s hot poll hits ?view=live and merges over the cached static
+  // snapshot. A full refresh every ~5min (or when the cache is empty) picks
+  // up mid-session changes (mode switches, trust updates, registry syncs).
+  const LIVE_QS = "?view=live";
+  const FULL_EVERY_POLLS = 20;
+  const FULL_EVERY_MS = 5 * 60 * 1000;
+  const STATIC_TOP_KEYS = [
+    "base_url",
+    "mode",
+    "in_bridge",
+    "show_bridge",
+    "models",
+    "model_count",
+    "safe_mode",
+    "max_messages_per_day",
+    "transient_retries",
+    "fingerprint_rotations",
+    "is_default_admin_token",
+    "upstream_sync",
+  ];
+  const STATIC_TOKEN_KEYS = [
+    "email",
+    "account_id",
+    "daily_limit",
+    "has_standing",
+    "standing_level",
+    "standing_label",
+    "standing_score",
+    "standing_next_level",
+    "standing_next_level_at",
+    "standing_capped_by",
+    "standing_capped_reason",
+    "standing_blurb",
+    "standing_next_steps",
+    "has_referral",
+    "referral_code",
+    "referral_qualified_count",
+    "referral_sessions_left",
+    "referral_github_linked",
+    "referral_reset_at",
+  ];
+  let staticPart = null;
+  let staticTokensByIndex = {};
+  let polls = 0;
+  let lastFullAt = 0;
+
+  function pick(obj, keys) {
+    const out = {};
+    for (const k of keys) if (k in obj) out[k] = obj[k];
+    return out;
+  }
+
+  function rememberStatic(full) {
+    staticPart = pick(full, STATIC_TOP_KEYS);
+    staticTokensByIndex = {};
+    for (const t of full.tokens ?? []) {
+      staticTokensByIndex[t.index] = pick(t, STATIC_TOKEN_KEYS);
+    }
+    lastFullAt = Date.now();
+  }
+
+  function mergeLive(live) {
+    // Old servers and hermetic mocks answer the live URL with the full shape:
+    // refresh the static cache instead of rendering stale snapshots.
+    if ("mode" in live && "model_count" in live) rememberStatic(live);
+    return {
+      ...staticPart,
+      ...live,
+      tokens: (live.tokens ?? []).map((lt) => ({
+        ...(staticTokensByIndex[lt.index] ?? {}),
+        ...lt,
+      })),
+    };
+  }
+
+  async function fetchFull() {
+    const full = await fetchAPI(adminApi.overview);
+    rememberStatic(full);
+    data = full;
+  }
+
   async function fetchData() {
     try {
-      data = await fetchAPI(adminApi.overview);
+      polls += 1;
+      if (
+        staticPart === null ||
+        polls % FULL_EVERY_POLLS === 0 ||
+        Date.now() - lastFullAt > FULL_EVERY_MS
+      ) {
+        await fetchFull();
+      } else {
+        data = mergeLive(await fetchAPI(adminApi.overview + LIVE_QS));
+      }
     } catch (e) {
       error =
         e.message ||

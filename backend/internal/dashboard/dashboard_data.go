@@ -317,6 +317,7 @@ func (d *Dashboard) overviewData(r *http.Request) overviewData {
 		ShowBridge:           mode == "bridge" || mode == "hybrid",
 		Models:               servedModels(d.reg),
 		ModelCount:           len(servedModels(d.reg)),
+		Uptime:               humanDuration(time.Since(d.started)),
 		SafeMode:             cfg.SafeMode,
 		MaxMessagesPerDay:    cfg.MaxMessagesPerDay,
 		TransientRetries:     ps.TransientRetries,
@@ -338,5 +339,39 @@ func (d *Dashboard) overviewData(r *http.Request) overviewData {
 		}
 	}
 	od.UpstreamSync = parseUpstreamSync(upstreamDriftJSON)
+	return od
+}
+
+// overviewLiveData is the hot-poll subset of overviewData (issue #322):
+// live numbers only. Restart/deploy-only fields (base_url, mode, models,
+// safe_mode, max_messages_per_day, transient_retries, upstream_sync) and
+// account-stable card fields ride the once-per-mount full fetch; the SPA
+// merges them back over this shape.
+type overviewLiveData struct {
+	Uptime           string            `json:"uptime"`
+	Tokens           []tokenLiveCard   `json:"tokens"`
+	HasTokens        bool              `json:"has_tokens"`
+	BridgeTokens     int               `json:"bridge_tokens"`
+	BridgeTokenCards []bridgeTokenCard `json:"bridge_token_cards,omitempty"`
+}
+
+// overviewLiveData builds the 15s hot-poll payload: uptime, per-token live
+// cards, and bridge relay state. Uptime is string-formatted like the full
+// view; bridge cards are live snapshots, identical to the full shape.
+func (d *Dashboard) overviewLiveData() overviewLiveData {
+	ps := d.pool.PoolSnapshot()
+	od := overviewLiveData{
+		Uptime:       humanDuration(time.Since(d.started)),
+		BridgeTokens: d.pool.BridgeCount(),
+	}
+	for _, t := range ps.Tokens {
+		od.Tokens = append(od.Tokens, liveCardFromSnapshot(t))
+	}
+	od.HasTokens = len(od.Tokens) > 0
+	if mode := d.cfg().EffectiveMode(); mode == "bridge" || mode == "hybrid" {
+		for _, snap := range d.pool.BridgeSnapshot() {
+			od.BridgeTokenCards = append(od.BridgeTokenCards, bridgeCardFromSnapshot(snap))
+		}
+	}
 	return od
 }

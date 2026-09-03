@@ -134,14 +134,29 @@ func (d *Dashboard) APIVersion(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// isLiveView reports whether the request asks for the hot-poll subset
+// (issue #322): ?view=live omits restart/deploy-only and account-stable
+// fields. The SPA fetches the full shape once per mount and merges the
+// live subset over it on every poll. Absent or any other value returns the
+// full shape, so old clients and existing tests are unaffected.
+func isLiveView(r *http.Request) bool {
+	return r != nil && r.URL != nil && r.URL.Query().Get("view") == "live"
+}
+
 // dataFor resolves the page data for a named content template.
 func (d *Dashboard) dataFor(name string, r *http.Request) any {
 	switch name {
 	case "overview":
+		if isLiveView(r) {
+			return d.overviewLiveData()
+		}
 		return d.overviewData(r)
 	case "config":
 		return d.configData()
 	case "tokens":
+		if isLiveView(r) {
+			return d.tokensLiveData()
+		}
 		return d.tokensData()
 	case "models":
 		return d.modelsData()

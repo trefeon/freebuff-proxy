@@ -239,8 +239,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await mockDashboard(page, f, {}, { loginPage: true });
 
     const state = { tokens: [tokenRow(0), tokenRow(1), tokenRow(2)] };
-    await page.unroute("**/admin/api/tokens");
-    await page.route("**/admin/api/tokens", async (route) => {
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -311,8 +311,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await mockDashboard(page, f, {}, { loginPage: true });
 
     const state = { tokens: [tokenRow(0), tokenRow(1)] };
-    await page.unroute("**/admin/api/tokens");
-    await page.route("**/admin/api/tokens", async (route) => {
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -486,8 +486,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
 
     // Stateful tokens so add/remove/lock keep the table consistent.
     const state = { tokens: tokenRowsOf(f.tokens) };
-    await page.unroute("**/admin/api/tokens");
-    await page.route("**/admin/api/tokens", async (route) => {
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -641,8 +641,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       }
     });
     // After logout the sensitive API is dead: 401s.
-    await page.unroute("**/admin/api/tokens");
-    await page.route("**/admin/api/tokens", async (route) => {
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
       await route.fulfill({
         status: 401,
         contentType: "application/json",
