@@ -282,13 +282,14 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pool" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
-    // A documented bool renders as a checkbox; effective value drives it.
-    const safeMode = page.getByRole("checkbox", { name: "SAFE_MODE" });
+    // A documented bool renders as a switch; effective value drives it.
+    const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
     await expect(safeMode).toBeVisible();
-    await expect(safeMode).toBeChecked();
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
 
     // Toggling marks the form dirty and surfaces the unsaved-changes banner.
-    await safeMode.uncheck();
+    await safeMode.click();
+    await expect(safeMode).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Unsaved changes")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
 
@@ -439,16 +440,16 @@ test.describe("dashboard hermetic mocks", () => {
       .catch(() => {});
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await metaResp;
-    const safeMode = page.getByRole("checkbox", { name: "SAFE_MODE" });
-    await expect(safeMode).toBeChecked();
+    const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
 
     // Toggle the bool, accept the confirm dialog, and save.
-    await safeMode.uncheck();
+    await safeMode.click();
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Save" }).click();
 
     // Failure alert shown and the control restored to the server state.
-    await expect(safeMode).toBeChecked();
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
     // Dirty reverted — Save button disabled again.
     await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
   });

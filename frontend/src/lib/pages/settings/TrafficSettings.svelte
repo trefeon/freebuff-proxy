@@ -1,4 +1,5 @@
 <script>
+  import ToggleSwitch from "../../components/ToggleSwitch.svelte";
   import { Activity } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -114,24 +115,11 @@
         </p>
       </div>
       <div class="shrink-0 flex items-center gap-2.5">
-        <label
-          class="inline-flex items-center gap-2 cursor-pointer select-none"
-        >
-          <input
-            type="checkbox"
-            aria-label="RATE_LIMIT_FAILOVER"
-            checked={rateLimitFailover}
-            onchange={(e) =>
-              onField(
-                "RATE_LIMIT_FAILOVER",
-                e.currentTarget.checked ? "true" : "false",
-              )}
-            class="h-5 w-5 rounded border-[var(--fp-border-bright)] bg-[var(--fp-input-bg)] text-[var(--fp-accent)] accent-[var(--fp-accent)] cursor-pointer focus:ring-2 focus:ring-[var(--fp-accent)] focus:ring-offset-1 transition-transform active:scale-95"
-          />
-          <span class="text-xs text-[var(--fp-muted)] min-w-[52px]">
-            {rateLimitFailover ? $tr("enabled") : $tr("disabled")}
-          </span>
-        </label>
+        <ToggleSwitch
+          checked={rateLimitFailover}
+          ariaLabel="RATE_LIMIT_FAILOVER"
+          onchange={(v) => onField("RATE_LIMIT_FAILOVER", v ? "true" : "false")}
+        />
       </div>
     </div>
   </div>

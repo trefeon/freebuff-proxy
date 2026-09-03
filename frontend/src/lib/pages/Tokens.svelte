@@ -9,6 +9,7 @@
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
   import RiskCards from "../components/RiskCards.svelte";
+  import ToggleSwitch from "../components/ToggleSwitch.svelte";
   import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
@@ -62,10 +63,10 @@
     }
   }
 
-  async function toggleRateLimitFailover() {
+  async function toggleRateLimitFailover(next) {
     if (savingFailover) return;
     savingFailover = true;
-    const nextVal = !rateLimitFailover;
+    const nextVal = typeof next === "boolean" ? next : !rateLimitFailover;
     try {
       const cfgRes = await fetchAPI(adminApi.config);
       const envContent = cfgRes?.env_content || "";
@@ -683,25 +684,16 @@
               )}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={rateLimitFailover}
+          <ToggleSwitch
+            checked={rateLimitFailover}
             disabled={savingFailover}
-            onclick={toggleRateLimitFailover}
-            class="fp-btn {rateLimitFailover
-              ? 'fp-btn-primary'
-              : 'fp-btn-ghost'} fp-btn-sm text-xs shrink-0"
-          >
-            {#if savingFailover}
-              {$tr("Saving...")}
-            {:else}
-              {rateLimitFailover ? $tr("Enabled") : $tr("Disabled")}
-            {/if}
-          </button>
+            saving={savingFailover}
+            ariaLabel="Auto Failover on Rate Limit (429)"
+            onchange={(v) => toggleRateLimitFailover(v)}
+          />
         </div>
-      </div>
-    </Card>
+      </div></Card
+    >
 
     <TokenTable
       tokens={data?.tokens ?? []}

@@ -573,9 +573,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await metaResp;
-    const safeMode = page.getByRole("checkbox", { name: "SAFE_MODE" });
-    await expect(safeMode).toBeChecked();
-    await safeMode.uncheck();
+    const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
+    await safeMode.click();
     const configReq = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
     );

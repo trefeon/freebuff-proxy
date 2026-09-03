@@ -477,9 +477,10 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await metaResp;
 
-    const safeMode = page.getByRole("checkbox", { name: "SAFE_MODE" });
-    await expect(safeMode).toBeChecked();
-    await safeMode.uncheck();
+    const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
+    await safeMode.click();
+    await expect(safeMode).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Unsaved changes")).toBeVisible();
 
     let posted = false;
@@ -490,7 +491,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
       await route.continue();
     });
     await page.getByRole("button", { name: "Discard" }).first().click();
-    await expect(safeMode).toBeChecked();
+    await expect(safeMode).toHaveAttribute("aria-checked", "true");
     await expect(page.getByText("Unsaved changes")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Save Changes", exact: true }),
@@ -513,10 +514,10 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await metaResp;
 
-    // Absent from .env, the bridge checkbox defaults to checked.
-    const bridge = page.getByRole("checkbox", { name: "BRIDGE_ENABLED" });
-    await expect(bridge).toBeChecked();
-    await bridge.uncheck();
+    // Absent from .env, the bridge switch defaults to on.
+    const bridge = page.getByRole("switch", { name: "BRIDGE_ENABLED" });
+    await expect(bridge).toHaveAttribute("aria-checked", "true");
+    await bridge.click();
     await page.locator('input[aria-label="RATE_LIMIT_PER_IP"]').fill("25");
 
     let savedBody = "";
@@ -573,9 +574,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
       page.getByRole("button", { name: "Update Password" }),
     ).toBeDisabled();
 
-    // Matching passwords enable submit; the mocked endpoint succeeds.
-    // (The success alert is transient by design: onSuccess refetches settings,
-    // which remounts the card — so cleared fields prove the ok branch ran.)
+    // Matching passwords enable submit; the mocked endpoint succeeds and the
+    // success alert survives (refetches are silent once mounted).
     await page.locator("#sec-confirm-password").fill("newpass123");
     const submit = page.getByRole("button", { name: "Update Password" });
     await expect(submit).toBeEnabled();
@@ -593,6 +593,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(page.locator("#sec-new-password")).toHaveValue("");
     await expect(page.locator("#sec-confirm-password")).toHaveValue("");
     await expect(page.getByText("Passwords do not match")).toHaveCount(0);
+    await expect(page.getByText("Password changed")).toBeVisible();
   });
 
   // -------------------------------------------------------------------------
@@ -603,8 +604,12 @@ test.describe("operator interactions (hermetic mocks)", () => {
   }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
+    const setupResp = page.waitForResponse(
+      (r) => r.url().includes("/admin/api/setup") && r.status() === 200,
+      { timeout: 5000 },
+    );
     await page.goto("http://127.0.0.1:4173/admin/setup");
-    await expect(page.getByText("pool size")).toBeVisible();
+    await setupResp;
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);

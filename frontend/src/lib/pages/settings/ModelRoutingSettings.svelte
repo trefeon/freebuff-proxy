@@ -1,4 +1,5 @@
 <script>
+  import ToggleSwitch from "../../components/ToggleSwitch.svelte";
   import { Cpu } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -151,24 +152,11 @@
         </p>
       </div>
       <div class="shrink-0 flex items-center gap-2.5">
-        <label
-          class="inline-flex items-center gap-2 cursor-pointer select-none"
-        >
-          <input
-            type="checkbox"
-            aria-label="REASONING_IN_CONTENT"
-            checked={reasoningInContent}
-            onchange={(e) =>
-              onField(
-                "REASONING_IN_CONTENT",
-                e.currentTarget.checked ? "true" : "",
-              )}
-            class="h-5 w-5 rounded border-[var(--fp-border-bright)] bg-[var(--fp-input-bg)] text-[var(--fp-accent)] accent-[var(--fp-accent)] cursor-pointer focus:ring-2 focus:ring-[var(--fp-accent)] focus:ring-offset-1 transition-transform active:scale-95"
-          />
-          <span class="text-xs text-[var(--fp-muted)] min-w-[52px]">
-            {reasoningInContent ? $tr("enabled") : $tr("disabled")}
-          </span>
-        </label>
+        <ToggleSwitch
+          checked={reasoningInContent}
+          ariaLabel="REASONING_IN_CONTENT"
+          onchange={(v) => onField("REASONING_IN_CONTENT", v ? "true" : "")}
+        />
       </div>
     </div>
 

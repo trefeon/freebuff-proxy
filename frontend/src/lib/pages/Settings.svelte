@@ -190,7 +190,12 @@
   // Data
   // ---------------------------------------------------------------------------
   async function fetchData() {
-    loading = true;
+    // Silent refetch once the form is mounted: flipping `loading` would
+    // unmount the cards (wiping e.g. the password success alert after
+    // SecurityCard's onSuccess refresh), and a failed background refresh
+    // must not wipe a usable form — it keeps stale data instead.
+    const firstLoad = data == null;
+    if (firstLoad) loading = true;
     error = "";
     try {
       const [metaRes, cfgRes] = await Promise.all([
@@ -213,9 +218,9 @@
       formValues = deriveValues(baseContent);
       changedKeys = new Set();
     } catch (e) {
-      error = e.message || $tr("Failed to fetch configuration");
+      if (firstLoad) error = e.message || $tr("Failed to fetch configuration");
     } finally {
-      loading = false;
+      if (firstLoad) loading = false;
     }
   }
 
