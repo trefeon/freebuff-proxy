@@ -136,7 +136,9 @@ test.describe("dashboard hermetic mocks", () => {
     const table = page.locator("table.fp-table");
     await expect(table.getByText("#0")).toBeVisible({ timeout: 10000 });
     await table.locator('button[aria-label*="Expand details"]').first().click();
-    await expect(page.getByText("Unlocked — serves any model.").first()).toBeVisible();
+    await expect(
+      page.getByText("Unlocked — serves any model.").first(),
+    ).toBeVisible();
 
     const postReqPromise = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
