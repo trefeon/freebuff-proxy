@@ -395,6 +395,47 @@ test.describe("dashboard hermetic mocks", () => {
     }
   });
 
+  test("Logs console survives same-second duplicate request lines", async ({
+    page,
+  }) => {
+    // Live entries share second-precision timestamps: one request emits
+    // chat request + routing + access + trace + done with the same req_id
+    // and time. Console line ids must stay unique or Svelte throws
+    // each_key_duplicate and the view breaks.
+    const t = new Date().toISOString();
+    const E = (message: string, fields: string) => ({
+      time: t,
+      level: "INFO",
+      message,
+      fields,
+    });
+    const f = loadFixtures();
+    const pageErrors: string[] = [];
+    page.on("pageerror", (e) => pageErrors.push(String(e)));
+    await mockDashboard(page, f, {
+      logs: {
+        entries: [
+          E("chat request", "req_id=dup  model=openai/gpt-5.6-luna"),
+          E("chat routing", "req_id=dup  agent=stealth/ox-alpha"),
+          E(
+            "access",
+            "req_id=dup  method=POST  path=/v1/chat/completions  status=200  ms=100",
+          ),
+          E("chat trace", "req_id=dup  total_ms=100"),
+          E("chat done", "req_id=dup  ms=100"),
+        ],
+      },
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    // Console is the default view: all five /v1 lines render, no crash.
+    await expect(page.getByText("5 request events")).toBeVisible();
+    await expect(
+      page.getByText("openai/gpt-5.6-luna").first(),
+    ).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
   test("Models lists 6 served models", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);

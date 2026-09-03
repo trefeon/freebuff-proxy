@@ -78,6 +78,22 @@
       return true;
     };
     const lines = [];
+    // Live entries share second-precision timestamps, so several lines for
+    // one request (chat request + routing + access + trace + done) can
+    // produce identical semantic ids — Svelte {#each} throws
+    // each_key_duplicate and the console breaks. Suffix collisions.
+    const usedIds = new Set();
+    const uid = (kind, reqId, time, i) => {
+      const base = kind + "-" + (reqId || i) + "-" + time;
+      let id = base;
+      let n = 1;
+      while (usedIds.has(id)) {
+        n += 1;
+        id = base + "~" + n;
+      }
+      usedIds.add(id);
+      return id;
+    };
 
     for (let i = 0; i < chrono.length; i++) {
       const e = chrono[i];
@@ -126,7 +142,7 @@
             " ",
           );
         lines.push({
-          id: "req-" + (reqId || i) + "-" + e.time,
+          id: uid("req", reqId, e.time, i),
           text: lineText,
           type: "req",
         });
@@ -153,7 +169,7 @@
           "";
         const outPart = outTok ? ` · OUT ${outTok}` : "";
         lines.push({
-          id: "done-" + (reqId || i) + "-" + e.time,
+          id: uid("done", reqId, e.time, i),
           text: `[${timeStr}] ${circle} 📊 DONE ${ms}ms${ttftPart}${inPart}${cachePart}${outPart}`,
           type: "done",
         });
@@ -167,7 +183,7 @@
           fields.reason || fields.error || fields.message || "request failed";
         const ms = fields.ms ? ` · ${fields.ms}ms` : "";
         lines.push({
-          id: "err-" + (reqId || i) + "-" + e.time,
+          id: uid("err", reqId, e.time, i),
           text: `[${timeStr}] ${circle} ✗ ERROR ${status} · ${err}${ms}`,
           type: "err",
         });
