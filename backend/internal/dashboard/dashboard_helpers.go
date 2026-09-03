@@ -129,15 +129,24 @@ func freebucksCardFromInfo(info *upstream.FreebucksInfo) *freebucksCard {
 	if info == nil {
 		return nil
 	}
-	return &freebucksCard{
-		Balance:       info.Balance,
-		Daily:         freebucksWindowCardFromWindow(info.Daily),
-		Weekly:        freebucksWindowCardFromWindow(info.Weekly),
-		Monthly:       freebucksWindowCardFromWindow(info.Monthly),
-		BindingWindow: info.BindingWindow,
-		Prices:        info.Prices,
-		PlanDaily:     info.PlanDaily,
+	card := &freebucksCard{
+		Balance: info.Balance,
+		Daily:   freebucksWindowCardFromWindow(info.Daily),
+		PlanID:  info.PlanID,
+		Prices:  info.Prices,
 	}
+	card.Wallet = freebucksWalletCard{
+		Balance:      info.Wallet.Balance,
+		MonthlyBonus: info.Wallet.MonthlyBonus,
+	}
+	if !info.Wallet.NextBonusAt.IsZero() {
+		card.Wallet.NextBonusAt = info.Wallet.NextBonusAt.Format(time.RFC3339)
+	}
+	card.Spend = freebucksSpendCard{LimitUsd: info.Spend.LimitUsd}
+	if !info.Spend.ResetAt.IsZero() {
+		card.Spend.ResetAt = info.Spend.ResetAt.Format(time.RFC3339)
+	}
+	return card
 }
 
 func freebucksWindowCardFromWindow(w upstream.FreebucksWindow) freebucksWindowCard {
@@ -185,13 +194,16 @@ func formatFreebucks(fb *freebucksCard) string {
 	if fb == nil {
 		return ""
 	}
-	return fmt.Sprintf("balance %s · daily %s · weekly %s · monthly %s · binding %s",
+	s := fmt.Sprintf("balance %s · daily %s · wallet %s · spend-ceiling $%s",
 		formatQuota(fb.Balance),
 		formatFreebucksWindow(fb.Daily),
-		formatFreebucksWindow(fb.Weekly),
-		formatFreebucksWindow(fb.Monthly),
-		fb.BindingWindow,
+		formatQuota(fb.Wallet.Balance),
+		formatQuota(fb.Spend.LimitUsd),
 	)
+	if fb.PlanID != "" {
+		s += " · plan " + fb.PlanID
+	}
+	return s
 }
 
 // formatFreebucksWindow formats one Freebucks window as "spent/limit (remaining left)".

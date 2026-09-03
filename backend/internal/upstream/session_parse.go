@@ -131,15 +131,32 @@ type FreebucksWindow struct {
 	ResetAt   time.Time `json:"resetAt"`
 }
 
-// FreebucksInfo is the caller's Freebucks position (issue #232).
+// FreebucksWallet is the never-expiring Freebucks store (issue #321 wire
+// drift): plan bonuses land here (monthlyBonus at nextBonusAt; 0 on free).
+type FreebucksWallet struct {
+	Balance      float64   `json:"balance"`
+	MonthlyBonus float64   `json:"monthlyBonus"`
+	NextBonusAt  time.Time `json:"nextBonusAt,omitempty"`
+}
+
+// FreebucksSpendCeiling is the settled-USD daily spend cap for the account's
+// tier (issue #321 wire drift).
+type FreebucksSpendCeiling struct {
+	LimitUsd float64   `json:"limitUsd"`
+	ResetAt  time.Time `json:"resetAt,omitempty"`
+}
+
+// FreebucksInfo is the caller's Freebucks position (issue #232, shape
+// issue #321): spendable balance (= daily.remaining + wallet.balance) +
+// the daily pool + the never-expiring wallet + the USD spend ceiling +
+// the plan id ("" when the account is on the free allowance).
 type FreebucksInfo struct {
-	Balance       float64            `json:"balance"`
-	Daily         FreebucksWindow    `json:"daily"`
-	Weekly        FreebucksWindow    `json:"weekly"`
-	Monthly       FreebucksWindow    `json:"monthly"`
-	BindingWindow string             `json:"bindingWindow"`
-	PlanDaily     *float64           `json:"planDaily,omitempty"`
-	Prices        map[string]float64 `json:"prices"`
+	Balance float64               `json:"balance"`
+	Daily   FreebucksWindow       `json:"daily"`
+	Wallet  FreebucksWallet       `json:"wallet"`
+	Spend   FreebucksSpendCeiling `json:"spend"`
+	PlanID  string                `json:"planId,omitempty"`
+	Prices  map[string]float64    `json:"prices"`
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -381,14 +398,28 @@ type rawFreebucksWindow struct {
 	ResetAt   any     `json:"resetAt"`
 }
 
+type rawFreebucksWallet struct {
+	Balance      float64 `json:"balance"`
+	MonthlyBonus float64 `json:"monthlyBonus"`
+	NextBonusAt  any     `json:"nextBonusAt"`
+}
+
+type rawFreebucksSpendCeiling struct {
+	LimitUsd float64 `json:"limitUsd"`
+	ResetAt  any     `json:"resetAt"`
+}
+
+// rawFreebucks mirrors upstream FreebuffFreebucksInfo (issue #321 wire
+// drift): spendable balance + the daily pool window + the never-expiring
+// wallet + the USD spend ceiling + the plan id. The pre-drift weekly and
+// monthly pool windows are gone upstream (replaced by wallet + spend).
 type rawFreebucks struct {
-	Balance       float64            `json:"balance"`
-	Daily         rawFreebucksWindow `json:"daily"`
-	Weekly        rawFreebucksWindow `json:"weekly"`
-	Monthly       rawFreebucksWindow `json:"monthly"`
-	BindingWindow string             `json:"bindingWindow"`
-	PlanDaily     *float64           `json:"planDaily"`
-	Prices        map[string]float64 `json:"prices"`
+	Balance float64                   `json:"balance"`
+	Daily   rawFreebucksWindow        `json:"daily"`
+	Wallet  *rawFreebucksWallet       `json:"wallet"`
+	Spend   *rawFreebucksSpendCeiling `json:"spend"`
+	PlanID  *string                   `json:"planId"`
+	Prices  map[string]float64        `json:"prices"`
 }
 
 type rawFreeWindows struct {
@@ -544,14 +575,26 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		}
 		if raw.Freebucks != nil {
 			fb := &FreebucksInfo{
-				Balance:       raw.Freebucks.Balance,
-				BindingWindow: raw.Freebucks.BindingWindow,
-				PlanDaily:     raw.Freebucks.PlanDaily,
-				Prices:        raw.Freebucks.Prices,
+				Balance: raw.Freebucks.Balance,
+				Prices:  raw.Freebucks.Prices,
+			}
+			if raw.Freebucks.PlanID != nil {
+				fb.PlanID = *raw.Freebucks.PlanID
 			}
 			fb.Daily = windowFromRaw(raw.Freebucks.Daily)
-			fb.Weekly = windowFromRaw(raw.Freebucks.Weekly)
-			fb.Monthly = windowFromRaw(raw.Freebucks.Monthly)
+			if raw.Freebucks.Wallet != nil {
+				fb.Wallet.Balance = raw.Freebucks.Wallet.Balance
+				fb.Wallet.MonthlyBonus = raw.Freebucks.Wallet.MonthlyBonus
+				if t, terr := parseFlexTime(raw.Freebucks.Wallet.NextBonusAt); terr == nil {
+					fb.Wallet.NextBonusAt = t
+				}
+			}
+			if raw.Freebucks.Spend != nil {
+				fb.Spend.LimitUsd = raw.Freebucks.Spend.LimitUsd
+				if t, terr := parseFlexTime(raw.Freebucks.Spend.ResetAt); terr == nil {
+					fb.Spend.ResetAt = t
+				}
+			}
 			state.Freebucks = fb
 		}
 		if raw.FreeWindows != nil {

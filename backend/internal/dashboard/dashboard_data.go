@@ -117,18 +117,34 @@ type freebucksWindowCard struct {
 	PercentUsed float64 `json:"percent_used"`
 }
 
-// freebucksCard is the dashboard view of upstream.FreebucksInfo (issue #232):
-// balance + daily/weekly/monthly windows + binding_window + per-model prices.
+// freebucksCard is the dashboard view of upstream.FreebucksInfo (issue #232,
+// shape issue #321): balance + the daily pool window + the never-expiring
+// wallet + the USD spend ceiling + the plan id + per-model prices.
 // Nil when the session has not reported Freebucks (nil-safe callers check).
 // Exposed alongside premium_quota, not replacing it.
 type freebucksCard struct {
-	Balance       float64             `json:"balance"`
-	Daily         freebucksWindowCard `json:"daily"`
-	Weekly        freebucksWindowCard `json:"weekly"`
-	Monthly       freebucksWindowCard `json:"monthly"`
-	BindingWindow string              `json:"binding_window"`
-	Prices        map[string]float64  `json:"prices,omitempty"`
-	PlanDaily     *float64            `json:"plan_daily,omitempty"`
+	Balance float64             `json:"balance"`
+	Daily   freebucksWindowCard `json:"daily"`
+	Wallet  freebucksWalletCard `json:"wallet"`
+	Spend   freebucksSpendCard  `json:"spend"`
+	PlanID  string              `json:"plan_id,omitempty"`
+	Prices  map[string]float64  `json:"prices,omitempty"`
+}
+
+// freebucksWalletCard is the dashboard view of the never-expiring Freebucks
+// wallet: spendable balance, monthly plan bonus (0 on free), and the ISO
+// instant the next plan bonus lands (empty when absent).
+type freebucksWalletCard struct {
+	Balance      float64 `json:"balance"`
+	MonthlyBonus float64 `json:"monthly_bonus"`
+	NextBonusAt  string  `json:"next_bonus_at,omitempty"`
+}
+
+// freebucksSpendCard is the dashboard view of the Freebucks USD spend
+// ceiling: the cap plus the ISO instant the day rolls.
+type freebucksSpendCard struct {
+	LimitUsd float64 `json:"limit_usd"`
+	ResetAt  string  `json:"reset_at,omitempty"`
 }
 
 // freeWindowsCard is the dashboard view of upstream.FreeWindowsInfo

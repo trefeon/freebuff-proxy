@@ -408,3 +408,49 @@ func TestRemoveTokenAtThenAddKeepsUsageSpendAligned(t *testing.T) {
 		t.Errorf("spend[2] day = %d, want 200 (old token-3 spend shifted)", d2)
 	}
 }
+
+// TestFreebucksCappedRetryWalletShape pins the issue #321 Freebucks wire
+// shape: the capped retry derives from the daily pool refill and the plan
+// wallet bonus — the pre-drift weekly/monthly binding windows are gone.
+// Balance (server-computed spendable = daily.remaining + wallet.balance)
+// below price caps the token; earliest future refill wins; no signal → 0.
+func TestFreebucksCappedRetryWalletShape(t *testing.T) {
+	mkSnap := func(fb *upstream.FreebucksInfo) session.SessionSnapshot {
+		return session.SessionSnapshot{Freebucks: fb}
+	}
+	fb := func(balance float64, dailyReset, bonusAt time.Time) *upstream.FreebucksInfo {
+		return &upstream.FreebucksInfo{
+			Balance: balance,
+			Daily:   upstream.FreebucksWindow{Limit: 20, Spent: 19, Remaining: 1, ResetAt: dailyReset},
+			Wallet:  upstream.FreebucksWallet{Balance: 0, MonthlyBonus: 10, NextBonusAt: bonusAt},
+			Prices:  map[string]float64{"openai/gpt-5.6-luna": 2},
+		}
+	}
+	// Balance covers the price → not capped.
+	capped, _ := freebucksCappedForSnapshot(mkSnap(fb(5, time.Now().Add(time.Hour), time.Time{})), "openai/gpt-5.6-luna")
+	if capped {
+		t.Error("capped with balance 5 >= price 2, want not capped")
+	}
+	// Capped: daily refill in 1h, bonus in 24h → retry ≈ daily reset.
+	reset := time.Now().Add(time.Hour).Truncate(time.Second)
+	capped, retry := freebucksCappedForSnapshot(mkSnap(fb(0.5, reset, reset.Add(23*time.Hour))), "openai/gpt-5.6-luna")
+	if !capped {
+		t.Fatal("not capped with balance 0.5 < price 2")
+	}
+	if retry < 59*time.Minute || retry > time.Hour+time.Minute {
+		t.Errorf("retry = %v, want ≈1h (daily refill, not the 24h bonus)", retry)
+	}
+	// Capped with the daily reset already past: plan bonus is the signal.
+	capped, retry = freebucksCappedForSnapshot(mkSnap(fb(0.5, time.Now().Add(-time.Hour), reset.Add(24*time.Hour))), "openai/gpt-5.6-luna")
+	if !capped {
+		t.Fatal("not capped with past daily reset")
+	}
+	if retry <= 0 {
+		t.Errorf("retry = %v, want the plan bonus instant", retry)
+	}
+	// No model price → never capped.
+	capped, _ = freebucksCappedForSnapshot(mkSnap(fb(0, reset, time.Time{})), "unknown/model")
+	if capped {
+		t.Error("capped for unpriced model, want not capped")
+	}
+}
