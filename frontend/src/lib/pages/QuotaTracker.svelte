@@ -95,6 +95,23 @@
   <!-- Upstream announcements and broadcasts -->
   <AnnouncementsBanner />
 
+  <!-- Upstream Accounting Transition Notice (issue #332/#335): one subtle
+       page-level card in the header zone — not repeated inside every
+       account card. -->
+  <div
+    class="p-2.5 rounded-lg bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/20 text-xs text-[var(--fp-muted)] flex items-start gap-2"
+  >
+    <Info size={14} class="shrink-0 mt-0.5 text-[var(--fp-accent)]" />
+    <div>
+      <strong class="text-[var(--fp-text)] font-medium block mb-0.5"
+        >{$tr("Upstream Accounting Revamp (Freebucks)")}</strong
+      >
+      {$tr(
+        "Codebuff is transitioning accounts from the legacy 4 sessions/day pool to daily Freebucks allowances (~75 Freebucks/day). Legacy accounts stay on the daily session pool until upstream finishes rollout.",
+      )}
+    </div>
+  </div>
+
   {#if loading}
     <div
       class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"
@@ -449,24 +466,6 @@
                       >
                     </div>
                   {/each}
-                </div>
-              </div>
-
-              <!-- Upstream Accounting Transition Notice (Issue #332/#335) -->
-              <div
-                class="mt-1 p-2.5 rounded-lg bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/20 text-xs text-[var(--fp-muted)] flex items-start gap-2"
-              >
-                <Info
-                  size={14}
-                  class="shrink-0 mt-0.5 text-[var(--fp-accent)]"
-                />
-                <div>
-                  <strong class="text-[var(--fp-text)] font-medium block mb-0.5"
-                    >{$tr("Upstream Accounting Revamp (Freebucks)")}</strong
-                  >
-                  {$tr(
-                    "Codebuff is transitioning accounts from the legacy 4 sessions/day pool to daily Freebucks allowances (~75 Freebucks/day). Legacy accounts stay on the daily session pool until upstream finishes rollout.",
-                  )}
                 </div>
               </div>
             </div>

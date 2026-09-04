@@ -740,8 +740,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await expect(
       page.getByText("No quota data available for this session."),
     ).toHaveCount(2);
-    // Unmetered models section and accounting revamp notice render per account card.
-    // No unmetered_models in payload here, so the static fallback renders.
+    // Unmetered models section renders per account card (static fallback
+    // here, since no unmetered_models is in the payload); the accounting
+    // revamp notice renders once at page level, not per account card.
     await expect(page.getByText("Unmetered Models")).toHaveCount(2);
     await expect(
       page.getByText(/Solar Pro 4 · Unlimited sessions/),
@@ -751,7 +752,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toHaveCount(2);
     await expect(
       page.getByText(/Upstream Accounting Revamp \(Freebucks\)/),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
   });
 
   // Issue #342: the section renders the backend modelcat derivation from
