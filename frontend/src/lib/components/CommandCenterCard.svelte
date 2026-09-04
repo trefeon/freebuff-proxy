@@ -133,7 +133,7 @@
     first
     label={$tr("Gateway Process")}
     description={$tr(
-      "Gracefully stops the proxy process. Container supervisors (restart: unless-stopped) or systemd restart it immediately with persisted state intact.",
+      "Restarts the proxy process immediately (in-flight requests drop). The container supervisor (restart: unless-stopped) or systemd brings it back at once; memory clears and disk-persisted sessions resume on the next request.",
     )}
   >
     {#snippet badge()}
