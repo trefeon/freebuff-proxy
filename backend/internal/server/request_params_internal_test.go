@@ -179,3 +179,68 @@ func TestAnthropicToChatParams_SystemNormalization(t *testing.T) {
 		})
 	}
 }
+
+// TestResponsesEcho mirrors OpenAI's echo semantics on the response object
+// skeleton: request params (store/tools/tool_choice/...) are reflected,
+// OpenAI defaults apply when absent. Regression: the skeleton hardcoded
+// store:true/tools:[] regardless of the request (live S13 showed
+// store:true on a store:false request).
+func TestResponsesEcho(t *testing.T) {
+	// Nil request → OpenAI defaults.
+	d := responsesEcho(nil)
+	if d["store"] != true {
+		t.Errorf("default store = %v, want true", d["store"])
+	}
+	if tools, _ := d["tools"].([]any); len(tools) != 0 {
+		t.Errorf("default tools = %v, want []", d["tools"])
+	}
+	if d["tool_choice"] != "auto" {
+		t.Errorf("default tool_choice = %v, want auto", d["tool_choice"])
+	}
+
+	// Client params are echoed verbatim.
+	tools := []any{map[string]any{"type": "function", "name": "get_weather"}}
+	raw := map[string]any{
+		"store":               false,
+		"tools":               tools,
+		"tool_choice":         "required",
+		"parallel_tool_calls": false,
+		"temperature":         0.2,
+		"instructions":        "Be concise.",
+		"max_output_tokens":   float64(300),
+		"reasoning":           map[string]any{"effort": "low", "summary": "auto"},
+	}
+	e := responsesEcho(raw)
+	if e["store"] != false {
+		t.Errorf("store = %v, want false", e["store"])
+	}
+	if e["tool_choice"] != "required" {
+		t.Errorf("tool_choice = %v, want required", e["tool_choice"])
+	}
+	if e["parallel_tool_calls"] != false {
+		t.Errorf("parallel_tool_calls = %v, want false", e["parallel_tool_calls"])
+	}
+	if e["instructions"] != "Be concise." {
+		t.Errorf("instructions = %v, want echo", e["instructions"])
+	}
+	if e["max_output_tokens"] != float64(300) {
+		t.Errorf("max_output_tokens = %v, want 300", e["max_output_tokens"])
+	}
+
+	// The skeleton carries the echo (created/in_progress/completed share it).
+	base := responsesBase("m", "resp_x", 1, "in_progress", e)
+	for k, want := range map[string]any{"store": false, "tool_choice": "required", "instructions": "Be concise."} {
+		if base[k] != want {
+			t.Errorf("skeleton[%s] = %v, want %v", k, base[k], want)
+		}
+	}
+	if len(base["tools"].([]any)) != 1 {
+		t.Errorf("skeleton tools = %v, want 1 echoed tool", base["tools"])
+	}
+
+	// Nil echo → defaults (test-driven relays pass &relayStats{}).
+	def := responsesBase("m", "resp_y", 1, "completed", nil)
+	if def["store"] != true || def["tool_choice"] != "auto" {
+		t.Errorf("nil-echo skeleton = store %v choice %v, want true/auto", def["store"], def["tool_choice"])
+	}
+}

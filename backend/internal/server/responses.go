@@ -111,10 +111,12 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	var relay relayFunc
 	if stream {
 		relay = func(ctx context.Context, w http.ResponseWriter, up io.Reader, stats *relayStats, chatStart time.Time) {
+			stats.responsesEcho = responsesEcho(raw)
 			s.relayResponsesStream(ctx, w, up, stats, chatStart, model, respID)
 		}
 	} else {
 		relay = func(ctx context.Context, w http.ResponseWriter, up io.Reader, stats *relayStats, chatStart time.Time) {
+			stats.responsesEcho = responsesEcho(raw)
 			s.relayResponsesJSON(ctx, w, up, stats, chatStart, model, respID)
 		}
 	}
@@ -425,8 +427,45 @@ func responsesInputToMessages(input any, instructions any) ([]any, error) {
 	return messages, nil
 }
 
+// responsesEcho builds the request-parameter echo map for the Responses
+// object skeleton, matching OpenAI's echo semantics: store, tools,
+// tool_choice, parallel_tool_calls, temperature, top_p, instructions and
+// max_output_tokens reflect what the client sent (OpenAI defaults when
+// absent). Previously the skeleton hardcoded store:true/tools:[] regardless
+// of the request, which strict Responses clients can observe.
+func responsesEcho(raw map[string]any) map[string]any {
+	echo := map[string]any{
+		"store":               true,
+		"tools":               []any{},
+		"tool_choice":         "auto",
+		"parallel_tool_calls": true,
+		"temperature":         1.0,
+		"top_p":               1.0,
+		"instructions":        nil,
+		"max_output_tokens":   nil,
+		"reasoning":           map[string]any{"effort": nil, "summary": nil},
+	}
+	if raw == nil {
+		return echo
+	}
+	for _, k := range []string{"store", "tools", "tool_choice", "parallel_tool_calls", "temperature", "top_p", "instructions", "max_output_tokens"} {
+		if v, ok := raw[k]; ok && v != nil {
+			echo[k] = v
+		}
+	}
+	if re, ok := raw["reasoning"].(map[string]any); ok {
+		echo["reasoning"] = map[string]any{"effort": re["effort"], "summary": re["summary"]}
+	}
+	return echo
+}
+
 // responsesBase builds the Responses object skeleton with the given status.
-func responsesBase(model, id string, createdAt int64, status string) map[string]any {
+// echo (from responsesEcho, nil-safe) overrides the OpenAI-default request
+// parameters echoed on the object.
+func responsesBase(model, id string, createdAt int64, status string, echo map[string]any) map[string]any {
+	if echo == nil {
+		echo = responsesEcho(nil)
+	}
 	return map[string]any{
 		"id":                   id,
 		"object":               "response",
@@ -434,19 +473,19 @@ func responsesBase(model, id string, createdAt int64, status string) map[string]
 		"status":               status,
 		"error":                nil,
 		"incomplete_details":   nil,
-		"instructions":         nil,
-		"max_output_tokens":    nil,
+		"instructions":         echo["instructions"],
+		"max_output_tokens":    echo["max_output_tokens"],
 		"model":                model,
 		"output":               []any{},
-		"parallel_tool_calls":  true,
+		"parallel_tool_calls":  echo["parallel_tool_calls"],
 		"previous_response_id": nil,
-		"reasoning":            map[string]any{"effort": nil, "summary": nil},
-		"store":                true,
-		"temperature":          1.0,
+		"reasoning":            echo["reasoning"],
+		"store":                echo["store"],
+		"temperature":          echo["temperature"],
 		"text":                 map[string]any{"format": map[string]any{"type": "text"}},
-		"tool_choice":          "auto",
-		"tools":                []any{},
-		"top_p":                1.0,
+		"tool_choice":          echo["tool_choice"],
+		"tools":                echo["tools"],
+		"top_p":                echo["top_p"],
 		"truncation":           "disabled",
 		"usage":                nil,
 		"user":                 nil,
