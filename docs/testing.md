@@ -230,7 +230,8 @@ What a healthy dashboard shows:
 
 Polling is per-page (Overview 15s, Tokens live store, Logs 1s). If one
 page's numbers freeze while the proxy still answers curl, reload that
-page; a proxy restart clears everything.
+page; a proxy restart clears in-flight streams and transient cooldowns,
+but persisted sessions and last-seen quota resume (see §7).
 
 ## 6. Service mode (run forever)
 

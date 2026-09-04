@@ -454,3 +454,46 @@ func TestFreebucksCappedRetryWalletShape(t *testing.T) {
 		t.Error("capped for unpriced model, want not capped")
 	}
 }
+
+// TestFreebucksCappedMonthlyAllowance pins wire drift 2026-09-04 (#330):
+// when the monthly dollar allowance is spent, fresh sessions stop upstream
+// regardless of the daily balance. Absent monthly (older servers) changes
+// nothing.
+func TestFreebucksCappedMonthlyAllowance(t *testing.T) {
+	mkSnap := func(fb *upstream.FreebucksInfo) session.SessionSnapshot {
+		return session.SessionSnapshot{Freebucks: fb}
+	}
+	withMonthly := func(balance, remainingUsd float64, dailyReset, monthReset time.Time) *upstream.FreebucksInfo {
+		return &upstream.FreebucksInfo{
+			Balance: balance,
+			Daily:   upstream.FreebucksWindow{Limit: 20, Spent: 1, Remaining: 19, ResetAt: dailyReset},
+			Wallet:  upstream.FreebucksWallet{},
+			Monthly: &upstream.FreebucksMonthlyAllowance{LimitUsd: 10, SpentUsd: 10 - remainingUsd, RemainingUsd: remainingUsd, ResetAt: monthReset},
+			Prices:  map[string]float64{"openai/gpt-5.6-luna": 2},
+		}
+	}
+	now := time.Now()
+	// Balance covers the price AND monthly has room → not capped.
+	capped, _ := freebucksCappedForSnapshot(mkSnap(withMonthly(5, 4, now.Add(time.Hour), now.Add(30*24*time.Hour))), "openai/gpt-5.6-luna")
+	if capped {
+		t.Error("capped with balance and monthly room, want not capped")
+	}
+	// Balance covers the price but the monthly period is spent → capped
+	// anyway (daily refill is the earlier signal here).
+	capped, retry := freebucksCappedForSnapshot(mkSnap(withMonthly(5, 0, now.Add(time.Hour), now.Add(30*24*time.Hour))), "openai/gpt-5.6-luna")
+	if !capped {
+		t.Fatal("not capped with spent monthly allowance")
+	}
+	if retry < 59*time.Minute || retry > time.Hour+time.Minute {
+		t.Errorf("retry = %v, want ≈1h (earliest of daily/monthly)", retry)
+	}
+	// Daily refill past and no bonus: the monthly reset is the only
+	// signal — proves the monthly window feeds the retry.
+	capped, retry = freebucksCappedForSnapshot(mkSnap(withMonthly(5, 0, now.Add(-time.Hour), now.Add(30*24*time.Hour))), "openai/gpt-5.6-luna")
+	if !capped {
+		t.Fatal("not capped with spent monthly and past daily reset")
+	}
+	if retry < 29*24*time.Hour || retry > 31*24*time.Hour {
+		t.Errorf("retry = %v, want ≈30d (monthly reset)", retry)
+	}
+}

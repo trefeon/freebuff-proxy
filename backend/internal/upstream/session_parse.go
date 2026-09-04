@@ -146,17 +146,29 @@ type FreebucksSpendCeiling struct {
 	ResetAt  time.Time `json:"resetAt,omitempty"`
 }
 
+// FreebucksMonthlyAllowance is the monthly dollar allowance (wire drift
+// 2026-09-04, issue #330): provider spend for the period at which fresh
+// sessions stop. Pointer in FreebucksInfo: absent on servers that predate
+// it, and clients must render nothing (not a zero) in that case.
+type FreebucksMonthlyAllowance struct {
+	LimitUsd     float64   `json:"limitUsd"`
+	SpentUsd     float64   `json:"spentUsd"`
+	RemainingUsd float64   `json:"remainingUsd"`
+	ResetAt      time.Time `json:"resetAt"`
+}
+
 // FreebucksInfo is the caller's Freebucks position (issue #232, shape
 // issue #321): spendable balance (= daily.remaining + wallet.balance) +
 // the daily pool + the never-expiring wallet + the USD spend ceiling +
 // the plan id ("" when the account is on the free allowance).
 type FreebucksInfo struct {
-	Balance float64               `json:"balance"`
-	Daily   FreebucksWindow       `json:"daily"`
-	Wallet  FreebucksWallet       `json:"wallet"`
-	Spend   FreebucksSpendCeiling `json:"spend"`
-	PlanID  string                `json:"planId,omitempty"`
-	Prices  map[string]float64    `json:"prices"`
+	Balance float64                    `json:"balance"`
+	Daily   FreebucksWindow            `json:"daily"`
+	Wallet  FreebucksWallet            `json:"wallet"`
+	Spend   FreebucksSpendCeiling      `json:"spend"`
+	Monthly *FreebucksMonthlyAllowance `json:"monthly,omitempty"`
+	PlanID  string                     `json:"planId,omitempty"`
+	Prices  map[string]float64         `json:"prices"`
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -334,7 +346,7 @@ type ModelQuota struct {
 	Limit       float64
 	RecentCount float64
 	ResetAt     time.Time
-	Period      string // "pacific_day" | "pacific_week" (empty when absent)
+	Period      string // "pacific_day" | "pacific_week" | "pacific_month" (empty when absent)
 	// Pool / PoolLabel group models that share one session-quota pool on
 	// the wire (FreebuffSessionRateLimit). Pool is opaque — group by it, never
 	// match on its value; PoolLabel is the server-authored display string.

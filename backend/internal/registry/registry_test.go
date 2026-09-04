@@ -59,6 +59,7 @@ var expectedFallback = map[string]string{
 	"anthropic/claude-fable-5":        "base2-free-fable",
 	"openai/gpt-5.6-luna-es":          "base2-free-luna-es",
 	"stealth/ox-alpha":                "base2-free-ox-alpha",
+	"google/gemini-3.8-flash":         "base2-free-gemini-3-8-flash",
 	"google/gemini-2.5-flash-lite":    "file-picker",
 	"google/gemini-3.1-flash-lite":    "file-picker-max",
 	"google/gemini-3.5-flash-lite":    "file-picker-max",
@@ -126,7 +127,7 @@ func TestFallbackMap(t *testing.T) {
 // live parse.
 func TestFallbackParityWithPinnedUpstream(t *testing.T) {
 	dir := filepath.Join("testdata", "upstream")
-	files := []string{"free-agents.ts", "freebuff-model-ids.ts", "freebuff-models.ts", "gemini.ts", "model-config.ts"}
+	files := []string{"free-agents.ts", "freebuff-model-ids.ts", "freebuff-models.ts", "gemini.ts", "model-config.ts", "freebuff-model-entitlements.ts"}
 	urls := make([]string, len(files))
 	for i, f := range files {
 		urls[i] = fileSource(t, filepath.Join(dir, f))

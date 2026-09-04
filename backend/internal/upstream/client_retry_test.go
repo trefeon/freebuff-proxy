@@ -1494,6 +1494,24 @@ func TestClassifyLoadSheddingAndPeakHours(t *testing.T) {
 	}
 }
 
+// TestClassifyMonthlyCapQuotaShaped pins wire drift 2026-09-04 (#330): a
+// pacific_month quota period with the counter at/over the limit classifies
+// as quota exhaustion (Pacific-midnight lock), exactly like daily/weekly —
+// never as an opaque transient.
+func TestClassifyMonthlyCapQuotaShaped(t *testing.T) {
+	errMonthly := classifyError(http.StatusTooManyRequests, `{"status":"rate_limited","period":"pacific_month","limit":100,"recentCount":100}`, http.Header{})
+	var rleMonthly *RateLimitError
+	if !errors.As(errMonthly, &rleMonthly) {
+		t.Fatalf("monthly-cap 429 = %T %v, want *RateLimitError", errMonthly, errMonthly)
+	}
+	if rleMonthly.RetryAfter <= 0 {
+		t.Error("monthly-cap 429 RetryAfter <= 0")
+	}
+	if !IsDailyCapReset(rleMonthly) {
+		t.Error("IsDailyCapReset(monthly) = false, want true")
+	}
+}
+
 // TestClassifyOpaqueRateLimitedBoundedBackoff pins #140: a fully opaque
 // rate_limited 429 body with empty headers (no timestamp, no period, no
 // Retry-After) must yield a bounded RetryAfter — a minutes-scale transient

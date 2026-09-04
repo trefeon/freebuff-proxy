@@ -131,8 +131,12 @@ type freebucksCard struct {
 	Daily   freebucksWindowCard `json:"daily"`
 	Wallet  freebucksWalletCard `json:"wallet"`
 	Spend   freebucksSpendCard  `json:"spend"`
-	PlanID  string              `json:"plan_id,omitempty"`
-	Prices  map[string]float64  `json:"prices,omitempty"`
+	// Monthly is the monthly dollar allowance (wire drift 2026-09-04,
+	// issue #330). Nil when the server predates it — the SPA renders
+	// nothing rather than a zero that would read as "spent".
+	Monthly *freebucksWindowCard `json:"monthly,omitempty"`
+	PlanID  string               `json:"plan_id,omitempty"`
+	Prices  map[string]float64   `json:"prices,omitempty"`
 }
 
 // freebucksWalletCard is the dashboard view of the never-expiring Freebucks

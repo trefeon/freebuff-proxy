@@ -47,6 +47,7 @@ var sourceFiles = []string{
 	"freebuff-models.ts",
 	"gemini.ts",
 	"model-config.ts",
+	"freebuff-model-entitlements.ts",
 }
 
 // fetchTimeout mirrors the JS fetch timeout of 30000ms.
@@ -84,6 +85,7 @@ func buildPinnedFallback() ([]agentModels, map[string]string) {
 		"testdata/upstream/freebuff-models.ts",
 		"testdata/upstream/gemini.ts",
 		"testdata/upstream/model-config.ts",
+		"testdata/upstream/freebuff-model-entitlements.ts",
 	}
 	texts := make([]string, 0, len(names))
 	for _, name := range names {

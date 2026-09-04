@@ -59,6 +59,17 @@ var pinnedRowIDs = map[string]string{
 	"DEEPSEEK_V4_FLASH_MODEL": "deepseek/deepseek-v4-flash",
 	"MIMO_V25_MODEL":          "mimo/mimo-v2.5",
 	"FABLE_5_MODEL":           "anthropic/claude-fable-5",
+	"SOLAR_PRO_4_MODEL":       "upstage/solar-pro4",
+	"GEMINI_38_FLASH_MODEL":   "google/gemini-3.8-flash",
+}
+
+// idAliases mirrors ID constants upstream moved out of literal form (the
+// test's literal parser cannot follow them; the registry parser resolves
+// them via member access). Update on sync when the literal set moves.
+var idAliases = map[string]string{
+	// FREEBUFF_SOLAR_PRO_4_MODEL_ID is now
+	// FREEBUFF_SOLAR_PRO_4_ENTITLEMENT.modelId (entitlements file).
+	"FREEBUFF_SOLAR_PRO_4_MODEL_ID": "upstage/solar-pro4",
 }
 
 // resolveModelRef resolves a FREEBUFF_*_MODEL_ID constant name OR a model
@@ -67,6 +78,9 @@ var pinnedRowIDs = map[string]string{
 func resolveModelRef(t *testing.T, ids map[string]string, ref string) string {
 	t.Helper()
 	if v, ok := ids[ref]; ok {
+		return v
+	}
+	if v, ok := idAliases[ref]; ok {
 		return v
 	}
 	if strings.HasSuffix(ref, "_MODEL") && !strings.HasPrefix(ref, "FREEBUFF_") {
@@ -137,6 +151,76 @@ scan:
 	return items
 }
 
+// rowPremiumFlag resolves the `premium:` field of the model row object
+// `const NAME = { ... }` to its boolean value: literals directly, member
+// chains (FREEBUFF_X_ENTITLEMENT.fullAccess.premium) through the
+// entitlements source. found=false when the row has no premium field.
+func rowPremiumFlag(modelsSrc, extraSrc, name string) (val, found bool) {
+	re := regexp.MustCompile(`(?s)const ` + regexp.QuoteMeta(name) + `\s*=\s*\{`)
+	m := re.FindStringIndex(modelsSrc)
+	if m == nil {
+		return false, false
+	}
+	depth := 0
+	body := ""
+	for i := m[1] - 1; i < len(modelsSrc); i++ {
+		switch modelsSrc[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				body = modelsSrc[m[1]:i]
+			}
+		}
+		if body != "" {
+			break
+		}
+	}
+	fm := regexp.MustCompile(`(?m)^\s*premium:\s*([^,\n]+),?\s*$`).FindStringSubmatch(body)
+	if fm == nil {
+		return false, false
+	}
+	expr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(fm[1]), ","))
+	switch expr {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	}
+	// Member chain into the entitlements source (e.g. solar's
+	// FREEBUFF_SOLAR_PRO_4_ENTITLEMENT.fullAccess.premium).
+	scope := extraSrc
+	parts := strings.Split(expr, ".")
+	for i, p := range parts {
+		var anchor string
+		if i == 0 {
+			mm := regexp.MustCompile(`(?s)const ` + regexp.QuoteMeta(p) + `\s*=\s*\{`).FindString(scope)
+			if mm == "" {
+				return false, false
+			}
+			anchor = mm
+		} else {
+			mm := regexp.MustCompile(`(?s)\b` + regexp.QuoteMeta(p) + `\s*:\s*\{?`).FindString(scope)
+			if mm == "" {
+				return false, false
+			}
+			anchor = mm
+		}
+		scope = scope[strings.Index(scope, anchor)+len(anchor)-1:]
+	}
+	tail := strings.TrimSpace(scope)
+	if strings.HasPrefix(tail, "{") {
+		return false, false
+	}
+	if strings.HasPrefix(tail, "true") {
+		return true, true
+	}
+	if strings.HasPrefix(tail, "false") {
+		return false, true
+	}
+	return false, false
+}
 func TestCatalogParityWithPinnedUpstream(t *testing.T) {
 	ids := modelIDs(t)
 	modelsSrc := readTestdata(t, "freebuff-models.ts")
@@ -185,15 +269,23 @@ func TestCatalogParityWithPinnedUpstream(t *testing.T) {
 		}
 	}
 
-	// Premium set.
-	premiumRefs := parseList(t, modelsSrc, "FREEBUFF_PREMIUM_MODEL_IDS")
+	// Premium set. Upstream derives FREEBUFF_PREMIUM_MODEL_IDS from the row
+	// flags, but our Premium means live shared-pool metering: served rows
+	// mirror the resolved upstream flag (literals directly, entitlement
+	// member chains through the entitlements source), while paused
+	// (withdrawn) rows must NOT be premium — they cannot consume the pool,
+	// whatever vestigial flag their frozen row object keeps.
+	entSrc := readTestdata(t, "freebuff-model-entitlements.ts")
 	premium := map[string]bool{}
-	for _, ref := range premiumRefs {
-		premium[resolveModelRef(t, ids, ref)] = true
+	for _, ref := range supported {
+		id := resolveModelRef(t, ids, ref)
+		if v, ok := rowPremiumFlag(modelsSrc, entSrc, ref); ok && v && IsServed(id) {
+			premium[id] = true
+		}
 	}
 	for _, m := range Catalog {
 		if m.Premium != premium[m.ID] {
-			t.Errorf("catalog premium[%q] = %v, upstream FREEBUFF_PREMIUM_MODEL_IDS = %v", m.ID, m.Premium, premium[m.ID])
+			t.Errorf("catalog premium[%q] = %v, want %v (served upstream flag)", m.ID, m.Premium, premium[m.ID])
 		}
 	}
 
@@ -305,11 +397,12 @@ func catalogIDs() []string {
 }
 
 // TestCatalogFactsPinned asserts the documented catalog reality directly:
-// the served set, the shared premium pool (Luna + Solar Pro 4; GLM 5.3
-// Flash is unmetered), the paused map (all three withdrawn rows recommend
-// the default model), per-model caps (none at this pin), and per-model
-// effort ladders. This pins what the doc comments CLAIM so a stale claim
-// (e.g. "GLM 5.3 Flash is premium") fails here before an operator reads it.
+// the served set, the shared premium pool (Luna alone since 2026-09-04;
+// GLM 5.3 Flash is unmetered), the paused map (all five withdrawn rows
+// recommend the default model), per-model caps (none at this pin), and
+// per-model effort ladders. This pins what the doc comments CLAIM so a
+// stale claim (e.g. "GLM 5.3 Flash is premium") fails here before an
+// operator reads it.
 func TestCatalogFactsPinned(t *testing.T) {
 	// Served set, catalog order.
 	wantServed := []string{
@@ -317,16 +410,15 @@ func TestCatalogFactsPinned(t *testing.T) {
 		"upstage/solar-pro4",
 		"z-ai/glm-5.3-flash",
 		"deepseek/deepseek-v4-flash",
-		"mimo/mimo-v2.5",
 	}
 	if got := ServedIDs(); !slices.Equal(got, wantServed) {
 		t.Errorf("ServedIDs() = %v, want %v", got, wantServed)
 	}
 
-	// Shared premium pool = Luna + Solar Pro 4 (both metered by the shared
-	// 5/day pool). GLM 5.3 Flash unmetered. Solar's per-model count cap
-	// (1/day solar_pro4) closed 2026-09-01, upstream 051fd4d9.
-	wantPremium := []string{"openai/gpt-5.6-luna", "upstage/solar-pro4"}
+	// Shared premium pool = Luna alone since 2026-09-04 (solar's entitlement
+	// went unmetered; gemini is paused-withdrawn and cannot consume the
+	// pool). GLM 5.3 Flash unmetered.
+	wantPremium := []string{"openai/gpt-5.6-luna"}
 	if got := SharedPremiumModels(); !slices.Equal(got, wantPremium) {
 		t.Errorf("SharedPremiumModels() = %v, want %v", got, wantPremium)
 	}
@@ -338,13 +430,12 @@ func TestCatalogFactsPinned(t *testing.T) {
 			t.Errorf("IsPremium(%q) = false, want true (shared premium pool)", id)
 		}
 	}
-
-	// Paused map: each withdrawn row recommends the default model.
 	wantPaused := map[string]string{
 		"stealth/ox-alpha":         DefaultModelID,
 		"deepseek/deepseek-v4-pro": DefaultModelID,
 		"minimax/minimax-m3":       DefaultModelID,
 		"z-ai/glm-5.2":             DefaultModelID,
+		"google/gemini-3.8-flash":  DefaultModelID,
 	}
 	if got := PausedMap(); !maps.Equal(got, wantPaused) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)

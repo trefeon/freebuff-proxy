@@ -1,6 +1,6 @@
 // about the FreeBuff free catalog. One row per model in upstream
 // SUPPORTED_FREEBUFF_MODELS (reference/freebuff/common/src/constants/
-// freebuff-models.ts, pinned snapshot 89ce3f5, vendor 0.0.160).
+// freebuff-models.ts, pinned snapshot f25d405, vendor 0.0.167).
 //
 // Every package that needs a per-model fact — registry (served/paused gate,
 // withdrawn-model copy), convert (effort ladders), pool (premium pool and
@@ -67,7 +67,17 @@ var Catalog = []ModelInfo{
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
-		Served: true, Premium: true, ContextWindow: 500_000},
+		Served: true, ContextWindow: 500_000},
+	// google/gemini-3.8-flash reached every surface 2026-09-03 and was
+	// withdrawn days later (upstream FREEBUFF_PAUSED_FREE_MODEL_IDS):
+	// recognized and coerced, never served. Premium stays false while
+	// paused (it cannot consume the pool); restore the flag together with
+	// Served when upstream re-lists it. No context entry upstream (falls
+	// back to DefaultContextWindow); the $0.50 per-session spend ceiling
+	// is upstream-enforced and unreachable while paused, so unmodeled.
+	{ID: "google/gemini-3.8-flash", DisplayName: "Gemini 3.8 Flash",
+		PausedReplacement: "deepseek/deepseek-v4-flash",
+		Efforts:           []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "deepseek/deepseek-v4-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
 		Served: true, ContextWindow: 1_000_000,
@@ -93,7 +103,7 @@ const DefaultModelID = "deepseek/deepseek-v4-flash"
 
 // FallbackModelID mirrors upstream FALLBACK_FREEBUFF_MODEL_ID: the model
 // guaranteed available on EVERY tier that unavailable picks are coerced to.
-// mimo is region-universal — premium-pool models (luna, solar-pro4) only
+// mimo is region-universal — premium-pool models (luna) only
 // resolve on full-tier accounts, so any proxy-side "no model" default must
 // be mimo, never the premium picker lead.
 const FallbackModelID = "mimo/mimo-v2.5"
@@ -123,10 +133,11 @@ const Glm52ModelID = "z-ai/glm-5.2"
 // FREEBUFF_STANDARD_MODEL_IDS derivation disagree if not).
 const Glm53ModelID = "z-ai/glm-5.3-flash"
 
-// SolarPro4ModelID mirrors FREEBUFF_SOLAR_PRO_4_MODEL_ID: the Upstage
-// experimental premium row, metered by the shared premium pool (no
-// per-model count cap since the 1/day trial window closed 2026-09-01,
-// upstream 051fd4d9; the per-session $ spend ceiling stays upstream-side).
+// SolarPro4ModelID mirrors FREEBUFF_SOLAR_PRO_4_MODEL_ID: the Upstage row,
+// UNMETERED since 2026-09-04 (entitlement fullAccess.premium=false;
+// "unmetered at full access" per the availability copy). Previously shared
+// premium pool; the per-model count cap closed 2026-09-01 (upstream
+// 051fd4d9) and pool metering followed it out.
 const SolarPro4ModelID = "upstage/solar-pro4"
 
 // PremiumSessionLimit mirrors upstream FREEBUFF_PREMIUM_SESSION_LIMIT: the
@@ -214,9 +225,8 @@ func IsPremium(id string) bool {
 }
 
 // SharedPremiumModels returns the ids metered by the shared daily premium
-// pool (FREEBUFF_PREMIUM_MODEL_IDS). Luna + Solar Pro 4 share the 5/day
-// premium pool (solar's 1/day per-model cap closed 2026-09-01, upstream
-// 051fd4d9 — the count cap came off, only the $ spend ceiling remains).
+// pool: Luna alone since 2026-09-04 (solar left the pool when its
+// entitlement went unmetered; gemini is paused-withdrawn).
 // GLM 5.3 Flash is unmetered.
 func SharedPremiumModels() []string {
 	var out []string

@@ -40,7 +40,7 @@ first credential reads as account 1, never index 0.
 
 ### 2. Tokens
 - **Account Table**: Every pooled credential as `Account #N` with status badge, session instance, live cooldown countdown (ticks every second; `45s`, `2m 10s`, `expiring…`, rolling over to `27d 10h` past 24h), and per-account actions:
-  - **Move Up / Move Down**: Reorder pool priority (`POST /admin/tokens/swap`); Move Up is disabled on the first account, Move Down on the last.
+  - **Move Up / Move Down**: Reorder pool priority (`POST /admin/tokens/swap`); Move Up is disabled on the first account, Move Down on the last. Reorders apply instantly even mid-stream: in-flight requests stay pinned to their account, and recovery paths (session invalidate, cooldowns) follow the lease, never the old index.
   - **Clear**: Clears a stale cooldown lock.
   - **Lock / Unlock**: Excludes an account from rotation until unlocked.
   - **Remove**: Deletes the account from the pool and `.env` (confirm dialog; dismissing sends nothing).
@@ -51,7 +51,7 @@ first credential reads as account 1, never index 0.
 - **OAuth Login Wizard**: One-click device-code browser login flow for minting fresh tokens without the CLI.
 
 ### 3. Quota Tracker
-- **Per-Account Cards** (`Account #1…`): premium-pool bars and per-model session-quota tables with live upstream limits, recent usage, period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them.
+- **Per-Account Cards** (`Account #1…`): premium-pool bars and per-model session-quota tables with live upstream limits, recent usage, period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them. A daily-capped account still serves its own live session (reuse costs no quota); only fresh admissions are refused until reset.
 
 ### 4. Models
 - Live catalog of served models with upstream agent bindings and session quotas; 1-click model ID copy actions.

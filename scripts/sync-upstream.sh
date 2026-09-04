@@ -114,6 +114,7 @@ FILES=(
 	freebuff-models.ts
 	gemini.ts
 	model-config.ts
+	freebuff-model-entitlements.ts
 )
 
 die() {

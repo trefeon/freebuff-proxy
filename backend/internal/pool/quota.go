@@ -129,10 +129,11 @@ func quotaLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
 // freebucksCapped reports whether the token's Freebucks allowance is exhausted
 // for model (issue #321 wire drift: balance is now the server-computed
 // spendable = daily.remaining + wallet.balance). When Freebucks is absent or
-// the model has no price, the token is not capped. When balance < price the
-// token is capped and RetryAfter is the earliest future recovery instant:
-// the daily pool refill (daily.ResetAt), else the plan bonus landing
-// (wallet.nextBonusAt, plan accounts only).
+// the model has no price, the token is not capped. The token is capped when
+// balance < price, or when the monthly dollar allowance is spent (wire drift
+// 2026-09-04, issue #330 — fresh sessions stop upstream regardless of the
+// daily balance). RetryAfter is the earliest future recovery instant among
+// the applicable windows; 0 when nothing is known.
 func freebucksCapped(acc tokenAccount, model string) (bool, time.Duration) {
 	return freebucksCappedForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
@@ -149,16 +150,24 @@ func freebucksCappedForSnapshot(snap session.SessionSnapshot, model string) (boo
 	if !ok {
 		return false, 0
 	}
-	if fb.Balance >= price {
+	// Monthly dollar allowance (wire drift 2026-09-04, issue #330): when
+	// the period is spent, fresh sessions stop upstream regardless of the
+	// daily balance. Absent on older servers (nil) — no behavior change.
+	monthlySpent := fb.Monthly != nil && fb.Monthly.RemainingUsd <= 0
+	if fb.Balance >= price && !monthlySpent {
 		return false, 0
 	}
-	// Balance insufficient — capped. The never-expiring wallet balance is
-	// already counted in Balance, so the only recovery signals are the
-	// daily pool refill and the plan's next wallet bonus. take the earliest
-	// future instant; when neither is known, surface 0.
+	// Capped. Recovery signals: the daily pool refill, the plan's next
+	// wallet bonus, and the monthly allowance reset (when the monthly
+	// period is what blocks). Take the earliest future instant; when
+	// nothing is known, surface 0.
 	now := time.Now()
 	earliest := time.Time{}
-	for _, t := range []time.Time{fb.Daily.ResetAt, fb.Wallet.NextBonusAt} {
+	candidates := []time.Time{fb.Daily.ResetAt, fb.Wallet.NextBonusAt}
+	if monthlySpent {
+		candidates = append(candidates, fb.Monthly.ResetAt)
+	}
+	for _, t := range candidates {
 		if t.IsZero() || !t.After(now) {
 			continue
 		}
@@ -193,6 +202,9 @@ func freebucksLimitErrorForSnapshot(snap session.SessionSnapshot, model string) 
 	// Surface price vs balance in the diagnostic body when available.
 	if fb != nil {
 		body = body + " (balance " + formatFreebucksBalance(fb.Balance) + " < price " + formatFreebucksBalance(price) + ")"
+		if fb.Monthly != nil && fb.Monthly.RemainingUsd <= 0 {
+			body = "freebucks monthly allowance exhausted for model"
+		}
 	}
 	return &upstream.RateLimitError{
 		Status:     "rate_limited",

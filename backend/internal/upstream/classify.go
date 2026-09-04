@@ -472,12 +472,13 @@ func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 }
 
 // IsDailyCapReset reports whether a no-timestamp 429 body signals a genuine
-// daily-cap reset: the quota period is pacific_day/pacific_week AND the
-// recent counter is at/over the limit (the session-quota bodies the CLI
-// serves on daily-cap refusals). Only these lock until the next Pacific
-// midnight; truly opaque bodies get opaqueRateLimitBackoff.
+// daily-cap reset: the quota period is pacific_day/pacific_week/
+// pacific_month AND the recent counter is at/over the limit (the
+// session-quota bodies the CLI serves on daily-cap refusals; monthly added
+// in wire drift 2026-09-04, issue #330). Only these lock until the next
+// Pacific midnight; truly opaque bodies get opaqueRateLimitBackoff.
 func IsDailyCapReset(rle *RateLimitError) bool {
-	if rle.Period != "pacific_day" && rle.Period != "pacific_week" {
+	if rle.Period != "pacific_day" && rle.Period != "pacific_week" && rle.Period != "pacific_month" {
 		return false
 	}
 	return rle.Limit > 0 && rle.RecentCount >= rle.Limit

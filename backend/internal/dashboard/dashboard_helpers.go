@@ -214,6 +214,20 @@ func freebucksCardFromInfo(info *upstream.FreebucksInfo) *freebucksCard {
 	if !info.Spend.ResetAt.IsZero() {
 		card.Spend.ResetAt = info.Spend.ResetAt.Format(time.RFC3339)
 	}
+	if info.Monthly != nil {
+		m := freebucksWindowCard{
+			Limit:     info.Monthly.LimitUsd,
+			Spent:     info.Monthly.SpentUsd,
+			Remaining: info.Monthly.RemainingUsd,
+		}
+		if !info.Monthly.ResetAt.IsZero() {
+			m.ResetAt = info.Monthly.ResetAt.Format(time.RFC3339)
+		}
+		if info.Monthly.LimitUsd != 0 {
+			m.PercentUsed = info.Monthly.SpentUsd / info.Monthly.LimitUsd * 100
+		}
+		card.Monthly = &m
+	}
 	return card
 }
 

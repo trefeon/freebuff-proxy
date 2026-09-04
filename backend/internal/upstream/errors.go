@@ -182,7 +182,7 @@ type RateLimitError struct {
 	RecentCount float64
 	ResetAt     time.Time
 	// Period is the quota period parsed from the body ("pacific_day" /
-	// "pacific_week"), when present — a daily/weekly reset signal once the
+	// "pacific_week" / "pacific_month"), when present — a reset signal once the
 	// recent counter is at/over the limit.
 	Period string
 	// Window is the ledger window for this refusal (body "1 minute"/
