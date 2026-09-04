@@ -787,6 +787,6 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     const checkBtn = page.getByRole("button", { name: "Check for Updates" });
     await expect(checkBtn).toBeVisible();
 
-    await expect(page.getByText("Version Rollback")).toBeVisible();
+    await expect(page.getByText("running", { exact: true })).toBeVisible();
   });
 });

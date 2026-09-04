@@ -165,6 +165,7 @@
 
   <!-- Software Update Check -->
   <SettingsRow
+    last
     label={$tr("Software Updates")}
     description={$tr(
       "Checks the latest published GitHub release. Updates can be pulled and deployed via Docker Compose or your host package manager.",
@@ -231,21 +232,5 @@
         </div>
       {/if}
     {/snippet}
-  </SettingsRow>
-
-  <!-- Version Rollback Reference -->
-  <SettingsRow
-    last
-    label={$tr("Version Rollback")}
-    description={$tr(
-      "To roll back or pin a specific version, set VERSION=vX.Y.Z in your deployment environment and re-run docker compose up -d.",
-    )}
-  >
-    <div class="flex items-center gap-2">
-      <CopyButton
-        text="VERSION=v1.8.8 docker compose up -d"
-        label={$tr("Copy Rollback Example")}
-      />
-    </div>
   </SettingsRow>
 </SettingsCard>
