@@ -21,6 +21,33 @@
   let logLevel = $derived(formValues.LOG_LEVEL || "info");
   let httpReadTimeout = $derived(formValues.HTTP_READ_TIMEOUT || "60s");
   let bridgeEnabled = $derived(formValues.BRIDGE_ENABLED !== "false");
+
+  const TIMEOUT_OPTIONS = [
+    { value: "60s", label: "60s (1m - default)" },
+    { value: "90s", label: "90s (1.5m)" },
+    { value: "120s", label: "120s (2m)" },
+    { value: "180s", label: "180s (3m)" },
+    { value: "300s", label: "300s (5m)" },
+    { value: "0", label: "0 (disabled)" },
+  ];
+
+  function normalizeTimeout(val) {
+    if (!val) return "60s";
+    const s = String(val).trim().toLowerCase();
+    if (s === "0" || s === "0s") return "0";
+    if (s === "60s" || s === "1m" || s === "1m0s" || s === "60") return "60s";
+    if (s === "90s" || s === "1m30s" || s === "1.5m" || s === "90")
+      return "90s";
+    if (s === "120s" || s === "2m" || s === "2m0s" || s === "120")
+      return "120s";
+    if (s === "180s" || s === "3m" || s === "3m0s" || s === "180")
+      return "180s";
+    if (s === "240s" || s === "4m" || s === "4m0s" || s === "240")
+      return "240s";
+    if (s === "300s" || s === "5m" || s === "5m0s" || s === "300")
+      return "300s";
+    return val;
+  }
 </script>
 
 <SettingsCard
@@ -126,16 +153,23 @@
     {/snippet}
 
     <div class="w-full sm:w-48">
-      <input
-        type="text"
-        inputmode="text"
+      <select
         aria-label="HTTP_READ_TIMEOUT"
-        class="fp-input w-full !text-xs !h-9 !px-3 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none font-mono"
-        value={httpReadTimeout}
-        placeholder="60s"
-        onchange={(e) =>
-          onField("HTTP_READ_TIMEOUT", e.currentTarget.value.trim())}
-      />
+        class="fp-select w-full !text-xs !h-9 !px-3 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none font-medium cursor-pointer"
+        value={normalizeTimeout(httpReadTimeout)}
+        onchange={(e) => onField("HTTP_READ_TIMEOUT", e.currentTarget.value)}
+      >
+        {#each TIMEOUT_OPTIONS as opt (opt.value)}
+          <option value={opt.value} class="bg-[#141a25] text-[#e9edf3]">
+            {opt.label}
+          </option>
+        {/each}
+        {#if !TIMEOUT_OPTIONS.some((opt) => opt.value === normalizeTimeout(httpReadTimeout))}
+          <option value={httpReadTimeout} class="bg-[#141a25] text-[#e9edf3]">
+            {httpReadTimeout} (custom)
+          </option>
+        {/if}
+      </select>
     </div>
   </SettingsRow>
 

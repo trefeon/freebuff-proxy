@@ -1,12 +1,13 @@
 <script>
   import { onMount } from "svelte";
-  import { RefreshCw } from "@lucide/svelte";
+  import { RefreshCw, Info } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
   import Button from "../components/Button.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import {
     tokensData,
     tokensError,
@@ -78,9 +79,15 @@
     {/snippet}
   </PageHeader>
 
+  <!-- Upstream announcements and broadcasts -->
+  <AnnouncementsBanner />
+
   {#if loading}
-    <div class="space-y-6" aria-busy="true">
-      {#each Array(3) as _, i (i)}
+    <div
+      class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"
+      aria-busy="true"
+    >
+      {#each Array(4) as _, i (i)}
         <div class="skeleton skeleton-card h-44"></div>
       {/each}
       <span class="sr-only">{$tr("Loading quota tracker")}</span>
@@ -102,7 +109,7 @@
         )}
       />
     {:else}
-      <div class="grid grid-cols-1 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {#each data.tokens as token, ti (token.index ?? ti)}
           {@const idx = token.index ?? ti}
           <Card
@@ -110,6 +117,7 @@
             description={token.session_model
               ? $tr("Session: {model}", { model: token.session_model })
               : ""}
+            class="h-full flex flex-col"
           >
             <div class="flex flex-col gap-4">
               {#if token.quota_stale}
@@ -202,7 +210,7 @@
                   {$tr("Session quota by model")}
                 </h3>
                 {#if token.quota?.length}
-                  <div class="hidden md:block overflow-x-auto">
+                  <div class="hidden xl:block overflow-x-auto">
                     <table class="fp-table">
                       <caption class="sr-only"
                         >{$tr("Session quota by model for account {index}", {
@@ -290,9 +298,9 @@
                       </tbody>
                     </table>
                   </div>
-                  <!-- Mobile: stacked per-model entries (< md) — no horizontal scrolling -->
+                  <!-- Narrow cards (< xl, incl. the lg 2-col grid): stacked per-model entries, no horizontal scrolling -->
                   <ul
-                    class="md:hidden flex flex-col gap-2.5"
+                    class="xl:hidden flex flex-col gap-2.5"
                     aria-label={$tr(
                       "Session quota by model for account {index}",
                       {
@@ -385,6 +393,120 @@
                     {$tr("No quota data available for this session.")}
                   </p>
                 {/if}
+              </div>
+
+              <!-- Unmetered Models Section (issue #332/#335, drift f25d4059) -->
+              <div class="mt-2 pt-3 border-t border-[var(--fp-border)]/60">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <h4
+                    class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-muted)] flex items-center gap-1.5"
+                  >
+                    <span>{$tr("Unmetered Models")}</span>
+                    <span
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-medium lowercase"
+                      >{$tr("unlimited")}</span
+                    >
+                  </h4>
+                </div>
+                <p
+                  class="text-xs text-[var(--fp-muted)] mb-2.5 leading-relaxed"
+                >
+                  {$tr(
+                    "These models run with unlimited sessions on full access and do not consume the daily 4-session pool:",
+                  )}
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div
+                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
+                  >
+                    <div>
+                      <div
+                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                      >
+                        upstage/solar-pro4
+                      </div>
+                      <div class="text-[11px] text-[var(--fp-dim)]">
+                        Solar Pro 4 · {$tr("Unmetered at full access")}
+                      </div>
+                    </div>
+                    <span
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
+                      >∞</span
+                    >
+                  </div>
+                  <div
+                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
+                  >
+                    <div>
+                      <div
+                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                      >
+                        deepseek/deepseek-v4-flash
+                      </div>
+                      <div class="text-[11px] text-[var(--fp-dim)]">
+                        DeepSeek V4 Flash · {$tr("Standard free row")}
+                      </div>
+                    </div>
+                    <span
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
+                      >∞</span
+                    >
+                  </div>
+                  <div
+                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
+                  >
+                    <div>
+                      <div
+                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                      >
+                        z-ai/glm-5.3-flash
+                      </div>
+                      <div class="text-[11px] text-[var(--fp-dim)]">
+                        GLM 5.3 Flash · {$tr("Standard free row")}
+                      </div>
+                    </div>
+                    <span
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
+                      >∞</span
+                    >
+                  </div>
+                  <div
+                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
+                  >
+                    <div>
+                      <div
+                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                      >
+                        mimo/mimo-v2.5
+                      </div>
+                      <div class="text-[11px] text-[var(--fp-dim)]">
+                        MiMo 2.5 · {$tr("Fallback & limited-tier universal")}
+                      </div>
+                    </div>
+                    <span
+                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
+                      >∞</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <!-- Upstream Accounting Transition Notice (Issue #332/#335) -->
+              <div
+                class="mt-1 p-2.5 rounded-lg bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/20 text-xs text-[var(--fp-muted)] flex items-start gap-2"
+              >
+                <Info
+                  size={14}
+                  class="shrink-0 mt-0.5 text-[var(--fp-accent)]"
+                />
+                <div>
+                  <strong class="text-[var(--fp-text)] font-medium block mb-0.5"
+                    >{$tr("Upstream Accounting Revamp (Freebucks)")}</strong
+                  >
+                  {$tr(
+                    "Codebuff is transitioning accounts from the legacy 4 sessions/day pool to daily Freebucks allowances (~75 Freebucks/day). Legacy accounts stay on the daily session pool until upstream finishes rollout.",
+                  )}
+                </div>
               </div>
             </div>
           </Card>

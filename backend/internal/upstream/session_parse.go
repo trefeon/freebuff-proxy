@@ -79,6 +79,9 @@ type SessionState struct {
 	// month windows plus provider spend USD; issue #319). Sent only to
 	// callers in the rollout audience; nil otherwise.
 	Subscription *SubscriptionInfo
+	// UpgradeHint carries the upstream promotional or upgrade broadcast
+	// hint ({url, message}) if provided by the session server; nil otherwise.
+	UpgradeHint *SessionUpgradeHint
 }
 
 // FreeWindowsInfo mirrors upstream FreebuffFreeWindowsInfo (free-tier
@@ -92,6 +95,13 @@ type FreeWindowsInfo struct {
 	MonthLimit   float64   `json:"monthLimit"`
 	DayResetAt   time.Time `json:"dayResetAt"`
 	MonthResetAt time.Time `json:"monthResetAt"`
+}
+
+// SessionUpgradeHint mirrors the upstream upgradeHint wire shape
+// (common/src/types/freebuff-session.ts:323-326).
+type SessionUpgradeHint struct {
+	URL     string `json:"url"`
+	Message string `json:"message"`
 }
 
 // SubscriptionInfo mirrors upstream FreebuffSubscriptionUsage (subscriber
@@ -529,6 +539,10 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		Freebucks              *rawFreebucks            `json:"freebucks"`
 		FreeWindows            *rawFreeWindows          `json:"freeWindows"`
 		Subscription           *rawSubscription         `json:"subscription"`
+		UpgradeHint            *struct {
+			URL     string `json:"url"`
+			Message string `json:"message"`
+		} `json:"upgradeHint"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -554,6 +568,12 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			AvailableHours:     raw.AvailableHours,
 			Message:            raw.Message,
 			GlmPromo:           string(raw.GlmPromo),
+		}
+		if raw.UpgradeHint != nil && (raw.UpgradeHint.URL != "" || raw.UpgradeHint.Message != "") {
+			state.UpgradeHint = &SessionUpgradeHint{
+				URL:     raw.UpgradeHint.URL,
+				Message: raw.UpgradeHint.Message,
+			}
 		}
 		if raw.Status == "model_unavailable" && raw.AvailableHours != "" {
 			if w, ok := ParseAvailabilityWindow(raw.AvailableHours); ok {

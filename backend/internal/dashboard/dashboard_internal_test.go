@@ -32,7 +32,7 @@ func testDashboard(t *testing.T) *Dashboard {
 
 func TestSparklineSVG(t *testing.T) {
 	// Empty series: a flat baseline, never a crash.
-	got := string(sparklineSVG(nil, "var(--fp-amber)", "label"))
+	got := string(sparklineSVG(nil, "#e3a857", "label"))
 	if !strings.Contains(got, `<polyline points="0,42 260,42"`) {
 		t.Errorf("empty series = %q, want flat baseline", got)
 	}
@@ -59,10 +59,22 @@ func TestSparklineSVG(t *testing.T) {
 	}
 	got = string(sparklineSVG([]float64{0, 5, 10}, "c", "l"))
 	if !strings.Contains(got, `points="0.0,42.0 130.0,22.0 260.0,2.0"`) {
-		t.Errorf("varying 3-series = %q, want linearly scaled points", got)
+		t.Errorf("varying 3-series = %q, want 0→bottom / 10→top", got)
+	}
+
+	// Regression: stroke is an SVG *attribute* where CSS var() cannot
+	// resolve (invisible polyline). Production call sites must pass
+	// concrete colors.
+	for _, color := range []string{"#e3a857", "#7dd3fc"} {
+		out := string(sparklineSVG([]float64{1, 2, 3}, color, "l"))
+		if !strings.Contains(out, `stroke="`+color+`"`) {
+			t.Errorf("sparkline missing concrete stroke %q: %s", color, out)
+		}
+		if strings.Contains(out, "var(") {
+			t.Errorf("sparkline stroke must not use var(): %s", out)
+		}
 	}
 }
-
 func TestHumanDuration(t *testing.T) {
 	cases := []struct {
 		in   time.Duration

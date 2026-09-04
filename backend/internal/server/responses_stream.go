@@ -48,6 +48,9 @@ type responsesStreamState struct {
 	// mapped tools to official signature names upstream, so function_call
 	// items must carry the CLIENT's dispatch name.
 	toolMap convert.ToolMapper
+	// echo carries the client's request parameters for the response
+	// skeleton (set from stats.responsesEcho at relay start).
+	echo map[string]any
 }
 
 // relayResponsesStream translates upstream chat SSE chunks into Responses
@@ -70,7 +73,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 	if servedModel == "" {
 		servedModel = model
 	}
-	st := &responsesStreamState{toolByUpIdx: make(map[int]*responsesItem), model: servedModel, toolMap: stats.toolMap}
+	st := &responsesStreamState{toolByUpIdx: make(map[int]*responsesItem), model: servedModel, toolMap: stats.toolMap, echo: stats.responsesEcho}
 	// send writes one SSE frame. The event name is a separate literal
 	// argument (never taken from the payload map) so the event: line is
 	// always constant; the payload map keeps its "type" key — OpenAI
@@ -81,8 +84,8 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 		_, _ = w.Write(convert.EncodeSSE(b))
 		flusher.Flush()
 	}
-	send("response.created", map[string]any{"type": "response.created", "response": responsesBase(model, respID, createdAt, "in_progress")})
-	send("response.in_progress", map[string]any{"type": "response.in_progress", "response": responsesBase(model, respID, createdAt, "in_progress")})
+	send("response.created", map[string]any{"type": "response.created", "response": responsesBase(model, respID, createdAt, "in_progress", stats.responsesEcho)})
+	send("response.in_progress", map[string]any{"type": "response.in_progress", "response": responsesBase(model, respID, createdAt, "in_progress", stats.responsesEcho)})
 
 	first := true
 	endTurnCallIndexes := make(map[int]bool)
@@ -301,7 +304,7 @@ func (s *Server) endResponsesStream(w http.ResponseWriter, send func(string, map
 			}
 		}
 	}
-	resp := responsesBase(model, respID, createdAt, "completed")
+	resp := responsesBase(model, respID, createdAt, "completed", st.echo)
 	resp["model"] = st.model
 	out := make([]any, 0, len(st.items))
 	for _, item := range st.items {
@@ -484,7 +487,7 @@ func (s *Server) relayResponsesJSON(ctx context.Context, w http.ResponseWriter, 
 	// Restore client tool names (issue #140): the completion's tool_calls
 	// carry official signature names; the client dispatches on its own.
 	stats.toolMap.FromUpstreamChunk(completion)
-	resp := responsesBase(model, respID, time.Now().Unix(), "completed")
+	resp := responsesBase(model, respID, time.Now().Unix(), "completed", stats.responsesEcho)
 	if stats.servedModel != "" {
 		// Issue #164: the response names the model the lease actually
 		// served (fallbacks included), never the upstream echo.

@@ -26,6 +26,7 @@ export const adminApi = {
   authStatus: "/admin/api/auth/status",
   changePassword: "/admin/api/change-password",
   requireLogin: "/admin/api/require-login",
+  notices: "/admin/api/notices",
   upstreamDrift: "/admin/api/upstream-drift",
   events: "/admin/api/events",
   loginStatus: "/admin/login/status",
@@ -48,6 +49,7 @@ export const adminActions = {
   tokenRemove: "/admin/tokens/remove",
   tokenSwap: "/admin/tokens/swap",
   tokenTestAll: "/admin/tokens/test-all",
+  restart: "/admin/restart",
 };
 
 /** SPA shell routes (the gateway also serves these directly). */

@@ -230,6 +230,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			TodayUsed:               todayUsed,
 			LastUsageDate:           lastUsage,
 			StreakUpdatedAt:         streakUpdated,
+			UpgradeHint:             ss.UpgradeHint,
+			ServerMessage:           ss.ServerMessage,
 			Locked:                  tok.locked.Load(),
 			Quarantined:             q != nil,
 			QuarantineReason:        quarantineReason,

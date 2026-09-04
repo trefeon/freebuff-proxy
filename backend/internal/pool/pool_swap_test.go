@@ -116,3 +116,51 @@ func TestPoolSwapTokens(t *testing.T) {
 	}
 	p.LeaseRelease(lease2)
 }
+
+func TestPoolMoveTokens(t *testing.T) {
+	mocks := []*testutil.MockUpstream{
+		testutil.NewMock(),
+		testutil.NewMock(),
+		testutil.NewMock(),
+		testutil.NewMock(),
+	}
+	for _, m := range mocks {
+		defer m.Close()
+	}
+
+	p := newTestPool(t, mocks[0], mocks[1], mocks[2], mocks[3])
+	if p.TokenCount() != 4 {
+		t.Fatalf("TokenCount = %d, want 4", p.TokenCount())
+	}
+
+	// Out of bounds checks
+	if err := p.MoveToken(-1, 0); err == nil {
+		t.Error("MoveToken(-1, 0) want error, got nil")
+	}
+	if err := p.MoveToken(0, 10); err == nil {
+		t.Error("MoveToken(0, 10) want error, got nil")
+	}
+
+	// Idempotent self-move
+	if err := p.MoveToken(1, 1); err != nil {
+		t.Errorf("MoveToken(1, 1) error: %v", err)
+	}
+
+	// Move index 0 to 2: [0, 1, 2, 3] -> [1, 2, 0, 3]
+	if err := p.MoveToken(0, 2); err != nil {
+		t.Fatalf("MoveToken(0, 2) error: %v", err)
+	}
+	toks := *p.roster.Load()
+	if toks[0].token != "tok-1" || toks[1].token != "tok-2" || toks[2].token != "tok-0" || toks[3].token != "tok-3" {
+		t.Fatalf("order after MoveToken(0, 2) wrong: %v, %v, %v, %v", toks[0].token, toks[1].token, toks[2].token, toks[3].token)
+	}
+
+	// Move back: index 2 to 0: [1, 2, 0, 3] -> [0, 1, 2, 3]
+	if err := p.MoveToken(2, 0); err != nil {
+		t.Fatalf("MoveToken(2, 0) error: %v", err)
+	}
+	toks = *p.roster.Load()
+	if toks[0].token != "tok-0" || toks[1].token != "tok-1" || toks[2].token != "tok-2" || toks[3].token != "tok-3" {
+		t.Fatalf("order after MoveToken(2, 0) wrong: %v, %v, %v, %v", toks[0].token, toks[1].token, toks[2].token, toks[3].token)
+	}
+}

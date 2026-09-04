@@ -1,4 +1,5 @@
 <script>
+  import { tick } from "svelte";
   import {
     RefreshCw,
     ChevronLeft,
@@ -40,7 +41,10 @@
   let autoPoll = $state(true);
   let page = $state(0);
   let pageSize = $state(10);
-
+  // Follow mode: stick the console to the newest entry at the bottom.
+  // Any manual scroll-up pauses it so reading history never gets yanked;
+  // scrolling back to the bottom (or the Follow toggle) resumes it.
+  let autoScroll = $state(true);
   const CIRCLE_EMOJIS = ["🟣", "🔵", "🟢", "🟡", "🟠", "🔴", "🟤", "⚪"];
   function circleFor(str) {
     if (!str) return "🟢";
@@ -489,6 +493,34 @@
     if (autoPoll) await fetchLogs();
   }, 1000);
 
+  function isNearBottom() {
+    if (!consoleEl) return true;
+    return (
+      consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight < 64
+    );
+  }
+
+  function handleConsoleScroll() {
+    autoScroll = isNearBottom();
+  }
+
+  function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    if (autoScroll && consoleEl) consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  // Stick to the newest entry whenever the group list grows while
+  // follow mode is on. tick() waits for Svelte to flush the new rows so
+  // scrollHeight already includes them.
+  $effect(() => {
+    const n = requestGroups.length;
+    const last = n ? requestGroups[n - 1].id : "";
+    if (viewMode !== "console" || !autoScroll || !consoleEl) return;
+    void last;
+    tick().then(() => {
+      if (consoleEl && autoScroll) consoleEl.scrollTop = consoleEl.scrollHeight;
+    });
+  });
   function levelTone(level) {
     switch (level) {
       case "error":
@@ -604,6 +636,22 @@
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={autoScroll}
+              onclick={toggleAutoScroll}
+              class="!h-8 !text-xs !px-2 sm:!px-2.5"
+              title={autoScroll
+                ? $tr("Following the newest logs")
+                : $tr(
+                    "Follow paused — scroll to the bottom or toggle to resume",
+                  )}
+            >
+              {$tr("Follow {state}", {
+                state: autoScroll ? $tr("on") : $tr("off"),
+              })}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onclick={copyConsoleLogs}
               class="!h-8 !text-xs !px-2 sm:!px-2.5"
             >
@@ -645,6 +693,7 @@
         <!-- Terminal Console View: structured rows wrap (never truncate, never break-all) -->
         <div
           bind:this={consoleEl}
+          onscroll={handleConsoleScroll}
           class="bg-black rounded-b-lg p-2 sm:p-4 font-mono text-[11px] sm:text-xs h-[60vh] min-h-[320px] sm:h-[calc(100vh-280px)] sm:min-h-[420px] overflow-x-hidden overflow-y-auto space-y-1.5 select-text border-t border-[var(--fp-border)] max-w-full"
         >
           {#if requestGroups.length === 0}
