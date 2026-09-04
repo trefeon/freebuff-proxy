@@ -324,6 +324,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.admin.handleAdminRequireLogin)
 	case "POST /admin/smoke":
 		return http.HandlerFunc(s.admin.handleSmoke)
+	case "POST /admin/restart":
+		return http.HandlerFunc(s.admin.handleAdminRestart)
 	case "GET /admin/assets/":
 		return noDirListing(http.StripPrefix("/admin/assets/", http.FileServerFS(mustSubFS(dashboard.DistFS(), "assets"))))
 	default:
