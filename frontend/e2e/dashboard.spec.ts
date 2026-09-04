@@ -330,7 +330,7 @@ test.describe("dashboard hermetic mocks", () => {
     expect(savedBody).toContain("LOG_LEVEL=info");
   });
 
-  test("Settings legacy #config alias, select save, secret masking and raw editor validation", async ({
+  test("Settings legacy #config alias, select save, and deployment guide card", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -374,14 +374,6 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByText("default", { exact: true }).first(),
     ).toBeVisible();
-    // Advanced raw editor mirrors the form edit and still validates.
-    await page.getByText("Advanced: raw .env editor").click();
-    const editor = page.locator("#config-env");
-    await expect(editor).toBeVisible();
-    await expect(editor).toHaveValue(/LOG_LEVEL=warn/);
-    await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByText(/Configuration is valid/)).toBeVisible();
-
     // Save posts the built .env line for the edited select.
     const postReqPromise = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
@@ -393,12 +385,13 @@ test.describe("dashboard hermetic mocks", () => {
       "LOG_LEVEL=warn",
     );
 
-    // Current-values table masks secrets and exposes no copy buttons for them.
-    const valuesTable = page.locator("table");
-    await expect(valuesTable.getByText("redacted")).toHaveCount(3);
-    await expect(valuesTable.getByRole("button", { name: "copy" })).toHaveCount(
-      5,
-    );
+    // Configuration file and deployment guide card renders.
+    await expect(
+      page.getByRole("heading", { name: "Configuration File & Deployment" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("/app/state/.env", { exact: true }),
+    ).toBeVisible();
   });
 
   test("Settings rejected save reverts the form to the server state", async ({
@@ -679,17 +672,15 @@ test.describe("dashboard hermetic mocks", () => {
     // Check that at least one element has aria-live or aria-describedby
     const liveCount = await page.locator("[aria-live]").count();
     expect(liveCount).toBeGreaterThanOrEqual(0);
-    // Settings keeps the raw editor's label association (behind the advanced details)
+    // Settings exposes accessible labeled inputs
     const configResp = page.waitForResponse(
       (r) => r.url().includes("/admin/api/config"),
       { timeout: 5000 },
     );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await configResp;
-    await page.getByText("Advanced: raw .env editor").click();
-    await expect(page.locator("#config-env")).toBeVisible();
-    // Verify the textarea has accessible label (sr-only)
-    await expect(page.locator('label[for="config-env"]')).toHaveCount(1);
+    await expect(page.getByRole("combobox", { name: "LOG_LEVEL" })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "SAFE_MODE" })).toBeVisible();
   });
 
   test("Metrics tab renders KPIs, sparklines and per-token rows", async ({
