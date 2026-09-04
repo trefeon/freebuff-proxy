@@ -7,6 +7,7 @@
   import Button from "../components/Button.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import {
     tokensData,
     tokensError,
@@ -77,6 +78,9 @@
       </Button>
     {/snippet}
   </PageHeader>
+
+  <!-- Upstream announcements and broadcasts -->
+  <AnnouncementsBanner />
 
   {#if loading}
     <div

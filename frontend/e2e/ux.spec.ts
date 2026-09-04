@@ -828,4 +828,60 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     expect(swapPayload?.to).toBe(1);
     expect(swapPayload?.action).toBe("move");
   });
+
+  // ---------------------------------------------------------------------------
+  // 12. Announcements: upstream notices and broadcasts render on Overview
+  // ---------------------------------------------------------------------------
+  test("overview: upstream announcements and notices render with dismissal", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(
+      page,
+      f,
+      {
+        "/admin/api/notices": {
+          notices: [
+            {
+              id: "test-tier-notice",
+              type: "announcement",
+              title: "Official Upstream Announcement",
+              message: "Solar Pro 4 is now unmetered at full access.",
+              badge: "Freebuff Team",
+              tone: "accent",
+            },
+          ],
+          peak_hours: {
+            is_peak: true,
+            next_window_in: "4h 15m",
+          },
+          count: 1,
+        },
+      },
+      { loginPage: true },
+    );
+
+    await page.goto("http://127.0.0.1:4173/admin/");
+    await expect(
+      page.getByRole("region", { name: "Upstream Announcements" }),
+    ).toBeVisible();
+
+    await expect(
+      page.getByText("Official Upstream Announcement"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Solar Pro 4 is now unmetered at full access."),
+    ).toBeVisible();
+    await expect(page.getByText("Freebuff Team")).toBeVisible();
+
+    // Dismiss notice
+    await page
+      .getByRole("button", {
+        name: "Dismiss Official Upstream Announcement",
+      })
+      .click();
+    await expect(
+      page.getByText("Solar Pro 4 is now unmetered at full access."),
+    ).toHaveCount(0);
+  });
 });

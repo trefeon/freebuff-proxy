@@ -175,6 +175,8 @@ func (d *Dashboard) dataFor(name string, r *http.Request) any {
 		return d.metricsData()
 	case "upstream":
 		return d.upstreamData()
+	case "notices":
+		return d.noticesData()
 	default:
 		return nil
 	}

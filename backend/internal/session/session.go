@@ -253,7 +253,9 @@ type cachedState struct {
 	freeWindows *upstream.FreeWindowsInfo
 	// subscription is the upstream subscription usage block (issue #319);
 	// nil until an admission/poll that carried it.
-	subscription *upstream.SubscriptionInfo
+	subscription  *upstream.SubscriptionInfo
+	upgradeHint   *upstream.SessionUpgradeHint
+	serverMessage string
 }
 
 // NewManager builds a session manager for the given upstream client.
@@ -700,15 +702,17 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		// A quota-less compact commit re-applies the saved map (issue
 		// #146): when that map is restart-restored, it stays marked until
 		// genuinely fresh quota lands.
-		QuotaStale:   m.snap.savedQuotaStale && len(quota) > 0,
-		QuotaSavedAt: m.snap.savedQuotaAt,
-		GlmPromo:     m.state.glmPromo,
-		Standing:     m.state.standing,
-		RemainingMs:  m.state.remainingMs,
-		Referral:     m.state.referral,
-		Freebucks:    m.state.freebucks,
-		FreeWindows:  m.state.freeWindows,
-		Subscription: m.state.subscription,
+		QuotaStale:    m.snap.savedQuotaStale && len(quota) > 0,
+		QuotaSavedAt:  m.snap.savedQuotaAt,
+		GlmPromo:      m.state.glmPromo,
+		Standing:      m.state.standing,
+		RemainingMs:   m.state.remainingMs,
+		Referral:      m.state.referral,
+		Freebucks:     m.state.freebucks,
+		FreeWindows:   m.state.freeWindows,
+		Subscription:  m.state.subscription,
+		UpgradeHint:   m.state.upgradeHint,
+		ServerMessage: m.state.serverMessage,
 	}
 }
 
