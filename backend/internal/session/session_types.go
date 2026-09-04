@@ -71,6 +71,12 @@ type SessionSnapshot struct {
 	// / month + provider spend USD; issue #319). Rollout-audience only;
 	// nil otherwise.
 	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
+	// UpgradeHint carries the upstream promotional or upgrade broadcast
+	// hint ({url, message}) if provided by the session server; nil otherwise.
+	UpgradeHint *upstream.SessionUpgradeHint `json:"upgrade_hint,omitempty"`
+	// ServerMessage is any live broadcast or error message sent by the
+	// session server; "" when absent.
+	ServerMessage string `json:"server_message,omitempty"`
 }
 
 // QuotaSnapshot is one model's live session quota for healthz/metrics

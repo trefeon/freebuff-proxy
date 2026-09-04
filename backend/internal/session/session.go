@@ -254,6 +254,8 @@ type cachedState struct {
 	// subscription is the upstream subscription usage block (issue #319);
 	// nil until an admission/poll that carried it.
 	subscription *upstream.SubscriptionInfo
+	upgradeHint *upstream.SessionUpgradeHint
+	serverMessage string
 }
 
 // NewManager builds a session manager for the given upstream client.
@@ -709,6 +711,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Freebucks:    m.state.freebucks,
 		FreeWindows:  m.state.freeWindows,
 		Subscription: m.state.subscription,
+		UpgradeHint: m.state.upgradeHint,
+		ServerMessage: m.state.serverMessage,
 	}
 }
 

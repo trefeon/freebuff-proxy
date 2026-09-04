@@ -18,6 +18,7 @@
   {"method": "GET", "path": "/admin/api/upstream-drift", "auth": "dashboard", "js": {"export": "adminApi", "key": "upstreamDrift"}},
   {"method": "GET", "path": "/admin/api/events", "auth": "dashboard", "js": {"export": "adminApi", "key": "events"}},
   {"method": "GET", "path": "/admin/api/auth/status", "auth": "dashboard", "js": {"export": "adminApi", "key": "authStatus"}},
+  {"method": "GET", "path": "/admin/api/notices", "auth": "dashboard", "js": {"export": "adminApi", "key": "notices"}},
 
   {"method": "GET", "path": "/admin", "auth": "dashboard", "js": {"export": "adminShell", "key": "root"}},
   {"method": "GET", "path": "/admin/", "auth": "dashboard", "js": null},

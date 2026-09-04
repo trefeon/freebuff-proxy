@@ -214,6 +214,36 @@ export async function mockDashboard(
       body: JSON.stringify(pick("upstreamDrift")),
     });
   });
+  // Notices
+  await page.route("**/admin/api/notices", async (route) => {
+    const defaultNotices = {
+      notices: [
+        {
+          id: "upstream-tier-change",
+          type: "announcement",
+          title: "Official Upstream Announcement",
+          message:
+            "Solar Pro 4 is now unmetered at full access and available with limited access.",
+          badge: "Freebuff Team",
+          tone: "accent",
+        },
+      ],
+      peak_hours: {
+        is_peak: false,
+        window_start_utc: "00:00 UTC",
+        window_end_utc: "10:00 UTC",
+        next_window_in: "12h 0m",
+      },
+      count: 1,
+    };
+    const body = overrides["/admin/api/notices"] ?? defaultNotices;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+
 
   // Auth status
   await page.route("**/admin/api/auth/status", async (route) => {

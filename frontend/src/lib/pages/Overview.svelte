@@ -15,6 +15,7 @@
   import Alert from "../components/Alert.svelte";
   import Button from "../components/Button.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
@@ -198,6 +199,9 @@
       {/if}
     {/snippet}
   </PageHeader>
+
+  <!-- Upstream announcements and broadcasts -->
+  <AnnouncementsBanner />
 
   <!-- Loading skeleton — live region announces loading without duplicating Alert -->
   {#if loading}
