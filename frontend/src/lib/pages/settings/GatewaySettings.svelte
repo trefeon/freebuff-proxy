@@ -159,7 +159,7 @@
         value={normalizeTimeout(httpReadTimeout)}
         onchange={(e) => onField("HTTP_READ_TIMEOUT", e.currentTarget.value)}
       >
-        {#each TIMEOUT_OPTIONS as opt}
+        {#each TIMEOUT_OPTIONS as opt (opt.value)}
           <option value={opt.value} class="bg-[#141a25] text-[#e9edf3]">
             {opt.label}
           </option>

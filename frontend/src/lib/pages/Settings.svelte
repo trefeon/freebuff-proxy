@@ -13,7 +13,6 @@
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
-  import { formatTime } from "../utils/format.js";
   import { parseEnv, setEnvValue as setEnvLine } from "../utils/env.js";
 
   // ---------------------------------------------------------------------------
@@ -33,8 +32,6 @@
 
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
-  let lastSavedTime = $state(null);
-
   // ---------------------------------------------------------------------------
   // .env parsing / merging — shared contract in ../utils/env.js (issue #234):
   // line-replace, comments preserved for untouched lines.
@@ -87,24 +84,6 @@
     rawText = out;
   }
 
-  function onRawInput(value) {
-    rawText = value;
-    const env = parseEnv(rawText);
-    for (const entry of meta) {
-      const v = env[entry.key];
-      if (v !== undefined) {
-        formValues[entry.key] = displayFor(entry, v);
-      } else if (changedKeys.has(entry.key)) {
-        formValues[entry.key] = "";
-      } else {
-        formValues[entry.key] = displayFor(
-          entry,
-          effectiveMap.get(entry.key)?.value ?? entry.default ?? "",
-        );
-      }
-    }
-  }
-
   function setField(key, value) {
     formValues[key] = value;
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient copy, reassigned whole
@@ -121,48 +100,6 @@
     result = null;
   }
 
-  // Live client-side .env parse — same rules as the legacy editor (separators,
-  // key syntax, duplicates). The server has no validate-only mode; Save posts
-  // the raw content and surfaces the server's decision.
-  let validationErrors = $derived.by(() => {
-    const errors = [];
-    const lines = rawText.split("\n");
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local dedup set
-    const seenKeys = new Set();
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line || line.startsWith("#")) continue;
-      const eqIdx = line.indexOf("=");
-      if (eqIdx === -1) {
-        errors.push(`Line ${i + 1}: Missing '=' separator`);
-        continue;
-      }
-      const key = line.substring(0, eqIdx).trim();
-      if (!key) {
-        errors.push(`Line ${i + 1}: Empty key name`);
-        continue;
-      }
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
-        errors.push(
-          `Line ${i + 1}: Invalid key "${key}" (use A-Z, a-z, 0-9, _)`,
-        );
-      if (seenKeys.has(key))
-        errors.push(`Line ${i + 1}: Duplicate key "${key}"`);
-      seenKeys.add(key);
-    }
-    return errors;
-  });
-  let envValid = $derived(
-    validationErrors.length === 0 && rawText.trim().length > 0,
-  );
-  let keyCount = $derived.by(
-    () =>
-      rawText
-        .split("\n")
-        .filter((l) => l.trim() && !l.trim().startsWith("#") && l.includes("="))
-        .length,
-  );
-
   // ---------------------------------------------------------------------------
   // Derived
   // ---------------------------------------------------------------------------
@@ -178,10 +115,6 @@
     }
     return n;
   });
-
-  let lastSavedTimeStr = $derived(
-    lastSavedTime ? formatTime(lastSavedTime) : "",
-  );
 
   // ---------------------------------------------------------------------------
   // Data
@@ -221,41 +154,6 @@
     }
   }
 
-  function validateConfig() {
-    if (saving) return;
-    if (!rawText.trim()) {
-      result = {
-        ok: false,
-        message: $tr("Configuration is empty — nothing to save."),
-        restart_only: [],
-      };
-      return;
-    }
-    if (validationErrors.length === 0) {
-      result = {
-        ok: true,
-        message: $tr("Configuration is valid — {count} key(s) parsed.", {
-          count: keyCount,
-        }),
-        restart_only: [],
-      };
-    } else {
-      const shown = validationErrors.slice(0, 5).join(" · ");
-      const more =
-        validationErrors.length > 5
-          ? ` (+${validationErrors.length - 5} more)`
-          : "";
-      result = {
-        ok: false,
-        message: $tr("Configuration invalid ({count}): {detail}", {
-          count: validationErrors.length,
-          detail: `${shown}${more}`,
-        }),
-        restart_only: [],
-      };
-    }
-  }
-
   async function saveConfig(e, opts = {}) {
     e?.preventDefault();
     if (saving || !dirty) return;
@@ -286,7 +184,6 @@
         restart_only: Array.isArray(json.restart_only) ? json.restart_only : [],
       };
       if (result.ok) {
-        lastSavedTime = new Date();
         await fetchData();
       } else {
         // The server rejected the write and rolled the .env file back;

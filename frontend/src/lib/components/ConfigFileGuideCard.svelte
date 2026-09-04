@@ -1,5 +1,5 @@
 <script>
-  import { FileText, Terminal } from "@lucide/svelte";
+  import { FileText } from "@lucide/svelte";
   import SettingsCard from "./SettingsCard.svelte";
   import SettingsRow from "./SettingsRow.svelte";
   import CopyButton from "./CopyButton.svelte";
