@@ -4,7 +4,7 @@
   import PageHeader from "../components/PageHeader.svelte";
   import Button from "../components/Button.svelte";
   import Alert from "../components/Alert.svelte";
-  import RawEditor from "./settings/RawEditor.svelte";
+  import ConfigFileGuideCard from "../components/ConfigFileGuideCard.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
   import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
@@ -443,18 +443,7 @@
 
     <!-- 4. Command Center (Lifecycle, updates & rollback) -->
     <CommandCenterCard />
-    <RawEditor
-      {rawText}
-      {onRawInput}
-      {validationErrors}
-      {envValid}
-      {keyCount}
-      {lastSavedTimeStr}
-      onValidate={validateConfig}
-      {dirty}
-      {changedKeysCount}
-      {data}
-      {saving}
-    />
+    <!-- 5. Configuration & Deployment Guide -->
+    <ConfigFileGuideCard />
   {/if}
 </div>
