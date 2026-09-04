@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -183,6 +184,9 @@ func anthropicToChatParams(raw map[string]any) ([]byte, error) {
 	if effort, ok := anthropicThinkingToEffort(raw["thinking"]); ok {
 		chat["reasoning_effort"] = effort
 	}
+	if v, ok := raw["container"]; ok && v != nil {
+		return nil, fmt.Errorf("unsupported parameter \"container\": server-side execution environments are not supported by this gateway")
+	}
 	if tools, ok := raw["tools"].([]any); ok && len(tools) > 0 {
 		chatTools := make([]any, 0, len(tools))
 		for _, rawTool := range tools {
@@ -190,7 +194,13 @@ func anthropicToChatParams(raw map[string]any) ([]byte, error) {
 			if !ok {
 				continue
 			}
+			if typ, _ := tool["type"].(string); typ != "" {
+				return nil, fmt.Errorf("unsupported parameter \"tools\": server tool type %q is not supported by this gateway (only client function tools with name and input_schema translate)", typ)
+			}
 			name, _ := tool["name"].(string)
+			if name == "" {
+				return nil, fmt.Errorf("unsupported parameter \"tools\": every tool needs a name (nameless server-side tool declarations do not translate)")
+			}
 			desc, _ := tool["description"].(string)
 			fn := map[string]any{"name": name, "description": desc}
 			if schema, ok := tool["input_schema"]; ok && schema != nil {
