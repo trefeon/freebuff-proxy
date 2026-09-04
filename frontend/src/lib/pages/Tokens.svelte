@@ -8,7 +8,6 @@
   import PageHeader from "../components/PageHeader.svelte";
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
-  import RiskCards from "../components/RiskCards.svelte";
   import ToggleSwitch from "../components/ToggleSwitch.svelte";
   import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
@@ -98,10 +97,6 @@
   let spawnModels = $state({});
   let actionPending = $state(false);
   let now = $state(Date.now());
-  let poolTotal = $derived(data?.tokens?.length ?? 0);
-  let atRiskTokens = $derived(
-    (data?.tokens ?? []).filter((t) => t.risk_level && t.risk_level !== "low"),
-  );
 
   const tokenValid = $derived(
     newToken.trim() === ""
@@ -421,10 +416,6 @@
         "Upstream credentials, device login, client API keys, and per-token session quotas",
       )}
     />
-
-    {#if atRiskTokens.length > 0}
-      <RiskCards tokens={atRiskTokens} total={poolTotal} />
-    {/if}
 
     {#if actionMessage}
       <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />

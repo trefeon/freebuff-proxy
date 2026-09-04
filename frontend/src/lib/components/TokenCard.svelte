@@ -104,12 +104,33 @@
     return `${sec}s`;
   }
 
-  function cooldownTone(token) {
-    if (!token.cooldown_until) return "default";
-    const ms = new Date(token.cooldown_until).getTime() - now;
-    if (ms >= 0 && ms < 5 * 60_000) return "warn";
-    return "default";
+  function riskTone(risk) {
+    switch (risk) {
+      case "low":
+        return "good";
+      case "moderate":
+        return "warn";
+      case "high":
+      case "critical":
+        return "bad";
+      default:
+        return "idle";
+    }
   }
+
+  // Risk chip (moved from the standalone At-risk cards): shown when the
+  // account carries a risk flag and no ban badge already claims the row.
+  const riskBadge = $derived(
+    banBadge(token)
+      ? null
+      : token.risk_level && token.risk_level !== "low"
+        ? {
+            label: token.risk_level,
+            tone: riskTone(token.risk_level),
+            pulse: token.risk_level === "critical",
+          }
+        : null,
+  );
 
   // Live session countdown (freebuff TUI parity). Anchor to the server's
   // ABSOLUTE expiry when the snapshot carries one (issue: a relative
@@ -223,7 +244,16 @@
     </div>
   </td>
   <td>
-    <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+    <div class="flex items-center gap-1.5">
+      <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+      {#if riskBadge}
+        <StatusBadge
+          status={riskBadge.label}
+          tone={riskBadge.tone}
+          pulse={riskBadge.pulse}
+        />
+      {/if}
+    </div>
   </td>
   <td>
     {#if token.session_instance}
@@ -236,16 +266,35 @@
   </td>
   <td class="num">
     {#if token.cooldown_active}
-      <span
-        class="fp-num text-xs {cooldownTone(token) === 'warn'
-          ? 'text-[var(--fp-warning)]'
-          : 'text-[var(--fp-text)]'}"
-      >
-        {cooldownLabel(token)}
+      {@const cd = cooldownLabel(token)}
+      <span class="fp-num text-xs text-[var(--fp-warning)]">
+        {cd}{#if cd !== "expiring" && cd !== "—"} {$tr("remaining")}{/if}
       </span>
     {:else}
       <span class="fp-num text-xs text-[var(--fp-dim)]">—</span>
     {/if}
+  </td>
+  <td class="num">
+    <div class="flex flex-col items-end gap-0.5">
+      <span class="text-xs text-[var(--fp-muted)]">
+        {#if token.daily_limit > 0}
+          <span class="fp-num text-[var(--fp-text)]"
+            >{token.messages_24h}/{token.daily_limit}</span
+          >
+          {$tr("msgs today")}
+          (<span class="fp-num text-[var(--fp-text)]"
+            >{token.usage_pct}%</span
+          >)
+        {:else}
+          <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
+          {$tr("msgs 24h")}
+        {/if}
+      </span>
+      <span class="text-[11px] text-[var(--fp-dim)]">
+        runs <span class="fp-num text-[var(--fp-text)]">{token.active_runs}</span>
+        · reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
+      </span>
+    </div>
   </td>
   <td class="text-right">
     <div class="inline-flex items-center gap-1.5 justify-end">
@@ -295,7 +344,7 @@
 </tr>
 {#if expanded}
   <tr>
-    <td colspan="6" class="!p-0">
+    <td colspan="7" class="!p-0">
       <div class="m-2">
         <TokenDetailsDrawer
           {token}

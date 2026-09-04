@@ -124,6 +124,34 @@
     if (m > 0) return `${m}m ${sec}s`;
     return `${sec}s`;
   }
+
+  function riskTone(risk) {
+    switch (risk) {
+      case "low":
+        return "good";
+      case "moderate":
+        return "warn";
+      case "high":
+      case "critical":
+        return "bad";
+      default:
+        return "idle";
+    }
+  }
+
+  // Risk chip (moved from the standalone At-risk cards): shown when the
+  // account carries a risk flag and no ban badge already claims the card.
+  const riskBadge = $derived(
+    banBadge(token)
+      ? null
+      : token.risk_level && token.risk_level !== "low"
+        ? {
+            label: token.risk_level,
+            tone: riskTone(token.risk_level),
+            pulse: token.risk_level === "critical",
+          }
+        : null,
+  );
 </script>
 
 <div
@@ -163,6 +191,13 @@
           </span>
         {/if}
         <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+        {#if riskBadge}
+          <StatusBadge
+            status={riskBadge.label}
+            tone={riskBadge.tone}
+            pulse={riskBadge.pulse}
+          />
+        {/if}
       </div>
       {#if token.email || token.account_id}
         <span
@@ -190,6 +225,43 @@
     </button>
   </div>
 
+  <!-- Risk/usage stats (moved from the standalone At-risk cards): live
+       cooldown, 24h messages and run/request counts on every card. -->
+  <div class="flex flex-col gap-2">
+    {#if token.cooldown_active}
+      {@const cd = cooldownLabel(token)}
+      <div class="fp-inset px-2.5 py-1.5 text-xs text-[var(--fp-warning)]">
+        {$tr("Cooldown")} —
+        <span class="fp-num">{cd}</span>
+        {#if cd !== "expiring" && cd !== "—"}{$tr("remaining")}{/if}
+      </div>
+    {/if}
+    <div class="fp-inset px-2.5 py-1.5 text-xs text-[var(--fp-muted)]">
+      {#if token.daily_limit > 0}
+        <span class="fp-num text-[var(--fp-text)]"
+          >{token.messages_24h}/{token.daily_limit}</span
+        >
+        {$tr("msgs today")}
+        (<span class="fp-num">{token.usage_pct}%</span>)
+      {:else}
+        <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
+        {$tr("msgs 24h")}
+      {/if}
+    </div>
+    <div class="flex justify-between text-xs text-[var(--fp-dim)]">
+      <span
+        >runs <span class="fp-num text-[var(--fp-text)]"
+          >{token.active_runs}</span
+        ></span
+      >
+      <span
+        >reqs <span class="fp-num text-[var(--fp-text)]"
+          >{token.requests}</span
+        ></span
+      >
+    </div>
+  </div>
+
   <!-- Details (secondary info + drawer) behind the expand chevron -->
   {#if expanded}
     <div class="flex flex-col gap-2">
@@ -203,14 +275,6 @@
           {:else}
             <span class="text-[var(--fp-dim)]">—</span>
           {/if}
-        </span>
-        <span class="text-[var(--fp-muted)]">{$tr("Cooldown")}</span>
-        <span
-          class="fp-num {token.cooldown_active
-            ? 'text-[var(--fp-text)]'
-            : 'text-[var(--fp-dim)]'}"
-        >
-          {token.cooldown_active ? cooldownLabel(token) : "—"}
         </span>
       </div>
       <TokenDetailsDrawer

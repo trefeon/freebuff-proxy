@@ -141,7 +141,7 @@
   {:else}
     <!-- Desktop: table (md+) -->
     <div class="hidden md:block overflow-x-auto">
-      <table class="fp-table w-full min-w-[640px]">
+      <table class="fp-table w-full min-w-[760px]">
         <thead>
           <tr>
             <th class="w-8"></th>
@@ -149,6 +149,7 @@
             <th>{$tr("Status")}</th>
             <th>{$tr("Instance")}</th>
             <th class="num">{$tr("Cooldown")}</th>
+            <th class="num">{$tr("Usage")}</th>
             <th class="text-right">{$tr("Actions")}</th>
           </tr>
         </thead>

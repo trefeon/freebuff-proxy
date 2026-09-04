@@ -28,8 +28,8 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
     // Overview KPI row shows Pool total / Banned etc (rendered from fixture)
     await expect(page.getByText("Pool total")).toBeVisible();
-    // At-risk cards moved to Tokens page (Account # labels, 1-based): overview
-    // must not render the risk section anymore.
+    // Risk info was integrated into the Pool Tokens table rows (moved from
+    // the standalone At-risk section): overview must not render it anymore.
     await expect(
       page.locator('section[aria-label="At-risk tokens"]'),
     ).toHaveCount(0);
@@ -46,7 +46,7 @@ test.describe("dashboard hermetic mocks", () => {
       { timeout: 17000 },
     );
     expect(overviewCount).toBeGreaterThanOrEqual(2);
-    // Risk cards moved to Tokens page with 1-based Account # labels.
+    // Tokens page lists all pooled accounts with 1-based Account # labels.
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
     await expect(page.getByText("Account #2").first()).toBeVisible();
   });
@@ -715,14 +715,20 @@ test.describe("dashboard hermetic mocks", () => {
     await page.goto("http://127.0.0.1:4173/admin/#overview");
     await overviewResp;
     // Overview loading skeleton used aria-live="polite" and aria-busy="true"
-    // Risk section moved to Tokens page: overview must not render it, Tokens must.
+    // Risk info integrated into the Pool Tokens table (moved from the
+    // standalone At-risk section): overview must not render it, tokens rows
+    // must show risk + usage per account.
     await expect(
       page.locator('section[aria-label="At-risk tokens"]'),
     ).toHaveCount(0);
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    const tokensTable = page.locator("table.fp-table");
+    // Fixture token #2 (Account #2) carries risk_level "moderate".
     await expect(
-      page.locator('section[aria-label="At-risk tokens"]'),
-    ).toBeVisible();
+      tokensTable.locator("tbody tr").filter({ hasText: "Account #2" }),
+    ).toContainText("moderate");
+    await expect(tokensTable.getByText("msgs today").first()).toBeVisible();
+    await expect(tokensTable.getByText("reqs").first()).toBeVisible();
 
     // Navigate to Logs and check filter labelling + live region. Console is
     // the default view; the labelled filter inputs and entry text live in
