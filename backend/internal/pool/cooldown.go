@@ -83,6 +83,85 @@ func (p *Pool) CooldownTokenCountryBlocked(token int, cbe *upstream.CountryBlock
 	p.quarantineToken(tok, "country_blocked", cbe)
 }
 
+// indexOfEntry resolves entry's CURRENT 0-based roster position (-1 when
+// retired): display indices and positional mismatch keys stay correct
+// across dashboard reorders. Cooldown/quarantine state itself lives on the
+// entry, so the wrong position can never punish the wrong account.
+func (p *Pool) indexOfEntry(entry *tokenEntry) int {
+	if entry == nil {
+		return -1
+	}
+	toks := p.roster.Load()
+	for i, t := range *toks {
+		if t == entry {
+			return i
+		}
+	}
+	return -1
+}
+
+// CooldownLease puts the lease's own entry in a cooldown window of
+// duration d (swap-safe — see InvalidateLeaseSession).
+func (p *Pool) CooldownLease(lease *Lease, d time.Duration) {
+	if lease == nil || lease.entry == nil {
+		return
+	}
+	lease.entry.runs.Cooldown(d)
+}
+
+// CooldownLeaseRateLimit applies a rate-limit cooldown to the lease's own
+// entry (swap-safe). Spend counting hits the entry ledger directly;
+// mismatch escalation keeps the entry's CURRENT 1-based position.
+func (p *Pool) CooldownLeaseRateLimit(lease *Lease, rle *upstream.RateLimitError) {
+	if lease == nil || lease.entry == nil || rle == nil {
+		return
+	}
+	lease.entry.runs.CooldownRateLimit(rle)
+	if rle.Status == "spend_limited" {
+		lease.entry.ledger.recordSpendLimited()
+	}
+	if idx := p.indexOfEntry(lease.entry); idx >= 0 {
+		p.recordMismatchEscalation(idx+1, rle) // 1-based key: 0 is the bridge-shared window
+	}
+}
+
+// CooldownLeaseIpCapped applies an ip_capped cooldown to the lease's own
+// entry (swap-safe — see CooldownLeaseRateLimit).
+func (p *Pool) CooldownLeaseIpCapped(lease *Lease, ice *upstream.IpCappedError) {
+	if lease == nil || lease.entry == nil || ice == nil {
+		return
+	}
+	lease.entry.runs.CooldownIpCapped(ice)
+}
+
+// CooldownLeaseBan applies a ban cooldown to the lease's own entry and
+// fires the token_banned webhook alert (swap-safe). Quarantine takes the
+// entry directly; the display index is resolved live.
+func (p *Pool) CooldownLeaseBan(lease *Lease, be *upstream.BanError) {
+	if lease == nil || lease.entry == nil || be == nil {
+		return
+	}
+	tok := lease.entry
+	tok.runs.CooldownBan(be)
+	if idx := p.indexOfEntry(tok); idx >= 0 {
+		p.notifyBan(idx+1, "")
+	}
+	if tok.runs.BanError() != nil {
+		p.quarantineToken(tok, "banned", be)
+	}
+}
+
+// CooldownLeaseCountryBlocked applies a country-block cooldown to the
+// lease's own entry (swap-safe — see CooldownLeaseBan).
+func (p *Pool) CooldownLeaseCountryBlocked(lease *Lease, cbe *upstream.CountryBlockedError) {
+	if lease == nil || lease.entry == nil || cbe == nil {
+		return
+	}
+	tok := lease.entry
+	tok.runs.CooldownCountryBlocked(cbe)
+	p.quarantineToken(tok, "country_blocked", cbe)
+}
+
 // CooldownBridge puts the bridge entry's token in a cooldown window of
 // duration d (auth-reject recovery, e.g. runs.DefaultCooldown).
 func (p *Pool) CooldownBridge(lease *Lease, d time.Duration) {

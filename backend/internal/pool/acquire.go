@@ -414,15 +414,17 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				// spend_limited counts on the ledger too (same counter as
 				// the chat-path refusal in CooldownTokenRateLimit).
 				if c.spendLimited {
-					p.recordSpendLimited(idx)
+					tok.ledger.recordSpendLimited()
 				}
 			}
 			if ice := c.ipCapped; ice != nil {
 				ipCapped = appendIpCapped(ipCapped, ice)
 			}
 			if be := c.banned; be != nil {
-				p.notifyBan(idx+1, model)
-				// Quarantine only while the ban is still live after
+				// Display index resolved live (see run-path below).
+				if li := p.indexOfEntry(tok); li >= 0 {
+					p.notifyBan(li+1, model)
+				}
 				// CooldownBan (hard, or a future resumes_at): an expired
 				// temporary ban is already lifted upstream and must not
 				// mark the token terminal.
@@ -505,15 +507,18 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				// Issue #122: count run-start spend_limited refusals on the
 				// ledger (same counter as the chat-path refusal).
 				if c.spendLimited {
-					p.recordSpendLimited(idx)
+					tok.ledger.recordSpendLimited()
 				}
 			}
 			if ice := c.ipCapped; ice != nil {
 				ipCapped = appendIpCapped(ipCapped, ice)
 			}
 			if be := c.banned; be != nil {
-				p.notifyBan(idx+1, model)
-				// Quarantine only while the ban is still live after
+				// Display index resolved live: a dashboard reorder
+				// mid-flight must not mislabel the ban alert.
+				if li := p.indexOfEntry(tok); li >= 0 {
+					p.notifyBan(li+1, model)
+				}
 				// CooldownBan (hard, or a future resumes_at): an expired
 				// temporary ban is already lifted upstream and must not
 				// mark the token terminal.

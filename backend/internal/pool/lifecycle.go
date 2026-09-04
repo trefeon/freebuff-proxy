@@ -141,6 +141,33 @@ func (p *Pool) InvalidateRun(token int, agentID string) {
 	(*toks)[token].runs.Invalidate(agentID)
 }
 
+// InvalidateLeaseSession drops the cached session of the lease's own entry
+// (swap-safe: the entry pointer travels with the lease, never the
+// snapshot-time Token index — a dashboard reorder mid-flight must not
+// invalidate the wrong account's session). Otherwise mirrors
+// InvalidateSession, including the issue #132 instance guard.
+func (p *Pool) InvalidateLeaseSession(lease *Lease) {
+	p.InvalidateLeaseSessionWithReason(lease, "instance_invalidated", 0)
+}
+
+// InvalidateLeaseSessionWithReason is the reason-aware, swap-safe form of
+// InvalidateSessionWithReason (see InvalidateLeaseSession, #159).
+func (p *Pool) InvalidateLeaseSessionWithReason(lease *Lease, reason string, status int) {
+	if lease == nil || lease.entry == nil {
+		return
+	}
+	lease.entry.session.InvalidateInstanceWithReason(lease.SessionInstanceID, reason, status)
+}
+
+// InvalidateLeaseRun drops the current run of the lease's own entry for
+// agentID (swap-safe — see InvalidateLeaseSession).
+func (p *Pool) InvalidateLeaseRun(lease *Lease, agentID string) {
+	if lease == nil || lease.entry == nil {
+		return
+	}
+	lease.entry.runs.Invalidate(agentID)
+}
+
 // ClearQueuedCaches drops every token's cached QUEUED session (issue #100):
 // the queue-time model fallback calls this before re-acquiring with the
 // fallback model, so the fallback acquire creates a fresh session instead of
@@ -260,7 +287,10 @@ func (p *Pool) RemoveTokenAt(idx int) error {
 }
 
 // SwapTokens swaps the token entries at index i and j in the fixed-token list.
-// Active in-flight requests on any token refuse the swap to avoid race hazards.
+// Seamless under load: in-flight leases resolve through their entry pointer
+// (leaseTarget), and the post-acquire invalidate/cooldown paths take the
+// lease itself, so no snapshot-time index can mis-target the wrong account.
+// Display/mismatch keys are re-resolved to live positions at use time.
 func (p *Pool) SwapTokens(i, j int) error {
 	toks := p.roster.Load()
 	if toks == nil {
@@ -271,11 +301,6 @@ func (p *Pool) SwapTokens(i, j int) error {
 	}
 	if i == j {
 		return nil
-	}
-	for _, t := range *toks {
-		if t.runs.InflightCount() > 0 {
-			return errors.New("pool: active requests in flight; retry once they finish")
-		}
 	}
 	// Swap the entries (and their 1-based mismatch keys) through the roster
 	// in one mutation — no more separate usageMu/spendMu/mismatchMu dances.

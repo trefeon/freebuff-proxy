@@ -48,28 +48,28 @@ func (b pooledBackend) Chat(ctx context.Context, lease *pool.Lease, opts upstrea
 	return b.p.Chat(ctx, lease, opts, body)
 }
 func (b pooledBackend) InvalidateSession(lease *pool.Lease) {
-	b.p.InvalidateSession(lease.Token, lease.SessionInstanceID)
+	b.p.InvalidateLeaseSession(lease)
 }
 func (b pooledBackend) InvalidateSessionSuperseded(lease *pool.Lease) {
-	b.p.InvalidateSessionWithReason(lease.Token, lease.SessionInstanceID, session.ReasonSuperseded, http.StatusConflict)
+	b.p.InvalidateLeaseSessionWithReason(lease, session.ReasonSuperseded, http.StatusConflict)
 }
 func (b pooledBackend) InvalidateRun(lease *pool.Lease, agentID string) {
-	b.p.InvalidateRun(lease.Token, agentID)
+	b.p.InvalidateLeaseRun(lease, agentID)
 }
 func (b pooledBackend) CooldownAuth(lease *pool.Lease) {
-	b.p.CooldownToken(lease.Token, runs.DefaultCooldown)
+	b.p.CooldownLease(lease, runs.DefaultCooldown)
 }
 func (b pooledBackend) CooldownBan(lease *pool.Lease, be *upstream.BanError) {
-	b.p.CooldownTokenBan(lease.Token, be)
+	b.p.CooldownLeaseBan(lease, be)
 }
 func (b pooledBackend) CooldownRateLimit(lease *pool.Lease, rle *upstream.RateLimitError) {
-	b.p.CooldownTokenRateLimit(lease.Token, rle)
+	b.p.CooldownLeaseRateLimit(lease, rle)
 }
 func (b pooledBackend) CooldownIpCapped(lease *pool.Lease, ice *upstream.IpCappedError) {
-	b.p.CooldownTokenIpCapped(lease.Token, ice)
+	b.p.CooldownLeaseIpCapped(lease, ice)
 }
 func (b pooledBackend) CooldownCountry(lease *pool.Lease, cbe *upstream.CountryBlockedError) {
-	b.p.CooldownTokenCountryBlocked(lease.Token, cbe)
+	b.p.CooldownLeaseCountryBlocked(lease, cbe)
 }
 func (b pooledBackend) LeaseRelease(lease *pool.Lease)  { b.p.LeaseRelease(lease) }
 func (b pooledBackend) LeaseAbandon(lease *pool.Lease)  { b.p.LeaseAbandon(lease) }
