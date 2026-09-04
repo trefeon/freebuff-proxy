@@ -438,3 +438,22 @@ func TestUnmeteredModelsDerivation(t *testing.T) {
 		}
 	}
 }
+
+// TestTokensDataUnmeteredWithoutQuota pins #342's third box at the payload
+// level: a pool with zero quota rows (compact-poll shape) still carries the
+// modelcat-derived list, proving the section ignores quota presence.
+func TestTokensDataUnmeteredWithoutQuota(t *testing.T) {
+	d := testDashboard(t)
+	td := d.tokensData()
+	if len(td.Tokens) != 0 {
+		t.Fatalf("empty-pool tokens = %d, want 0", len(td.Tokens))
+	}
+	if len(td.UnmeteredModels) == 0 {
+		t.Fatal("UnmeteredModels empty on quota-less pool, want modelcat derivation")
+	}
+	for _, r := range td.UnmeteredModels {
+		if modelcat.IsPremium(r.ID) {
+			t.Errorf("premium model %q in payload unmetered list", r.ID)
+		}
+	}
+}

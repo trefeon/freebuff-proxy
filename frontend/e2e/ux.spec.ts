@@ -737,6 +737,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
         "No premium quota data — run a request or -test-token to populate.",
       ),
     ).toHaveCount(2);
+    await expect(
+      page.getByText("No quota data available for this session."),
+    ).toHaveCount(2);
     // Unmetered models section and accounting revamp notice render per account card.
     // No unmetered_models in payload here, so the static fallback renders.
     await expect(page.getByText("Unmetered Models")).toHaveCount(2);
