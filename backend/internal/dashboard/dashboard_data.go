@@ -105,7 +105,11 @@ type tokenCard struct {
 	Subscription *subscriptionCard `json:"subscription,omitempty"`
 	// AllowedModels is the slot's MODEL_LOCKS allowlist (issue #325); nil
 	// when unlocked. Config-static: rides the full fetch, cached by the SPA.
-	AllowedModels []string `json:"allowed_models,omitempty"`
+	AllowedModels   []string `json:"allowed_models,omitempty"`
+	Streak          int      `json:"streak,omitempty"`
+	TodayUsed       bool     `json:"today_used,omitempty"`
+	LastUsage       string   `json:"last_usage,omitempty"`
+	StreakUpdatedAt string   `json:"streak_updated_at,omitempty"`
 }
 
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):

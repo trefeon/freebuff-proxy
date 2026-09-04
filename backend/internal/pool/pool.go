@@ -205,8 +205,12 @@ type TokenSnapshot struct {
 	// resumes_at deadline (auto-lifts at BannedUntil) and "hard" when it
 	// does not (never self-heals; operator must appeal upstream). Both are
 	// zero values when no ban window is active.
-	BanType     string    `json:"ban_type,omitempty"`
-	BannedUntil time.Time `json:"banned_until,omitempty"`
+	BanType         string    `json:"ban_type,omitempty"`
+	BannedUntil     time.Time `json:"banned_until,omitempty"`
+	Streak          int       `json:"streak,omitempty"`
+	TodayUsed       bool      `json:"today_used,omitempty"`
+	LastUsageDate   string    `json:"last_usage,omitempty"`
+	StreakUpdatedAt time.Time `json:"streak_updated_at,omitempty"`
 }
 
 // Pool balances requests across the configured tokens.
@@ -406,7 +410,9 @@ type tokenEntry struct {
 	// refusal (CompareAndSwap) and cleared either by UnlockToken or by the
 	// entry rebuild that an AUTH_TOKENS slot change triggers (SetConfig —
 	// the whole entry is replaced, so the marker dies with it).
-	quarantine atomic.Pointer[quarantineState]
+	quarantine  atomic.Pointer[quarantineState]
+	streak      atomic.Pointer[upstream.StreakInfo]
+	streakFetch atomic.Bool
 }
 
 func (e *tokenEntry) Email() string {
@@ -433,6 +439,33 @@ func (e *tokenEntry) SetAccountID(id string) {
 	if id != "" {
 		e.accountID.Store(&id)
 	}
+}
+func (e *tokenEntry) Streak() *upstream.StreakInfo {
+	return e.streak.Load()
+}
+
+func (e *tokenEntry) SetStreak(s *upstream.StreakInfo) {
+	if s != nil {
+		e.streak.Store(s)
+	}
+}
+
+func (p *Pool) asyncStreakFetch(e *tokenEntry) {
+	if s := e.streak.Load(); s != nil && time.Since(s.UpdatedAt) < time.Hour {
+		return
+	}
+	if !e.streakFetch.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer e.streakFetch.Store(false)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		st, err := e.client.GetStreak(ctx)
+		if err == nil && st != nil {
+			e.SetStreak(st)
+		}
+	}()
 }
 
 // asyncAccountInfoFetch backfills the account email/id for one pooled token

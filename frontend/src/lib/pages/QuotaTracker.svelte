@@ -124,6 +124,55 @@
                   )}
                 </p>
               {/if}
+              {#if token.streak > 0}
+                <div
+                  class="rounded border border-[var(--fp-border)] bg-[var(--fp-surface-2)]/40 p-3 flex flex-col gap-1.5"
+                >
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="font-semibold text-xs sm:text-sm text-[var(--fp-text)]"
+                      >
+                        {token.streak}
+                        {$tr("day streak")}
+                      </span>
+                      <span
+                        class="font-mono text-sm tracking-widest text-[var(--fp-accent)] select-none"
+                        aria-label={$tr("Streak progress: {filled} of 7 days", {
+                          filled: Math.min(token.streak, 7),
+                        })}
+                      >
+                        {"●".repeat(Math.min(token.streak, 7)) +
+                          "○".repeat(Math.max(0, 7 - token.streak)) +
+                          (token.streak > 7 ? "+" : "")}
+                      </span>
+                    </div>
+                    <span
+                      class="text-[11px] font-mono px-2 py-0.5 rounded {token.today_used
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}"
+                    >
+                      {token.today_used
+                        ? $tr("Active today")
+                        : $tr("Needs activity today")}
+                    </span>
+                  </div>
+                  {#if token.streak < 7}
+                    <p class="text-xs text-[var(--fp-muted)]">
+                      🎁 {$tr(
+                        "{count} more day(s) to unlock +1 bonus session every day",
+                        { count: 7 - token.streak },
+                      )}
+                    </p>
+                  {:else}
+                    <p class="text-xs text-[var(--fp-accent)]">
+                      🎁 {$tr("Streak perk: +1 bonus session every day")}
+                    </p>
+                  {/if}
+                </div>
+              {/if}
               {#if token.freebucks}
                 <PremiumQuotaBar
                   freebucks={token.freebucks}

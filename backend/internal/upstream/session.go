@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // CreateSession POSTs /api/v1/freebuff/session with no body.
@@ -103,6 +104,67 @@ func (c *Client) ProbeAccount(ctx context.Context) (*SessionState, error) {
 		return nil, countryBlockFromBody(state.WireBody)
 	}
 	return state, nil
+}
+
+// StreakInfo is the upstream streak position (docs/maturity-plan.md PR1).
+type StreakInfo struct {
+	Streak        int       `json:"streak"`
+	TodayUsed     bool      `json:"todayUsed"`
+	LastUsageDate string    `json:"lastUsageDate,omitempty"`
+	TimeZone      string    `json:"timeZone,omitempty"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+// GetStreak calls GET /api/v1/freebuff/streak with the caller's auth token.
+// Returns the streak count, whether activity has been recorded today in the
+// account's timezone, and the last usage date.
+func (c *Client) GetStreak(ctx context.Context) (*StreakInfo, error) {
+	if c.mock != nil {
+		if sm, ok := c.mock.(interface {
+			Streak(string) (*StreakInfo, error)
+		}); ok {
+			return sm.Streak(c.token)
+		}
+		return &StreakInfo{
+			Streak:        7,
+			TodayUsed:     true,
+			LastUsageDate: time.Now().Format("2006-01-02"),
+			TimeZone:      "UTC",
+			UpdatedAt:     time.Now(),
+		}, nil
+	}
+	req, err := c.newRequest(ctx, http.MethodGet, "/api/v1/freebuff/streak", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, cancel, classErr := c.do(req, c.sessionCallTimeout)
+	if classErr != nil && resp == nil {
+		return nil, classErr
+	}
+	defer releaseCancel(cancel)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		if classErr != nil {
+			return nil, classErr
+		}
+		return nil, fmt.Errorf("streak endpoint returned status %d", resp.StatusCode)
+	}
+	var raw struct {
+		Streak        int    `json:"streak"`
+		TodayUsed     bool   `json:"todayUsed"`
+		LastUsageDate string `json:"lastUsageDate"`
+		TimeZone      string `json:"timeZone"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+	return &StreakInfo{
+		Streak:        raw.Streak,
+		TodayUsed:     raw.TodayUsed,
+		LastUsageDate: raw.LastUsageDate,
+		TimeZone:      raw.TimeZone,
+		UpdatedAt:     time.Now(),
+	}, nil
 }
 
 // EndSession DELETE /api/v1/freebuff/session; 404 is tolerated. The DELETE

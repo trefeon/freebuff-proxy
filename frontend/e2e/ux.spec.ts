@@ -738,6 +738,40 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toHaveCount(2);
   });
 
+  test("quota: streak indicator renders progress dots and perk countdown", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(
+      page,
+      f,
+      {
+        tokens: tokensPayload([
+          tokenRow(0, {
+            streak: 5,
+            today_used: true,
+          }),
+          tokenRow(1, {
+            streak: 12,
+            today_used: false,
+          }),
+        ]),
+      },
+      { loginPage: true },
+    );
+
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(page.getByText("5 day streak")).toBeVisible();
+    await expect(page.getByText("Active today")).toBeVisible();
+    await expect(page.getByText(/2 more day.*to unlock/)).toBeVisible();
+
+    await expect(page.getByText("12 day streak")).toBeVisible();
+    await expect(page.getByText("Needs activity today")).toBeVisible();
+    await expect(
+      page.getByText("Streak perk: +1 bonus session every day"),
+    ).toBeVisible();
+  });
+
   // ---------------------------------------------------------------------------
   // 11. Settings: the raw .env editor inside <details> still validates and
   //     save posts the edited content
