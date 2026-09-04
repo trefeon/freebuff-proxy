@@ -21,7 +21,7 @@ func TestParseFreebucks(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"active","instanceId":"inst-fb","model":"openai/gpt-5.6-luna","expiresAt":"2030-01-01T00:00:00Z","freebucks":{"balance":17.5,"daily":{"limit":20,"spent":5,"remaining":15,"resetAt":"2026-09-01T07:00:00Z"},"wallet":{"balance":2.5,"monthlyBonus":10,"nextBonusAt":"2026-10-01T07:00:00Z"},"spend":{"limitUsd":15,"resetAt":"2026-09-01T07:00:00Z"},"planId":"starter","prices":{"openai/gpt-5.6-luna":2}}}`))
+		_, _ = w.Write([]byte(`{"status":"active","instanceId":"inst-fb","model":"openai/gpt-5.6-luna","expiresAt":"2030-01-01T00:00:00Z","freebucks":{"balance":17.5,"daily":{"limit":20,"spent":5,"remaining":15,"resetAt":"2026-09-01T07:00:00Z"},"wallet":{"balance":2.5,"monthlyBonus":10,"nextBonusAt":"2026-10-01T07:00:00Z"},"spend":{"limitUsd":15,"resetAt":"2026-09-01T07:00:00Z"},"monthly":{"limitUsd":50,"spentUsd":10,"remainingUsd":40,"resetAt":"2026-10-01T07:00:00Z"},"planId":"starter","prices":{"openai/gpt-5.6-luna":2}}}`))
 	}
 
 	client, err := NewForAuth(testConfig(mock.URL(), nil))
@@ -65,6 +65,15 @@ func TestParseFreebucks(t *testing.T) {
 	}
 	if fb.Prices["openai/gpt-5.6-luna"] != 2 {
 		t.Errorf("Prices = %v, want luna 2", fb.Prices)
+	}
+	if fb.Monthly == nil {
+		t.Fatal("Monthly = nil, want parsed allowance")
+	}
+	if fb.Monthly.LimitUsd != 50 || fb.Monthly.SpentUsd != 10 || fb.Monthly.RemainingUsd != 40 {
+		t.Errorf("Monthly = %+v, want limit 50 spent 10 remaining 40", fb.Monthly)
+	}
+	if fb.Monthly.ResetAt.IsZero() {
+		t.Error("Monthly.ResetAt zero, want parsed time")
 	}
 }
 

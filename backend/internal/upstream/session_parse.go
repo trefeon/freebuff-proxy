@@ -420,18 +420,24 @@ type rawFreebucksSpendCeiling struct {
 	LimitUsd float64 `json:"limitUsd"`
 	ResetAt  any     `json:"resetAt"`
 }
+type rawFreebucksMonthlyAllowance struct {
+	LimitUsd     float64 `json:"limitUsd"`
+	SpentUsd     float64 `json:"spentUsd"`
+	RemainingUsd float64 `json:"remainingUsd"`
+	ResetAt      any     `json:"resetAt"`
+}
 
 // rawFreebucks mirrors upstream FreebuffFreebucksInfo (issue #321 wire
 // drift): spendable balance + the daily pool window + the never-expiring
-// wallet + the USD spend ceiling + the plan id. The pre-drift weekly and
-// monthly pool windows are gone upstream (replaced by wallet + spend).
+// wallet + the USD spend ceiling + the monthly allowance + the plan id.
 type rawFreebucks struct {
-	Balance float64                   `json:"balance"`
-	Daily   rawFreebucksWindow        `json:"daily"`
-	Wallet  *rawFreebucksWallet       `json:"wallet"`
-	Spend   *rawFreebucksSpendCeiling `json:"spend"`
-	PlanID  *string                   `json:"planId"`
-	Prices  map[string]float64        `json:"prices"`
+	Balance float64                       `json:"balance"`
+	Daily   rawFreebucksWindow            `json:"daily"`
+	Wallet  *rawFreebucksWallet           `json:"wallet"`
+	Spend   *rawFreebucksSpendCeiling     `json:"spend"`
+	Monthly *rawFreebucksMonthlyAllowance `json:"monthly"`
+	PlanID  *string                       `json:"planId"`
+	Prices  map[string]float64            `json:"prices"`
 }
 
 type rawFreeWindows struct {
@@ -606,6 +612,17 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				if t, terr := parseFlexTime(raw.Freebucks.Spend.ResetAt); terr == nil {
 					fb.Spend.ResetAt = t
 				}
+			}
+			if raw.Freebucks.Monthly != nil {
+				m := &FreebucksMonthlyAllowance{
+					LimitUsd:     raw.Freebucks.Monthly.LimitUsd,
+					SpentUsd:     raw.Freebucks.Monthly.SpentUsd,
+					RemainingUsd: raw.Freebucks.Monthly.RemainingUsd,
+				}
+				if t, terr := parseFlexTime(raw.Freebucks.Monthly.ResetAt); terr == nil {
+					m.ResetAt = t
+				}
+				fb.Monthly = m
 			}
 			state.Freebucks = fb
 		}

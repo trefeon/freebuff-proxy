@@ -53,9 +53,26 @@
   // Normalise a FreebucksWindow that may be snake_case or camelCase
   function normalizeWindow(win) {
     if (!win) return null;
-    const limit = win.limit ?? win.Limit ?? 0;
-    const spent = win.spent ?? win.Spent ?? 0;
-    const remRaw = win.remaining ?? win.Remaining;
+    const limit =
+      win.limit ??
+      win.Limit ??
+      win.limit_usd ??
+      win.limitUsd ??
+      win.LimitUsd ??
+      0;
+    const spent =
+      win.spent ??
+      win.Spent ??
+      win.spent_usd ??
+      win.spentUsd ??
+      win.SpentUsd ??
+      0;
+    const remRaw =
+      win.remaining ??
+      win.Remaining ??
+      win.remaining_usd ??
+      win.remainingUsd ??
+      win.RemainingUsd;
     const remaining = remRaw != null ? remRaw : limit - spent;
     const resetAt =
       win.reset_at ??
@@ -76,6 +93,9 @@
   let hasFreebucks = $derived(!!freebucks);
   let fbBalance = $derived(freebucks?.balance ?? freebucks?.Balance ?? null);
   let fbDaily = $derived(normalizeWindow(freebucks?.daily ?? freebucks?.Daily));
+  let fbMonthly = $derived(
+    normalizeWindow(freebucks?.monthly ?? freebucks?.Monthly),
+  );
   let fbPlanId = $derived(
     freebucks?.plan_id ?? freebucks?.planId ?? freebucks?.PlanID ?? null,
   );
@@ -100,7 +120,9 @@
 
   let fbWindows = $derived.by(() => {
     const w = [];
-    if (fbDaily) w.push({ key: "daily", label: "Daily", win: fbDaily });
+    if (fbDaily) w.push({ key: "daily", label: $tr("Daily"), win: fbDaily });
+    if (fbMonthly)
+      w.push({ key: "monthly", label: $tr("Monthly"), win: fbMonthly });
     return w;
   });
 
