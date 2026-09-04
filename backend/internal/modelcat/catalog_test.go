@@ -410,6 +410,7 @@ func TestCatalogFactsPinned(t *testing.T) {
 		"upstage/solar-pro4",
 		"z-ai/glm-5.3-flash",
 		"deepseek/deepseek-v4-flash",
+		"mimo/mimo-v2.5",
 	}
 	if got := ServedIDs(); !slices.Equal(got, wantServed) {
 		t.Errorf("ServedIDs() = %v, want %v", got, wantServed)
