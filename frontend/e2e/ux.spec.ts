@@ -779,7 +779,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     );
     await expect(page.getByText("deepseek/deepseek-v4-flash")).toHaveCount(2);
     // Fallback-only rows must not render when the payload carries the list.
-    await expect(page.getByText(/Solar Pro 4/)).toHaveCount(0);
+    // Assert on the model id (the banner's tier-change copy also names
+    // "Solar Pro 4", so the display name is not a stable absence signal).
+    await expect(page.getByText("upstage/solar-pro4")).toHaveCount(0);
   });
 
   test("quota: streak indicator renders progress dots and perk countdown", async ({
