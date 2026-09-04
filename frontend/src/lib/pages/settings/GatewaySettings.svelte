@@ -16,6 +16,7 @@
   let env = $derived(parseEnv(rawText));
   let safeMode = $derived(formValues.SAFE_MODE !== "false");
   let logLevel = $derived(formValues.LOG_LEVEL || "info");
+  let httpReadTimeout = $derived(formValues.HTTP_READ_TIMEOUT || "60s");
   let bridgeEnabled = $derived(formValues.BRIDGE_ENABLED !== "false");
 </script>
 
@@ -122,6 +123,50 @@
             >trace</option
           >
         </select>
+      </div>
+    </div>
+
+    <!-- HTTP Read Timeout -->
+    <div
+      class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    >
+      <div class="flex-1 min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-medium text-sm sm:text-base text-[var(--fp-text)]">
+            {$tr("HTTP Read Timeout")}
+          </span>
+          <code
+            class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
+            >HTTP_READ_TIMEOUT</code
+          >
+          {#if !env.HTTP_READ_TIMEOUT}
+            <span
+              class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
+              >{$tr("default")}</span
+            >
+          {/if}
+          <span
+            class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/50 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
+            >{$tr("restart")}</span
+          >
+        </div>
+        <p class="text-xs sm:text-sm text-text-muted mt-1 leading-relaxed">
+          {$tr(
+            "How long the server waits for slow clients uploading request bodies (far-away harnesses, images). Takes effect after a container restart; 0 disables the timeout.",
+          )}
+        </p>
+      </div>
+      <div class="shrink-0 w-full sm:w-48">
+        <input
+          type="text"
+          inputmode="text"
+          aria-label="HTTP_READ_TIMEOUT"
+          class="fp-input w-full !text-xs !h-9 !px-3 bg-[var(--fp-input-bg)] text-[var(--fp-text)] border border-[var(--fp-border-bright)] rounded-[var(--fp-radius-sm)] focus:border-[var(--fp-accent)] focus:outline-none font-mono"
+          value={httpReadTimeout}
+          placeholder="60s"
+          onchange={(e) =>
+            onField("HTTP_READ_TIMEOUT", e.currentTarget.value.trim())}
+        />
       </div>
     </div>
 

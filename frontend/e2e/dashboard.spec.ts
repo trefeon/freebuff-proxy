@@ -286,6 +286,13 @@ test.describe("dashboard hermetic mocks", () => {
     const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
     await expect(safeMode).toBeVisible();
     await expect(safeMode).toHaveAttribute("aria-checked", "true");
+    // The restart-only HTTP read timeout renders as a duration textbox
+    // with the compiled-in default and a restart badge.
+    const httpTimeout = page.getByRole("textbox", {
+      name: "HTTP_READ_TIMEOUT",
+    });
+    await expect(httpTimeout).toBeVisible();
+    await expect(httpTimeout).toHaveValue("60s");
 
     // Toggling marks the form dirty and surfaces the unsaved-changes banner.
     await safeMode.click();
@@ -534,9 +541,9 @@ test.describe("dashboard hermetic mocks", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view: all five /v1 lines render with the
-    // MSG/TOOL counts, no crash.
-    await expect(page.getByText("5 request events")).toBeVisible();
+    // Console is the default view: the five same-req_id lines merge into ONE
+    // request group carrying the MSG/TOOL counts, no crash.
+    await expect(page.getByText("1 request")).toBeVisible();
     await expect(page.getByText("3 MSG", { exact: true })).toBeVisible();
     await expect(page.getByText("2 TOOL", { exact: true })).toBeVisible();
     await expect(page.getByText("openai/gpt-5.6-luna").first()).toBeVisible();
