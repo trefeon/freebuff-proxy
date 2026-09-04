@@ -9,6 +9,7 @@
   import CopyButton from "../components/CopyButton.svelte";
   import RawEditor from "./settings/RawEditor.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
+  import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
   import ModelRoutingSettings from "./settings/ModelRoutingSettings.svelte";
@@ -446,6 +447,9 @@
 
     <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
     <ModelRoutingSettings {formValues} {rawText} onField={setField} />
+
+    <!-- 5. Command Center (Lifecycle, updates & rollback) -->
+    <CommandCenterCard />
 
     <!-- 5. Container Bootstrap Notice -->
     <Alert tone="info">
