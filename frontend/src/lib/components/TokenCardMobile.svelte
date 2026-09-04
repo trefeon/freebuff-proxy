@@ -6,6 +6,7 @@
     Unlock,
     Lock,
     Trash2,
+    GripVertical,
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import StatusBadge from "./StatusBadge.svelte";
@@ -47,6 +48,13 @@
     onRefresh,
     onDropSession,
     onSwap,
+    dragging = false,
+    dragOver = false,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onDragEnd,
   } = $props();
 
   function banBadge(token) {
@@ -118,11 +126,32 @@
   }
 </script>
 
-<div class="fp-inset rounded-lg p-3.5 flex flex-col gap-2.5">
+<div
+  draggable={totalTokens > 1 && !actionPending}
+  ondragstart={(e) => onDragStart?.(e, idx)}
+  ondragover={(e) => onDragOver?.(e, idx)}
+  ondragleave={(e) => onDragLeave?.(e, idx)}
+  ondrop={(e) => onDrop?.(e, idx)}
+  ondragend={onDragEnd}
+  class="fp-inset rounded-lg p-3.5 flex flex-col gap-2.5 transition-all {dragging
+    ? 'opacity-30 bg-[var(--fp-surface-2)]/60'
+    : dragOver
+      ? 'border-[var(--fp-accent)] ring-2 ring-[var(--fp-accent)] bg-[var(--fp-accent)]/5'
+      : ''}"
+>
   <!-- Header: identity + status + expand -->
   <div class="flex items-start justify-between gap-2">
     <div class="min-w-0 flex flex-col gap-1">
       <div class="flex items-center gap-1.5 flex-wrap">
+        {#if totalTokens > 1}
+          <div
+            class="cursor-grab active:cursor-grabbing p-1 text-[var(--fp-dim)] hover:text-[var(--fp-accent)] rounded select-none -ml-1 hover:bg-[var(--fp-surface)] transition-colors"
+            title={$tr("Drag to reorder account position")}
+            aria-label={$tr("Drag to reorder")}
+          >
+            <GripVertical size={16} />
+          </div>
+        {/if}
         <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
           >Account #{idx + 1}</span
         >

@@ -46,6 +46,16 @@ func TestAdminTokensSwap(t *testing.T) {
 		t.Errorf("swapped .env = %s, want tok-2 at index 1", string(env))
 	}
 
+	// Move action: move token at index 2 to index 0: [tok-1, tok-2, tok-0] -> [tok-0, tok-1, tok-2]
+	resp = postJSON(t, ts.URL, cookie, "/admin/tokens/swap", `{"from":2,"to":0,"action":"move"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("move status = %d, want 200", resp.StatusCode)
+	}
+	env, _ = os.ReadFile(".env")
+	if !strings.Contains(string(env), "AUTH_TOKENS=tok-0,tok-1,tok-2") {
+		t.Errorf("moved .env = %s, want tok-0 first", string(env))
+	}
+
 	// Out of bounds check
 	resp = postJSON(t, ts.URL, cookie, "/admin/tokens/swap", `{"from":0,"to":10}`)
 	if resp.StatusCode != http.StatusBadRequest {

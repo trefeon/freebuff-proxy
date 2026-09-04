@@ -789,4 +789,43 @@ test.describe("operator UX journey (hermetic mocks)", () => {
 
     await expect(page.getByText("running", { exact: true })).toBeVisible();
   });
+
+  // 13. Tokens: Drag and drop handle renders and triggers reorder action
+  // ---------------------------------------------------------------------------
+  test("tokens: drag and drop handle renders and triggers move action", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await expect(
+      page.getByRole("heading", { name: "Pool Tokens" }),
+    ).toBeVisible();
+
+    const grips = page.getByLabel("Drag to reorder");
+    await expect(grips.first()).toBeVisible();
+
+    // Verify move action POST payload on drop / move
+    let swapPayload: Record<string, any> | null = null;
+    await page.route(/\/admin\/tokens\/swap$/, async (route) => {
+      swapPayload = JSON.parse(route.request().postData() || "{}");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, message: "Token moved successfully" }),
+      });
+    });
+
+    const rows = page.locator("tbody tr");
+    await expect(rows.first()).toHaveAttribute("draggable", "true");
+
+    // Perform drag and drop from row 0 to row 1
+    await rows.first().dragTo(rows.nth(1));
+
+    expect(swapPayload).not.toBeNull();
+    expect(swapPayload?.from).toBe(0);
+    expect(swapPayload?.to).toBe(1);
+    expect(swapPayload?.action).toBe("move");
+  });
 });

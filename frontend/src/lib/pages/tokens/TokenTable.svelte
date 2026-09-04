@@ -26,7 +26,8 @@
    * @prop {(idx: number, model: string) => void} onSpawn
    * @prop {(idx: number, action: string) => void} onRefresh
    * @prop {(idx: number) => void} onDropSession
-   * @prop {(from: number, to: number) => void} onSwap
+   * @prop {(from: number, to: number) => void} [onSwap]
+   * @prop {(from: number, to: number) => void} [onMove]
    * @prop {() => void} onRetry
    */
   let {
@@ -45,15 +46,71 @@
     onRefresh,
     onDropSession,
     onSwap,
+    onMove,
     onRetry,
   } = $props();
+
+  let draggingIndex = $state(null);
+  let dragOverIndex = $state(null);
+
+  function handleDragStart(e, idx) {
+    if (actionPending) return;
+    draggingIndex = idx;
+    dragOverIndex = null;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(idx));
+    }
+  }
+
+  function handleDragOver(e, idx) {
+    if (draggingIndex === null || draggingIndex === idx) return;
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "move";
+    }
+    dragOverIndex = idx;
+  }
+
+  function handleDragLeave(e, idx) {
+    if (dragOverIndex === idx) {
+      dragOverIndex = null;
+    }
+  }
+
+  function handleDrop(e, targetIdx) {
+    e.preventDefault();
+    const sourceIdx =
+      draggingIndex !== null
+        ? draggingIndex
+        : Number(e.dataTransfer?.getData("text/plain"));
+    draggingIndex = null;
+    dragOverIndex = null;
+    if (
+      !isNaN(sourceIdx) &&
+      sourceIdx !== targetIdx &&
+      sourceIdx >= 0 &&
+      targetIdx >= 0
+    ) {
+      if (onMove) {
+        onMove(sourceIdx, targetIdx);
+      } else if (onSwap) {
+        onSwap(sourceIdx, targetIdx);
+      }
+    }
+  }
+
+  function handleDragEnd() {
+    draggingIndex = null;
+    dragOverIndex = null;
+  }
 </script>
 
 <Card
   title={$tr("Pool Tokens")}
   description={tokenCount
     ? $tr(
-        "{count} pooled token(s) · Tap a card to see session & quota details",
+        "{count} pooled token(s) · Drag handle to reorder priority · Tap for details",
         { count: tokenCount },
       )
     : $tr("Tap a card to see session & quota details")}
@@ -107,6 +164,13 @@
               {actionPending}
               {now}
               {devToolsEnabled}
+              dragging={draggingIndex === idx}
+              dragOver={dragOverIndex === idx}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
               onToggle={() => onToggle(idx)}
               onAction={(action) => onAction(token, idx, action)}
               onSpawn={(model) => onSpawn(idx, model)}
@@ -131,6 +195,13 @@
           {actionPending}
           {now}
           {devToolsEnabled}
+          dragging={draggingIndex === idx}
+          dragOver={dragOverIndex === idx}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
           onToggle={() => onToggle(idx)}
           onAction={(action) => onAction(token, idx, action)}
           onSpawn={(model) => onSpawn(idx, model)}

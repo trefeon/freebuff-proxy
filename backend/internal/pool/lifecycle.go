@@ -310,6 +310,24 @@ func (p *Pool) SwapTokens(i, j int) error {
 	return nil
 }
 
+// MoveToken moves the token entry from index 'from' to index 'to', sliding intermediate entries.
+func (p *Pool) MoveToken(from, to int) error {
+	toks := p.roster.Load()
+	if toks == nil {
+		return errors.New("pool: no tokens configured")
+	}
+	if from < 0 || from >= len(*toks) || to < 0 || to >= len(*toks) {
+		return errors.New("pool: token index out of range")
+	}
+	if from == to {
+		return nil
+	}
+	if !p.roster.move(from, to) {
+		return errors.New("pool: token index out of range")
+	}
+	return nil
+}
+
 // session (mirrors RemoveAllTokens' run finish plus the session end that
 // removal previously skipped), bounded by the per-token shutdown timeout so
 // a hung upstream cannot block the dashboard action. guarded by
