@@ -79,8 +79,11 @@
   </PageHeader>
 
   {#if loading}
-    <div class="space-y-6" aria-busy="true">
-      {#each Array(3) as _, i (i)}
+    <div
+      class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"
+      aria-busy="true"
+    >
+      {#each Array(4) as _, i (i)}
         <div class="skeleton skeleton-card h-44"></div>
       {/each}
       <span class="sr-only">{$tr("Loading quota tracker")}</span>
@@ -102,7 +105,7 @@
         )}
       />
     {:else}
-      <div class="grid grid-cols-1 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {#each data.tokens as token, ti (token.index ?? ti)}
           {@const idx = token.index ?? ti}
           <Card
@@ -110,6 +113,7 @@
             description={token.session_model
               ? $tr("Session: {model}", { model: token.session_model })
               : ""}
+            class="h-full flex flex-col"
           >
             <div class="flex flex-col gap-4">
               {#if token.quota_stale}
