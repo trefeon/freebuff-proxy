@@ -222,7 +222,7 @@ func Serve(configPath string, verbose bool, version string) int {
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       60 * time.Second,
+		ReadTimeout:       cfg.HTTPReadTimeout,
 		// IdleTimeout closes keep-alive connections that have been idle for
 		// two minutes, bounding goroutines parked on dead clients.
 		IdleTimeout: 120 * time.Second,

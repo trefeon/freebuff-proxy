@@ -29,6 +29,7 @@ type Config struct {
 	RotationInterval      time.Duration
 	RequestTimeout        time.Duration
 	SessionCallTimeout    time.Duration
+	HTTPReadTimeout       time.Duration
 	APIKeys               []string
 	AdminToken            string // bearer token required for POST /admin/reload (defaults to "123456" when unset/empty)
 	DashboardRequireLogin bool   // true = dashboard requires password authentication (DASHBOARD_REQUIRE_LOGIN); defaults to true
@@ -265,6 +266,7 @@ type rawConfig struct {
 	RotationInterval   string   `json:"ROTATION_INTERVAL"`
 	RequestTimeout     string   `json:"REQUEST_TIMEOUT"`
 	SessionCallTimeout string   `json:"SESSION_CALL_TIMEOUT"`
+	HTTPReadTimeout    string   `json:"HTTP_READ_TIMEOUT"`
 	APIKeys            []string `json:"API_KEYS"`
 	AdminToken         string   `json:"ADMIN_TOKEN"`
 	CostMode           string   `json:"COST_MODE"`
@@ -384,6 +386,7 @@ func defaultRawConfig() rawConfig {
 		UpstreamBaseURL:                  "https://codebuff.com", // normalized to www.
 		RotationInterval:                 "6h",
 		RequestTimeout:                   "15m",
+		HTTPReadTimeout:                  "60s",
 		SessionCallTimeout:               "30s",
 		TokenRotation:                    "drain",
 		RateLimitFailover:                new(true),

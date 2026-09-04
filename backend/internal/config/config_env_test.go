@@ -734,3 +734,40 @@ func TestModelAliasesConfig(t *testing.T) {
 		t.Errorf("ModelAliases[gpt-4o] = %q, want deepseek/deepseek-v4-flash", cfg.ModelAliases["gpt-4o"])
 	}
 }
+
+// TestHTTPReadTimeoutEnv pins issue #331: the HTTP server read timeout
+// defaults to 60s and is raisable via env (far-away clients uploading
+// large bodies); 0 disables it, negatives reject the load.
+func TestHTTPReadTimeoutEnv(t *testing.T) {
+	clearEnv(t)
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.HTTPReadTimeout != 60*time.Second {
+		t.Errorf("HTTPReadTimeout = %v, want 60s default", cfg.HTTPReadTimeout)
+	}
+
+	t.Setenv("HTTP_READ_TIMEOUT", "3m")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.HTTPReadTimeout != 3*time.Minute {
+		t.Errorf("HTTPReadTimeout = %v, want 3m", cfg.HTTPReadTimeout)
+	}
+
+	t.Setenv("HTTP_READ_TIMEOUT", "0")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.HTTPReadTimeout != 0 {
+		t.Errorf("HTTPReadTimeout = %v, want 0 (disabled)", cfg.HTTPReadTimeout)
+	}
+
+	t.Setenv("HTTP_READ_TIMEOUT", "-5s")
+	if _, err = Load(""); err == nil {
+		t.Error("Load with negative HTTP_READ_TIMEOUT succeeded, want error")
+	}
+}

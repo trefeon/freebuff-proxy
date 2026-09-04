@@ -60,6 +60,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	}
 	overrideString(&raw.RotationInterval, "ROTATION_INTERVAL")
 	overrideString(&raw.RequestTimeout, "REQUEST_TIMEOUT")
+	overrideString(&raw.HTTPReadTimeout, "HTTP_READ_TIMEOUT")
 	overrideString(&raw.SessionCallTimeout, "SESSION_CALL_TIMEOUT")
 	overrideCSV(&raw.APIKeys, "API_KEYS")
 	overrideString(&raw.AdminToken, "ADMIN_TOKEN")
@@ -143,6 +144,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		return Config{}, err
 	}
 	sessionCallTimeout, err := parseDuration(raw.SessionCallTimeout, "SESSION_CALL_TIMEOUT")
+	if err != nil {
+		return Config{}, err
+	}
+	httpReadTimeout, err := parseDuration(raw.HTTPReadTimeout, "HTTP_READ_TIMEOUT")
 	if err != nil {
 		return Config{}, err
 	}
@@ -408,6 +413,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		AuthTokens:                       dedupeStrings(raw.AuthTokens),
 		RotationInterval:                 rotationInterval,
 		RequestTimeout:                   requestTimeout,
+		HTTPReadTimeout:                  httpReadTimeout,
 		SessionCallTimeout:               sessionCallTimeout,
 		TokenRotation:                    tokenRotation,
 		ModelLocks:                       modelLocks,
@@ -574,6 +580,7 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.UpstreamBaseURL, get, "UPSTREAM_BASE_URL")
 	overrideStringFrom(&raw.RotationInterval, get, "ROTATION_INTERVAL")
 	overrideStringFrom(&raw.RequestTimeout, get, "REQUEST_TIMEOUT")
+	overrideStringFrom(&raw.HTTPReadTimeout, get, "HTTP_READ_TIMEOUT")
 	overrideStringFrom(&raw.SessionCallTimeout, get, "SESSION_CALL_TIMEOUT")
 	overrideStringFrom(&raw.TokenRotation, get, "TOKEN_ROTATION")
 	overrideBoolPtrFrom(&raw.RateLimitFailover, get, "RATE_LIMIT_FAILOVER")

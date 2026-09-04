@@ -25,6 +25,8 @@ func (c Config) Validate() error {
 		return errors.New("REQUEST_TIMEOUT must be greater than zero")
 	case c.SessionCallTimeout <= 0:
 		return errors.New("SESSION_CALL_TIMEOUT must be greater than zero")
+	case c.HTTPReadTimeout < 0:
+		return errors.New("HTTP_READ_TIMEOUT cannot be negative (0 disables the read timeout)")
 	case c.RegistryRefresh <= 0:
 		return errors.New("REGISTRY_REFRESH must be greater than zero")
 	case c.RequestJitter < 0:

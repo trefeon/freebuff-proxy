@@ -55,6 +55,8 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.RotationInterval.String(), false
 	case "REQUEST_TIMEOUT":
 		return c.RequestTimeout.String(), false
+	case "HTTP_READ_TIMEOUT":
+		return c.HTTPReadTimeout.String(), false
 	case "SESSION_CALL_TIMEOUT":
 		return c.SessionCallTimeout.String(), false
 	case "COST_MODE":

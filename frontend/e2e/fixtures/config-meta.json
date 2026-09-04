@@ -66,6 +66,17 @@
     "description": "Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default off: it is a manual testing surface that hammers /v1/*."
   },
   {
+    "key": "HTTP_READ_TIMEOUT",
+    "group": "general",
+    "kind": "text",
+    "default": "60s",
+    "restart_only": true,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "HTTP read timeout for client request bodies (far-away clients uploading large prompts/images need more; 0 disables). Set via container environment."
+  },
+  {
     "key": "LISTEN_ADDR",
     "group": "general",
     "kind": "text",
