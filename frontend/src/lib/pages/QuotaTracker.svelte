@@ -62,19 +62,6 @@
       (c) => c.premium_quota || c.freebucks,
     ).length,
   );
-
-  // Unmetered rows come from the backend modelcat derivation (issue #342);
-  // the static list below is the absent-tolerant fallback for old servers
-  // or empty payloads — never empty, never misleading.
-  const FALLBACK_UNMETERED = [
-    { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-    { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
-    { id: "upstage/solar-pro4", name: "Solar Pro 4" },
-    { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
-  ];
-  let unmetered = $derived(
-    data?.unmetered_models?.length ? data.unmetered_models : FALLBACK_UNMETERED,
-  );
 </script>
 
 <div class="space-y-6 page-enter">
@@ -423,50 +410,6 @@
                     {$tr("No quota data available for this session.")}
                   </p>
                 {/if}
-              </div>
-
-              <!-- Unmetered Models Section (issue #332/#335, drift f25d4059) -->
-              <div class="mt-2 pt-3 border-t border-[var(--fp-border)]/60">
-                <div class="flex items-center justify-between gap-2 mb-2">
-                  <h4
-                    class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-muted)] flex items-center gap-1.5"
-                  >
-                    <span>{$tr("Unmetered Models")}</span>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-medium lowercase"
-                      >{$tr("unlimited")}</span
-                    >
-                  </h4>
-                </div>
-                <p
-                  class="text-xs text-[var(--fp-muted)] mb-2.5 leading-relaxed"
-                >
-                  {$tr(
-                    "These models run with unlimited sessions on full access and do not consume the daily 4-session pool:",
-                  )}
-                </p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {#each unmetered as m (m.id)}
-                    <div
-                      class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
-                    >
-                      <div>
-                        <div
-                          class="font-mono text-xs text-[var(--fp-text)] font-semibold"
-                        >
-                          {m.id}
-                        </div>
-                        <div class="text-[11px] text-[var(--fp-dim)]">
-                          {m.name} · {$tr("Unlimited sessions")}
-                        </div>
-                      </div>
-                      <span
-                        class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
-                        >∞</span
-                      >
-                    </div>
-                  {/each}
-                </div>
               </div>
             </div>
           </Card>

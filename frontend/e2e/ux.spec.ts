@@ -740,52 +740,13 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await expect(
       page.getByText("No quota data available for this session."),
     ).toHaveCount(2);
-    // Unmetered models section renders per account card (static fallback
-    // here, since no unmetered_models is in the payload); the accounting
-    // revamp notice renders once at page level, not per account card.
-    await expect(page.getByText("Unmetered Models")).toHaveCount(2);
-    await expect(
-      page.getByText(/Solar Pro 4 · Unlimited sessions/),
-    ).toHaveCount(2);
-    await expect(
-      page.getByText(/DeepSeek V4 Flash · Unlimited sessions/),
-    ).toHaveCount(2);
+    // The accounting revamp notice renders once at page level, not per
+    // account card (the per-card unmetered models section was removed to
+    // keep cards compact — issue #332/#335 section dropped).
     await expect(
       page.getByText(/Upstream Accounting Revamp \(Freebucks\)/),
     ).toHaveCount(1);
-  });
-
-  // Issue #342: the section renders the backend modelcat derivation from
-  // the payload — not the static fallback — even when quota rows are
-  // absent (compact-poll shape), proving it never derives from quota.
-  test("quota: unmetered section renders payload rows without quota data", async ({
-    page,
-  }) => {
-    const f = loadFixtures();
-    await mockDashboard(
-      page,
-      f,
-      {
-        tokens: tokensPayload([tokenRow(0), tokenRow(1)], {
-          unmetered_models: [
-            { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-            { id: "x-ai/custom-row", name: "Custom Row" },
-          ],
-        }),
-      },
-      { loginPage: true },
-    );
-
-    await page.goto("http://127.0.0.1:4173/admin/#quota");
-    await expect(page.getByText("Unmetered Models")).toHaveCount(2);
-    await expect(page.getByText(/Custom Row · Unlimited sessions/)).toHaveCount(
-      2,
-    );
-    await expect(page.getByText("deepseek/deepseek-v4-flash")).toHaveCount(2);
-    // Fallback-only rows must not render when the payload carries the list.
-    // Assert on the model id (the banner's tier-change copy also names
-    // "Solar Pro 4", so the display name is not a stable absence signal).
-    await expect(page.getByText("upstage/solar-pro4")).toHaveCount(0);
+    await expect(page.getByText("Unmetered Models")).toHaveCount(0);
   });
 
   test("quota: streak indicator renders progress dots and perk countdown", async ({
