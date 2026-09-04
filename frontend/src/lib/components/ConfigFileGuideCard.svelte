@@ -1,5 +1,5 @@
 <script>
-  import { FileText, Copy, Terminal, ExternalLink } from "@lucide/svelte";
+  import { FileText, Terminal } from "@lucide/svelte";
   import SettingsCard from "./SettingsCard.svelte";
   import SettingsRow from "./SettingsRow.svelte";
   import CopyButton from "./CopyButton.svelte";
@@ -21,7 +21,7 @@
     <FileText size={20} />
   {/snippet}
 
-  <!-- File Location -->
+  <!-- 1. File Location -->
   <SettingsRow
     first
     label={$tr("Configuration File Location")}
@@ -29,82 +29,112 @@
       "The gateway reads environment variables from .env at process launch. In container deployments, this is mounted from the host at /app/state/.env.",
     )}
   >
-    <div class="flex items-center gap-2">
-      <code
-        class="fp-num text-xs text-[var(--fp-accent)] font-mono bg-[var(--fp-surface-2)] px-2 py-1 rounded border border-[var(--fp-border)] select-all"
+    {#snippet extra()}
+      <div
+        class="mt-2.5 p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
       >
-        /app/state/.env
-      </code>
-      <CopyButton text="/app/state/.env" label={$tr("Copy Path")} />
-    </div>
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">
+            {$tr("Container Mount Path")}:
+          </span>
+          <code
+            class="fp-num text-xs text-[var(--fp-accent)] font-mono font-semibold truncate select-all"
+          >
+            /app/state/.env
+          </code>
+        </div>
+        <CopyButton text="/app/state/.env" label={$tr("Copy Path")} />
+      </div>
+    {/snippet}
   </SettingsRow>
 
-  <!-- Precedence Order -->
+  <!-- 2. Precedence Order (Balanced 4-card grid) -->
   <SettingsRow
     label={$tr("Precedence Order")}
     description={$tr(
-      "Configuration resolves in strict order: Host Environment Variables override -config JSON, which overrides the .env file, falling back to built-in catalog defaults.",
+      "Configuration values resolve in strict order from highest to lowest precedence:",
     )}
   >
-    <div class="flex items-center gap-1.5 flex-wrap">
-      <span
-        class="text-[11px] px-2 py-0.5 rounded font-mono font-medium bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30"
+    {#snippet extra()}
+      <ol
+        class="mt-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs"
       >
-        1. Host Env
-      </span>
-      <span class="text-xs text-[var(--fp-dim)]">›</span>
-      <span
-        class="text-[11px] px-2 py-0.5 rounded font-mono font-medium bg-[var(--fp-surface-2)] text-[var(--fp-text)] border border-[var(--fp-border)]"
-      >
-        2. -config JSON
-      </span>
-      <span class="text-xs text-[var(--fp-dim)]">›</span>
-      <span
-        class="text-[11px] px-2 py-0.5 rounded font-mono font-medium bg-[var(--fp-surface-2)] text-[var(--fp-muted)] border border-[var(--fp-border)]"
-      >
-        3. .env File
-      </span>
-      <span class="text-xs text-[var(--fp-dim)]">›</span>
-      <span
-        class="text-[11px] px-2 py-0.5 rounded font-mono font-medium bg-[var(--fp-surface-2)] text-[var(--fp-dim)] border border-[var(--fp-border)]"
-      >
-        4. Defaults
-      </span>
-    </div>
+        <li
+          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/30"
+        >
+          <span class="font-mono font-bold text-[var(--fp-accent)]">1.</span>
+          <span class="font-mono font-medium text-[var(--fp-text)]"
+            >Host Env</span
+          >
+          <span
+            class="text-[10px] text-[var(--fp-accent)] ml-auto font-medium lowercase"
+            >{$tr("highest")}</span
+          >
+        </li>
+        <li
+          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+        >
+          <span class="font-mono font-bold text-[var(--fp-muted)]">2.</span>
+          <span class="font-mono text-[var(--fp-text)]">-config JSON</span>
+        </li>
+        <li
+          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+        >
+          <span class="font-mono font-bold text-[var(--fp-muted)]">3.</span>
+          <span class="font-mono text-[var(--fp-text)]">.env File</span>
+        </li>
+        <li
+          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+        >
+          <span class="font-mono font-bold text-[var(--fp-dim)]">4.</span>
+          <span class="font-mono text-[var(--fp-muted)]">{$tr("Defaults")}</span
+          >
+        </li>
+      </ol>
+    {/snippet}
   </SettingsRow>
 
-  <!-- Edit on Host -->
+  <!-- 3. Host Terminal Commands (Full-width rows, never wrapping) -->
   <SettingsRow
+    last
     label={$tr("Host Terminal Commands")}
     description={$tr(
-      "To edit variables directly via SSH or terminal without the web interface, open the environment file with a text editor and restart the container.",
+      "To edit variables directly via SSH or host terminal without the web interface:",
     )}
   >
-    <div class="flex items-center gap-2">
-      <code
-        class="fp-num text-xs text-[var(--fp-text)] font-mono bg-[var(--fp-surface-2)] px-2.5 py-1 rounded border border-[var(--fp-border)] select-all"
-      >
-        nano .env
-      </code>
-      <CopyButton text="nano .env" label={$tr("Copy Command")} />
-    </div>
-
     {#snippet extra()}
-      <div
-        class="mt-2.5 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-2"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <Terminal size={14} class="shrink-0 text-[var(--fp-muted)]" />
-          <span class="text-xs text-[var(--fp-muted)] truncate">
-            {$tr("Restart container after host file edits")}:
-          </span>
+      <div class="mt-2.5 flex flex-col gap-2">
+        <!-- Edit file command -->
+        <div
+          class="p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">
+              {$tr("Edit config file")}:
+            </span>
+            <code
+              class="fp-num text-xs text-[var(--fp-text)] font-mono font-semibold truncate select-all"
+            >
+              nano .env
+            </code>
+          </div>
+          <CopyButton text="nano .env" label={$tr("Copy Command")} />
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <code
-            class="fp-num text-xs text-[var(--fp-accent)] font-mono select-all"
-          >
-            docker compose up -d
-          </code>
+
+        <!-- Reload container command -->
+        <div
+          class="p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
+        >
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">
+              {$tr("Restart container")}:
+            </span>
+            <code
+              class="fp-num text-xs text-[var(--fp-accent)] font-mono font-semibold truncate select-all"
+            >
+              docker compose up -d
+            </code>
+          </div>
           <CopyButton text="docker compose up -d" label={$tr("Copy Command")} />
         </div>
       </div>
