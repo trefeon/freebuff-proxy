@@ -1,12 +1,9 @@
 <script>
   import { onMount, onDestroy } from "svelte";
-  import { RefreshCw, Save, X, Info } from "@lucide/svelte";
+  import { RefreshCw, Save, X } from "@lucide/svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import Button from "../components/Button.svelte";
-  import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
-  import EmptyState from "../components/EmptyState.svelte";
-  import CopyButton from "../components/CopyButton.svelte";
   import RawEditor from "./settings/RawEditor.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
@@ -446,99 +443,6 @@
 
     <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
     <ModelRoutingSettings {formValues} {rawText} onField={setField} />
-
-    <!-- 5. Container Bootstrap Notice -->
-    <Alert tone="info">
-      <div class="flex items-start gap-2">
-        <Info size={16} class="shrink-0 mt-0.5" />
-        <div class="text-xs leading-relaxed">
-          <strong class="font-semibold block mb-0.5"
-            >{$tr("Container Bootstrap Notice")}</strong
-          >
-          {$tr(
-            "Settings like LISTEN_ADDR (:3457) and SESSION_PERSIST are fixed at container boot. To change container-level bootstrap parameters, update your docker-compose.yml or container environment and restart the container.",
-          )}
-        </div>
-      </div>
-    </Alert>
-
-    <!-- Current values: read-only effective config, secrets masked -->
-    <Card
-      title={$tr("Current Values")}
-      description={$tr(
-        "Read-only view of the running configuration. Secret values are masked.",
-      )}
-      pad="none"
-    >
-      <div class="overflow-auto max-h-96 min-h-0" style="contain: paint;">
-        {#if data?.effective?.length}
-          <table class="fp-table">
-            <caption class="sr-only"
-              >{$tr("Effective configuration — key and value")}</caption
-            >
-            <thead>
-              <tr>
-                <th scope="col">{$tr("Key")}</th>
-                <th scope="col">{$tr("Value")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each data.effective as kv (kv.key)}
-                <tr>
-                  <td>
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span
-                        class="fp-num text-[11px] font-semibold text-[var(--fp-text)] truncate"
-                        >{kv.key}</span
-                      >
-                      {#if kv.secret}
-                        <span
-                          class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-error)]/40 bg-[var(--fp-error)]/15 text-[#FCA5A5] font-semibold uppercase tracking-wider shrink-0"
-                          >{$tr("secret")}</span
-                        >
-                      {/if}
-                    </div>
-                  </td>
-                  <td>
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span
-                        class="fp-num text-[11px] text-[var(--fp-muted)] truncate max-w-[180px]"
-                      >
-                        {kv.secret ? "••••••••" : kv.value || "—"}
-                      </span>
-                      {#if kv.secret}
-                        <span
-                          class="text-[10px] text-[var(--fp-dim)] uppercase tracking-wider"
-                          >{$tr("redacted")}</span
-                        >
-                      {:else if kv.value}
-                        <span class="shrink-0">
-                          <CopyButton text={kv.value} label={$tr("copy")} />
-                        </span>
-                      {/if}
-                    </div>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {:else}
-          <div class="p-5">
-            <EmptyState
-              title={$tr("No effective configuration")}
-              description={$tr("Start the proxy to populate this view.")}
-            >
-              {#snippet action()}
-                <Button variant="secondary" onclick={fetchData}>
-                  <RefreshCw size={15} />
-                  {$tr("Refresh")}
-                </Button>
-              {/snippet}
-            </EmptyState>
-          </div>
-        {/if}
-      </div>
-    </Card>
 
     <RawEditor
       {rawText}
