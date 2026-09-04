@@ -126,18 +126,19 @@ func (p *Pool) Start(ctx context.Context) {
 		p.wg.Add(1)
 		go p.maintainLoop(runCtx)
 		p.wg.Add(1)
-		go p.accountBackfillLoop(runCtx)
+		go p.backfillLoop(runCtx)
 	})
 }
 
-// accountBackfillLoop periodically fetches account info (email/id) for
-// pooled tokens that still have an empty email (issue #269). It runs as a
-// plain background job so neither pool.New nor the Snapshot read path ever
-// issues upstream traffic; the first pass fires shortly after Start, later
-// passes are throttled to one try per entry per tick via
-// asyncAccountInfoFetch's in-flight guard. The dashboard token cards get
-// their email shortly after the first poll.
-func (p *Pool) accountBackfillLoop(ctx context.Context) {
+// backfillLoop periodically fetches account info (email/id, issue #269) for
+// pooled tokens that still have an empty email, and streak position (issue
+// #336) for tokens whose streak is missing or older than an hour. It runs
+// as a plain background job so neither pool.New nor the Snapshot read path
+// ever issues upstream traffic; the first pass fires shortly after Start,
+// later passes are throttled to one try per entry per tick via the
+// in-flight guards. The dashboard token cards fill in shortly after the
+// first poll.
+func (p *Pool) backfillLoop(ctx context.Context) {
 	defer p.wg.Done()
 	first := time.NewTimer(2 * time.Second)
 	ticker := time.NewTicker(30 * time.Second)
@@ -161,6 +162,7 @@ func (p *Pool) accountBackfillLoop(ctx context.Context) {
 			if tok.email.Load() == nil {
 				p.asyncAccountInfoFetch(tok)
 			}
+			p.asyncStreakFetch(tok)
 		}
 	}
 }

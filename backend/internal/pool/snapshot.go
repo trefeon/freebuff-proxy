@@ -180,6 +180,9 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 				quarantineReason = q.reason
 			}
 		}
+		// Streak is a pure cache read here: backfills run on the maintain
+		// loop, never on the Snapshot path (which must not issue upstream
+		// traffic). Nil streak simply renders no streak card.
 		var streak int
 		var todayUsed bool
 		var lastUsage string
@@ -189,8 +192,6 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			todayUsed = st.TodayUsed
 			lastUsage = st.LastUsageDate
 			streakUpdated = st.UpdatedAt
-		} else {
-			p.asyncStreakFetch(tok)
 		}
 
 		out = append(out, TokenSnapshot{
