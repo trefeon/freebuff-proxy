@@ -69,8 +69,12 @@ func (d *Dashboard) metricsData() metricsData {
 		requests[i] = float64(s.Requests)
 		retries[i] = float64(s.Retries)
 	}
-	md.RequestsSpark = sparklineSVG(requests, "var(--fp-amber)", "requests served over time")
-	md.RetriesSpark = sparklineSVG(retries, "var(--fp-teal)", "transient retries over time")
+	// NOTE: sparklineSVG inlines color into the SVG stroke *attribute*, where
+	// CSS var() cannot resolve (and --fp-amber/--fp-teal are not even defined
+	// in app.css) — so concrete theme hexes are required or polylines render
+	// invisible. Keep in sync with frontend/src/app.css (--fp-accent/--fp-info).
+	md.RequestsSpark = sparklineSVG(requests, "#e3a857", "requests served over time")
+	md.RetriesSpark = sparklineSVG(retries, "#7dd3fc", "transient retries over time")
 
 	// Trend: compare last 10 samples vs previous 10.
 	md.RequestsTrend = computeTrend(hist, true)

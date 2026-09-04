@@ -63,7 +63,7 @@
     >
       {#if data.traces?.length}
         <div class="overflow-x-auto">
-          <table class="fp-table">
+          <table class="fp-table w-full min-w-[640px]">
             <caption class="sr-only"
               >{$tr(
                 "Chat traces — time, token, model, status, latency and phases",
@@ -101,7 +101,7 @@
                       {t.status || "ok"}
                     </span>
                   </td>
-                  <td class="num">{t.ms ? t.ms + "ms" : "—"}</td>
+                  <td class="num">{t.ms ? t.ms : "—"}</td>
                   <td>
                     {#if t.phases?.length}
                       <div class="flex flex-wrap gap-1">

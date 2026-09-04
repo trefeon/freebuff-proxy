@@ -157,7 +157,7 @@
                   {$tr("Session quota by model")}
                 </h3>
                 {#if token.quota?.length}
-                  <div class="hidden md:block overflow-x-auto">
+                  <div class="hidden xl:block overflow-x-auto">
                     <table class="fp-table">
                       <caption class="sr-only"
                         >{$tr("Session quota by model for account {index}", {
@@ -245,9 +245,9 @@
                       </tbody>
                     </table>
                   </div>
-                  <!-- Mobile: stacked per-model entries (< md) — no horizontal scrolling -->
+                  <!-- Narrow cards (< xl, incl. the lg 2-col grid): stacked per-model entries, no horizontal scrolling -->
                   <ul
-                    class="md:hidden flex flex-col gap-2.5"
+                    class="xl:hidden flex flex-col gap-2.5"
                     aria-label={$tr(
                       "Session quota by model for account {index}",
                       {
