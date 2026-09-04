@@ -804,4 +804,29 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     expect(body).toContain("SAFE_MODE=true");
     await expect(page.getByText("Config saved")).toBeVisible();
   });
+
+  // ---------------------------------------------------------------------------
+  // 12. Settings: Command Center displays restart and update controls
+  // ---------------------------------------------------------------------------
+  test("settings: command center renders restart and update check controls", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+
+    await page.goto("http://127.0.0.1:4173/admin/#settings");
+    await expect(
+      page.getByRole("heading", { name: "Command Center" }),
+    ).toBeVisible();
+
+    await expect(page.getByText("Gateway Process")).toBeVisible();
+    const restartBtn = page.getByRole("button", { name: "Restart Gateway" });
+    await expect(restartBtn).toBeVisible();
+
+    await expect(page.getByText("Software Updates")).toBeVisible();
+    const checkBtn = page.getByRole("button", { name: "Check for Updates" });
+    await expect(checkBtn).toBeVisible();
+
+    await expect(page.getByText("Version Rollback")).toBeVisible();
+  });
 });

@@ -126,9 +126,14 @@ func (d *Dashboard) APIVersion(w http.ResponseWriter, r *http.Request) {
 		"update_url":      releaseURL,
 	}
 	if d.version != "" && d.updates != nil && r.Context() != nil {
-		if latest, err := d.updates.Latest(r.Context()); err == nil && latest != "" && updatecheck.UpdateAvailable(d.version, latest) {
-			resp["has_update"] = true
+		if r.URL != nil && r.URL.Query().Get("force") == "true" {
+			d.updates.Invalidate()
+		}
+		if latest, err := d.updates.Latest(r.Context()); err == nil && latest != "" {
 			resp["latest_version"] = latest
+			if updatecheck.UpdateAvailable(d.version, latest) {
+				resp["has_update"] = true
+			}
 		}
 	}
 	_ = json.NewEncoder(w).Encode(resp)

@@ -6,6 +6,7 @@
   import Alert from "../components/Alert.svelte";
   import RawEditor from "./settings/RawEditor.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
+  import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
   import { fetchAPI, postForm } from "../api/client.js";
@@ -440,6 +441,8 @@
     <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
     <TrafficSettings {formValues} {rawText} onField={setField} />
 
+    <!-- 4. Command Center (Lifecycle, updates & rollback) -->
+    <CommandCenterCard />
     <RawEditor
       {rawText}
       {onRawInput}
