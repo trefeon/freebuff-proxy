@@ -286,9 +286,9 @@ test.describe("dashboard hermetic mocks", () => {
     const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
     await expect(safeMode).toBeVisible();
     await expect(safeMode).toHaveAttribute("aria-checked", "true");
-    // The restart-only HTTP read timeout renders as a duration textbox
+    // The restart-only HTTP read timeout renders as a select dropdown
     // with the compiled-in default and a restart badge.
-    const httpTimeout = page.getByRole("textbox", {
+    const httpTimeout = page.getByRole("combobox", {
       name: "HTTP_READ_TIMEOUT",
     });
     await expect(httpTimeout).toBeVisible();
