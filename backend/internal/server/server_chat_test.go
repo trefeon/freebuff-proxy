@@ -714,3 +714,38 @@ func TestChatRunFanoutSurfaced429(t *testing.T) {
 		t.Errorf("upstream chat calls = %d, want 1 (never re-POST into a fanout refusal)", got)
 	}
 }
+
+// turn_spend_limit kills a runaway turn (per-turn spend ceiling, usually a
+// stuck agent loop): it must surface as 429 turn_spend_limited with the
+// upstream message intact and WITHOUT the daily-quota advisory, plus a
+// bounded Retry-After. Never re-POST into it (same anti-sweep discipline
+// as fanout refusals).
+func TestChatTurnSpendLimitedSurfaced429(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var chatCalls atomic.Int32
+	mock.ChatHandler = func(w http.ResponseWriter, r *http.Request) {
+		chatCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":"turn_spend_limit","message":"Something went wrong with this turn.","retryAfterMs":60000}`)
+	}
+	ts, _ := newTestServerCfg(t, nil, nil, mock)
+
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", chatBody(modelA), nil)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429: %s", resp.StatusCode, data)
+	}
+	if ra := resp.Header.Get("Retry-After"); ra != "60" {
+		t.Errorf("Retry-After = %q, want 60", ra)
+	}
+	if !strings.Contains(string(data), `"code":"turn_spend_limited"`) {
+		t.Errorf("body missing turn_spend_limited code: %s", data)
+	}
+	if strings.Contains(string(data), "Daily session quota") {
+		t.Errorf("body wrongly carries the daily-quota advisory: %s", data)
+	}
+	if got := chatCalls.Load(); got != 1 {
+		t.Errorf("upstream chat calls = %d, want 1 (never re-POST into a turn-spend refusal)", got)
+	}
+}

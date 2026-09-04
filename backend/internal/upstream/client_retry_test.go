@@ -1512,6 +1512,27 @@ func TestClassifyMonthlyCapQuotaShaped(t *testing.T) {
 	}
 }
 
+// TestClassifyTurnSpendLimited pins the per-turn spend ceiling: a
+// turn_spend_limit refusal is loop protection, not quota exhaustion —
+// distinct status, bounded 60s backoff from retryAfterMs, never the
+// Pacific-midnight lock.
+func TestClassifyTurnSpendLimited(t *testing.T) {
+	errSpend := classifyError(http.StatusTooManyRequests, `{"error":"turn_spend_limit","message":"Something went wrong with this turn.","retryAfterMs":60000}`, http.Header{})
+	var rleSpend *RateLimitError
+	if !errors.As(errSpend, &rleSpend) {
+		t.Fatalf("turn-spend 429 = %T %v, want *RateLimitError", errSpend, errSpend)
+	}
+	if rleSpend.Status != "turn_spend_limited" {
+		t.Errorf("Status = %q, want turn_spend_limited", rleSpend.Status)
+	}
+	if rleSpend.RetryAfter != time.Minute {
+		t.Errorf("RetryAfter = %v, want 1m", rleSpend.RetryAfter)
+	}
+	if IsDailyCapReset(rleSpend) {
+		t.Error("IsDailyCapReset(turn_spend) = true, want false (not a quota window)")
+	}
+}
+
 // TestClassifyOpaqueRateLimitedBoundedBackoff pins #140: a fully opaque
 // rate_limited 429 body with empty headers (no timestamp, no period, no
 // Retry-After) must yield a bounded RetryAfter — a minutes-scale transient

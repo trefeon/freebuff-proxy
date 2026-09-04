@@ -248,6 +248,11 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 			// distinct code so operators can spot it in logs, and the pool's
 			// escalation guard alerts at 3 hits/60s.
 			code = "free_mode_invalid_agent_model"
+		case "turn_spend_limited":
+			// Upstream killed a runaway turn (per-turn spend ceiling,
+			// usually a stuck agent loop) — not session-quota exhaustion,
+			// so the daily-quota advisory below must not fire.
+			code = "turn_spend_limited"
 		}
 		message, retryAfter = rle.Error(), rle.RetryAfter
 		resetAt, window = rle.ResetAt, rle.Window

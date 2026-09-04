@@ -420,6 +420,14 @@ func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 		if st, ok := target["status"].(string); ok {
 			rle.Status = st
 		}
+		// Per-turn spend ceiling (wire drift note 2026-09-04): upstream
+		// kills runaway turns with {"error":"turn_spend_limit",...} — a
+		// loop-protection refusal, NOT session-quota exhaustion. Distinct
+		// status so the pool backs off without burning quota-fallback
+		// budget and the server skips the daily-quota advisory.
+		if es, ok := raw["error"].(string); ok && es == "turn_spend_limit" {
+			rle.Status = "turn_spend_limited"
+		}
 		if period, ok := target["period"].(string); ok {
 			rle.Period = period
 		}
