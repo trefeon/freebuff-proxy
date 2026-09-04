@@ -106,11 +106,15 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 }
 
 // quietAccessPath reports whether path is a poll/fire-and-forget endpoint
-// whose access lines are rate-limited (T17): /healthz, /metrics, and CORS
-// OPTIONS preflights. Unknown paths (which 404) are gated the same way by
+// whose access lines are rate-limited (T17): /healthz, /metrics, CORS
+// OPTIONS preflights, and the dashboard Logs page's own 1s poll
+// (GET /admin/api/logs — the poll observes the same 200-entry ring it would
+// otherwise fill with one line per second, evicting idle inference history
+// in ~3 minutes). Unknown paths (which 404) are gated the same way by
 // the access wrapper — an arbitrary-path client must not flood the log.
 func quietAccessPath(method, path string) bool {
-	return path == "/healthz" || path == "/metrics" || method == http.MethodOptions
+	return path == "/healthz" || path == "/metrics" || method == http.MethodOptions ||
+		(method == http.MethodGet && path == "/admin/api/logs")
 }
 
 // accessGates are the per-Server access-log and rate-limit dedupe gates

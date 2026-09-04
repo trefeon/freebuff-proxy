@@ -196,7 +196,7 @@ func (s *Server) chatCore(w http.ResponseWriter, r *http.Request, model string, 
 	if !bridge {
 		if until, lie := s.pool.ModelUnfit(model); !until.IsZero() && time.Now().Before(until) {
 			phases.Since(phasetiming.TotalMS, start)
-			s.logger.Info(kind+" request refused", "model", model, "reason", "model_limited_on_egress", "until", until.Format(time.RFC3339))
+			s.logger.Info(kind+" request refused", "req_id", reqID, "model", model, "reason", "model_limited_on_egress", "until", until.Format(time.RFC3339))
 			// Never mutate the registry's stored error (SEC-1): concurrent
 			// refusals would race on RetryAfter. Surface a per-request
 			// shallow copy carrying the computed window.

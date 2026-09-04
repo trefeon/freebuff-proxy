@@ -20,7 +20,7 @@
   import { adminApi, adminRoot } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
   import { formatTime, parseLogFields } from "../utils/format.js";
-  import { SvelteSet } from "svelte/reactivity";
+  import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import { copyToClipboard } from "../utils/clipboard.js";
   import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
@@ -49,43 +49,272 @@
   }
 
   // Console is the specialized inference-traffic view: ONLY /v1 lines.
-  // Access entries carry fields.path, so /v1 access lines self-identify;
-  // sibling pipeline lines (routing/done/failed) join via req_id against
-  // the /v1 access entries seen in the same batch. Pathless lines without
-  // a req_id keep legacy behavior (rare pipeline logs with no routing
-  // context). Admin (/admin/*) lines never enter the console — use Table.
-  let requestLogs = $derived.by(() => {
+  // Console request groups: one card per /v1 request (keyed by req_id),
+  // merging the backend's per-request cluster (request → routing → access →
+  // trace → done, or request failed / refused / throttled). The old flat
+  // line list rendered up to THREE near-identical REQ rows per request and a
+  // context-free DONE row, and TTFT never appeared (only "chat trace"
+  // carries upstream_ttfb_ms). Only access lines carry path, so pipeline
+  // messages match exactly and count as inherently /v1 — the access line is
+  // written AFTER the handler returns, so mid-stream an anchor lookup would
+  // hide live lines. Playground traffic (req_id of an admin access in the
+  // same batch) stays hidden: console is /v1 only.
+  const CONSOLE_REQ = new Set([
+    "chat request",
+    "messages request",
+    "responses request",
+    "chat routing",
+    "messages routing",
+    "responses routing",
+    "chat request refused",
+    "messages request refused",
+    "responses request refused",
+  ]);
+  const CONSOLE_DONE = new Set([
+    "chat done",
+    "messages done",
+    "responses done",
+    "chat trace",
+  ]);
+  const endpointOfKind = (msg) =>
+    msg.startsWith("messages")
+      ? "messages"
+      : msg.startsWith("responses")
+        ? "responses"
+        : "chat";
+  const endpointOfPath = (path) => {
+    if (path.includes("/messages/count_tokens")) return "count_tokens";
+    const seg = String(path).split("/")[2] || "";
+    if (seg === "messages") return "messages";
+    if (seg === "responses") return "responses";
+    if (seg === "chat") return "chat";
+    return seg || "unknown";
+  };
+  const parseStream = (v) =>
+    v === "true" || v === "1" || v === true
+      ? true
+      : v === "false" || v === "0" || v === false
+        ? false
+        : null;
+  let requestGroups = $derived.by(() => {
     const raw = data?.entries || [];
-    const chrono = [...raw].reverse();
-    // Pass 1: req_ids that belong to /v1 access entries.
-    const v1ReqIds = new SvelteSet();
-    for (let i = 0; i < chrono.length; i++) {
-      const e = chrono[i];
+    // req_ids minted for admin-path accesses (playground, login, …) in this
+    // batch — pipeline lines carrying one are admin traffic, not /v1.
+    const adminReqIds = new SvelteSet();
+    for (let i = 0; i < raw.length; i++) {
+      const e = raw[i];
       if ((e.message || "") !== "access") continue;
       const parsed = parseLogFields(e.fields);
       let path = "";
       let reqId = "";
       for (let j = 0; j < parsed.length; j++) {
         if (parsed[j].key === "path") path = String(parsed[j].value || "");
-        if (parsed[j].key === "req_id" || parsed[j].key === "client_request_id")
-          reqId = parsed[j].value;
+        if (parsed[j].key === "req_id") reqId = parsed[j].value;
       }
-      if (path.includes("/v1/") && reqId) v1ReqIds.add(reqId);
+      if (path.includes(adminRoot) && reqId) adminReqIds.add(reqId);
     }
-    const isV1Line = (msg, path, reqId) => {
-      if (path && !path.includes("/v1/")) return false;
-      if (path.includes("/v1/")) return true;
-      if (reqId) return v1ReqIds.has(reqId);
-      return true;
+    const chrono = [...raw].reverse();
+    const byKey = new SvelteMap();
+    const order = [];
+    const get = (key, timeStr, eTime, circleKey) => {
+      let g = byKey.get(key);
+      if (!g) {
+        g = {
+          key,
+          time: timeStr,
+          eTime,
+          circle: circleFor(circleKey),
+          endpoint: "unknown",
+          model: "",
+          agent: "",
+          servedModel: "",
+          fallback: "",
+          stream: null,
+          msgs: 0,
+          tools: 0,
+          effort: "",
+          token: "",
+          instanceId: "",
+          refused: false,
+          reason: "",
+          until: "",
+          failed: false,
+          status: "",
+          code: "",
+          errText: "",
+          retryAfter: "",
+          throttled: false,
+          done: false,
+          ms: "",
+          bytes: "",
+          chunks: "",
+          traceStatus: "",
+          ttft: "",
+          attempts: 0,
+          retried: false,
+          statusesSeen: "",
+          accessStatus: "",
+          accessMs: "",
+        };
+        byKey.set(key, g);
+        order.push(g);
+      }
+      return g;
     };
-    const lines = [];
-    // Live entries share second-precision timestamps, so several lines for
-    // one request (chat request + routing + access + trace + done) can
-    // produce identical semantic ids — Svelte {#each} throws
-    // each_key_duplicate and the console breaks. Suffix collisions.
+    for (let i = 0; i < chrono.length; i++) {
+      const e = chrono[i];
+      const entryTime = new Date(e.time).getTime();
+      if (clearedBefore && entryTime <= clearedBefore) continue;
+      const timeStr = formatTime(e.time);
+      const fields = {};
+      const parsed = parseLogFields(e.fields);
+      for (let j = 0; j < parsed.length; j++) {
+        fields[parsed[j].key] = parsed[j].value;
+      }
+      const reqId = fields.req_id || "";
+      const pathStr = String(fields.path || "");
+      const msg = e.message || "";
+      // Playground/admin pipeline traffic stays out of the /v1 console.
+      if (reqId && adminReqIds.has(reqId)) continue;
+      // Stable group key without tracking the window index (an index-based
+      // key reshuffles every poll as the ring slides).
+      const gkey = reqId
+        ? "id-" + reqId
+        : "solo-" + (fields.model || msg) + "-" + (e.time || i);
+      if (CONSOLE_REQ.has(msg)) {
+        const g = get(
+          gkey,
+          timeStr,
+          e.time,
+          reqId || fields.token || fields.model,
+        );
+        if (g.endpoint === "unknown") g.endpoint = endpointOfKind(msg);
+        if (!g.model && fields.model) g.model = fields.model;
+        if (!g.agent && fields.agent) g.agent = fields.agent;
+        if (!g.servedModel && fields.served_model)
+          g.servedModel = fields.served_model;
+        if (!g.fallback && fields.fallback) g.fallback = fields.fallback;
+        if (g.stream === null) g.stream = parseStream(fields.stream);
+        if (!g.msgs && Number(fields.msgs)) g.msgs = Number(fields.msgs);
+        if (!g.tools && Number(fields.tools)) g.tools = Number(fields.tools);
+        if (!g.effort && fields.reasoning_effort)
+          g.effort = fields.reasoning_effort;
+        if (!g.token && fields.token) g.token = fields.token;
+        if (!g.instanceId && fields.instance_id)
+          g.instanceId = fields.instance_id;
+        if (msg.endsWith("request refused")) {
+          g.refused = true;
+          g.reason = fields.reason || "refused";
+          g.until = fields.until || "";
+        }
+      } else if (msg === "access" && pathStr.includes("/v1/")) {
+        const status = Number(fields.status) || 0;
+        if (fields.method === "POST" || status >= 400) {
+          const g = get(
+            gkey,
+            timeStr,
+            e.time,
+            reqId || fields.token || fields.model,
+          );
+          if (g.endpoint === "unknown") g.endpoint = endpointOfPath(pathStr);
+          if (!g.accessStatus && status) {
+            g.accessStatus = String(status);
+            g.accessMs = fields.ms || "";
+          }
+        }
+      } else if (CONSOLE_DONE.has(msg)) {
+        const g = get(
+          gkey,
+          timeStr,
+          e.time,
+          reqId || fields.token || fields.model,
+        );
+        if (g.endpoint === "unknown" && msg !== "chat trace")
+          g.endpoint = endpointOfKind(msg);
+        if (!g.model && fields.model) g.model = fields.model;
+        if (!g.agent && fields.agent) g.agent = fields.agent;
+        if (!g.token && fields.token) g.token = fields.token;
+        if (msg === "chat trace") {
+          g.traceStatus = fields.status || g.traceStatus;
+          if (!g.ttft && fields.upstream_ttfb_ms)
+            g.ttft = fields.upstream_ttfb_ms;
+          if (!g.attempts && Number(fields.attempts))
+            g.attempts = Number(fields.attempts);
+          if (fields.retried === "true" || fields.retried === "1")
+            g.retried = true;
+          if (!g.statusesSeen && fields.statuses_seen)
+            g.statusesSeen = fields.statuses_seen;
+          if (!g.ms && (fields.total_ms || fields.ms))
+            g.ms = fields.total_ms || fields.ms;
+          if (g.traceStatus === "error" && !g.errText && fields.error)
+            g.errText = fields.error;
+        } else {
+          g.done = true;
+          if (!g.ms && fields.ms) g.ms = fields.ms;
+          if (!g.bytes && fields.bytes) g.bytes = fields.bytes;
+          if (!g.chunks && fields.chunks) g.chunks = fields.chunks;
+          if (g.stream === null) g.stream = parseStream(fields.stream);
+          if (!g.effort && fields.reasoning_effort)
+            g.effort = fields.reasoning_effort;
+        }
+      } else if (msg === "request failed") {
+        const g = get(
+          gkey,
+          timeStr,
+          e.time,
+          reqId || fields.token || fields.model,
+        );
+        g.failed = true;
+        if (!g.status && fields.status) g.status = String(fields.status);
+        if (!g.code && fields.code) g.code = fields.code;
+        if (!g.errText)
+          g.errText =
+            fields.err ||
+            fields.reason ||
+            fields.error ||
+            fields.message ||
+            (fields.code ? `[${fields.code}]` : "") ||
+            "request failed";
+        if (!g.retryAfter && fields.retry_after)
+          g.retryAfter = String(fields.retry_after);
+        if (!g.model && fields.model) g.model = fields.model;
+        if (!g.token && fields.token) g.token = fields.token;
+      } else if (msg === "rate limit exceeded") {
+        const g = get(
+          gkey,
+          timeStr,
+          e.time,
+          reqId || fields.token || fields.model,
+        );
+        // Per-IP throttle: rejected before access, so no access line exists.
+        g.throttled = true;
+        if (!g.status) g.status = "429";
+        if (!g.retryAfter && fields.retry_after_sec)
+          g.retryAfter = String(fields.retry_after_sec);
+        if (!g.errText) g.errText = "client rate limit exceeded";
+      }
+    }
+    // Finalize: outcome, stable id, copy text, chips.
     const usedIds = new SvelteSet();
-    const uid = (kind, reqId, time, i) => {
-      const base = kind + "-" + (reqId || i) + "-" + time;
+    for (const g of order) {
+      const accessFail = g.accessStatus && Number(g.accessStatus) >= 400;
+      const traceFail = g.traceStatus === "error";
+      g.outcome =
+        g.failed || accessFail || traceFail
+          ? "error"
+          : g.refused
+            ? "refused"
+            : g.throttled
+              ? "throttled"
+              : g.done || g.traceStatus === "ok" || g.accessStatus
+                ? "ok"
+                : "live";
+      if (!g.ms) g.ms = g.accessMs || "";
+      if (!g.status)
+        g.status = g.accessStatus || (g.outcome === "ok" ? "200" : "");
+      const base =
+        "g-" +
+        (g.key.startsWith("id-") ? g.key.slice(3) : g.model + "-" + g.eTime);
       let id = base;
       let n = 1;
       while (usedIds.has(id)) {
@@ -93,160 +322,64 @@
         id = base + "~" + n;
       }
       usedIds.add(id);
-      return id;
-    };
-
-    for (let i = 0; i < chrono.length; i++) {
-      const e = chrono[i];
-      const entryTime = new Date(e.time).getTime();
-      if (clearedBefore && entryTime <= clearedBefore) continue;
-
-      const timeStr = formatTime(e.time);
-      const fields = {};
-      const parsed = parseLogFields(e.fields);
-      for (let j = 0; j < parsed.length; j++) {
-        fields[parsed[j].key] = parsed[j].value;
-      }
-
-      const reqId = fields.req_id || fields.client_request_id || "";
-      const pathStr = String(fields.path || "");
-      const circle = circleFor(reqId || fields.token || fields.model);
-      const msg = e.message || "";
-
-      if (
-        (msg.includes("request") ||
-          msg.includes("routing") ||
-          (msg === "access" &&
-            fields.method === "POST" &&
-            pathStr.includes("/v1/"))) &&
-        isV1Line(msg, pathStr, reqId)
-      ) {
-        const model = fields.model || "chat";
-        const agent = fields.served_model
-          ? `→ ${fields.served_model}`
-          : fields.agent
-            ? `→ ${fields.agent}`
-            : "";
-        const pathStr = String(fields.path || "");
-        const fmt = pathStr.includes("/messages")
-          ? "anthropic→openai"
-          : "openai→openai";
-        const stream =
-          fields.stream === "true" || fields.stream === "1" ? "STREAM" : "SYNC";
-        const msgCount = Number(fields.msgs) || 0;
-        const toolCount = Number(fields.tools) || 0;
-        const counts =
-          (msgCount > 0 ? ` · ${msgCount} MSG` : "") +
-          (toolCount > 0 ? ` · ${toolCount} TOOL` : "");
-        const effort = fields.reasoning_effort
-          ? ` · THINK:${fields.reasoning_effort}`
-          : "";
-        const acc = fields.token ? ` · ACC:${fields.token}` : "";
-        const lineText =
-          `[${timeStr}] ${circle} ▶ POST ${model} ${agent} · FMT: ${fmt} · ${stream}${counts}${effort}${acc}`.replace(
-            /\s+/g,
-            " ",
-          );
-        const chips = [
-          `FMT ${fmt}`,
-          stream,
-          ...(msgCount > 0 ? [`${msgCount} MSG`] : []),
-          ...(toolCount > 0 ? [`${toolCount} TOOL`] : []),
-          ...(fields.reasoning_effort
-            ? [`THINK ${fields.reasoning_effort}`]
+      g.id = id;
+      const who = g.servedModel || g.agent;
+      const head =
+        g.outcome === "ok"
+          ? `POST ${g.model || "chat"}${who ? ` → ${who}` : ""} · ${g.status} · ${g.ms}ms`
+          : g.outcome === "live"
+            ? `POST ${g.model || "chat"}${who ? ` → ${who}` : ""} · LIVE`
+            : g.outcome === "refused"
+              ? `REFUSED ${g.model || ""} · ${g.reason}`.trim()
+              : g.outcome === "throttled"
+                ? `THROTTLED · ${g.errText}${g.retryAfter ? ` · RETRY ${g.retryAfter}s` : ""}`
+                : `ERROR ${g.status}${g.code ? ` ${g.code}` : ""} · ${g.errText}${g.retryAfter ? ` · RETRY ${g.retryAfter}s` : ""}`;
+      g.text = `[${g.time}] ${head}`;
+      g.chips = [
+        ...(g.endpoint && g.endpoint !== "unknown" ? [g.endpoint] : []),
+        ...(g.stream === true
+          ? ["STREAM"]
+          : g.stream === false
+            ? ["SYNC"]
             : []),
-          ...(fields.token ? [`ACC ${fields.token}`] : []),
-        ];
-        lines.push({
-          id: uid("req", reqId, e.time, i),
-          text: lineText,
-          type: "req",
-          time: timeStr,
-          circle,
-          model,
-          agent: agent.replace(/^→\s*/, ""),
-          chips,
-        });
-      } else if (
-        (msg.includes("done") || msg === "chat trace") &&
-        isV1Line(msg, pathStr, reqId)
-      ) {
-        const ms = fields.ms || fields.total_ms || "0";
-        const ttft = fields.upstream_ttfb_ms || fields.ttft_ms || "";
-        const ttftPart = ttft ? ` · TTFT ${ttft}ms` : "";
-        const inTok =
-          fields.prompt_tokens ||
-          fields.input_tokens ||
-          fields.tokens ||
-          fields.usage ||
-          "";
-        const inPart = inTok ? ` · IN ${inTok}` : "";
-        const cacheTok = fields.cache_read_tokens || "";
-        const cachePart = cacheTok ? ` (CACHE ↻${cacheTok})` : "";
-        const outTok =
-          fields.completion_tokens ||
-          fields.output_tokens ||
-          fields.chunks ||
-          "";
-        const outPart = outTok ? ` · OUT ${outTok}` : "";
-        const doneChips = [
-          ...(ttft ? [`TTFT ${ttft}ms`] : []),
-          ...(inTok ? [`IN ${inTok}`] : []),
-          ...(cacheTok ? [`CACHE ↻${cacheTok}`] : []),
-          ...(outTok ? [`OUT ${outTok}`] : []),
-        ];
-        lines.push({
-          id: uid("done", reqId, e.time, i),
-          text: `[${timeStr}] ${circle} 📊 DONE ${ms}ms${ttftPart}${inPart}${cachePart}${outPart}`,
-          type: "done",
-          time: timeStr,
-          circle,
-          ms: String(ms),
-          chips: doneChips,
-        });
-      } else if (
-        (msg.includes("failed") ||
-          (msg === "access" && Number(fields.status) >= 400)) &&
-        isV1Line(msg, pathStr, reqId)
-      ) {
-        const status = fields.status || "";
-        const err =
-          fields.err ||
-          fields.reason ||
-          fields.error ||
-          fields.message ||
-          (fields.code ? `[${fields.code}]` : "") ||
-          (msg === "access" ? `HTTP ${status}` : "request failed");
-        const ms = fields.ms ? ` · ${fields.ms}ms` : "";
-        const retry = fields.retry_after
-          ? ` · RETRY ${fields.retry_after}s`
-          : "";
-        const model = fields.model ? ` [${fields.model}]` : "";
-        lines.push({
-          id: uid("err", reqId, e.time, i),
-          text: `[${timeStr}] ${circle} ✗ ERROR ${status}${model} · ${err}${retry}${ms}`,
-          type: "err",
-          time: timeStr,
-          circle,
-          status: String(status || ""),
-          model: String(fields.model || ""),
-          errMsg: String(err),
-          retry: String(fields.retry_after || ""),
-          ms: String(fields.ms || ""),
-        });
-      }
+        ...(g.msgs > 0 ? [`${g.msgs} MSG`] : []),
+        ...(g.tools > 0 ? [`${g.tools} TOOL`] : []),
+        ...(g.effort ? [`THINK ${g.effort}`] : []),
+        ...(g.token ? [`ACC ${g.token}`] : []),
+        ...(g.fallback ? [`FALLBACK ${g.fallback}`] : []),
+        ...(g.ttft ? [`TTFT ${g.ttft}ms`] : []),
+        ...(g.bytes ? [`${g.bytes}B`] : []),
+        ...(g.chunks ? [`${g.chunks} CHUNKS`] : []),
+        ...(g.attempts > 1 ? [`×${g.attempts}`] : []),
+        ...(g.retried ? ["RETRIED"] : []),
+      ];
     }
-    return lines;
+    return order;
   });
 
+  // Stick to the tail only while new lines arrive AND the user was already
+  // near the bottom — otherwise every 1s poll yanked the scroll away from
+  // the history being read (felt like the console "updated itself").
+  let prevConsoleCount = $state(0);
   $effect(() => {
-    if (consoleEl && requestLogs.length > 0) {
-      consoleEl.scrollTop = consoleEl.scrollHeight;
+    const n = requestGroups.length;
+    if (consoleEl && n > prevConsoleCount) {
+      const el = consoleEl;
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (gap < 120) el.scrollTop = el.scrollHeight;
     }
+    prevConsoleCount = n;
   });
-
+  function groupChipClass(chip) {
+    if (chip === "STREAM")
+      return "border-green-500/40 bg-green-500/10 text-green-300";
+    if (chip === "SYNC") return "border-zinc-600 bg-zinc-800/80 text-zinc-300";
+    if (chip === "RETRIED" || chip.startsWith("×") || chip.startsWith("TTFT"))
+      return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+    return "border-zinc-700/80 bg-zinc-900 text-zinc-300";
+  }
   async function copyConsoleLogs() {
-    const text = requestLogs.map((l) => l.text).join("\n");
+    const text = requestGroups.map((g) => g.text).join("\n");
     if (!text) return;
     const ok = await copyToClipboard(text);
     if (ok) {
@@ -268,11 +401,35 @@
     const start = page * pageSize;
     return filteredEntries.slice(start, start + pageSize);
   });
+  // Content-stable row keys: index keys made every 1s poll swap row contents
+  // in place (the table looked like it "updated itself"); identical rows in
+  // one page get a collision suffix, same as the console uid scheme.
+  let keyedPagedEntries = $derived.by(() => {
+    const seen = new SvelteSet();
+    return pagedEntries.map((e) => {
+      const base =
+        (e.time || "") +
+        "|" +
+        (e.level || "") +
+        "|" +
+        (e.message || "") +
+        "|" +
+        (e.fields || "");
+      let k = base;
+      let n = 1;
+      while (seen.has(k)) {
+        n += 1;
+        k = base + "~" + n;
+      }
+      seen.add(k);
+      return { k, e };
+    });
+  });
   let totalPages = $derived.by(() =>
     Math.max(1, Math.ceil(filteredEntries.length / pageSize)),
   );
   let hasActiveFilter = $derived.by(
-    () => filterLevel !== "info" || filterMsg.trim() !== "" || !hideAdmin,
+    () => filterLevel !== "" || filterMsg.trim() !== "" || !hideAdmin,
   );
   let rangeStart = $derived.by(() =>
     filteredEntries.length === 0 ? 0 : page * pageSize + 1,
@@ -287,13 +444,18 @@
     try {
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local query builder, not reactive state
       const query = new URLSearchParams();
-      if (filterLevel) query.set("level", filterLevel);
-      if (filterMsg.trim()) query.set("msg", filterMsg.trim());
+      // Table-only filters: the console is an unfiltered /v1 view — sending
+      // stale table filters while it is visible emptied it with no visible
+      // cause ("no request log" although traffic existed).
+      if (viewMode === "table") {
+        if (filterLevel) query.set("level", filterLevel);
+        if (filterMsg.trim()) query.set("msg", filterMsg.trim());
+      }
       const res = await fetchAPI(`${adminApi.logs}?${query.toString()}`);
       data = res;
       error = "";
-      const tp = Math.ceil((res?.entries?.length || 0) / pageSize);
-      if (page > tp - 1) page = 0;
+      // No page reset here: the clamp effect above keeps the pager in range
+      // without yanking the table back to page 0 on every 1s poll.
     } catch (e) {
       error = e.message
         ? $tr("Could not load log entries: {reason}", { reason: e.message })
@@ -315,7 +477,7 @@
   }
 
   function clearFilters() {
-    filterLevel = "info";
+    filterLevel = "";
     filterMsg = "";
     hideAdmin = true;
     handleFilterChange();
@@ -357,7 +519,10 @@
           'console'
             ? 'bg-[var(--fp-surface)] text-[var(--fp-accent)] font-semibold shadow-sm'
             : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => (viewMode = "console")}
+          onclick={() => {
+            viewMode = "console";
+            fetchLogs();
+          }}
         >
           {$tr("Console")}
         </button>
@@ -367,7 +532,10 @@
           'table'
             ? 'bg-[var(--fp-surface)] text-[var(--fp-accent)] font-semibold shadow-sm'
             : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => (viewMode = "table")}
+          onclick={() => {
+            viewMode = "table";
+            fetchLogs();
+          }}
         >
           {$tr("Table")}
         </button>
@@ -421,12 +589,13 @@
         >
           <div class="flex items-center gap-2 min-w-0">
             <span
-              class="led {requestLogs.length > 0
+              class="led {requestGroups.length > 0
                 ? 'led-good'
                 : 'led-idle'} shrink-0"
             ></span>
             <span class="font-mono text-xs text-[var(--fp-muted)] truncate"
-              >{requestLogs.length} {$tr("request events")} · /v1 only</span
+              >{requestGroups.length}
+              {requestGroups.length === 1 ? "request" : "requests"} · /v1 only</span
             >
           </div>
           <div
@@ -499,7 +668,7 @@
           bind:this={consoleEl}
           class="bg-black rounded-b-lg p-2 sm:p-4 font-mono text-[11px] sm:text-xs h-[60vh] min-h-[320px] sm:h-[calc(100vh-280px)] sm:min-h-[420px] overflow-x-hidden overflow-y-auto space-y-1.5 select-text border-t border-[var(--fp-border)] max-w-full"
         >
-          {#if requestLogs.length === 0}
+          {#if requestGroups.length === 0}
             <div
               class="h-full flex flex-col items-center justify-center text-zinc-500 italic py-16 px-4 text-center"
             >
@@ -511,64 +680,68 @@
               </p>
             </div>
           {:else}
-            {#each requestLogs as line (line.id)}
+            {#each requestGroups as g (g.id)}
               <div
                 class="hover:bg-zinc-900/70 px-1.5 py-1 rounded transition-colors leading-relaxed min-w-0 overflow-hidden"
               >
-                {#if line.type === "req"}
-                  <div class="break-words">
-                    <span class="text-zinc-500">[{line.time}]</span>
-                    <span class="text-zinc-300">{line.circle} ▶ </span><span
-                      class="text-green-400 font-medium">POST {line.model}</span
+                <div class="break-words">
+                  <span class="text-zinc-500">[{g.time}]</span>
+                  <span class="text-zinc-300">{g.circle} </span>
+                  {#if g.outcome === "ok"}
+                    <span class="text-green-400 font-medium"
+                      >POST {g.model || g.endpoint}</span
                     >
-                    {#if line.agent}<span class="text-zinc-400">
-                        → {line.agent}</span
+                    {#if g.servedModel || g.agent}<span class="text-zinc-400">
+                        → {g.servedModel || g.agent}</span
+                      >{/if}
+                    <span class="text-zinc-400">
+                      · {g.status}{#if g.ms}
+                        · {g.ms}ms{/if}</span
+                    >
+                  {:else if g.outcome === "live"}
+                    <span class="text-sky-300 font-medium animate-pulse"
+                      >POST {g.model || g.endpoint} · LIVE</span
+                    >
+                    {#if g.servedModel || g.agent}<span class="text-zinc-400">
+                        → {g.servedModel || g.agent}</span
+                      >{/if}
+                  {:else if g.outcome === "refused"}
+                    <span class="text-amber-300 font-medium"
+                      >REFUSED {g.model}</span
+                    >
+                    <span class="text-amber-200/80"> · {g.reason}</span>
+                  {:else if g.outcome === "throttled"}
+                    <span class="text-red-400 font-medium">THROTTLED</span>
+                    <span class="text-red-300/90">
+                      · {g.errText}{#if g.retryAfter}
+                        · RETRY {g.retryAfter}s{/if}</span
+                    >
+                  {:else}
+                    <span class="text-red-400 font-medium"
+                      >ERROR{#if g.status}
+                        {g.status}{/if}{#if g.code}
+                        {g.code}{/if}</span
+                    >
+                    <span class="text-red-300/90"> · {g.errText}</span>
+                  {/if}
+                </div>
+                {#if g.outcome === "error" && (g.retryAfter || g.statusesSeen)}
+                  <div class="break-words text-red-300/70">
+                    {#if g.retryAfter}<span>RETRY {g.retryAfter}s</span>{/if}
+                    {#if g.statusesSeen}<span>
+                        · tried {g.statusesSeen}</span
                       >{/if}
                   </div>
+                {/if}
+                {#if g.chips.length > 0}
                   <div class="flex flex-wrap gap-1 mt-1">
-                    {#each line.chips as chip, j (j)}
+                    {#each g.chips as chip, j (j)}
                       <span
-                        class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {chip ===
-                        'STREAM'
-                          ? 'border-green-500/40 bg-green-500/10 text-green-300'
-                          : chip === 'SYNC'
-                            ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
-                            : 'border-zinc-700/80 bg-zinc-900 text-zinc-300'}"
-                        >{chip}</span
+                        class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {groupChipClass(
+                          chip,
+                        )}">{chip}</span
                       >
                     {/each}
-                  </div>
-                {:else if line.type === "done"}
-                  <div class="break-words">
-                    <span class="text-zinc-500">[{line.time}]</span>
-                    <span class="text-zinc-300">{line.circle} 📊 </span><span
-                      class="text-amber-300 font-medium">DONE {line.ms}ms</span
-                    >
-                  </div>
-                  {#if line.chips.length > 0}
-                    <div class="flex flex-wrap gap-1 mt-1">
-                      {#each line.chips as chip, j (j)}
-                        <span
-                          class="inline-flex items-center rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] leading-4 whitespace-nowrap text-amber-200"
-                          >{chip}</span
-                        >
-                      {/each}
-                    </div>
-                  {/if}
-                {:else}
-                  <div class="break-words">
-                    <span class="text-zinc-500">[{line.time}]</span>
-                    <span class="text-zinc-300">{line.circle} ✗ </span><span
-                      class="text-red-400 font-medium"
-                      >ERROR{#if line.status}
-                        {line.status}{/if}{#if line.model}
-                        [{line.model}]{/if}</span
-                    >
-                    <span class="text-red-300/90">
-                      · {line.errMsg}{#if line.retry}
-                        · RETRY {line.retry}s{/if}{#if line.ms}
-                        · {line.ms}ms{/if}</span
-                    >
                   </div>
                 {/if}
               </div>
@@ -710,7 +883,8 @@
         {:else}
           <div class="fp-inset m-3.5 overflow-x-auto">
             <ul class="divide-y divide-[var(--fp-border)]">
-              {#each pagedEntries as e, i (i)}
+              {#each keyedPagedEntries as row (row.k)}
+                {@const e = row.e}
                 {@const fields = parseLogFields(e.fields)}
                 {@const entryJson = JSON.stringify(
                   {
@@ -740,7 +914,7 @@
                   </div>
                   {#if fields.length > 0}
                     <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 pl-1">
-                      {#each fields as f (f.key)}
+                      {#each fields as f, j (j)}
                         <span
                           class="font-mono text-[11px] text-[var(--fp-muted)] min-w-0 break-words"
                         >

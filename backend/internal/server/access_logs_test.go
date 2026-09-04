@@ -82,6 +82,37 @@ func TestAccessQuietEndpointsRateLimited(t *testing.T) {
 	}
 }
 
+// TestAccessLogsEndpointRateLimited pins the console self-pollution fix: the
+// Logs page polls GET /admin/api/logs every second, and each poll used to
+// emit its own access line into the same 200-entry window the console reads.
+// At one line per second an idle dashboard evicted its own inference history
+// in ~3 minutes ("entries appear then vanish with no new requests"). The
+// endpoint is quiet-gated like /healthz: at most one access line per window.
+func TestAccessLogsEndpointRateLimited(t *testing.T) {
+	testutil.UnsetConfigEnv(t)
+	mock := testutil.NewMock()
+	defer mock.Close()
+	srv, sink := newLoggingServer(t, mock, nil)
+	srv.gates = newAccessGates()
+	h := srv.Handler()
+
+	for range 2 {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/api/logs", nil))
+	}
+	if got := strings.Count(sink.String(), "msg=access"); got != 1 {
+		t.Fatalf("access lines for two same-window GET /admin/api/logs = %d, want 1", got)
+	}
+
+	// A normal /v1 access line must still fire every time (only the
+	// self-observing logs poll is quiet-gated).
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if got := strings.Count(sink.String(), "msg=access"); got != 2 {
+		t.Fatalf("access lines after one /v1/models = %d, want 2", got)
+	}
+}
+
 // TestAccessLogDisabledSuppressesLines verifies LOG_ACCESS=false turns the
 // access lines off entirely (normal paths included), and flipping the
 // effective config back on restores them (T17).

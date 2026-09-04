@@ -375,14 +375,14 @@ test.describe("operator interactions (hermetic mocks)", () => {
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
     // Console is the default view.
-    await expect(page.getByText("request events")).toBeVisible();
+    await expect(page.getByText("/v1 only")).toBeVisible();
 
     // Table view exposes the labelled filter controls.
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
     await page.getByRole("button", { name: "Console" }).click();
-    await expect(page.getByText("request events")).toBeVisible();
+    await expect(page.getByText("/v1 only")).toBeVisible();
 
     // Auto toggle flips label and pauses the 1s poll.
     const auto = page.getByRole("button", { name: /^Auto / });
@@ -438,9 +438,10 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(page.getByText("request 2 completed")).toBeVisible();
     await expect(page.getByText("request 1 completed")).toHaveCount(0);
 
-    // Clear filters resets to Info and hides admin rows again.
+    // Clear filters resets to All levels and hides admin rows again (it must
+    // not apply ?level=info — that would silently drop warn/error rows).
     await page.getByRole("button", { name: "Clear filters" }).click();
-    await expect(page.locator("#log-level")).toHaveValue("info");
+    await expect(page.locator("#log-level")).toHaveValue("");
     await expect(page.getByText("request 1 completed")).toHaveCount(0);
   });
 
