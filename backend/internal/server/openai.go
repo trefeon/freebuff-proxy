@@ -21,6 +21,13 @@ func (s *Server) registerOpenAIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/embeddings", s.requireAuth(s.handleEmbeddings))
 	mux.HandleFunc("GET /v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("GET /v1/models/{model...}", s.requireAuth(s.handleModelRetrieve))
+	// Trailing-slash twins: harness baseURL joins vary (bare host, /v1,
+	// /v1/ — goose derive_base_path, LibreChat custom endpoints,
+	// SillyTavern). A 404 on a trailing slash is a pure client-config
+	// artifact; serve the same handler instead.
+	mux.HandleFunc("POST /v1/chat/completions/", s.requireAuth(s.handleChat))
+	mux.HandleFunc("POST /v1/responses/", s.requireAuth(s.handleResponses))
+	mux.HandleFunc("POST /v1/embeddings/", s.requireAuth(s.handleEmbeddings))
 }
 
 // handleChat is the OpenAI chat-completions entry point: sanitize the
@@ -95,6 +102,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 //   - audio: audio output has no chat-completion analogue upstream.
 //   - web_search_options / moderation: built-in web search and moderation
 //     are not implemented by the upstream chat endpoint.
+//   - allowed_tools / non-function tools / non-function tool_choice: tool
+//     allow-listing and custom/built-in tool types have no upstream
+//     mapping; silently dropping allowed_tools would lift a client-side
+//     restriction, so all three fail loudly.
 //
 // Params that stay whitelisted passthrough (mapped, documented): logit_bias,
 // logprobs, top_logprobs, response_format, seed, store, stream_options,
@@ -112,6 +123,35 @@ func validateChatUnsupportedParams(raw map[string]any) string {
 	}
 	if v, ok := raw["moderation"]; ok && v != nil {
 		return "unsupported parameter \"moderation\": request moderation is not supported by this gateway"
+	}
+	if v, ok := raw["allowed_tools"]; ok && v != nil {
+		return "unsupported parameter \"allowed_tools\": tool allow-listing is not supported by this gateway; declare only the tools the model may call"
+	}
+	if tools, ok := raw["tools"].([]any); ok {
+		for _, item := range tools {
+			if tm, ok := item.(map[string]any); ok {
+				if typ, _ := tm["type"].(string); typ != "" && typ != "function" {
+					return fmt.Sprintf("unsupported parameter \"tools\": tool type %q is not supported by this gateway (only function tools translate)", typ)
+				}
+			}
+		}
+	}
+	switch tc := raw["tool_choice"].(type) {
+	case nil:
+		// Absent: model decides.
+	case string:
+		switch tc {
+		case "none", "auto", "required":
+			// Valid ChatCompletionToolChoiceOption strings.
+		default:
+			return fmt.Sprintf("unsupported parameter \"tool_choice\": value %q is not supported by this gateway (want none, auto, required, or a named function choice)", tc)
+		}
+	case map[string]any:
+		if typ, _ := tc["type"].(string); typ != "" && typ != "function" {
+			return fmt.Sprintf("unsupported parameter \"tool_choice\": tool choice type %q is not supported by this gateway (only named function choices translate)", typ)
+		}
+	default:
+		return "unsupported parameter \"tool_choice\": must be a string or a named function choice object"
 	}
 	return ""
 }

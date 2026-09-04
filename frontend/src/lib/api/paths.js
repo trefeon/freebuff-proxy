@@ -49,6 +49,7 @@ export const adminActions = {
   tokenRemove: "/admin/tokens/remove",
   tokenSwap: "/admin/tokens/swap",
   tokenTestAll: "/admin/tokens/test-all",
+  restart: "/admin/restart",
 };
 
 /** SPA shell routes (the gateway also serves these directly). */

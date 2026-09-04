@@ -7,9 +7,12 @@ package server
 // wires them once and server.adminHandler dispatches through s.admin.
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
+	"time"
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/dashboard"
@@ -43,4 +46,42 @@ type adminHandlers struct {
 	// handleChat forwards the playground's synthetic chat request to the
 	// normal chat pipeline (admin.go:176).
 	handleChat func(w http.ResponseWriter, r *http.Request)
+}
+
+var restartProcess = func() {
+	os.Exit(0)
+}
+
+func (a *adminHandlers) handleAdminRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Validate configuration before restart to prevent exiting on broken settings
+	if _, err := config.Load(a.configPath); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":      false,
+			"message": "Config validation failed — aborting restart: " + err.Error(),
+		})
+		return
+	}
+
+	a.logfunc().Info("admin restart initiated via dashboard", "remote", remoteHost(r))
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":      true,
+		"message": "Gateway process restart initiated.",
+	})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		restartProcess()
+	}()
 }

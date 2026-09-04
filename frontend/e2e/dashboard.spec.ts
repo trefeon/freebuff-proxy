@@ -286,9 +286,9 @@ test.describe("dashboard hermetic mocks", () => {
     const safeMode = page.getByRole("switch", { name: "SAFE_MODE" });
     await expect(safeMode).toBeVisible();
     await expect(safeMode).toHaveAttribute("aria-checked", "true");
-    // The restart-only HTTP read timeout renders as a duration textbox
+    // The restart-only HTTP read timeout renders as a select dropdown
     // with the compiled-in default and a restart badge.
-    const httpTimeout = page.getByRole("textbox", {
+    const httpTimeout = page.getByRole("combobox", {
       name: "HTTP_READ_TIMEOUT",
     });
     await expect(httpTimeout).toBeVisible();
@@ -330,7 +330,7 @@ test.describe("dashboard hermetic mocks", () => {
     expect(savedBody).toContain("LOG_LEVEL=info");
   });
 
-  test("Settings legacy #config alias, select save, secret masking and raw editor validation", async ({
+  test("Settings legacy #config alias, select save, and deployment guide card", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -374,14 +374,6 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByText("default", { exact: true }).first(),
     ).toBeVisible();
-    // Advanced raw editor mirrors the form edit and still validates.
-    await page.getByText("Advanced: raw .env editor").click();
-    const editor = page.locator("#config-env");
-    await expect(editor).toBeVisible();
-    await expect(editor).toHaveValue(/LOG_LEVEL=warn/);
-    await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByText(/Configuration is valid/)).toBeVisible();
-
     // Save posts the built .env line for the edited select.
     const postReqPromise = page.waitForRequest(
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
@@ -393,12 +385,13 @@ test.describe("dashboard hermetic mocks", () => {
       "LOG_LEVEL=warn",
     );
 
-    // Current-values table masks secrets and exposes no copy buttons for them.
-    const valuesTable = page.locator("table");
-    await expect(valuesTable.getByText("redacted")).toHaveCount(3);
-    await expect(valuesTable.getByRole("button", { name: "copy" })).toHaveCount(
-      5,
-    );
+    // Configuration file and deployment guide card renders.
+    await expect(
+      page.getByRole("heading", { name: "Configuration File & Deployment" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("/app/state/.env", { exact: true }),
+    ).toBeVisible();
   });
 
   test("Settings rejected save reverts the form to the server state", async ({
@@ -547,6 +540,79 @@ test.describe("dashboard hermetic mocks", () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test("Logs console follows newest entries and pauses on manual scroll-up", async ({
+    page,
+  }) => {
+    // 25 requests overflow the console viewport: follow mode must stick to
+    // the bottom on load, pause when the user scrolls up, and resume via
+    // the Follow toggle.
+    const t = new Date().toISOString();
+    const E = (message: string, fields: string) => ({
+      time: t,
+      level: "INFO",
+      message,
+      fields,
+    });
+    const entries = [];
+    for (let i = 0; i < 25; i++) {
+      const id = `follow${i}`;
+      entries.push(
+        E(
+          "chat request",
+          `req_id=${id}  model=openai/gpt-5.6-luna  msgs=3  tools=2`,
+        ),
+      );
+      entries.push(E("chat routing", `req_id=${id}  agent=stealth/ox-alpha`));
+      entries.push(
+        E(
+          "access",
+          `req_id=${id}  method=POST  path=/v1/chat/completions  status=200  ms=100`,
+        ),
+      );
+      entries.push(E("chat trace", `req_id=${id}  total_ms=100`));
+      entries.push(E("chat done", `req_id=${id}  ms=100`));
+    }
+    const f = loadFixtures();
+    await mockDashboard(page, f, { logs: { entries } });
+
+    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await expect(page.getByText("25 requests")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Follow on" })).toBeVisible();
+
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector(".bg-black.rounded-b-lg");
+        return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+      },
+      null,
+      { timeout: 5000 },
+    );
+
+    // Manual scroll-up pauses follow mode instead of yanking the reader.
+    await page.evaluate(() => {
+      const el = document.querySelector(".bg-black.rounded-b-lg");
+      if (el) {
+        el.scrollTop = 0;
+        el.dispatchEvent(new Event("scroll"));
+      }
+    });
+    await expect(
+      page.getByRole("button", { name: "Follow off" }),
+    ).toBeVisible();
+
+    // Toggling Follow back on sticks to the newest entry again.
+    await page.getByRole("button", { name: "Follow off" }).click();
+    await expect(page.getByRole("button", { name: "Follow on" })).toBeVisible();
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector(".bg-black.rounded-b-lg");
+        return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+      },
+      null,
+      { timeout: 5000 },
+    );
+  });
+
   test("Models lists 6 served models", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
@@ -679,17 +745,17 @@ test.describe("dashboard hermetic mocks", () => {
     // Check that at least one element has aria-live or aria-describedby
     const liveCount = await page.locator("[aria-live]").count();
     expect(liveCount).toBeGreaterThanOrEqual(0);
-    // Settings keeps the raw editor's label association (behind the advanced details)
+    // Settings exposes accessible labeled inputs
     const configResp = page.waitForResponse(
       (r) => r.url().includes("/admin/api/config"),
       { timeout: 5000 },
     );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await configResp;
-    await page.getByText("Advanced: raw .env editor").click();
-    await expect(page.locator("#config-env")).toBeVisible();
-    // Verify the textarea has accessible label (sr-only)
-    await expect(page.locator('label[for="config-env"]')).toHaveCount(1);
+    await expect(
+      page.getByRole("combobox", { name: "LOG_LEVEL" }),
+    ).toBeVisible();
+    await expect(page.getByRole("switch", { name: "SAFE_MODE" })).toBeVisible();
   });
 
   test("Metrics tab renders KPIs, sparklines and per-token rows", async ({

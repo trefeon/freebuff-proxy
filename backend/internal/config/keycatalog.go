@@ -90,7 +90,7 @@ var keyCatalog = []KeyDef{
 	{Key: "DEVTOOLS_ENABLED", Group: GroupGeneral, Kind: "bool", Hidden: true,
 		Default:     "false",
 		Description: `Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default off: it is a manual testing surface that hammers /v1/*.`},
-	{Key: "HTTP_READ_TIMEOUT", Group: GroupGeneral, Kind: "text", RestartOnly: true, Hidden: true,
+	{Key: "HTTP_READ_TIMEOUT", Group: GroupGeneral, Kind: "select", Enum: []string{"60s", "90s", "120s", "180s", "300s", "0"}, RestartOnly: true, Hidden: true,
 		Default:     "60s",
 		Description: `HTTP read timeout for client request bodies (far-away clients uploading large prompts/images need more; 0 disables). Set via container environment.`},
 	{Key: "LISTEN_ADDR", Group: GroupGeneral, Kind: "text", Hidden: true,

@@ -50,6 +50,11 @@ func TestChatUnsupportedParamsRejected(t *testing.T) {
 		{"audio", `,"audio":{"voice":"alloy","format":"mp3"}`, `audio output is not supported`},
 		{"web_search_options", `,"web_search_options":{"search_context_size":"low"}`, `web_search_options`},
 		{"moderation", `,"moderation":"low"`, `request moderation is not supported`},
+		{"allowed_tools", `,"allowed_tools":[{"mode":"auto","tools":[{"type":"function","function":{"name":"get_weather"}}]}]`, `allowed_tools`},
+		{"custom_tool", `,"tools":[{"type":"custom","custom":{"name":"calc"}}]`, `only function tools translate`},
+		{"tool_choice_bad_string", `,"tool_choice":"sometimes"`, `tool_choice`},
+		{"tool_choice_allowed", `,"tool_choice":{"type":"allowed_tools","mode":"auto","tools":[]}`, `only named function choices translate`},
+		{"tool_choice_custom", `,"tool_choice":{"type":"custom","name":"calc"}`, `only named function choices translate`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -83,6 +88,26 @@ func TestChatNAccepted(t *testing.T) {
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(body), nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, truncate(string(data), 200))
+	}
+}
+
+// TestChatFunctionToolsAccepted verifies the validator lets real function
+// tools and a named function choice through (only the new non-function
+// shapes are rejected).
+func TestChatFunctionToolsAccepted(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = responsesChunks()
+	ts, _ := newTestServer(t, nil, mock)
+	body := `{"model":"` + modelA + `","messages":[{"role":"user","content":"ping"}],` +
+		`"tools":[{"type":"function","function":{"name":"get_weather","description":"w","parameters":{"type":"object"}}}],` +
+		`"tool_choice":{"type":"function","function":{"name":"get_weather"}}}`
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(body), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, truncate(string(data), 200))
+	}
+	if !mock.BodyContains(`"get_weather"`) {
+		t.Errorf("upstream body missing function tool: %s", truncate(mock.LastChatBody(), 300))
 	}
 }
 
@@ -249,4 +274,84 @@ func TestResponsesFunctionCallOutputReplay(t *testing.T) {
 		!mock.BodyContains(`{\"temp\":68}`) {
 		t.Errorf("upstream body missing replayed tool message: %s", mock.LastChatBody())
 	}
+}
+
+// --- Anthropic /v1/messages ---
+
+// TestAnthropicServerToolsRejected verifies server-side tool declarations
+// (typed blocks, nameless entries) and the container param fail with an
+// explicit 400 instead of mistranslating into an empty-named function tool
+// upstream. Plain client function tools still pass.
+func TestAnthropicServerToolsRejected(t *testing.T) {
+	cases := []struct {
+		name    string
+		extra   string
+		wantErr string
+	}{
+		{"nameless_tool", `,"tools":[{"description":"no name here"}]`, `every tool needs a name`},
+		{"server_tool_type", `,"tools":[{"type":"web_search_20260222","name":"web_search"}]`, `only client function tools`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock := testutil.NewMock()
+			defer mock.Close()
+			mock.ChatBody = responsesChunks()
+			ts, _ := newTestServer(t, nil, mock)
+			body := `{"model":"` + modelA + `","max_tokens":100,"messages":[{"role":"user","content":"ping"}]` + tc.extra + `}`
+			resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/messages", []byte(body), map[string]string{
+				"anthropic-version": "2023-06-01",
+			})
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", resp.StatusCode, truncate(string(data), 200))
+			}
+			if !strings.Contains(string(data), tc.wantErr) {
+				t.Errorf("error body missing %q: %s", tc.wantErr, truncate(string(data), 200))
+			}
+			if mock.Requests != 0 {
+				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.Requests)
+			}
+		})
+	}
+
+	// Plain client function tools are unaffected by the server-tool gate.
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = responsesChunks()
+	ts, _ := newTestServer(t, nil, mock)
+	body := `{"model":"` + modelA + `","max_tokens":100,"messages":[{"role":"user","content":"ping"}],` +
+		`"tools":[{"name":"get_weather","description":"w","input_schema":{"type":"object"}}]}`
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/messages", []byte(body), map[string]string{
+		"anthropic-version": "2023-06-01",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, truncate(string(data), 200))
+	}
+	if !mock.BodyContains(`"get_weather"`) {
+		t.Errorf("upstream body missing function tool: %s", truncate(mock.LastChatBody(), 300))
+	}
+}
+
+// TestTrailingSlashTolerance verifies harness baseURL joins with a trailing
+// slash resolve to the same handlers (goose derive_base_path, LibreChat
+// custom endpoints, SillyTavern all vary here): a 404 on a trailing slash
+// is a pure client-config artifact, never a missing route.
+func TestTrailingSlashTolerance(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = responsesChunks()
+	ts, _ := newTestServer(t, nil, mock)
+	chatBody := `{"model":"` + modelA + `","messages":[{"role":"user","content":"ping"}]}`
+	for _, path := range []string{"/v1/chat/completions/", "/v1/messages/"} {
+		headers := map[string]string(nil)
+		if path == "/v1/messages/" {
+			headers = map[string]string{"anthropic-version": "2023-06-01"}
+		}
+		resp, data := doJSON(t, http.MethodPost, ts.URL+path, []byte(chatBody), headers)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("POST %s status = %d, want 200: %s", path, resp.StatusCode, truncate(string(data), 200))
+		}
+	}
+	// Note: GET /v1/models/ stays claimed by the /v1/models/{model...}
+	// wildcard (stdlib mux rejects the overlap), so only the POST twins
+	// are asserted here.
 }

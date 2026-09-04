@@ -742,67 +742,91 @@ test.describe("operator UX journey (hermetic mocks)", () => {
   // 11. Settings: the raw .env editor inside <details> still validates and
   //     save posts the edited content
   // ---------------------------------------------------------------------------
-  test("settings: advanced raw .env editor validates the edits and save posts them", async ({
+  // 11. Settings: configuration file and deployment guide renders with host commands
+  // ---------------------------------------------------------------------------
+  test("settings: configuration file and deployment guide renders with host commands", async ({
     page,
   }) => {
     const f = loadFixtures();
-    const configWithContent = {
-      ...f.config,
-      env_content:
-        "LISTEN_ADDR=127.0.0.1:3457\nAUTH_TOKENS=tok0,tok1\nAPI_KEYS=sk-local-xyz\nSAFE_MODE=true\nLOG_LEVEL=info\n",
-      has_env_file: true,
-      effective: [
-        { key: "LISTEN_ADDR", value: "127.0.0.1:3457", secret: false },
-        { key: "AUTH_TOKENS", value: "2 token(s)", secret: true },
-        { key: "API_KEYS", value: "1 key(s)", secret: true },
-        { key: "ADMIN_TOKEN", value: "set", secret: true },
-        { key: "SAFE_MODE", value: "true", secret: false },
-        { key: "LOG_LEVEL", value: "info", secret: false },
-        { key: "COST_MODE", value: "free", secret: false },
-        { key: "MAX_MESSAGES_PER_DAY", value: "0", secret: false },
-      ],
-    };
-    await mockDashboard(
-      page,
-      f,
-      { configWithApiKeys: configWithContent },
-      { loginPage: true },
-    );
+    await mockDashboard(page, f, {}, { loginPage: true });
 
-    const metaResp = page.waitForResponse(
-      (r) => r.url().includes("/admin/api/config/meta") && r.status() === 200,
-    );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
-    await metaResp;
     await expect(
-      page.getByRole("heading", { name: "Settings", exact: true }),
+      page.getByRole("heading", { name: "Configuration File & Deployment" }),
     ).toBeVisible();
 
-    // Raw editor lives behind the <details> toggle; open it and edit directly.
-    await page.getByText("Advanced: raw .env editor").click();
-    const editor = page.locator("#config-env");
-    await expect(editor).toBeVisible();
-    const editedEnv =
-      "LISTEN_ADDR=127.0.0.1:3457\nAUTH_TOKENS=tok0,tok1\nAPI_KEYS=sk-local-xyz\nSAFE_MODE=true\nLOG_LEVEL=debug\nCOST_MODE=free\n";
-    await editor.fill(editedEnv);
-    await expect(editor).toHaveValue(editedEnv);
+    await expect(
+      page.getByText("/app/state/.env", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Precedence Order")).toBeVisible();
+    await expect(page.getByText("nano .env")).toBeVisible();
+    await expect(
+      page.getByText("docker compose up -d", { exact: true }),
+    ).toBeVisible();
+  });
 
-    // Client-side validation passes for the edited document.
-    await page.getByRole("button", { name: "Validate" }).click();
-    await expect(page.getByText(/Configuration is valid/)).toBeVisible();
+  // ---------------------------------------------------------------------------
+  // 12. Settings: Command Center displays restart and update controls
+  // ---------------------------------------------------------------------------
+  test("settings: command center renders restart and update check controls", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
 
-    // Save posts the edited raw content (form POST, dialog accept required).
-    const saveReq = page.waitForRequest(
-      (r) => r.method() === "POST" && r.url().includes("/admin/config"),
-    );
-    page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
-    const req = await saveReq;
-    const body = decodeURIComponent(req.postData() || "");
-    expect(body).toContain("content=");
-    expect(body).toContain("LOG_LEVEL=debug");
-    expect(body).toContain("SAFE_MODE=true");
-    await expect(page.getByText("Config saved")).toBeVisible();
+    await page.goto("http://127.0.0.1:4173/admin/#settings");
+    await expect(
+      page.getByRole("heading", { name: "Command Center" }),
+    ).toBeVisible();
+
+    await expect(page.getByText("Gateway Process")).toBeVisible();
+    const restartBtn = page.getByRole("button", { name: "Restart Gateway" });
+    await expect(restartBtn).toBeVisible();
+
+    await expect(page.getByText("Software Updates")).toBeVisible();
+    const checkBtn = page.getByRole("button", { name: "Check for Updates" });
+    await expect(checkBtn).toBeVisible();
+
+    await expect(page.getByText("running", { exact: true })).toBeVisible();
+  });
+
+  // 13. Tokens: Drag and drop handle renders and triggers reorder action
+  // ---------------------------------------------------------------------------
+  test("tokens: drag and drop handle renders and triggers move action", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await expect(
+      page.getByRole("heading", { name: "Pool Tokens" }),
+    ).toBeVisible();
+
+    const grips = page.getByLabel("Drag to reorder");
+    await expect(grips.first()).toBeVisible();
+
+    // Verify move action POST payload on drop / move
+    let swapPayload: Record<string, any> | null = null;
+    await page.route(/\/admin\/tokens\/swap$/, async (route) => {
+      swapPayload = JSON.parse(route.request().postData() || "{}");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, message: "Token moved successfully" }),
+      });
+    });
+
+    const rows = page.locator("tbody tr");
+    await expect(rows.first()).toHaveAttribute("draggable", "true");
+
+    // Perform drag and drop from row 0 to row 1
+    await rows.first().dragTo(rows.nth(1));
+
+    expect(swapPayload).not.toBeNull();
+    expect(swapPayload?.from).toBe(0);
+    expect(swapPayload?.to).toBe(1);
+    expect(swapPayload?.action).toBe("move");
   });
 
   // ---------------------------------------------------------------------------

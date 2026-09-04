@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -34,6 +35,10 @@ import (
 func (s *Server) registerAnthropicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/messages", s.requireAuth(s.handleMessages))
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.requireAuth(s.handleMessagesCountTokens))
+	// Trailing-slash twins (same join-tolerance rationale as the OpenAI
+	// routes above).
+	mux.HandleFunc("POST /v1/messages/", s.requireAuth(s.handleMessages))
+	mux.HandleFunc("POST /v1/messages/count_tokens/", s.requireAuth(s.handleMessagesCountTokens))
 }
 
 // handleMessages is the Anthropic /v1/messages entry point: convert the
@@ -143,13 +148,16 @@ const anthropicDefaultMaxTokens = 8192
 //     temperature, top_p, stop_sequences, tools (+ input_schema),
 //     tool_choice (+ disable_parallel_tool_use → parallel_tool_calls),
 //     metadata.user_id → user, thinking → reasoning_effort, stream: mapped.
+//   - output_config.effort (the 4.6+ effort knob; thinking adaptive carries
+//     no budget) overrides the thinking-derived effort; output_format
+//     json_schema → response_format (same contract, best-effort upstream).
 //   - top_k: NO chat-completions analogue (the upstream CLI itself warns
 //     "unsupported-setting topK"); the served models do not expose a
 //     top-k knob, so an omitted top_k is behaviorally equivalent. It is
 //     deliberately ignored (documented, not silent) — erroring would break
 //     liberal Anthropic clients that send it as a kit default.
 //   - cache_control (top-level and on tool definitions), container,
-//     inference_geo, output_config, service_tier and the user_profile_id
+//     inference_geo, service_tier and the user_profile_id
 //     header: no chat-completion analogue (no prompt-cache marker, no
 //     container/geo affinity, no per-user attribution upstream) — ignored
 //     (documented, not silent).
@@ -173,15 +181,39 @@ func anthropicToChatParams(raw map[string]any) ([]byte, error) {
 	if stops, ok := anthropicStopSequencesToOpenAI(raw["stop_sequences"]); ok {
 		chat["stop"] = stops
 	}
+	if effort, ok := anthropicThinkingToEffort(raw["thinking"]); ok {
+		chat["reasoning_effort"] = effort
+	}
+	// output_config.effort (Claude 4.6+ effort knob) wins over the
+	// thinking-derived default: adaptive thinking carries no budget, so
+	// without this the effort would always inflate to high.
+	if oc, ok := raw["output_config"].(map[string]any); ok && oc != nil {
+		if effort, _ := oc["effort"].(string); strings.TrimSpace(effort) != "" {
+			chat["reasoning_effort"] = strings.ToLower(strings.TrimSpace(effort))
+		}
+	}
+	// output_format json_schema → response_format: the same structured-
+	// output contract under the chat-completions name (mirrors the AI
+	// SDK's own mapping, which defaults the schema name to "response").
+	if of, ok := raw["output_format"].(map[string]any); ok && of != nil {
+		if typ, _ := of["type"].(string); typ == "json_schema" {
+			if schema, ok := of["schema"]; ok && schema != nil {
+				chat["response_format"] = map[string]any{
+					"type": "json_schema",
+					"json_schema": map[string]any{
+						"name":   "response",
+						"schema": schema,
+					},
+				}
+			}
+		}
+	}
 	if meta, ok := raw["metadata"].(map[string]any); ok && meta != nil {
 		if uid, ok := meta["user_id"].(string); ok && uid != "" {
 			chat["user"] = uid
 		}
 	} else if v, ok := raw["user"]; ok && v != nil {
 		chat["user"] = v
-	}
-	if effort, ok := anthropicThinkingToEffort(raw["thinking"]); ok {
-		chat["reasoning_effort"] = effort
 	}
 	if tools, ok := raw["tools"].([]any); ok && len(tools) > 0 {
 		chatTools := make([]any, 0, len(tools))
@@ -190,7 +222,13 @@ func anthropicToChatParams(raw map[string]any) ([]byte, error) {
 			if !ok {
 				continue
 			}
+			if typ, _ := tool["type"].(string); typ != "" {
+				return nil, fmt.Errorf("unsupported parameter \"tools\": server tool type %q is not supported by this gateway (only client function tools with name and input_schema translate)", typ)
+			}
 			name, _ := tool["name"].(string)
+			if name == "" {
+				return nil, fmt.Errorf("unsupported parameter \"tools\": every tool needs a name (nameless server-side tool declarations do not translate)")
+			}
 			desc, _ := tool["description"].(string)
 			fn := map[string]any{"name": name, "description": desc}
 			if schema, ok := tool["input_schema"]; ok && schema != nil {

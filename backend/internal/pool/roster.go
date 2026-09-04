@@ -141,6 +141,51 @@ func (r *tokenRoster) swap(i, j int) bool {
 	return true
 }
 
+// move shifts the entry at 'from' to 'to', sliding intermediate entries.
+// Returns false when indices are out of range or identical.
+func (r *tokenRoster) move(from, to int) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur := *r.toks.Load()
+	if from < 0 || from >= len(cur) || to < 0 || to >= len(cur) || from == to {
+		return false
+	}
+	target := cur[from]
+	without := make([]*tokenEntry, 0, len(cur)-1)
+	without = append(without, cur[:from]...)
+	without = append(without, cur[from+1:]...)
+
+	next := make([]*tokenEntry, 0, len(cur))
+	next = append(next, without[:to]...)
+	next = append(next, target)
+	next = append(next, without[to:]...)
+	r.toks.Store(&next)
+
+	newMismatch := make(map[int]mismatchEscalation, len(r.mismatch))
+	for oldIdx1, v := range r.mismatch {
+		old0 := oldIdx1 - 1
+		var new0 int
+		if old0 == from {
+			new0 = to
+		} else if from < to {
+			if old0 > from && old0 <= to {
+				new0 = old0 - 1
+			} else {
+				new0 = old0
+			}
+		} else { // from > to
+			if old0 >= to && old0 < from {
+				new0 = old0 + 1
+			} else {
+				new0 = old0
+			}
+		}
+		newMismatch[new0+1] = v
+	}
+	r.mismatch = newMismatch
+	return true
+}
+
 // clear empties the roster and resets the mismatch map (RemoveAllTokens).
 func (r *tokenRoster) clear() {
 	r.mu.Lock()

@@ -32,6 +32,11 @@ type relayStats struct {
 	// on the request, so every relay must rename them BACK before writing.
 	// Zero value = identity.
 	toolMap convert.ToolMapper
+	// responsesEcho carries the client's Responses request parameters to
+	// echo on the response object skeleton (store/tools/tool_choice/...),
+	// matching OpenAI's echo semantics. Set by handleResponses; nil =
+	// OpenAI defaults (tests drive relays with &relayStats{}).
+	responsesEcho map[string]any
 }
 
 // usageTotalTokens extracts the token total from a chat usage object

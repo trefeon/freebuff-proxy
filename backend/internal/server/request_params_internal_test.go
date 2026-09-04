@@ -179,3 +179,124 @@ func TestAnthropicToChatParams_SystemNormalization(t *testing.T) {
 		})
 	}
 }
+
+// TestResponsesEcho mirrors OpenAI's echo semantics on the response object
+// skeleton: request params (store/tools/tool_choice/...) are reflected,
+// OpenAI defaults apply when absent. Regression: the skeleton hardcoded
+// store:true/tools:[] regardless of the request (live S13 showed
+// store:true on a store:false request).
+func TestResponsesEcho(t *testing.T) {
+	// Nil request → OpenAI defaults.
+	d := responsesEcho(nil)
+	if d["store"] != true {
+		t.Errorf("default store = %v, want true", d["store"])
+	}
+	if tools, _ := d["tools"].([]any); len(tools) != 0 {
+		t.Errorf("default tools = %v, want []", d["tools"])
+	}
+	if d["tool_choice"] != "auto" {
+		t.Errorf("default tool_choice = %v, want auto", d["tool_choice"])
+	}
+
+	// Client params are echoed verbatim.
+	tools := []any{map[string]any{"type": "function", "name": "get_weather"}}
+	raw := map[string]any{
+		"store":               false,
+		"tools":               tools,
+		"tool_choice":         "required",
+		"parallel_tool_calls": false,
+		"temperature":         0.2,
+		"instructions":        "Be concise.",
+		"max_output_tokens":   float64(300),
+		"reasoning":           map[string]any{"effort": "low", "summary": "auto"},
+	}
+	e := responsesEcho(raw)
+	if e["store"] != false {
+		t.Errorf("store = %v, want false", e["store"])
+	}
+	if e["tool_choice"] != "required" {
+		t.Errorf("tool_choice = %v, want required", e["tool_choice"])
+	}
+	if e["parallel_tool_calls"] != false {
+		t.Errorf("parallel_tool_calls = %v, want false", e["parallel_tool_calls"])
+	}
+	if e["instructions"] != "Be concise." {
+		t.Errorf("instructions = %v, want echo", e["instructions"])
+	}
+	if e["max_output_tokens"] != float64(300) {
+		t.Errorf("max_output_tokens = %v, want 300", e["max_output_tokens"])
+	}
+
+	// The skeleton carries the echo (created/in_progress/completed share it).
+	base := responsesBase("m", "resp_x", 1, "in_progress", e)
+	for k, want := range map[string]any{"store": false, "tool_choice": "required", "instructions": "Be concise."} {
+		if base[k] != want {
+			t.Errorf("skeleton[%s] = %v, want %v", k, base[k], want)
+		}
+	}
+	if len(base["tools"].([]any)) != 1 {
+		t.Errorf("skeleton tools = %v, want 1 echoed tool", base["tools"])
+	}
+
+	// Nil echo → defaults (test-driven relays pass &relayStats{}).
+	def := responsesBase("m", "resp_y", 1, "completed", nil)
+	if def["store"] != true || def["tool_choice"] != "auto" {
+		t.Errorf("nil-echo skeleton = store %v choice %v, want true/auto", def["store"], def["tool_choice"])
+	}
+}
+
+// TestAnthropicOutputConfigEffort pins the Claude 4.6+ effort path:
+// thinking adaptive carries no budget, so output_config.effort must win
+// over the thinking-derived default (else every adaptive turn inflates
+// to high). output_format json_schema maps to response_format.
+func TestAnthropicOutputConfigEffort(t *testing.T) {
+	raw := map[string]any{
+		"model":         "anthropic/claude-opus-4-6",
+		"max_tokens":    float64(1024),
+		"thinking":      map[string]any{"type": "adaptive"},
+		"output_config": map[string]any{"effort": "low"},
+		"output_format": map[string]any{
+			"type":   "json_schema",
+			"schema": map[string]any{"type": "object"},
+		},
+		"messages": []any{map[string]any{"role": "user", "content": "hi"}},
+	}
+	out, err := anthropicToChatParams(raw)
+	if err != nil {
+		t.Fatalf("anthropicToChatParams failed: %v", err)
+	}
+	var chat map[string]any
+	if err := json.Unmarshal(out, &chat); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if chat["reasoning_effort"] != "low" {
+		t.Errorf("reasoning_effort = %v, want low (output_config wins over adaptive default high)", chat["reasoning_effort"])
+	}
+	rf, _ := chat["response_format"].(map[string]any)
+	if rf["type"] != "json_schema" {
+		t.Errorf("response_format = %v, want json_schema mapping", chat["response_format"])
+	}
+
+	// Without output_config, adaptive still defaults to high and no
+	// response_format appears.
+	raw2 := map[string]any{
+		"model":      "anthropic/claude-opus-4-6",
+		"max_tokens": float64(1024),
+		"thinking":   map[string]any{"type": "adaptive"},
+		"messages":   []any{map[string]any{"role": "user", "content": "hi"}},
+	}
+	out2, err := anthropicToChatParams(raw2)
+	if err != nil {
+		t.Fatalf("anthropicToChatParams failed: %v", err)
+	}
+	var chat2 map[string]any
+	if err := json.Unmarshal(out2, &chat2); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if chat2["reasoning_effort"] != "high" {
+		t.Errorf("reasoning_effort = %v, want high (adaptive default)", chat2["reasoning_effort"])
+	}
+	if _, ok := chat2["response_format"]; ok {
+		t.Errorf("response_format = %v, want absent without output_format", chat2["response_format"])
+	}
+}
