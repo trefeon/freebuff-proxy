@@ -37,8 +37,8 @@ func TestChatOversizedBody413(t *testing.T) {
 	if !strings.Contains(string(data), "content_too_large") {
 		t.Errorf("body missing content_too_large: %s", truncate(string(data), 200))
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (oversized body rejected before pool)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (oversized body rejected before pool)", mock.RequestsSnapshot())
 	}
 }
 
@@ -73,8 +73,8 @@ func TestChatInvalidJSONTable(t *testing.T) {
 			}
 		})
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (malformed bodies rejected before pool)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (malformed bodies rejected before pool)", mock.RequestsSnapshot())
 	}
 }
 
