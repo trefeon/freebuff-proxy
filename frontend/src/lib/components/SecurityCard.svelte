@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { Shield, Key, Eye, EyeOff } from "@lucide/svelte";
+  import SettingsCard from "./SettingsCard.svelte";
   import Button from "./Button.svelte";
   import Alert from "./Alert.svelte";
   import { postAPI, fetchAPI } from "../api/client.js";
@@ -108,18 +109,10 @@
   }
 </script>
 
-<div
-  class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] p-6 page-enter"
->
-  <!-- Card Header -->
-  <div class="flex items-center gap-3 mb-4">
-    <div class="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-      <Shield size={20} />
-    </div>
-    <h3 class="text-base sm:text-lg font-semibold text-[var(--fp-text)]">
-      {$tr("Security")}
-    </h3>
-  </div>
+<SettingsCard title={$tr("Security")}>
+  {#snippet icon()}
+    <Shield size={20} />
+  {/snippet}
 
   <div class="flex flex-col gap-4">
     <!-- Password Change Form -->
@@ -273,4 +266,4 @@
       </div>
     </form>
   </div>
-</div>
+</SettingsCard>

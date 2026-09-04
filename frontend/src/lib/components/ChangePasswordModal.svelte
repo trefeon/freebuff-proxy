@@ -1,5 +1,6 @@
 <script>
-  import { X, Lock, Key, Eye, EyeOff } from "@lucide/svelte";
+  import { Lock, Key, Eye, EyeOff } from "@lucide/svelte";
+  import Modal from "./Modal.svelte";
   import Button from "./Button.svelte";
   import Alert from "./Alert.svelte";
   import Field from "./Field.svelte";
@@ -8,6 +9,9 @@
   import { tr } from "../i18n.js";
 
   /**
+   * ChangePasswordModal — modal for updating master administrative password.
+   * Built on top of the canonical Modal template component.
+   *
    * @prop {boolean} open
    * @prop {() => void} [onSuccess]
    * @prop {() => void} [onClose]
@@ -23,8 +27,6 @@
   let showConfirmPassword = $state(false);
   let errorMsg = $state("");
   let successMsg = $state("");
-  let dialogEl = $state(null);
-  let previouslyFocusedEl = null;
 
   function resetForm() {
     currentPassword = "";
@@ -85,280 +87,137 @@
       submitting = false;
     }
   }
-
-  function getFocusable(container) {
-    if (!container) return [];
-    const selector =
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    return Array.from(container.querySelectorAll(selector)).filter((el) => {
-      // filter out hidden elements
-      if (el.hasAttribute("hidden")) return false;
-      // offsetParent null means display:none; keep if it's the active element
-      // Use getComputedStyle as fallback for visibility
-      try {
-        const style = getComputedStyle(el);
-        if (style.visibility === "hidden" || style.display === "none")
-          return false;
-      } catch {}
-      return true;
-    });
-  }
-
-  function trapFocus(e) {
-    if (e.key !== "Tab" || !dialogEl) return;
-    const focusables = getFocusable(dialogEl);
-    if (focusables.length === 0) {
-      e.preventDefault();
-      return;
-    }
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey) {
-      if (active === first) {
-        e.preventDefault();
-        last.focus();
-      }
-    } else {
-      if (active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }
-
-  function setBackgroundInert(enabled) {
-    try {
-      const targets = [
-        document.getElementById("main-content"),
-        document.querySelector('aside[aria-label="Sidebar"]'),
-        document.querySelector("header"),
-      ];
-      for (const el of targets) {
-        if (!el) continue;
-        // Avoid inert-ing the dialog itself (dialog is not inside these targets)
-        if (enabled) {
-          if ("inert" in el) el.inert = true;
-          else el.setAttribute("inert", "");
-          el.setAttribute("aria-hidden", "true");
-        } else {
-          if ("inert" in el) el.inert = false;
-          el.removeAttribute("inert");
-          el.removeAttribute("aria-hidden");
-        }
-      }
-    } catch {}
-  }
-
-  $effect(() => {
-    if (!open) return;
-    previouslyFocusedEl =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-
-    // Defer focus and inert until after the dialog is mounted
-    queueMicrotask(() => {
-      try {
-        const focusables = getFocusable(dialogEl);
-        const target = focusables[0] ?? dialogEl;
-        target?.focus();
-        setBackgroundInert(true);
-      } catch {}
-    });
-
-    const handleKeydown = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        handleClose();
-        return;
-      }
-      if (e.key === "Tab") trapFocus(e);
-    };
-
-    document.addEventListener("keydown", handleKeydown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKeydown);
-      document.body.style.overflow = prevOverflow;
-      try {
-        setBackgroundInert(false);
-      } catch {}
-      queueMicrotask(() => {
-        try {
-          previouslyFocusedEl?.focus();
-        } catch {}
-      });
-    };
-  });
 </script>
 
-{#if open}
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <!-- Backdrop -->
-    <button
-      type="button"
-      class="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity border-0 p-0 m-0 w-full h-full cursor-default"
-      onclick={handleClose}
-      aria-label={$tr("Close dialog backdrop")}
-      tabindex="-1"
-    ></button>
-
-    <!-- Modal Card -->
+<Modal
+  bind:open
+  title={$tr("Change Admin Password")}
+  description={$tr("Update the master administrative password")}
+  onClose={handleClose}
+  loading={submitting}
+  size="md"
+>
+  {#snippet icon()}
     <div
-      bind:this={dialogEl}
-      tabindex="-1"
-      class="relative w-full max-w-md bg-[var(--fp-card)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-5 page-enter focus:outline-none"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
+      class="w-8 h-8 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)] flex items-center justify-center"
     >
-      <!-- Header -->
-      <div
-        class="flex items-center justify-between border-b border-[var(--fp-border)] pb-4"
-      >
-        <div class="flex items-center gap-2.5">
-          <div
-            class="w-8 h-8 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)] flex items-center justify-center"
-          >
-            <Lock size={18} />
-          </div>
-          <div>
-            <h2
-              id="modal-title"
-              class="text-sm font-semibold text-[var(--fp-text)]"
-            >
-              {$tr("Change Admin Password")}
-            </h2>
-            <p class="text-xs text-[var(--fp-muted)]">
-              {$tr("Update the master administrative password")}
-            </p>
-          </div>
-        </div>
+      <Lock size={18} />
+    </div>
+  {/snippet}
+
+  {#if errorMsg}
+    <div class="mb-4">
+      <Alert tone="error">{errorMsg}</Alert>
+    </div>
+  {/if}
+  {#if successMsg}
+    <div class="mb-4">
+      <Alert tone="success">{successMsg}</Alert>
+    </div>
+  {/if}
+
+  <form onsubmit={handleSubmit} class="space-y-4">
+    <Field label={$tr("Current Password")} id="current-password">
+      <div class="relative">
+        <input
+          id="current-password"
+          data-autofocus
+          type={showCurrentPassword ? "text" : "password"}
+          autocomplete="current-password"
+          bind:value={currentPassword}
+          placeholder={$tr("Enter current password (default: 123456)")}
+          required
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+        />
         <button
           type="button"
-          onclick={handleClose}
-          class="min-w-11 min-h-11 w-11 h-11 flex items-center justify-center text-[var(--fp-dim)] hover:text-[var(--fp-text)] rounded-lg hover:bg-[var(--fp-border)]/50 transition-colors shrink-0"
-          aria-label={$tr("Close modal")}
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+          onclick={() => (showCurrentPassword = !showCurrentPassword)}
+          aria-label={showCurrentPassword
+            ? $tr("Hide password")
+            : $tr("Show password")}
         >
-          <X size={16} />
+          {#if showCurrentPassword}
+            <EyeOff size={16} />
+          {:else}
+            <Eye size={16} />
+          {/if}
         </button>
       </div>
+    </Field>
 
-      <!-- Messages -->
-      {#if errorMsg}
-        <Alert tone="error">{errorMsg}</Alert>
-      {/if}
-      {#if successMsg}
-        <Alert tone="success">{successMsg}</Alert>
-      {/if}
-
-      <!-- Form -->
-      <form onsubmit={handleSubmit} class="space-y-4">
-        <Field label={$tr("Current Password")} id="current-password">
-          <div class="relative">
-            <input
-              id="current-password"
-              type={showCurrentPassword ? "text" : "password"}
-              autocomplete="current-password"
-              bind:value={currentPassword}
-              placeholder={$tr("Enter current password (default: 123456)")}
-              required
-              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-            />
-            <button
-              type="button"
-              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
-              onclick={() => (showCurrentPassword = !showCurrentPassword)}
-              aria-label={showCurrentPassword
-                ? $tr("Hide password")
-                : $tr("Show password")}
-            >
-              {#if showCurrentPassword}
-                <EyeOff size={16} />
-              {:else}
-                <Eye size={16} />
-              {/if}
-            </button>
-          </div>
-        </Field>
-
-        <Field
-          label={$tr("New Password")}
+    <Field
+      label={$tr("New Password")}
+      id="new-password"
+      hint={$tr("Minimum 6 characters")}
+    >
+      <div class="relative">
+        <input
           id="new-password"
-          hint={$tr("Minimum 6 characters")}
+          type={showNewPassword ? "text" : "password"}
+          autocomplete="new-password"
+          bind:value={newPassword}
+          placeholder={$tr("Enter secure new password")}
+          required
+          minlength="6"
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+        />
+        <button
+          type="button"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+          onclick={() => (showNewPassword = !showNewPassword)}
+          aria-label={showNewPassword
+            ? $tr("Hide password")
+            : $tr("Show password")}
         >
-          <div class="relative">
-            <input
-              id="new-password"
-              type={showNewPassword ? "text" : "password"}
-              autocomplete="new-password"
-              bind:value={newPassword}
-              placeholder={$tr("Enter secure new password")}
-              required
-              minlength="6"
-              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-            />
-            <button
-              type="button"
-              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
-              onclick={() => (showNewPassword = !showNewPassword)}
-              aria-label={showNewPassword
-                ? $tr("Hide password")
-                : $tr("Show password")}
-            >
-              {#if showNewPassword}
-                <EyeOff size={16} />
-              {:else}
-                <Eye size={16} />
-              {/if}
-            </button>
-          </div>
-        </Field>
+          {#if showNewPassword}
+            <EyeOff size={16} />
+          {:else}
+            <Eye size={16} />
+          {/if}
+        </button>
+      </div>
+    </Field>
 
-        <Field label={$tr("Confirm New Password")} id="confirm-password">
-          <div class="relative">
-            <input
-              id="confirm-password"
-              type={showConfirmPassword ? "text" : "password"}
-              autocomplete="new-password"
-              bind:value={confirmPassword}
-              placeholder={$tr("Re-enter new password")}
-              required
-              minlength="6"
-              class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
-            />
-            <button
-              type="button"
-              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
-              onclick={() => (showConfirmPassword = !showConfirmPassword)}
-              aria-label={showConfirmPassword
-                ? $tr("Hide password")
-                : $tr("Show password")}
-            >
-              {#if showConfirmPassword}
-                <EyeOff size={16} />
-              {:else}
-                <Eye size={16} />
-              {/if}
-            </button>
-          </div>
-        </Field>
-
-        <div
-          class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--fp-border)]"
+    <Field label={$tr("Confirm New Password")} id="confirm-password">
+      <div class="relative">
+        <input
+          id="confirm-password"
+          type={showConfirmPassword ? "text" : "password"}
+          autocomplete="new-password"
+          bind:value={confirmPassword}
+          placeholder={$tr("Re-enter new password")}
+          required
+          minlength="6"
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+        />
+        <button
+          type="button"
+          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--fp-dim)] hover:text-[var(--fp-text)] p-1 rounded transition-colors"
+          onclick={() => (showConfirmPassword = !showConfirmPassword)}
+          aria-label={showConfirmPassword
+            ? $tr("Hide password")
+            : $tr("Show password")}
         >
-          <Button variant="ghost" onclick={handleClose} disabled={submitting}>
-            {$tr("Cancel")}
-          </Button>
-          <Button variant="primary" type="submit" loading={submitting}>
-            <Key size={14} />
-            {$tr("Update Password")}
-          </Button>
-        </div>
-      </form>
+          {#if showConfirmPassword}
+            <EyeOff size={16} />
+          {:else}
+            <Eye size={16} />
+          {/if}
+        </button>
+      </div>
+    </Field>
+
+    <div
+      class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--fp-border)]"
+    >
+      <Button variant="ghost" onclick={handleClose} disabled={submitting}>
+        {$tr("Cancel")}
+      </Button>
+      <Button variant="primary" type="submit" loading={submitting}>
+        <Key size={14} />
+        {$tr("Update Password")}
+      </Button>
     </div>
-  </div>
-{/if}
+  </form>
+</Modal>

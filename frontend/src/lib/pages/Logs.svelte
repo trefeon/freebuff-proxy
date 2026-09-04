@@ -16,6 +16,7 @@
   import Alert from "../components/Alert.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import CopyButton from "../components/CopyButton.svelte";
+  import SegmentedControl from "../components/SegmentedControl.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi, adminRoot } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
@@ -510,36 +511,14 @@
     )}
   >
     {#snippet actions()}
-      <div
-        class="flex items-center gap-1 bg-[var(--fp-surface-2)] p-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]"
-      >
-        <button
-          type="button"
-          class="px-2.5 py-1 text-xs font-mono rounded transition-colors {viewMode ===
-          'console'
-            ? 'bg-[var(--fp-surface)] text-[var(--fp-accent)] font-semibold shadow-sm'
-            : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => {
-            viewMode = "console";
-            fetchLogs();
-          }}
-        >
-          {$tr("Console")}
-        </button>
-        <button
-          type="button"
-          class="px-2.5 py-1 text-xs font-mono rounded transition-colors {viewMode ===
-          'table'
-            ? 'bg-[var(--fp-surface)] text-[var(--fp-accent)] font-semibold shadow-sm'
-            : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
-          onclick={() => {
-            viewMode = "table";
-            fetchLogs();
-          }}
-        >
-          {$tr("Table")}
-        </button>
-      </div>
+      <SegmentedControl
+        bind:value={viewMode}
+        options={[
+          { id: "console", label: $tr("Console") },
+          { id: "table", label: $tr("Table") },
+        ]}
+        onchange={() => fetchLogs()}
+      />
     {/snippet}
   </PageHeader>
 
