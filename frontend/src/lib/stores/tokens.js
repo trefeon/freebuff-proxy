@@ -55,6 +55,10 @@ const STATIC_TOKEN_KEYS = [
   "referral_github_linked",
   "referral_reset_at",
   "allowed_models",
+  "streak",
+  "today_used",
+  "last_usage",
+  "streak_updated_at",
 ];
 let staticTop = null;
 let staticTokensByIndex = {};

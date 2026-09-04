@@ -180,6 +180,18 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 				quarantineReason = q.reason
 			}
 		}
+		var streak int
+		var todayUsed bool
+		var lastUsage string
+		var streakUpdated time.Time
+		if st := tok.Streak(); st != nil {
+			streak = st.Streak
+			todayUsed = st.TodayUsed
+			lastUsage = st.LastUsageDate
+			streakUpdated = st.UpdatedAt
+		} else {
+			p.asyncStreakFetch(tok)
+		}
 
 		out = append(out, TokenSnapshot{
 			Token:                   i,
@@ -214,6 +226,10 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Freebucks:               ss.Freebucks,
 			FreeWindows:             ss.FreeWindows,
 			Subscription:            ss.Subscription,
+			Streak:                  streak,
+			TodayUsed:               todayUsed,
+			LastUsageDate:           lastUsage,
+			StreakUpdatedAt:         streakUpdated,
 			UpgradeHint:             ss.UpgradeHint,
 			ServerMessage:           ss.ServerMessage,
 			Locked:                  tok.locked.Load(),

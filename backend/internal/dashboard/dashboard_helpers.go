@@ -74,6 +74,14 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 	if t.Subscription != nil {
 		card.Subscription = subscriptionCardFromInfo(t.Subscription)
 	}
+	if t.Streak > 0 {
+		card.Streak = t.Streak
+		card.TodayUsed = t.TodayUsed
+		card.LastUsage = t.LastUsageDate
+		if !t.StreakUpdatedAt.IsZero() {
+			card.StreakUpdatedAt = t.StreakUpdatedAt.Format(time.RFC3339)
+		}
+	}
 	card.AllowedModels = t.AllowedModels
 	return card
 }
@@ -101,10 +109,14 @@ type tokenLiveCard struct {
 	TransientRetries int64  `json:"transient_retries"`
 	// AllowlistSkips is live (like TransientRetries): every poll refreshes
 	// it, so it stays out of the SPA's static cache.
-	AllowlistSkips int64             `json:"allowlist_skips,omitempty"`
-	Freebucks      *freebucksCard    `json:"freebucks,omitempty"`
-	FreeWindows    *freeWindowsCard  `json:"free_windows,omitempty"`
-	Subscription   *subscriptionCard `json:"subscription,omitempty"`
+	AllowlistSkips  int64             `json:"allowlist_skips,omitempty"`
+	Freebucks       *freebucksCard    `json:"freebucks,omitempty"`
+	FreeWindows     *freeWindowsCard  `json:"free_windows,omitempty"`
+	Subscription    *subscriptionCard `json:"subscription,omitempty"`
+	Streak          int               `json:"streak,omitempty"`
+	TodayUsed       bool              `json:"today_used,omitempty"`
+	LastUsage       string            `json:"last_usage,omitempty"`
+	StreakUpdatedAt string            `json:"streak_updated_at,omitempty"`
 }
 
 // liveCardFromSnapshot builds the hot-poll card for one token snapshot.
@@ -141,6 +153,14 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	}
 	if t.Subscription != nil {
 		card.Subscription = subscriptionCardFromInfo(t.Subscription)
+	}
+	if t.Streak > 0 {
+		card.Streak = t.Streak
+		card.TodayUsed = t.TodayUsed
+		card.LastUsage = t.LastUsageDate
+		if !t.StreakUpdatedAt.IsZero() {
+			card.StreakUpdatedAt = t.StreakUpdatedAt.Format(time.RFC3339)
+		}
 	}
 	return card
 }
