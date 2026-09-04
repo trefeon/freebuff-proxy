@@ -23,9 +23,9 @@ type NoticeItem struct {
 
 // NoticesResponse is the payload returned by GET /admin/api/notices.
 type NoticesResponse struct {
-	Notices   []NoticeItem                      `json:"notices"`
+	Notices   []NoticeItem                     `json:"notices"`
 	PeakHours upstream.DeepSeekPeakHoursWindow `json:"peak_hours"`
-	Count     int                               `json:"count"`
+	Count     int                              `json:"count"`
 }
 
 // noticesData aggregates upstream static announcements, live DeepSeek peak
