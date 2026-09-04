@@ -236,10 +236,10 @@ func TestMaintainTickSkipsCooldownToken(t *testing.T) {
 
 	p.CooldownToken(0, time.Hour)
 
-	before := mock.Requests
+	before := mock.RequestsSnapshot()
 	p.maintainTick(context.Background())
 	p.sessionPollTick(context.Background())
-	if got := mock.Requests; got != before {
+	if got := mock.RequestsSnapshot(); got != before {
 		t.Errorf("upstream requests during cooldown maintain = %d, want %d (no poll/rotate)", got, before)
 	}
 }

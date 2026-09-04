@@ -62,8 +62,8 @@ func TestCORSPreflight204(t *testing.T) {
 			t.Errorf("Access-Control-Allow-Methods missing %q", want)
 		}
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (preflight answered before routing)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (preflight answered before routing)", mock.RequestsSnapshot())
 	}
 }
 
@@ -142,8 +142,8 @@ func TestEmbeddingsUnsupported(t *testing.T) {
 	if !strings.Contains(body.Error.Message, modelA) {
 		t.Errorf("message missing model list (want %q): %q", modelA, body.Error.Message)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.RequestsSnapshot())
 	}
 }
 
@@ -698,8 +698,8 @@ func TestMessagesCountTokens(t *testing.T) {
 	if out.InputTokens != 9 {
 		t.Errorf("input_tokens = %d, want 9", out.InputTokens)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (local estimate only)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (local estimate only)", mock.RequestsSnapshot())
 	}
 }
 
@@ -734,8 +734,8 @@ func TestMessagesCountTokensComplexRequest(t *testing.T) {
 	if out.InputTokens != 93 {
 		t.Errorf("input_tokens = %d, want 93 (golden reference)", out.InputTokens)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -766,8 +766,8 @@ func TestMessagesCountTokensDeterministic(t *testing.T) {
 			t.Fatalf("iteration %d input_tokens = %d, want %d (deterministic)", i, out.InputTokens, first)
 		}
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -793,8 +793,8 @@ func TestMessagesCountTokensMissingModel(t *testing.T) {
 	if out.Error.Type != "invalid_request_error" || out.Error.Code != "model_not_found" {
 		t.Errorf("type/code = %q/%q, want invalid_request_error/model_not_found", out.Error.Type, out.Error.Code)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -820,8 +820,8 @@ func TestMessagesCountTokensUnknownModel(t *testing.T) {
 	if out.Error.Type != "invalid_request_error" {
 		t.Errorf("type = %q, want invalid_request_error", out.Error.Type)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -847,8 +847,8 @@ func TestMessagesCountTokensInvalidJSON(t *testing.T) {
 			t.Errorf("body %q code = %q, want invalid_json", body, out.Error.Code)
 		}
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -868,8 +868,8 @@ func TestMessagesCountTokensOversizedBody(t *testing.T) {
 	if !strings.Contains(string(data), "content_too_large") {
 		t.Errorf("body missing content_too_large: %s", truncate(string(data), 200))
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0 (oversized body rejected before counting)", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0 (oversized body rejected before counting)", mock.RequestsSnapshot())
 	}
 }
 
@@ -898,8 +898,8 @@ func TestMessagesCountTokensDocumentRejected(t *testing.T) {
 	if out.Error.Code != "unsupported_content" {
 		t.Errorf("code = %q, want unsupported_content (valid JSON, so invalid_json would mislead)", out.Error.Code)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -925,8 +925,8 @@ func TestMessagesCountTokensSystemImageFlat(t *testing.T) {
 	if out.InputTokens != 1600+8+1 { // system image + message overhead + "hi"
 		t.Errorf("input_tokens = %d, want %d (flat 1600, base64 never tokenized)", out.InputTokens, 1600+8+1)
 	}
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 
@@ -957,8 +957,8 @@ func TestMessagesCountTokensAuth(t *testing.T) {
 		t.Fatalf("Bearer status = %d, want 200: %s", resp.StatusCode, truncate(string(data), 200))
 	}
 
-	if mock.Requests != 0 {
-		t.Errorf("upstream requests = %d, want 0", mock.Requests)
+	if mock.RequestsSnapshot() != 0 {
+		t.Errorf("upstream requests = %d, want 0", mock.RequestsSnapshot())
 	}
 }
 

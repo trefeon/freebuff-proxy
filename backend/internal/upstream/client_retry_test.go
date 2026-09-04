@@ -597,8 +597,8 @@ func TestRateLimitNeverRetried(t *testing.T) {
 	if !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("err = %v, want ErrRateLimited", err)
 	}
-	if mock.Requests != 1 {
-		t.Errorf("upstream requests = %d, want exactly 1 (429 must never be retried)", mock.Requests)
+	if mock.RequestsSnapshot() != 1 {
+		t.Errorf("upstream requests = %d, want exactly 1 (429 must never be retried)", mock.RequestsSnapshot())
 	}
 	if got := client.TransientRetries(); got != 0 {
 		t.Errorf("TransientRetries = %d, want 0", got)
@@ -621,8 +621,8 @@ func TestBanNeverRetried(t *testing.T) {
 	if !errors.Is(err, ErrBanned) {
 		t.Fatalf("err = %v, want ErrBanned", err)
 	}
-	if mock.Requests != 1 {
-		t.Errorf("upstream requests = %d, want exactly 1 (403 banned must never be retried)", mock.Requests)
+	if mock.RequestsSnapshot() != 1 {
+		t.Errorf("upstream requests = %d, want exactly 1 (403 banned must never be retried)", mock.RequestsSnapshot())
 	}
 	if got := client.TransientRetries(); got != 0 {
 		t.Errorf("TransientRetries = %d, want 0", got)

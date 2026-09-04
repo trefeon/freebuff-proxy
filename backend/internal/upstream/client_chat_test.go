@@ -671,7 +671,7 @@ func TestRequestJitter(t *testing.T) {
 
 	// The jitter gate must hold the request before any upstream contact.
 	time.Sleep(50 * time.Millisecond)
-	if n := mock.Requests; n != 0 {
+	if n := mock.RequestsSnapshot(); n != 0 {
 		t.Fatalf("upstream hit %d times during the jitter window, want 0", n)
 	}
 	cancel()
@@ -683,7 +683,7 @@ func TestRequestJitter(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("ChatCompletions did not abort on cancel during jitter")
 	}
-	if n := mock.Requests; n != 0 {
+	if n := mock.RequestsSnapshot(); n != 0 {
 		t.Fatalf("upstream hit %d times after cancel, want 0", n)
 	}
 
@@ -702,8 +702,8 @@ func TestRequestJitter(t *testing.T) {
 			t.Fatalf("chat with jitter failed: %v", err)
 		}
 		_ = rc.Close()
-		if mock2.Requests != 1 {
-			t.Errorf("Requests = %d, want 1", mock2.Requests)
+		if mock2.RequestsSnapshot() != 1 {
+			t.Errorf("Requests = %d, want 1", mock2.RequestsSnapshot())
 		}
 	})
 }
@@ -767,8 +767,8 @@ func TestChatNonObjectBodyAndGzipError(t *testing.T) {
 		if !strings.Contains(err.Error(), "envelope") {
 			t.Errorf("err = %v, want an envelope error", err)
 		}
-		if mock.Requests != 0 {
-			t.Errorf("upstream hit %d times for a rejected body, want 0", mock.Requests)
+		if mock.RequestsSnapshot() != 0 {
+			t.Errorf("upstream hit %d times for a rejected body, want 0", mock.RequestsSnapshot())
 		}
 	})
 

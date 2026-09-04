@@ -70,8 +70,8 @@ func TestChatUnsupportedParamsRejected(t *testing.T) {
 			if !strings.Contains(string(data), tc.wantErr) {
 				t.Errorf("error body missing %q: %s", tc.wantErr, truncate(string(data), 200))
 			}
-			if mock.Requests != 0 {
-				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.Requests)
+			if mock.RequestsSnapshot() != 0 {
+				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.RequestsSnapshot())
 			}
 		})
 	}
@@ -179,8 +179,8 @@ func TestResponsesUnsupportedParamsRejected(t *testing.T) {
 			if !strings.Contains(string(data), tc.wantErr) {
 				t.Errorf("error body missing %q: %s", tc.wantErr, truncate(string(data), 200))
 			}
-			if mock.Requests != 0 {
-				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.Requests)
+			if mock.RequestsSnapshot() != 0 {
+				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.RequestsSnapshot())
 			}
 		})
 	}
@@ -307,8 +307,8 @@ func TestAnthropicServerToolsRejected(t *testing.T) {
 			if !strings.Contains(string(data), tc.wantErr) {
 				t.Errorf("error body missing %q: %s", tc.wantErr, truncate(string(data), 200))
 			}
-			if mock.Requests != 0 {
-				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.Requests)
+			if mock.RequestsSnapshot() != 0 {
+				t.Errorf("upstream requests = %d, want 0 (rejected before pool)", mock.RequestsSnapshot())
 			}
 		})
 	}
