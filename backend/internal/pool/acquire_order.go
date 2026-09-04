@@ -53,10 +53,13 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 			tok.allowlistSkips.Add(1)
 			return false
 		}
-		// Quota-capped tokens are excluded from BOTH the hot set and the
-		// cold fallback: their rate-limit reasons ride back in quotaLimited,
-		// so the pool surfaces a real 429 when every token is capped.
-		if _, _, capped := quotaRemaining(tok, model); capped {
+		// Quota-capped tokens are excluded from the cold fallback: their
+		// rate-limit reasons ride back in quotaLimited, so the pool surfaces
+		// a real 429 when every token is capped. Matching-hot tokens are
+		// EXEMPT (hotReusableForModel): serving via a live session posts no
+		// admission and burns no quota — excluding them strands live
+		// sessions behind a 429 they could still serve.
+		if _, _, capped := quotaRemaining(tok, model); capped && !hotReusableForModel(tok, model) {
 			return false
 		}
 		if capped, _ := freebucksCapped(tok, model); capped {

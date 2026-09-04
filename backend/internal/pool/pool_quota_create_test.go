@@ -87,7 +87,10 @@ func TestAcquireKnownQuotaBeforeUnknown(t *testing.T) {
 	}
 }
 
-func TestAcquireSkipsQuotaCappedAndSurfaces429(t *testing.T) {
+func TestAcquireCappedHotReusesLiveSession(t *testing.T) {
+	// Capped quota + live MATCHING session: Acquire must reuse the live
+	// instance with zero new admission (reuse burns no quota) instead of
+	// 429ing a request the live session could still serve.
 	reset := futureReset()
 	mock0 := testutil.NewMock()
 	defer mock0.Close()
@@ -98,9 +101,54 @@ func TestAcquireSkipsQuotaCappedAndSurfaces429(t *testing.T) {
 	p := newTestPool(t, mock0, mock1)
 	admitBoth(t, p, modelA)
 
-	// Both tokens are capped for modelA: Acquire must surface a 429
-	// (RateLimitError) with the earliest window reset, not a generic error.
-	_, err := p.Acquire(context.Background(), modelA)
+	lease, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatalf("Acquire on capped-but-hot token = %v, want reuse success", err)
+	}
+	if lease.SessionInstanceID == "" {
+		t.Error("lease has no session instance id")
+	}
+	p.LeaseRelease(lease)
+	// No new session was admitted for the reuse.
+	if mock0.SessionCreates != 1 || mock1.SessionCreates != 1 {
+		t.Errorf("session creates = %d/%d, want 1/1 (reuse posts no admission)", mock0.SessionCreates, mock1.SessionCreates)
+	}
+	// Repeat reuse keeps working while the session lives.
+	lease2, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatalf("second Acquire = %v, want reuse success", err)
+	}
+	p.LeaseRelease(lease2)
+	if mock0.SessionCreates != 1 || mock1.SessionCreates != 1 {
+		t.Errorf("session creates after 2nd reuse = %d/%d, want 1/1", mock0.SessionCreates, mock1.SessionCreates)
+	}
+}
+
+func TestAcquireCappedMismatchedStill429(t *testing.T) {
+	// Capped quota + live session for a DIFFERENT model: serving would
+	// require release + fresh admission (a quota-burning POST), so Acquire
+	// must still surface 429 without attempting the switch. Luna has no
+	// QUOTA_FALLBACK_MODELS mapping in the test config, so no fallback
+	// fires either.
+	const luna = "openai/gpt-5.6-luna"
+	reset := futureReset()
+	newCappedMock := func() *testutil.MockUpstream {
+		m := testutil.NewMock()
+		qm := quotaFor(modelA, 5, 5, reset)
+		for k, v := range quotaFor(luna, 5, 5, reset) {
+			qm[k] = v
+		}
+		m.RateLimitsByModel = qm
+		return m
+	}
+	mock0 := newCappedMock()
+	defer mock0.Close()
+	mock1 := newCappedMock()
+	defer mock1.Close()
+	p := newTestPool(t, mock0, mock1)
+	admitBoth(t, p, modelA)
+
+	_, err := p.Acquire(context.Background(), luna)
 	var rle *upstream.RateLimitError
 	if !errors.As(err, &rle) {
 		t.Fatalf("Acquire err = %v, want *RateLimitError", err)
@@ -108,12 +156,9 @@ func TestAcquireSkipsQuotaCappedAndSurfaces429(t *testing.T) {
 	if rle.Limit != 5 || rle.RecentCount != 5 {
 		t.Errorf("rate limit = %g/%g, want 5/5", rle.RecentCount, rle.Limit)
 	}
-	if rle.RetryAfter <= 0 || rle.RetryAfter > time.Hour {
-		t.Errorf("RetryAfter = %v, want ~1h window", rle.RetryAfter)
-	}
-	// No session was created for the capped tokens.
+	// No switch admission was attempted on either token.
 	if mock0.SessionCreates != 1 || mock1.SessionCreates != 1 {
-		t.Errorf("session creates = %d/%d, want 1/1 (only the admits)", mock0.SessionCreates, mock1.SessionCreates)
+		t.Errorf("session creates = %d/%d, want 1/1 (no switch admission)", mock0.SessionCreates, mock1.SessionCreates)
 	}
 }
 

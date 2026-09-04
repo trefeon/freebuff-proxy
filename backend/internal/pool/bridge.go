@@ -171,9 +171,13 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		p.logger.Debug("pool: bridge entry daily message limit", "limit", cfg.MaxMessagesPerDay)
 		return nil, p.bridgeDailyLimitError(entry)
 	}
-	// Issue #155: quota-exhaustion fallback in bridge mode.
 	fellBack := false
-	if _, _, quotaCapped := quotaRemaining(entry, model); quotaCapped {
+	// Issue #155: quota-exhaustion fallback in bridge mode. A capped
+	// entry holding a live session for the requested model is EXEMPT
+	// (hotReusableForModel): the single-flight gate below reuses the
+	// live instance with zero admission POST, so falling back (or 429ing)
+	// would strand a session that can still serve.
+	if _, _, quotaCapped := quotaRemaining(entry, model); quotaCapped && !hotReusableForModel(entry, model) {
 		if fb := cfg.QuotaFallbackModels[model]; fb != "" && fb != model {
 			p.logger.Info("pool: bridge token quota exhausted, falling back", "token", bridgeTokenLabel(entry), "requested", model, "fallback", fb)
 			fbAgent, err := p.reg.AgentForModel(fb)

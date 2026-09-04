@@ -72,6 +72,19 @@ func quotaRemaining(acc tokenAccount, model string) (known bool, remaining float
 	return quotaStateForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
 
+// hotReusableForModel reports whether acc holds a live session for model
+// that can serve a chat with zero admission POST: reuse burns no session
+// quota, so the session-quota cap gates only admissions that actually POST
+// (cold/mismatched), never matching-hot reuse. Without this exemption a
+// daily-capped token 429s requests its own live session could still serve
+// (stranded-session 429). Freebucks is intentionally NOT exempted: serving
+// still spends balance. A near-expiry session may still fire its one
+// background pre-emptive re-admit per window (fails safe, rides the cache).
+func hotReusableForModel(acc tokenAccount, model string) bool {
+	snap := acc.sessionMgr().Snapshot()
+	return (snap.Usable() || snap.Refreshing) && snap.MatchesModel(model)
+}
+
 // quotaLimitErrorForSnapshot builds the 429 surfaced when a snapshot's quota
 // is exhausted for model (issue #85, #183): RetryAfter is the time until the
 // window reset, mirroring the upstream RateLimitError contract. Shared by

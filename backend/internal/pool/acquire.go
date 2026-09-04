@@ -324,7 +324,11 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// The hot path excludes these in acquireOrder (their rate-limit
 		// reasons ride back in quotaLimited); the no-hot round-robin path
 		// reaches them here and records the reason the same way.
-		if _, _, capped := quotaRemaining(tok, model); capped {
+		// Matching-hot tokens are EXEMPT (hotReusableForModel): the loop
+		// reaches EnsureSessionForModel, whose fast path reuses the live
+		// instance with zero admission POST — a capped token can still serve
+		// its own live session.
+		if _, _, capped := quotaRemaining(tok, model); capped && !hotReusableForModel(tok, model) {
 			rateLimited = append(rateLimited, quotaLimitError(tok, model))
 			errs = append(errs, fmt.Sprintf("%s: session quota exhausted for model", name))
 			p.logger.Debug("pool: token skipped (session quota exhausted)", "token", idx+1, "model", model)
