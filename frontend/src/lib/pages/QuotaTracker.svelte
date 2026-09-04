@@ -7,6 +7,7 @@
   import Button from "../components/Button.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import {
     tokensData,
     tokensError,
@@ -78,9 +79,15 @@
     {/snippet}
   </PageHeader>
 
+  <!-- Upstream announcements and broadcasts -->
+  <AnnouncementsBanner />
+
   {#if loading}
-    <div class="space-y-6" aria-busy="true">
-      {#each Array(3) as _, i (i)}
+    <div
+      class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start"
+      aria-busy="true"
+    >
+      {#each Array(4) as _, i (i)}
         <div class="skeleton skeleton-card h-44"></div>
       {/each}
       <span class="sr-only">{$tr("Loading quota tracker")}</span>
@@ -102,7 +109,7 @@
         )}
       />
     {:else}
-      <div class="grid grid-cols-1 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {#each data.tokens as token, ti (token.index ?? ti)}
           {@const idx = token.index ?? ti}
           <Card
@@ -110,6 +117,7 @@
             description={token.session_model
               ? $tr("Session: {model}", { model: token.session_model })
               : ""}
+            class="h-full flex flex-col"
           >
             <div class="flex flex-col gap-4">
               {#if token.quota_stale}
@@ -153,7 +161,7 @@
                   {$tr("Session quota by model")}
                 </h3>
                 {#if token.quota?.length}
-                  <div class="hidden md:block overflow-x-auto">
+                  <div class="hidden xl:block overflow-x-auto">
                     <table class="fp-table">
                       <caption class="sr-only"
                         >{$tr("Session quota by model for account {index}", {
@@ -241,9 +249,9 @@
                       </tbody>
                     </table>
                   </div>
-                  <!-- Mobile: stacked per-model entries (< md) — no horizontal scrolling -->
+                  <!-- Narrow cards (< xl, incl. the lg 2-col grid): stacked per-model entries, no horizontal scrolling -->
                   <ul
-                    class="md:hidden flex flex-col gap-2.5"
+                    class="xl:hidden flex flex-col gap-2.5"
                     aria-label={$tr(
                       "Session quota by model for account {index}",
                       {

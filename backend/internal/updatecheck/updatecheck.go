@@ -63,6 +63,13 @@ func (c *Checker) SetLogger(l *slog.Logger) {
 	c.logger = l
 }
 
+// Invalidate clears the cache timestamp so the next Latest call re-fetches.
+func (c *Checker) Invalidate() {
+	c.mu.Lock()
+	c.fetched = time.Time{}
+	c.mu.Unlock()
+}
+
 // Latest returns the latest release tag (e.g. "v0.9.3") from the in-memory
 // cache, fetching it when the last attempt — successful or failed — is
 // older than CacheTTL. A fetch failure returns the previously cached tag

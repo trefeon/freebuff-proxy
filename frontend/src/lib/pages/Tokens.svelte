@@ -278,6 +278,11 @@
     triggerAction(adminActions.tokenSwap, { from, to });
   }
 
+  function handleMove(from, to) {
+    if (from === to) return;
+    triggerAction(adminActions.tokenSwap, { from, to, action: "move" });
+  }
+
   async function startOAuthLogin() {
     oauthStarting = true;
     oauthStatus = {
@@ -711,6 +716,7 @@
       onRefresh={handleRefresh}
       onDropSession={handleDropSession}
       onSwap={handleSwap}
+      onMove={handleMove}
       onRetry={() => {
         error = "";
         refreshTokens();

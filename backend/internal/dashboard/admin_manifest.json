@@ -18,6 +18,7 @@
   {"method": "GET", "path": "/admin/api/upstream-drift", "auth": "dashboard", "js": {"export": "adminApi", "key": "upstreamDrift"}},
   {"method": "GET", "path": "/admin/api/events", "auth": "dashboard", "js": {"export": "adminApi", "key": "events"}},
   {"method": "GET", "path": "/admin/api/auth/status", "auth": "dashboard", "js": {"export": "adminApi", "key": "authStatus"}},
+  {"method": "GET", "path": "/admin/api/notices", "auth": "dashboard", "js": {"export": "adminApi", "key": "notices"}},
 
   {"method": "GET", "path": "/admin", "auth": "dashboard", "js": {"export": "adminShell", "key": "root"}},
   {"method": "GET", "path": "/admin/", "auth": "dashboard", "js": null},
@@ -52,6 +53,6 @@
   {"method": "POST", "path": "/admin/api/change-password", "auth": "sensitive", "js": {"export": "adminApi", "key": "changePassword"}},
   {"method": "POST", "path": "/admin/api/require-login", "auth": "sensitive", "js": {"export": "adminApi", "key": "requireLogin"}},
   {"method": "POST", "path": "/admin/smoke", "auth": "sensitive", "js": {"export": "adminActions", "key": "smoke"}},
-
+  {"method": "POST", "path": "/admin/restart", "auth": "sensitive", "js": {"export": "adminActions", "key": "restart"}},
   {"method": "GET", "path": "/admin/assets/", "auth": "none", "js": null}
 ]

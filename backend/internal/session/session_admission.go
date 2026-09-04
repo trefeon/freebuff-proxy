@@ -449,6 +449,8 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 				freebucks:          st.Freebucks,
 				freeWindows:        st.FreeWindows,
 				subscription:       st.Subscription,
+				upgradeHint:        st.UpgradeHint,
+				serverMessage:      st.Message,
 			})
 			// Issue #60: the successful admission refreshes the probe cache
 			// window — subsequent session poll GETs within the TTL are

@@ -276,6 +276,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return s.dash.APIHandler("upstream")
 	case "GET /admin/api/auth/status":
 		return http.HandlerFunc(s.admin.handleAdminAuthStatus)
+	case "GET /admin/api/notices":
+		return s.dash.APIHandler("notices")
 	case "GET /admin", "GET /admin/", "GET /admin/tokens", "GET /admin/models", "GET /admin/traces",
 		"GET /admin/setup", "GET /admin/playground", "GET /admin/config", "GET /admin/logs", "GET /admin/metrics":
 		// SPA shell routes: the gateway serves the Svelte app directly.
@@ -324,6 +326,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.admin.handleAdminRequireLogin)
 	case "POST /admin/smoke":
 		return http.HandlerFunc(s.admin.handleSmoke)
+	case "POST /admin/restart":
+		return http.HandlerFunc(s.admin.handleAdminRestart)
 	case "GET /admin/assets/":
 		return noDirListing(http.StripPrefix("/admin/assets/", http.FileServerFS(mustSubFS(dashboard.DistFS(), "assets"))))
 	default:

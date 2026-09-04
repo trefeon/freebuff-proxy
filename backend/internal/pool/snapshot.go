@@ -214,6 +214,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Freebucks:               ss.Freebucks,
 			FreeWindows:             ss.FreeWindows,
 			Subscription:            ss.Subscription,
+			UpgradeHint:             ss.UpgradeHint,
+			ServerMessage:           ss.ServerMessage,
 			Locked:                  tok.locked.Load(),
 			Quarantined:             q != nil,
 			QuarantineReason:        quarantineReason,

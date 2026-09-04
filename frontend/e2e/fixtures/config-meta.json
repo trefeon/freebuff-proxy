@@ -68,7 +68,15 @@
   {
     "key": "HTTP_READ_TIMEOUT",
     "group": "general",
-    "kind": "text",
+    "kind": "select",
+    "enum": [
+      "60s",
+      "90s",
+      "120s",
+      "180s",
+      "300s",
+      "0"
+    ],
     "default": "60s",
     "restart_only": true,
     "secret": false,

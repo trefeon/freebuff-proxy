@@ -446,12 +446,13 @@ func (a *adminHandlers) handleTokenSwap(w http.ResponseWriter, r *http.Request) 
 	toIdx := -1
 
 	var req struct {
-		I    *int   `json:"i"`
-		J    *int   `json:"j"`
-		From *int   `json:"from"`
-		To   *int   `json:"to"`
-		Idx  *int   `json:"index"`
-		Dir  string `json:"direction"`
+		I      *int   `json:"i"`
+		J      *int   `json:"j"`
+		From   *int   `json:"from"`
+		To     *int   `json:"to"`
+		Idx    *int   `json:"index"`
+		Dir    string `json:"direction"`
+		Action string `json:"action"`
 	}
 	body, _ := io.ReadAll(r.Body)
 	if len(body) > 0 {
@@ -498,6 +499,24 @@ func (a *adminHandlers) handleTokenSwap(w http.ResponseWriter, r *http.Request) 
 		a.dash.RenderConfigResult(w, r, true, "Tokens already in requested order.")
 		return
 	}
+	isMove := req.Action == "move" || r.URL.Query().Get("action") == "move"
+	if isMove {
+		if err := a.pool.MoveToken(fromIdx, toIdx); err != nil {
+			a.dash.RenderConfigResult(w, r, false, err.Error())
+			return
+		}
+
+		tokens := moveStringSlice(cfg.AuthTokens, fromIdx, toIdx)
+		if err := a.syncTokensAfterMutation(tokens); err != nil {
+			_ = a.pool.MoveToken(toIdx, fromIdx) // rollback pool order
+			a.logfunc().Warn("dashboard token move rolled back", "remote", remoteHost(r), "err", err)
+			a.dash.RenderConfigResult(w, r, false, err.Error())
+			return
+		}
+		a.logfunc().Info("dashboard token moved", "remote", remoteHost(r), "from", fromIdx, "to", toIdx)
+		a.dash.RenderConfigResult(w, r, true, fmt.Sprintf("Token #%d moved to position #%d and updated in .env.", fromIdx+1, toIdx+1))
+		return
+	}
 
 	if err := a.pool.SwapTokens(fromIdx, toIdx); err != nil {
 		a.dash.RenderConfigResult(w, r, false, err.Error())
@@ -517,6 +536,21 @@ func (a *adminHandlers) handleTokenSwap(w http.ResponseWriter, r *http.Request) 
 	a.dash.RenderConfigResult(w, r, true, fmt.Sprintf("Token #%d and Token #%d swapped and prioritized in .env.", fromIdx, toIdx))
 }
 
+func moveStringSlice(s []string, from, to int) []string {
+	if from < 0 || from >= len(s) || to < 0 || to >= len(s) || from == to {
+		return s
+	}
+	target := s[from]
+	without := make([]string, 0, len(s)-1)
+	without = append(without, s[:from]...)
+	without = append(without, s[from+1:]...)
+
+	res := make([]string, 0, len(s))
+	res = append(res, without[:to]...)
+	res = append(res, target)
+	res = append(res, without[to:]...)
+	return res
+}
 func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before FormValue: ParseForm would otherwise slurp the
 	// entire request into memory before the JSON fallback's 4KB cap applies.

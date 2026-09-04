@@ -6,6 +6,7 @@
     Unlock,
     Lock,
     Trash2,
+    GripVertical,
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import StatusBadge from "./StatusBadge.svelte";
@@ -47,6 +48,13 @@
     onRefresh,
     onDropSession,
     onSwap,
+    dragging = false,
+    dragOver = false,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onDragEnd,
   } = $props();
 
   function banBadge(token) {
@@ -127,10 +135,29 @@
   const st = $derived(statusFor(token));
 </script>
 
-<tr>
-  <td class="w-14">
-    <div class="inline-flex items-center gap-0.5">
+<tr
+  draggable={totalTokens > 1 && !actionPending}
+  ondragstart={(e) => onDragStart?.(e, idx)}
+  ondragover={(e) => onDragOver?.(e, idx)}
+  ondragleave={(e) => onDragLeave?.(e, idx)}
+  ondrop={(e) => onDrop?.(e, idx)}
+  ondragend={onDragEnd}
+  class="transition-colors {dragging
+    ? 'opacity-30 bg-[var(--fp-surface-2)]/60'
+    : dragOver
+      ? 'bg-[var(--fp-accent)]/15 border-y-2 border-[var(--fp-accent)]'
+      : ''}"
+>
+  <td class="w-16">
+    <div class="inline-flex items-center gap-1">
       {#if totalTokens > 1}
+        <div
+          class="cursor-grab active:cursor-grabbing p-1 text-[var(--fp-dim)] hover:text-[var(--fp-accent)] rounded select-none hover:bg-[var(--fp-surface-2)] transition-colors"
+          title={$tr("Drag to reorder account position")}
+          aria-label={$tr("Drag to reorder")}
+        >
+          <GripVertical size={15} />
+        </div>
         <div class="flex flex-col shrink-0 -my-1">
           <button
             type="button"
@@ -138,9 +165,9 @@
             title={$tr("Move Up / Prioritize")}
             aria-label={$tr("Move Up")}
             onclick={() => onSwap?.(idx, idx - 1)}
-            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-5 h-5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronUp size={14} />
+            <ChevronUp size={13} />
           </button>
           <button
             type="button"
@@ -148,9 +175,9 @@
             title={$tr("Move Down")}
             aria-label={$tr("Move Down")}
             onclick={() => onSwap?.(idx, idx + 1)}
-            class="inline-flex items-center justify-center w-6 h-6 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            class="inline-flex items-center justify-center w-5 h-5 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronDown size={14} />
+            <ChevronDown size={13} />
           </button>
         </div>
       {/if}

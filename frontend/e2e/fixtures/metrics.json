@@ -4,8 +4,8 @@
   "requests_total": 60,
   "models": 6,
   "sample_count": 20,
-  "requests_spark": "<svg aria-label=\"requests served over time\" role=\"img\" viewBox=\"0 0 100 20\"><polyline fill=\"none\" stroke=\"var(--fp-amber)\" points=\"0,15 10,12 20,10 30,8 40,9 50,6 60,7 70,5 80,4 90,2\"/></svg>",
-  "retries_spark": "<svg aria-label=\"transient retries over time\" role=\"img\" viewBox=\"0 0 100 20\"><polyline fill=\"none\" stroke=\"var(--fp-teal)\" points=\"0,18 10,16 20,15 30,14 40,13 50,12 60,11 70,10 80,9 90,8\"/></svg>",
+  "requests_spark": "<svg aria-label=\"requests served over time\" role=\"img\" viewBox=\"0 0 100 20\"><polyline fill=\"none\" stroke=\"#e3a857\" points=\"0,15 10,12 20,10 30,8 40,9 50,6 60,7 70,5 80,4 90,2\"/></svg>",
+  "retries_spark": "<svg aria-label=\"transient retries over time\" role=\"img\" viewBox=\"0 0 100 20\"><polyline fill=\"none\" stroke=\"#7dd3fc\" points=\"0,18 10,16 20,15 30,14 40,13 50,12 60,11 70,10 80,9 90,8\"/></svg>",
   "requests_trend": {
     "direction": "up",
     "percentage": 12.5

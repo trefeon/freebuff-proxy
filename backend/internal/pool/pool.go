@@ -166,6 +166,12 @@ type TokenSnapshot struct {
 	// Subscription is the upstream subscription usage block (issue #319);
 	// rollout-audience only; nil until reported.
 	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
+	// UpgradeHint is the upstream upgradeHint block ({url, message})
+	// broadcast by the session server; nil when absent.
+	UpgradeHint *upstream.SessionUpgradeHint `json:"upgrade_hint,omitempty"`
+	// ServerMessage is any live broadcast or error message sent by the
+	// session server; "" when absent.
+	ServerMessage string `json:"server_message,omitempty"`
 	// TransientRetries / FingerprintRotations are this token's upstream
 	// client counters (TRANSIENT_RETRIES): retried transport failures and
 	// pinned TLS fingerprint swaps. Surfaced per-token in /metrics.
