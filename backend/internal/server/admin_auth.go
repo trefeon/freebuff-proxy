@@ -667,7 +667,7 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 	a.adminSaveMu.Lock()
 	defer a.adminSaveMu.Unlock()
 
-	oldBytes, oldErr := os.ReadFile(".env")
+	oldBytes, oldErr := os.ReadFile(config.EnvFileForWrite())
 	_, err := updateEnvKeys([]config.EnvUpdate{
 		{Key: "ADMIN_TOKEN", Value: req.NewPassword},
 		{Key: "DASHBOARD_REQUIRE_LOGIN", Value: "true"},
@@ -769,7 +769,7 @@ func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.R
 	a.adminSaveMu.Lock()
 	defer a.adminSaveMu.Unlock()
 
-	oldBytes, oldErr := os.ReadFile(".env")
+	oldBytes, oldErr := os.ReadFile(config.EnvFileForWrite())
 	_, err := updateEnvKeys([]config.EnvUpdate{
 		{Key: "DASHBOARD_REQUIRE_LOGIN", Value: valStr},
 	})

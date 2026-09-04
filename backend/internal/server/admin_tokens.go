@@ -228,7 +228,7 @@ func (a *adminHandlers) syncTokensAfterMutation(tokens []string) error {
 	// rollback). Otherwise the failed add leaves AUTH_TOKENS=<new> in .env
 	// while the live pool holds the old list — the very divergence the
 	// caller is trying to avoid.
-	old, oldErr := os.ReadFile(".env")
+	old, oldErr := os.ReadFile(config.EnvFileForWrite())
 	if _, err := updateAuthTokensEnv(tokens); err != nil {
 		return fmt.Errorf("persist AUTH_TOKENS: %w", err)
 	}
@@ -553,7 +553,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		// Persist AUTH_TOKENS= (explicit empty) and
 		// reload, verifying the effective config actually lands in bridge
 		// mode before touching the live pool. Roll the .env back on failure.
-		old, oldErr := os.ReadFile(".env")
+		old, oldErr := os.ReadFile(config.EnvFileForWrite())
 		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: ""}}); err != nil {
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
@@ -590,7 +590,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		// touching the live pool. Roll the .env back on failure.
 		a.adminSaveMu.Lock()
 		defer a.adminSaveMu.Unlock()
-		old, oldErr := os.ReadFile(".env")
+		old, oldErr := os.ReadFile(config.EnvFileForWrite())
 		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "0"}}); err != nil {
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
@@ -624,7 +624,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		// Pure pooled → hybrid: enable the bridge relay alongside the pool.
 		a.adminSaveMu.Lock()
 		defer a.adminSaveMu.Unlock()
-		old, oldErr := os.ReadFile(".env")
+		old, oldErr := os.ReadFile(config.EnvFileForWrite())
 		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "1"}}); err != nil {
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return

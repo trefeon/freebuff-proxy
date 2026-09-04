@@ -133,7 +133,10 @@ func quotaLimitError(acc tokenAccount, model string) *upstream.RateLimitError {
 // balance < price, or when the monthly dollar allowance is spent (wire drift
 // 2026-09-04, issue #330 — fresh sessions stop upstream regardless of the
 // daily balance). RetryAfter is the earliest future recovery instant among
-// the applicable windows; 0 when nothing is known.
+// the applicable windows. When every recovery instant is past or unknown,
+// the stored numbers are self-declared stale and the token is NOT capped —
+// one admission revalidates live truth (polls never carry Freebucks, so
+// nothing else could refresh them).
 func freebucksCapped(acc tokenAccount, model string) (bool, time.Duration) {
 	return freebucksCappedForSnapshot(acc.sessionMgr().Snapshot(), model)
 }
@@ -176,7 +179,13 @@ func freebucksCappedForSnapshot(snap session.SessionSnapshot, model string) (boo
 		}
 	}
 	if earliest.IsZero() {
-		return true, 0
+		// No future recovery instant: the stored numbers are self-declared
+		// stale (their own windows passed, or a server that never sent
+		// reset times). Treat as unknown so one admission revalidates
+		// against live upstream truth — a genuine refusal re-caps with
+		// fresh data — instead of 429ing forever on frozen numbers no
+		// refresh path can update (polls do not carry Freebucks).
+		return false, 0
 	}
 	return true, time.Until(earliest)
 }

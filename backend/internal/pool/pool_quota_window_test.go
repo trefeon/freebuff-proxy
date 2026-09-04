@@ -496,4 +496,10 @@ func TestFreebucksCappedMonthlyAllowance(t *testing.T) {
 	if retry < 29*24*time.Hour || retry > 31*24*time.Hour {
 		t.Errorf("retry = %v, want ≈30d (monthly reset)", retry)
 	}
+	// All recovery instants past: the numbers are self-declared stale —
+	// unknown, not capped, so one admission revalidates live truth.
+	capped, _ = freebucksCappedForSnapshot(mkSnap(withMonthly(0, 0, now.Add(-time.Hour), now.Add(-time.Hour))), "openai/gpt-5.6-luna")
+	if capped {
+		t.Error("capped on fully-past windows, want unknown (revalidate)")
+	}
 }
