@@ -5,7 +5,7 @@ b42006247502 common/src/constants/freebuff-signup-block.ts
 f248aa36d083 common/src/constants/freebuff-spend-ceilings.ts
 555339c61867 common/src/constants/freebuff-standing.ts
 c2508c4590f2 common/src/tools/constants.ts
-897ef326589d common/src/types/freebuff-session.ts
+d41334b2718d common/src/types/freebuff-session.ts
 43971606f941 common/src/util/freebuff-model-availability.ts
 233ab67d1922 packages/agent-runtime/src/constants.ts
 7bf7ca49fb51 packages/agent-runtime/src/prompt-agent-stream.ts
