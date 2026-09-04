@@ -739,9 +739,15 @@ test.describe("operator UX journey (hermetic mocks)", () => {
 
     // Unmetered models section and accounting revamp notice render per account card.
     await expect(page.getByText("Unmetered Models")).toHaveCount(2);
-    await expect(page.getByText(/Solar Pro 4 · Unmetered at full access/)).toHaveCount(2);
-    await expect(page.getByText(/DeepSeek V4 Flash · Standard free row/)).toHaveCount(2);
-    await expect(page.getByText(/Upstream Accounting Revamp \(Freebucks\)/)).toHaveCount(2);
+    await expect(
+      page.getByText(/Solar Pro 4 · Unmetered at full access/),
+    ).toHaveCount(2);
+    await expect(
+      page.getByText(/DeepSeek V4 Flash · Standard free row/),
+    ).toHaveCount(2);
+    await expect(
+      page.getByText(/Upstream Accounting Revamp \(Freebucks\)/),
+    ).toHaveCount(2);
   });
 
   // ---------------------------------------------------------------------------
