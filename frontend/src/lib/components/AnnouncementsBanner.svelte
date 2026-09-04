@@ -24,18 +24,7 @@
   let collapsed = $state(false);
   let loaded = $state(false);
 
-  const STORAGE_KEY = "freebuff_dismissed_notices";
-
   onMount(async () => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        for (const id of JSON.parse(stored)) dismissed.add(id);
-      }
-    } catch {
-      // Ignore localStorage read errors
-    }
-
     try {
       const res = await fetchAPI(adminApi.notices);
       if (res) {
@@ -49,13 +38,12 @@
     }
   });
 
+  // Session-scoped dismissal: hides a notice until this page unmounts
+  // (navigating away or reloading brings it back). Deliberately NOT persisted
+  // to localStorage — dismissing on one page must not erase the notice
+  // everywhere, and the banner only lives on the Overview page.
   function dismissNotice(id) {
     dismissed.add(id);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...dismissed]));
-    } catch {
-      // Ignore localStorage write errors
-    }
   }
 
   let activeNotices = $derived(notices.filter((n) => !dismissed.has(n.id)));

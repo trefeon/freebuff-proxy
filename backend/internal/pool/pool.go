@@ -43,6 +43,11 @@ import (
 // requests per 24h of usage history.
 const usageWindow = 24 * time.Hour
 
+// rpmWindow is the rolling window for the per-token per-minute request cap
+// (MAX_REQUESTS_PER_MINUTE): a token may admit at most N chat requests per
+// 60s of admission history.
+const rpmWindow = 60 * time.Second
+
 // shutdownTimeout bounds each token's Shutdown during Pool.Shutdown when the
 // caller's context carries no earlier deadline.
 const shutdownTimeout = 10 * time.Second
@@ -99,10 +104,21 @@ type TokenSnapshot struct {
 	SessionExpiresAt time.Time `json:"session_expires_at,omitempty"`
 	ActiveRuns       int
 	Requests         int
-	Messages24h      int    // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
-	DailyLimit       int    // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
-	UsagePct         int    // percentage of daily limit used (0 when unlimited)
-	RiskLevel        string // "low", "moderate", "high", "critical" account safety indicator (#6)
+	Messages24h      int // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
+	DailyLimit       int // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
+	UsagePct         int // percentage of daily limit used (0 when unlimited)
+	// RequestsPerMinute / RequestsPerDay are the local per-token request
+	// counters (MAX_REQUESTS_PER_MINUTE: admitted chats in the rolling 60s
+	// window; MAX_REQUESTS_PER_DAY: successful chats in the current Pacific
+	// day, rolling at Pacific midnight). The ...Limit fields carry the
+	// configured caps (0 = unlimited) and RequestsPerDayResetIn the time
+	// until the next Pacific midnight (the official daily reset instant).
+	RequestsPerMinute      int           `json:"requests_per_minute"`
+	RequestsPerDay         int           `json:"requests_per_day"`
+	RequestsPerMinuteLimit int           `json:"requests_per_minute_limit"`
+	RequestsPerDayLimit    int           `json:"requests_per_day_limit"`
+	RequestsPerDayResetIn  time.Duration `json:"requests_per_day_reset_in"`
+	RiskLevel              string        // "low", "moderate", "high", "critical" account safety indicator (#6)
 	// Spend24h / SpendDay / SpendWeek / SpendMonth are the local per-token
 	// spend ledger (issue #87/#122): tokens spent in the rolling 24h window
 	// and the current Pacific day/week/month buckets (with rollover —
@@ -879,10 +895,19 @@ func (p *Pool) Chat(ctx context.Context, lease *Lease, opts upstream.ChatOptions
 		return nil, errors.New("pool: chat: invalid lease")
 	}
 	rc, err := t.client.ChatCompletions(ctx, opts, body)
+	// Per-minute request accounting (MAX_REQUESTS_PER_MINUTE): every request
+	// that went upstream counts, success or failure — the exact rate
+	// upstream observes (retries that later fail are throttled too).
+	if t.bridge != nil {
+		p.bridgeRecordRequest(t.bridge)
+	} else if t.entry != nil {
+		p.recordRequestEntry(t.entry)
+	}
 	if err == nil {
 		if t.bridge != nil {
 			// Only chats that actually went upstream count against the
-			// daily cap; errors are not recorded.
+			// daily cap; errors are not recorded. The Pacific-day request
+			// count (MAX_REQUESTS_PER_DAY) rides the same success path.
 			p.bridgeRecordChat(t.bridge)
 		} else if t.entry != nil {
 			p.recordChatEntry(t.entry)

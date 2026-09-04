@@ -209,16 +209,79 @@ func (r *tokenRoster) recordChat(token int) {
 }
 
 // recordChatEntry appends one successful upstream chat for a lease's backing
-// entry by pointer. The entry owns its ledger, so no index lookup is needed;
-// a retired (removed) entry's ledger is never read again, so recording on it
-// is harmless.
+// entry by pointer, plus the Pacific-day successful-request count
+// (MAX_REQUESTS_PER_DAY). The entry owns its ledger, so no index lookup is
+// needed; a retired (removed) entry's ledger is never read again, so
+// recording on it is harmless.
 func (r *tokenRoster) recordChatEntry(entry *tokenEntry) {
 	if entry == nil {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	entry.ledger.recordChat(time.Now())
+	now := time.Now()
+	entry.ledger.recordChat(now)
+	entry.ledger.recordDayRequest(now)
+}
+
+// recordRequestEntry appends one ADMITTED chat request for a lease's backing
+// entry by pointer (MAX_REQUESTS_PER_MINUTE): success or failure upstream,
+// the request was sent — counted at the exact rate upstream observes.
+func (r *tokenRoster) recordRequestEntry(entry *tokenEntry) {
+	if entry == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry.ledger.recordRequest(time.Now())
+}
+
+// rpmCount returns the entry at token's admitted-request count in the
+// rolling 60s window, pruning expired timestamps.
+func (r *tokenRoster) rpmCount(token int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur := *r.toks.Load()
+	if token < 0 || token >= len(cur) {
+		return 0
+	}
+	return cur[token].ledger.rpmCount(time.Now())
+}
+
+// rpmResetIn returns how long until the entry at token's oldest admitted
+// request ages out of the 60s window.
+func (r *tokenRoster) rpmResetIn(token int) time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur := *r.toks.Load()
+	if token < 0 || token >= len(cur) {
+		return 0
+	}
+	return cur[token].ledger.rpmResetIn(time.Now())
+}
+
+// dayRequestCount returns the entry at token's successful-request count in
+// the current Pacific day, rolling the bucket at Pacific midnight.
+func (r *tokenRoster) dayRequestCount(token int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur := *r.toks.Load()
+	if token < 0 || token >= len(cur) {
+		return 0
+	}
+	return cur[token].ledger.dayRequestCount(time.Now())
+}
+
+// dayRequestResetIn returns how long until the next Pacific midnight (the
+// official daily quota reset instant).
+func (r *tokenRoster) dayRequestResetIn(token int) time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur := *r.toks.Load()
+	if token < 0 || token >= len(cur) {
+		return 0
+	}
+	return cur[token].ledger.dayRequestResetIn(time.Now())
 }
 
 // usageCount returns the entry at token's in-window chat count, pruning

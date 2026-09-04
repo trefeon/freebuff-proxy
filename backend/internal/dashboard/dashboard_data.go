@@ -56,30 +56,39 @@ type upstreamFile struct {
 	Status    string `json:"status"` // DRIFT | MISSING_UPSTREAM | SAME
 }
 type tokenCard struct {
-	Index               int     `json:"index"`
-	Email               string  `json:"email,omitempty"`
-	AccountID           string  `json:"account_id,omitempty"`
-	SessionStatus       string  `json:"session_status"`
-	QueuePosition       int     `json:"queue_position"`
-	QueueDepth          int     `json:"queue_depth"`
-	ActiveRuns          int     `json:"active_runs"`
-	Requests            int     `json:"requests"`
-	Messages24h         int     `json:"messages_24h"`
-	DailyLimit          int     `json:"daily_limit"`
-	UsagePct            int     `json:"usage_pct"`
-	RiskLevel           string  `json:"risk_level"`
-	CooldownActive      bool    `json:"cooldown_active"`
-	CooldownUntil       string  `json:"cooldown_until"`
-	Locked              bool    `json:"locked"`
-	BanType             string  `json:"ban_type,omitempty"`
-	BannedUntil         string  `json:"banned_until,omitempty"`
-	TransientRetries    int64   `json:"transient_retries"`
-	HasStanding         bool    `json:"has_standing"`
-	StandingLevel       string  `json:"standing_level"`
-	StandingLabel       string  `json:"standing_label"`
-	StandingScore       float64 `json:"standing_score"`
-	StandingNextLevel   string  `json:"standing_next_level"`
-	StandingNextLevelAt string  `json:"standing_next_level_at"`
+	Index         int    `json:"index"`
+	Email         string `json:"email,omitempty"`
+	AccountID     string `json:"account_id,omitempty"`
+	SessionStatus string `json:"session_status"`
+	QueuePosition int    `json:"queue_position"`
+	QueueDepth    int    `json:"queue_depth"`
+	ActiveRuns    int    `json:"active_runs"`
+	Requests      int    `json:"requests"`
+	Messages24h   int    `json:"messages_24h"`
+	DailyLimit    int    `json:"daily_limit"`
+	UsagePct      int    `json:"usage_pct"`
+	// Per-token request limits (issue: RPD/RPM): live counters + configured
+	// caps (0 = unlimited) + time until the next Pacific midnight (the
+	// official daily reset) in seconds, so the dashboard can show usage and
+	// lock state per account.
+	RequestsPerMinute      int     `json:"requests_per_minute"`
+	RequestsPerDay         int     `json:"requests_per_day"`
+	RequestsPerMinuteLimit int     `json:"requests_per_minute_limit"`
+	RequestsPerDayLimit    int     `json:"requests_per_day_limit"`
+	RequestsPerDayResetIn  int     `json:"requests_per_day_reset_in"` // seconds
+	RiskLevel              string  `json:"risk_level"`
+	CooldownActive         bool    `json:"cooldown_active"`
+	CooldownUntil          string  `json:"cooldown_until"`
+	Locked                 bool    `json:"locked"`
+	BanType                string  `json:"ban_type,omitempty"`
+	BannedUntil            string  `json:"banned_until,omitempty"`
+	TransientRetries       int64   `json:"transient_retries"`
+	HasStanding            bool    `json:"has_standing"`
+	StandingLevel          string  `json:"standing_level"`
+	StandingLabel          string  `json:"standing_label"`
+	StandingScore          float64 `json:"standing_score"`
+	StandingNextLevel      string  `json:"standing_next_level"`
+	StandingNextLevelAt    string  `json:"standing_next_level_at"`
 	// Standing cap + earn-back hints (issue #140, FreebuffStandingInfo):
 	// cappedBy/cappedReason name the trust cap holding the level, blurb is
 	// upstream's human explanation, nextSteps the suggested actions.

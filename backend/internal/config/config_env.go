@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+// Default per-token request limits (anti-abuse posture, user-mandated
+// 2026-09-05): each account stays well under upstream abuse-detection
+// volume while the multi-token pool rolls capped tokens. 0 = unlimited.
+const (
+	defaultMaxRequestsPerDay    = 1500 // successful chats per Pacific day (resets with the official daily quota)
+	defaultMaxRequestsPerMinute = 30   // admitted chat requests per rolling 60s window
+)
+
 // LoadOptions configures LoadOpts. DiscoverCLIToken, when non-nil, sources
 // an empty AUTH_TOKENS pool from the official CLI login files (issue #283);
 // the cmd entrypoint wires clicreds.DiscoverToken here. A nil value keeps
@@ -80,6 +88,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.LogAccess, "LOG_ACCESS")
 	overrideInt(&raw.LogRingSize, "LOG_RING_SIZE")
 	overrideInt(&raw.MaxMessagesPerDay, "MAX_MESSAGES_PER_DAY")
+	overrideInt(&raw.MaxRequestsPerDay, "MAX_REQUESTS_PER_DAY")
+	overrideInt(&raw.MaxRequestsPerMinute, "MAX_REQUESTS_PER_MINUTE")
 	overrideInt(&raw.BridgeDailyLimit, "BRIDGE_DAILY_LIMIT")
 	overrideInt(&raw.MaxSpendPerDay, "MAX_SPEND_PER_DAY")
 	overrideBool(&raw.BridgeEnabled, "BRIDGE_ENABLED")
@@ -271,6 +281,24 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		maxMessagesPerDay = *raw.MaxMessagesPerDay
 	}
 
+	// MAX_REQUESTS_PER_DAY defaults to 1500 (per-token, Pacific-day): sized
+	// for ~6 concurrent agent sessions over a full working day while each
+	// account stays under abuse-detection volume; the pool rolls capped
+	// tokens. 0 = unlimited; explicit values always win.
+	maxRequestsPerDay := defaultMaxRequestsPerDay
+	if raw.MaxRequestsPerDay != nil {
+		maxRequestsPerDay = *raw.MaxRequestsPerDay
+	}
+
+	// MAX_REQUESTS_PER_MINUTE defaults to 30 (per-token, rolling 60s):
+	// ~2-3x the worst realistic minute for 6 parallel subagent sessions
+	// (spawn batches of 6-8 land within seconds) yet tight enough to lock
+	// a runaway loop (>=1 req/s) within a minute. 0 = unlimited.
+	maxRequestsPerMinute := defaultMaxRequestsPerMinute
+	if raw.MaxRequestsPerMinute != nil {
+		maxRequestsPerMinute = *raw.MaxRequestsPerMinute
+	}
+
 	// BRIDGE_DAILY_LIMIT (B5): global daily chat cap across ALL bridge
 	// entries. 0 = unlimited (default). Explicit values always win.
 	bridgeDailyLimit := 0
@@ -433,6 +461,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		LogAccess:                        raw.LogAccess,
 		LogRingSize:                      logRingSize,
 		MaxMessagesPerDay:                maxMessagesPerDay,
+		MaxRequestsPerDay:                maxRequestsPerDay,
+		MaxRequestsPerMinute:             maxRequestsPerMinute,
 		BridgeDailyLimit:                 bridgeDailyLimit,
 		MaxSpendPerDay:                   maxSpendPerDay,
 		BridgeEnabled:                    raw.BridgeEnabled,

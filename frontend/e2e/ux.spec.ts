@@ -710,8 +710,25 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       f,
       {
         tokens: tokensPayload([
-          tokenRow(0, { has_quota: true, quota: [] }),
-          tokenRow(1, { has_quota: true, quota: [] }),
+          tokenRow(0, {
+            has_quota: true,
+            quota: [],
+            requests_per_minute: 2,
+            requests_per_minute_limit: 30,
+            requests_per_day: 5,
+            requests_per_day_limit: 1500,
+            requests_per_day_reset_in: 3600,
+          }),
+          tokenRow(1, {
+            has_quota: true,
+            quota: [],
+            requests_per_minute: 12,
+            requests_per_minute_limit: 30,
+            // Day-capped: the card shows the Pacific-midnight reset countdown.
+            requests_per_day: 1500,
+            requests_per_day_limit: 1500,
+            requests_per_day_reset_in: 3600,
+          }),
         ]),
       },
       { loginPage: true },
@@ -747,6 +764,16 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       page.getByText(/Upstream Accounting Revamp \(Freebucks\)/),
     ).toHaveCount(1);
     await expect(page.getByText("Unmetered Models")).toHaveCount(0);
+    // Per-account request-limit chips render per card; a day-capped account
+    // shows the Pacific-midnight reset countdown.
+    await expect(page.getByText("req/min")).toHaveCount(2);
+    await expect(page.getByText("req/day")).toHaveCount(2);
+    await expect(page.getByText("5/1500")).toHaveCount(1);
+    await expect(page.getByText("12/30")).toHaveCount(1);
+    await expect(page.getByText("1500/1500")).toHaveCount(1);
+    await expect(page.getByText(/daily limit reached — resets 1h/)).toHaveCount(
+      1,
+    );
   });
 
   test("quota: streak indicator renders progress dots and perk countdown", async ({

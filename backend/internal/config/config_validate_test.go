@@ -234,6 +234,8 @@ func TestValidate(t *testing.T) {
 		{"zero registry refresh", func(c *Config) { c.RegistryRefresh = 0 }},
 		{"bad cost mode", func(c *Config) { c.CostMode = "Free" }},
 		{"negative max messages", func(c *Config) { c.MaxMessagesPerDay = -1 }},
+		{"negative max requests per day", func(c *Config) { c.MaxRequestsPerDay = -1 }},
+		{"negative max requests per minute", func(c *Config) { c.MaxRequestsPerMinute = -1 }},
 		{"negative max spend", func(c *Config) { c.MaxSpendPerDay = -1 }},
 		{"negative rate limit per ip", func(c *Config) { c.RateLimitPerIP = -1 }},
 		{"negative rate limit burst", func(c *Config) { c.RateLimitBurst = -1 }},

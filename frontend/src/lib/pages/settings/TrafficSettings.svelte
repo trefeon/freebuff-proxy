@@ -75,6 +75,92 @@
     </div>
   </SettingsRow>
 
+  <!-- Per-token Per-Minute Request Limit -->
+  <SettingsRow
+    label={$tr("Max Requests per Minute (per account)")}
+    description={$tr(
+      "Per-token cap on admitted chat requests in a rolling 60s window. Throttles the request rate upstream actually observes — a runaway loop locks within a minute and the pool rolls to the next account. 0 = unlimited, empty = default (30).",
+    )}
+  >
+    {#snippet badge()}
+      <code
+        class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
+        >MAX_REQUESTS_PER_MINUTE</code
+      >
+      {#if !env.MAX_REQUESTS_PER_MINUTE}
+        <span
+          class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
+          >{$tr("default")}</span
+        >
+      {/if}
+    {/snippet}
+
+    <div class="w-full sm:w-44">
+      <div class="relative">
+        <input
+          type="number"
+          min="0"
+          step="1"
+          aria-label="MAX_REQUESTS_PER_MINUTE"
+          class="fp-input w-full !text-xs !py-1.5"
+          placeholder="30 (default)"
+          value={formValues.MAX_REQUESTS_PER_MINUTE ?? ""}
+          oninput={(e) => {
+            const val = e.currentTarget.value.trim();
+            onField("MAX_REQUESTS_PER_MINUTE", val);
+          }}
+        />
+        <span
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none"
+          >req/min</span
+        >
+      </div>
+    </div>
+  </SettingsRow>
+
+  <!-- Per-token Per-Day Request Limit -->
+  <SettingsRow
+    label={$tr("Max Requests per Day (per account)")}
+    description={$tr(
+      "Per-token cap on successful chat requests per Pacific day. A capped account is skipped and the pool rolls to the next one; all tokens unlock at Pacific midnight — the same instant upstream resets its daily quota windows. 0 = unlimited, empty = default (1500).",
+    )}
+  >
+    {#snippet badge()}
+      <code
+        class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
+        >MAX_REQUESTS_PER_DAY</code
+      >
+      {#if !env.MAX_REQUESTS_PER_DAY}
+        <span
+          class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
+          >{$tr("default")}</span
+        >
+      {/if}
+    {/snippet}
+
+    <div class="w-full sm:w-44">
+      <div class="relative">
+        <input
+          type="number"
+          min="0"
+          step="1"
+          aria-label="MAX_REQUESTS_PER_DAY"
+          class="fp-input w-full !text-xs !py-1.5"
+          placeholder="1500 (default)"
+          value={formValues.MAX_REQUESTS_PER_DAY ?? ""}
+          oninput={(e) => {
+            const val = e.currentTarget.value.trim();
+            onField("MAX_REQUESTS_PER_DAY", val);
+          }}
+        />
+        <span
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none"
+          >req/day</span
+        >
+      </div>
+    </div>
+  </SettingsRow>
+
   <!-- 429 Failover -->
   <SettingsRow
     last

@@ -637,6 +637,64 @@ func TestMaxMessagesPerDay(t *testing.T) {
 	}
 }
 
+// TestRequestLimits pins the per-token RPD/RPM knobs (user-mandated
+// 2026-09-05, anti-abuse): defaults 1500/day + 30/min when unset, env
+// overrides, unparseable env ignored (file value kept), and JSON file
+// values. 0 = unlimited (explicit).
+func TestRequestLimits(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("AUTH_TOKENS", "tok")
+
+	// Defaults when unset: 1500 requests/day, 30 requests/min.
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load: %v", err)
+	} else if cfg.MaxRequestsPerDay != defaultMaxRequestsPerDay {
+		t.Errorf("MaxRequestsPerDay = %d, want %d (default)", cfg.MaxRequestsPerDay, defaultMaxRequestsPerDay)
+	} else if cfg.MaxRequestsPerMinute != defaultMaxRequestsPerMinute {
+		t.Errorf("MaxRequestsPerMinute = %d, want %d (default)", cfg.MaxRequestsPerMinute, defaultMaxRequestsPerMinute)
+	}
+
+	// Env override.
+	t.Setenv("MAX_REQUESTS_PER_DAY", "500")
+	t.Setenv("MAX_REQUESTS_PER_MINUTE", "10")
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (env): %v", err)
+	} else if cfg.MaxRequestsPerDay != 500 || cfg.MaxRequestsPerMinute != 10 {
+		t.Errorf("env overrides = %d/%d, want 500/10", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
+	}
+
+	// Explicit zero = unlimited.
+	t.Setenv("MAX_REQUESTS_PER_DAY", "0")
+	t.Setenv("MAX_REQUESTS_PER_MINUTE", "0")
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (zero): %v", err)
+	} else if cfg.MaxRequestsPerDay != 0 || cfg.MaxRequestsPerMinute != 0 {
+		t.Errorf("explicit zero = %d/%d, want 0/0 (unlimited)", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
+	}
+
+	// Unparseable env values are ignored (file values kept).
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"MAX_REQUESTS_PER_DAY": 42, "MAX_REQUESTS_PER_MINUTE": 7}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MAX_REQUESTS_PER_DAY", "soon")
+	t.Setenv("MAX_REQUESTS_PER_MINUTE", "never")
+	if cfg, err := Load(path); err != nil {
+		t.Fatalf("Load (bad env + file): %v", err)
+	} else if cfg.MaxRequestsPerDay != 42 || cfg.MaxRequestsPerMinute != 7 {
+		t.Errorf("bad env ignored = %d/%d, want file 42/7", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
+	}
+
+	// JSON file value with env unset.
+	t.Setenv("MAX_REQUESTS_PER_DAY", "")
+	t.Setenv("MAX_REQUESTS_PER_MINUTE", "")
+	if cfg, err := Load(path); err != nil {
+		t.Fatalf("Load (file): %v", err)
+	} else if cfg.MaxRequestsPerDay != 42 || cfg.MaxRequestsPerMinute != 7 {
+		t.Errorf("file = %d/%d, want 42/7", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
+	}
+}
+
 // TestMaxSpendPerDay pins the advisory spend-ceiling knob (issue #122):
 // default 0 (unlimited), env override, unparseable env ignored, JSON file
 // value, and .env value. The knob is advisory-only — the upstream $ ceilings

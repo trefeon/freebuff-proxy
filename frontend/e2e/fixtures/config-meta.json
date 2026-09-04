@@ -493,6 +493,26 @@
     "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement)."
   },
   {
+    "key": "MAX_REQUESTS_PER_DAY",
+    "group": "quota",
+    "kind": "int",
+    "default": "1500",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Per-token cap on successful chat requests per Pacific day (0 = unlimited). Locks the account until the daily quota reset (Pacific midnight, same instant upstream rolls its windows); capped tokens are skipped and the pool rolls to the next account."
+  },
+  {
+    "key": "MAX_REQUESTS_PER_MINUTE",
+    "group": "quota",
+    "kind": "int",
+    "default": "30",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Per-token cap on admitted chat requests per rolling 60s window (0 = unlimited). Throttles upstream-visible request bursts so each account stays under abuse-detection rates; a runaway loop locks within a minute and the pool rolls to the next account."
+  },
+  {
     "key": "MAX_SPEND_PER_DAY",
     "group": "quota",
     "kind": "int",

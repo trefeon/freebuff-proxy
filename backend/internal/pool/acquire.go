@@ -197,6 +197,24 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		name := fmt.Sprintf("token-%d", idx+1)
 
+		// Per-minute request cap (MAX_REQUESTS_PER_MINUTE) and daily request
+		// cap (MAX_REQUESTS_PER_DAY): mirrors the direct loop — capped
+		// tokens are skipped so the pool rolls to the next account; the
+		// day-cap error rides the rate-limited bucket with RetryAfter =
+		// next Pacific midnight (the official daily reset instant).
+		if cfg.MaxRequestsPerMinute > 0 && p.rpmCount(idx) >= cfg.MaxRequestsPerMinute {
+			rateLimited = append(rateLimited, p.rpmLimitError(idx))
+			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
+			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
+			continue
+		}
+		if cfg.MaxRequestsPerDay > 0 && p.dayRequestCount(idx) >= cfg.MaxRequestsPerDay {
+			rateLimited = append(rateLimited, p.dayRequestLimitError(idx))
+			errs = append(errs, fmt.Sprintf("%s: daily request limit (%d) reached", name, cfg.MaxRequestsPerDay))
+			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
+			continue
+		}
+
 		// Quarantined tokens (terminal account state: banned,
 		// country_blocked, 401 invalid) are permanently skipped — the pool
 		// never revives a dead account, so they are never re-admitted. Their
@@ -318,6 +336,27 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			dailyLimited = append(dailyLimited, p.dailyLimitError(idx))
 			errs = append(errs, fmt.Sprintf("%s: daily message limit (%d) reached", name, cfg.MaxMessagesPerDay))
 			p.logger.Debug("pool: token skipped (daily message limit)", "token", idx+1, "limit", cfg.MaxMessagesPerDay)
+			continue
+		}
+		// Per-minute request cap (MAX_REQUESTS_PER_MINUTE): a token that
+		// already admitted its quota of chat requests in the last 60s is
+		// skipped like a rate limit — upstream-visible bursts (including
+		// retries that later fail) are throttled at the exact rate upstream
+		// observes, keeping the account under abuse-detection patterns.
+		if cfg.MaxRequestsPerMinute > 0 && p.rpmCount(idx) >= cfg.MaxRequestsPerMinute {
+			rateLimited = append(rateLimited, p.rpmLimitError(idx))
+			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
+			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
+			continue
+		}
+		// Daily request cap (MAX_REQUESTS_PER_DAY): a token that already
+		// sent its daily successful-request quota is skipped like the daily
+		// message cap; it unlocks at the next Pacific midnight — the same
+		// instant upstream rolls its daily quota windows.
+		if cfg.MaxRequestsPerDay > 0 && p.dayRequestCount(idx) >= cfg.MaxRequestsPerDay {
+			dailyLimited = append(dailyLimited, p.dayRequestLimitError(idx))
+			errs = append(errs, fmt.Sprintf("%s: daily request limit (%d) reached", name, cfg.MaxRequestsPerDay))
+			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
 			continue
 		}
 		// Issue #85: session-quota-capped token for the requested model.

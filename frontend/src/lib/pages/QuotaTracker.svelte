@@ -7,7 +7,6 @@
   import Button from "../components/Button.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
-  import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import {
     tokensData,
     tokensError,
@@ -62,6 +61,16 @@
       (c) => c.premium_quota || c.freebucks,
     ).length,
   );
+
+  // resetInLabel renders a seconds countdown (e.g. the time until the next
+  // Pacific midnight for a day-capped account) as "Xh Ym" / "Xm".
+  function resetInLabel(sec) {
+    if (!sec || sec <= 0) return "—";
+    if (sec < 3600) return `${Math.ceil(sec / 60)}m`;
+    const h = Math.floor(sec / 3600);
+    const m = Math.ceil((sec % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
 </script>
 
 <div class="space-y-6 page-enter">
@@ -78,9 +87,6 @@
       </Button>
     {/snippet}
   </PageHeader>
-
-  <!-- Upstream announcements and broadcasts -->
-  <AnnouncementsBanner />
 
   <!-- Upstream Accounting Transition Notice (issue #332/#335): one subtle
        page-level card in the header zone — not repeated inside every
@@ -411,6 +417,47 @@
                   </p>
                 {/if}
               </div>
+
+              <!-- Per-account request limits (MAX_REQUESTS_PER_MINUTE/_DAY):
+                   live counters vs caps. The day cap unlocks at Pacific
+                   midnight — the same instant upstream resets daily quota. -->
+              {#if token.requests_per_day_limit > 0 || token.requests_per_minute_limit > 0}
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] fp-num text-[var(--fp-dim)]"
+                >
+                  {#if token.requests_per_minute_limit > 0}
+                    <span
+                      title={$tr(
+                        "Admitted requests in the last 60s / per-minute cap",
+                      )}
+                    >
+                      {$tr("req/min")}
+                      <span class="text-[var(--fp-text)] font-medium"
+                        >{token.requests_per_minute}</span
+                      >/{token.requests_per_minute_limit}
+                    </span>
+                  {/if}
+                  {#if token.requests_per_day_limit > 0}
+                    <span
+                      title={$tr(
+                        "Successful requests today / per-day cap — unlocks at Pacific midnight",
+                      )}
+                    >
+                      {$tr("req/day")}
+                      <span class="text-[var(--fp-text)] font-medium"
+                        >{token.requests_per_day}</span
+                      >/{token.requests_per_day_limit}
+                    </span>
+                    {#if token.requests_per_day >= token.requests_per_day_limit}
+                      <span class="text-[#f5a623] font-medium">
+                        {$tr("daily limit reached — resets {in}", {
+                          in: resetInLabel(token.requests_per_day_reset_in),
+                        })}
+                      </span>
+                    {/if}
+                  {/if}
+                </div>
+              {/if}
             </div>
           </Card>
         {/each}

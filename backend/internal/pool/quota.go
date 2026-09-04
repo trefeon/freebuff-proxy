@@ -260,6 +260,45 @@ func (p *Pool) dailyLimitError(token int) *upstream.RateLimitError {
 // the window (0 when the token has no recorded usage or the reset is due).
 func (p *Pool) usageResetIn(token int) time.Duration { return p.roster.usageResetIn(token) }
 
+// --- per-token request limits (MAX_REQUESTS_PER_DAY / _PER_MINUTE) ---
+
+// recordRequestEntry appends one ADMITTED chat request for the lease's
+// backing entry by pointer (see roster.recordRequestEntry).
+func (p *Pool) recordRequestEntry(entry *tokenEntry) { p.roster.recordRequestEntry(entry) }
+
+// rpmCount returns how many admitted requests token sent within the last
+// 60s window, pruning expired timestamps.
+func (p *Pool) rpmCount(token int) int { return p.roster.rpmCount(token) }
+
+// dayRequestCount returns how many successful chats token sent in the
+// current Pacific day, rolling the bucket at Pacific midnight.
+func (p *Pool) dayRequestCount(token int) int { return p.roster.dayRequestCount(token) }
+
+// rpmLimitError builds the 429 surfaced when token is capped by
+// MAX_REQUESTS_PER_MINUTE: RetryAfter is when the oldest admitted request
+// ages out of the 60s window.
+func (p *Pool) rpmLimitError(token int) *upstream.RateLimitError {
+	return &upstream.RateLimitError{
+		RetryAfter:  p.roster.rpmResetIn(token),
+		Limit:       float64(p.cfg.Load().MaxRequestsPerMinute),
+		RecentCount: float64(p.roster.rpmCount(token)),
+		Body:        "per-minute request limit reached",
+	}
+}
+
+// dayRequestLimitError builds the 429 surfaced when token is capped by
+// MAX_REQUESTS_PER_DAY: RetryAfter is the time until the next Pacific
+// midnight — the same instant upstream rolls its daily quota windows — so
+// the token unlocks in sync with the official daily reset.
+func (p *Pool) dayRequestLimitError(token int) *upstream.RateLimitError {
+	return &upstream.RateLimitError{
+		RetryAfter:  p.roster.dayRequestResetIn(token),
+		Limit:       float64(p.cfg.Load().MaxRequestsPerDay),
+		RecentCount: float64(p.roster.dayRequestCount(token)),
+		Body:        "daily request limit reached",
+	}
+}
+
 // --- bridge mode internals ---
 
 // bestDailyLimit picks the daily-cap error whose window frees first: the
@@ -275,7 +314,8 @@ func bestDailyLimit(entries []*upstream.RateLimitError) *upstream.RateLimitError
 }
 
 // bridgeRecordChat appends one successful upstream chat for the bridge entry
-// and prunes its usage history outside the 24h window. The entry's ledger is
+// and prunes its usage history outside the 24h window, plus the Pacific-day
+// successful-request count (MAX_REQUESTS_PER_DAY). The entry's ledger is
 // shared with the pooled path (issue #263); only this mode's global
 // BRIDGE_DAILY_LIMIT counter is extra.
 func (p *Pool) bridgeRecordChat(entry *bridgeEntry) {
@@ -284,8 +324,89 @@ func (p *Pool) bridgeRecordChat(entry *bridgeEntry) {
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
-	entry.ledger.recordChat(time.Now())
+	now := time.Now()
+	entry.ledger.recordChat(now)
+	entry.ledger.recordDayRequest(now)
 	p.bridgeDailyUsage++
+}
+
+// bridgeRecordRequest appends one ADMITTED chat request for the bridge
+// entry (MAX_REQUESTS_PER_MINUTE): success or failure upstream, the request
+// was sent.
+func (p *Pool) bridgeRecordRequest(entry *bridgeEntry) {
+	if entry == nil {
+		return
+	}
+	p.bridgeMu.Lock()
+	defer p.bridgeMu.Unlock()
+	entry.ledger.recordRequest(time.Now())
+}
+
+// bridgeRpmCount returns how many admitted requests the bridge entry sent
+// within the last 60s window, pruning expired timestamps.
+func (p *Pool) bridgeRpmCount(entry *bridgeEntry) int {
+	if entry == nil {
+		return 0
+	}
+	p.bridgeMu.Lock()
+	defer p.bridgeMu.Unlock()
+	return entry.ledger.rpmCount(time.Now())
+}
+
+// bridgeDayRequestCount returns how many successful chats the bridge entry
+// sent in the current Pacific day, rolling the bucket at Pacific midnight.
+func (p *Pool) bridgeDayRequestCount(entry *bridgeEntry) int {
+	if entry == nil {
+		return 0
+	}
+	p.bridgeMu.Lock()
+	defer p.bridgeMu.Unlock()
+	return entry.ledger.dayRequestCount(time.Now())
+}
+
+// bridgeRpmLimitError builds the 429 surfaced when the bridge entry is
+// capped by MAX_REQUESTS_PER_MINUTE (mirrors rpmLimitError).
+func (p *Pool) bridgeRpmLimitError(entry *bridgeEntry) *upstream.RateLimitError {
+	return &upstream.RateLimitError{
+		RetryAfter:  p.bridgeRpmResetIn(entry),
+		Limit:       float64(p.cfg.Load().MaxRequestsPerMinute),
+		RecentCount: float64(p.bridgeRpmCount(entry)),
+		Body:        "per-minute request limit reached",
+	}
+}
+
+// bridgeRpmResetIn is how long until the bridge entry's oldest admitted
+// request ages out of the 60s window (0 when the window is empty).
+func (p *Pool) bridgeRpmResetIn(entry *bridgeEntry) time.Duration {
+	if entry == nil {
+		return 0
+	}
+	p.bridgeMu.Lock()
+	defer p.bridgeMu.Unlock()
+	return entry.ledger.rpmResetIn(time.Now())
+}
+
+// bridgeDayRequestLimitError builds the 429 surfaced when the bridge entry
+// is capped by MAX_REQUESTS_PER_DAY: RetryAfter is the time until the next
+// Pacific midnight (the official daily reset instant).
+func (p *Pool) bridgeDayRequestLimitError(entry *bridgeEntry) *upstream.RateLimitError {
+	return &upstream.RateLimitError{
+		RetryAfter:  p.bridgeDayRequestResetIn(entry),
+		Limit:       float64(p.cfg.Load().MaxRequestsPerDay),
+		RecentCount: float64(p.bridgeDayRequestCount(entry)),
+		Body:        "daily request limit reached",
+	}
+}
+
+// bridgeDayRequestResetIn is how long until the next Pacific midnight for
+// the bridge entry's day bucket (0 when the entry is nil).
+func (p *Pool) bridgeDayRequestResetIn(entry *bridgeEntry) time.Duration {
+	if entry == nil {
+		return 0
+	}
+	p.bridgeMu.Lock()
+	defer p.bridgeMu.Unlock()
+	return entry.ledger.dayRequestResetIn(time.Now())
 }
 
 // bridgeUsageCount returns how many successful chats the bridge entry sent

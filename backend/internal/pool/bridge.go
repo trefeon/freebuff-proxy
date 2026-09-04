@@ -171,6 +171,17 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		p.logger.Debug("pool: bridge entry daily message limit", "limit", cfg.MaxMessagesPerDay)
 		return nil, p.bridgeDailyLimitError(entry)
 	}
+	// Per-minute request cap (MAX_REQUESTS_PER_MINUTE), per client token.
+	if cfg.MaxRequestsPerMinute > 0 && p.bridgeRpmCount(entry) >= cfg.MaxRequestsPerMinute {
+		p.logger.Debug("pool: bridge entry per-minute request limit", "limit", cfg.MaxRequestsPerMinute)
+		return nil, p.bridgeRpmLimitError(entry)
+	}
+	// Daily request cap (MAX_REQUESTS_PER_DAY), per client token: unlocks at
+	// the next Pacific midnight (the official daily reset instant).
+	if cfg.MaxRequestsPerDay > 0 && p.bridgeDayRequestCount(entry) >= cfg.MaxRequestsPerDay {
+		p.logger.Debug("pool: bridge entry daily request limit", "limit", cfg.MaxRequestsPerDay)
+		return nil, p.bridgeDayRequestLimitError(entry)
+	}
 	fellBack := false
 	// Issue #155: quota-exhaustion fallback in bridge mode. A capped
 	// entry holding a live session for the requested model is EXEMPT

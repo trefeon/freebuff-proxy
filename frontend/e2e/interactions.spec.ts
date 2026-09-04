@@ -520,6 +520,12 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(bridge).toHaveAttribute("aria-checked", "true");
     await bridge.click();
     await page.locator('input[aria-label="RATE_LIMIT_PER_IP"]').fill("25");
+    // Per-account request limits (MAX_REQUESTS_PER_MINUTE / _PER_DAY) are
+    // user-facing quota rows in the same Pool card.
+    await page
+      .locator('input[aria-label="MAX_REQUESTS_PER_MINUTE"]')
+      .fill("40");
+    await page.locator('input[aria-label="MAX_REQUESTS_PER_DAY"]').fill("800");
 
     let savedBody = "";
     await page.route(/\/admin\/config$/, async (route) => {
@@ -540,6 +546,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
       .click();
     expect(savedBody).toContain("BRIDGE_ENABLED=false");
     expect(savedBody).toContain("RATE_LIMIT_PER_IP=25");
+    expect(savedBody).toContain("MAX_REQUESTS_PER_MINUTE=40");
+    expect(savedBody).toContain("MAX_REQUESTS_PER_DAY=800");
     await expect(page.getByText("Saved.")).toBeVisible();
   });
 

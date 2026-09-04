@@ -34,6 +34,11 @@ type BridgeTokenSnapshot struct {
 	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
 	SpendDay     float64                    `json:"spend_day"`
 	SpendPct     int                        `json:"spend_pct"`
+	// RequestsPerMinute / RequestsPerDay mirror TokenSnapshot's local
+	// request counters (MAX_REQUESTS_PER_MINUTE rolling 60s admitted;
+	// MAX_REQUESTS_PER_DAY successful chats in the current Pacific day).
+	RequestsPerMinute int `json:"requests_per_minute"`
+	RequestsPerDay    int `json:"requests_per_day"`
 	// BanType / BannedUntil mirror TokenSnapshot's active-ban view
 	// (issues #198/#199): "temporary" (auto-lifts at BannedUntil) vs
 	// "hard" (never self-heals); zero values when no ban is active.
@@ -204,6 +209,11 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Messages24h:             msgs,
 			DailyLimit:              dailyLimit,
 			UsagePct:                usagePct,
+			RequestsPerMinute:       p.rpmCount(i),
+			RequestsPerDay:          p.dayRequestCount(i),
+			RequestsPerMinuteLimit:  p.cfg.Load().MaxRequestsPerMinute,
+			RequestsPerDayLimit:     p.cfg.Load().MaxRequestsPerDay,
+			RequestsPerDayResetIn:   p.roster.dayRequestResetIn(i),
 			RiskLevel:               riskLevel,
 			SessionStatus:           sessionStatus,
 			SessionInstanceID:       ss.InstanceID,

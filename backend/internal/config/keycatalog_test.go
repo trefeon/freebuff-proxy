@@ -29,6 +29,7 @@ var dotenvKeys = map[string]bool{
 	"DEBUG_DUMP": true, "DEVTOOLS_ENABLED": true, "LOG_FILE": true,
 	"LOG_LEVEL": true, "LOG_FORMAT": true, "LOG_ACCESS": true,
 	"LOG_RING_SIZE": true, "MAX_MESSAGES_PER_DAY": true, "BRIDGE_DAILY_LIMIT": true,
+	"MAX_REQUESTS_PER_DAY": true, "MAX_REQUESTS_PER_MINUTE": true,
 	"MAX_SPEND_PER_DAY": true, "BRIDGE_ENABLED": true, "BRIDGE_IDLE_EVICT": true,
 	"IDLE_ROTATION_TIMEOUT": true, "SESSION_IDLE_END": true, "SAFE_MODE": true,
 	"MODELS_HIDE_UNAVAILABLE": true, "MODELS_ALLOW": true, "CORS_ALLOWED_ORIGIN": true,

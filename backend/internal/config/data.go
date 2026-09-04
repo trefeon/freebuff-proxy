@@ -79,6 +79,10 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.Itoa(c.LogRingSize), false
 	case "MAX_MESSAGES_PER_DAY":
 		return strconv.Itoa(c.MaxMessagesPerDay), false
+	case "MAX_REQUESTS_PER_DAY":
+		return strconv.Itoa(c.MaxRequestsPerDay), false
+	case "MAX_REQUESTS_PER_MINUTE":
+		return strconv.Itoa(c.MaxRequestsPerMinute), false
 	case "MAX_SPEND_PER_DAY":
 		return strconv.FormatInt(c.MaxSpendPerDay, 10), false
 	case "IDLE_ROTATION_TIMEOUT":
