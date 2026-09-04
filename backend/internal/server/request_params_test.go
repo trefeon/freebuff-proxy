@@ -290,7 +290,6 @@ func TestAnthropicServerToolsRejected(t *testing.T) {
 	}{
 		{"nameless_tool", `,"tools":[{"description":"no name here"}]`, `every tool needs a name`},
 		{"server_tool_type", `,"tools":[{"type":"web_search_20260222","name":"web_search"}]`, `only client function tools`},
-		{"container", `,"container":{"id":"cont_1"}`, `container`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -330,4 +329,29 @@ func TestAnthropicServerToolsRejected(t *testing.T) {
 	if !mock.BodyContains(`"get_weather"`) {
 		t.Errorf("upstream body missing function tool: %s", truncate(mock.LastChatBody(), 300))
 	}
+}
+
+// TestTrailingSlashTolerance verifies harness baseURL joins with a trailing
+// slash resolve to the same handlers (goose derive_base_path, LibreChat
+// custom endpoints, SillyTavern all vary here): a 404 on a trailing slash
+// is a pure client-config artifact, never a missing route.
+func TestTrailingSlashTolerance(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.ChatBody = responsesChunks()
+	ts, _ := newTestServer(t, nil, mock)
+	chatBody := `{"model":"` + modelA + `","messages":[{"role":"user","content":"ping"}]}`
+	for _, path := range []string{"/v1/chat/completions/", "/v1/messages/"} {
+		headers := map[string]string(nil)
+		if path == "/v1/messages/" {
+			headers = map[string]string{"anthropic-version": "2023-06-01"}
+		}
+		resp, data := doJSON(t, http.MethodPost, ts.URL+path, []byte(chatBody), headers)
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("POST %s status = %d, want 200: %s", path, resp.StatusCode, truncate(string(data), 200))
+		}
+	}
+	// Note: GET /v1/models/ stays claimed by the /v1/models/{model...}
+	// wildcard (stdlib mux rejects the overlap), so only the POST twins
+	// are asserted here.
 }

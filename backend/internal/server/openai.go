@@ -21,6 +21,13 @@ func (s *Server) registerOpenAIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/embeddings", s.requireAuth(s.handleEmbeddings))
 	mux.HandleFunc("GET /v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("GET /v1/models/{model...}", s.requireAuth(s.handleModelRetrieve))
+	// Trailing-slash twins: harness baseURL joins vary (bare host, /v1,
+	// /v1/ — goose derive_base_path, LibreChat custom endpoints,
+	// SillyTavern). A 404 on a trailing slash is a pure client-config
+	// artifact; serve the same handler instead.
+	mux.HandleFunc("POST /v1/chat/completions/", s.requireAuth(s.handleChat))
+	mux.HandleFunc("POST /v1/responses/", s.requireAuth(s.handleResponses))
+	mux.HandleFunc("POST /v1/embeddings/", s.requireAuth(s.handleEmbeddings))
 }
 
 // handleChat is the OpenAI chat-completions entry point: sanitize the

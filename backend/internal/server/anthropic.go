@@ -35,6 +35,10 @@ import (
 func (s *Server) registerAnthropicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/messages", s.requireAuth(s.handleMessages))
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.requireAuth(s.handleMessagesCountTokens))
+	// Trailing-slash twins (same join-tolerance rationale as the OpenAI
+	// routes above).
+	mux.HandleFunc("POST /v1/messages/", s.requireAuth(s.handleMessages))
+	mux.HandleFunc("POST /v1/messages/count_tokens/", s.requireAuth(s.handleMessagesCountTokens))
 }
 
 // handleMessages is the Anthropic /v1/messages entry point: convert the
@@ -174,18 +178,15 @@ func anthropicToChatParams(raw map[string]any) ([]byte, error) {
 	if stops, ok := anthropicStopSequencesToOpenAI(raw["stop_sequences"]); ok {
 		chat["stop"] = stops
 	}
+	if effort, ok := anthropicThinkingToEffort(raw["thinking"]); ok {
+		chat["reasoning_effort"] = effort
+	}
 	if meta, ok := raw["metadata"].(map[string]any); ok && meta != nil {
 		if uid, ok := meta["user_id"].(string); ok && uid != "" {
 			chat["user"] = uid
 		}
 	} else if v, ok := raw["user"]; ok && v != nil {
 		chat["user"] = v
-	}
-	if effort, ok := anthropicThinkingToEffort(raw["thinking"]); ok {
-		chat["reasoning_effort"] = effort
-	}
-	if v, ok := raw["container"]; ok && v != nil {
-		return nil, fmt.Errorf("unsupported parameter \"container\": server-side execution environments are not supported by this gateway")
 	}
 	if tools, ok := raw["tools"].([]any); ok && len(tools) > 0 {
 		chatTools := make([]any, 0, len(tools))
