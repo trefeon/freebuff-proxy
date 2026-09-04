@@ -30,6 +30,15 @@ func isReferralGatedModel(model string) bool {
 // resets, capped vs fresh windows, referral entitlement — cannot drift
 // between the two modes.
 func quotaStateForSnapshot(snap session.SessionSnapshot, model string) (known bool, remaining float64, capped bool) {
+	// Restart-restored quota is explicitly NOT live truth (Snapshot marks
+	// it QuotaStale until first live contact): never cap on it. The
+	// request flows to Ensure, whose pollPersisted resume (one zero-cost
+	// GET) or fresh admission reports live numbers — a genuine upstream
+	// 429 re-caps with fresh data. Capping here strands sessions that are
+	// still active upstream behind a 429 no upstream ever sent.
+	if snap.QuotaStale {
+		return false, 0, false
+	}
 	if isReferralGatedModel(model) {
 		if !snap.HasGlmEntitlement() {
 			// Token has no referral entitlement for GLM 5.2. Treat as capped
