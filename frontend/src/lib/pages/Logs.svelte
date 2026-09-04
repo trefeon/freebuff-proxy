@@ -1,4 +1,5 @@
 <script>
+  import { tick } from "svelte";
   import {
     RefreshCw,
     ChevronLeft,
@@ -40,7 +41,10 @@
   let autoPoll = $state(true);
   let page = $state(0);
   let pageSize = $state(10);
-
+  // Follow mode: stick the console to the newest entry at the bottom.
+  // Any manual scroll-up pauses it so reading history never gets yanked;
+  // scrolling back to the bottom (or the Follow toggle) resumes it.
+  let autoScroll = $state(true);
   const CIRCLE_EMOJIS = ["🟣", "🔵", "🟢", "🟡", "🟠", "🔴", "🟤", "⚪"];
   function circleFor(str) {
     if (!str) return "🟢";
@@ -489,6 +493,34 @@
     if (autoPoll) await fetchLogs();
   }, 1000);
 
+  function isNearBottom() {
+    if (!consoleEl) return true;
+    return (
+      consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight < 64
+    );
+  }
+
+  function handleConsoleScroll() {
+    autoScroll = isNearBottom();
+  }
+
+  function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    if (autoScroll && consoleEl) consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  // Stick to the newest entry whenever the group list grows while
+  // follow mode is on. tick() waits for Svelte to flush the new rows so
+  // scrollHeight already includes them.
+  $effect(() => {
+    const n = requestGroups.length;
+    const last = n ? requestGroups[n - 1].id : "";
+    if (viewMode !== "console" || !autoScroll || !consoleEl) return;
+    void last;
+    tick().then(() => {
+      if (consoleEl && autoScroll) consoleEl.scrollTop = consoleEl.scrollHeight;
+    });
+  });
   function levelTone(level) {
     switch (level) {
       case "error":
@@ -604,6 +636,22 @@
             <Button
               variant="ghost"
               size="sm"
+              aria-pressed={autoScroll}
+              onclick={toggleAutoScroll}
+              class="!h-8 !text-xs !px-2 sm:!px-2.5"
+              title={autoScroll
+                ? $tr("Following the newest logs")
+                : $tr(
+                    "Follow paused — scroll to the bottom or toggle to resume",
+                  )}
+            >
+              {$tr("Follow {state}", {
+                state: autoScroll ? $tr("on") : $tr("off"),
+              })}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onclick={copyConsoleLogs}
               class="!h-8 !text-xs !px-2 sm:!px-2.5"
             >
@@ -640,94 +688,100 @@
               <RefreshCw size={13} />
               <span class="hidden min-[480px]:inline">{$tr("Refresh")}</span>
             </Button>
-          </div>
-        </div>
-        <!-- Terminal Console View: structured rows wrap (never truncate, never break-all) -->
-        <div
-          bind:this={consoleEl}
-          class="bg-black rounded-b-lg p-2 sm:p-4 font-mono text-[11px] sm:text-xs h-[60vh] min-h-[320px] sm:h-[calc(100vh-280px)] sm:min-h-[420px] overflow-x-hidden overflow-y-auto space-y-1.5 select-text border-t border-[var(--fp-border)] max-w-full"
-        >
-          {#if requestGroups.length === 0}
+            <!-- Terminal Console View: structured rows wrap (never truncate, never break-all) -->
             <div
-              class="h-full flex flex-col items-center justify-center text-zinc-500 italic py-16 px-4 text-center"
+              bind:this={consoleEl}
+              onscroll={handleConsoleScroll}
+              class="bg-black rounded-b-lg p-2 sm:p-4 font-mono text-[11px] sm:text-xs h-[60vh] min-h-[320px] sm:h-[calc(100vh-280px)] sm:min-h-[420px] overflow-x-hidden overflow-y-auto space-y-1.5 select-text border-t border-[var(--fp-border)] max-w-full"
             >
-              <p>{$tr("No request activity recorded yet.")}</p>
-              <p class="text-[11px] mt-1 text-zinc-600">
-                {$tr(
-                  "Live incoming chat and messages requests will stream here.",
-                )}
-              </p>
-            </div>
-          {:else}
-            {#each requestGroups as g (g.id)}
-              <div
-                class="hover:bg-zinc-900/70 px-1.5 py-1 rounded transition-colors leading-relaxed min-w-0 overflow-hidden"
-              >
-                <div class="break-words">
-                  <span class="text-zinc-500">[{g.time}]</span>
-                  <span class="text-zinc-300">{g.circle} </span>
-                  {#if g.outcome === "ok"}
-                    <span class="text-green-400 font-medium"
-                      >POST {g.model || g.endpoint}</span
-                    >
-                    {#if g.servedModel || g.agent}<span class="text-zinc-400">
-                        → {g.servedModel || g.agent}</span
-                      >{/if}
-                    <span class="text-zinc-400">
-                      · {g.status}{#if g.ms}
-                        · {g.ms}ms{/if}</span
-                    >
-                  {:else if g.outcome === "live"}
-                    <span class="text-sky-300 font-medium animate-pulse"
-                      >POST {g.model || g.endpoint} · LIVE</span
-                    >
-                    {#if g.servedModel || g.agent}<span class="text-zinc-400">
-                        → {g.servedModel || g.agent}</span
-                      >{/if}
-                  {:else if g.outcome === "refused"}
-                    <span class="text-amber-300 font-medium"
-                      >REFUSED {g.model}</span
-                    >
-                    <span class="text-amber-200/80"> · {g.reason}</span>
-                  {:else if g.outcome === "throttled"}
-                    <span class="text-red-400 font-medium">THROTTLED</span>
-                    <span class="text-red-300/90">
-                      · {g.errText}{#if g.retryAfter}
-                        · RETRY {g.retryAfter}s{/if}</span
-                    >
-                  {:else}
-                    <span class="text-red-400 font-medium"
-                      >ERROR{#if g.status}
-                        {g.status}{/if}{#if g.code}
-                        {g.code}{/if}</span
-                    >
-                    <span class="text-red-300/90"> · {g.errText}</span>
-                  {/if}
+              {#if requestGroups.length === 0}
+                <div
+                  class="h-full flex flex-col items-center justify-center text-zinc-500 italic py-16 px-4 text-center"
+                >
+                  <p>{$tr("No request activity recorded yet.")}</p>
+                  <p class="text-[11px] mt-1 text-zinc-600">
+                    {$tr(
+                      "Live incoming chat and messages requests will stream here.",
+                    )}
+                  </p>
                 </div>
-                {#if g.outcome === "error" && (g.retryAfter || g.statusesSeen)}
-                  <div class="break-words text-red-300/70">
-                    {#if g.retryAfter}<span>RETRY {g.retryAfter}s</span>{/if}
-                    {#if g.statusesSeen}<span>
-                        · tried {g.statusesSeen}</span
-                      >{/if}
+              {:else}
+                {#each requestGroups as g (g.id)}
+                  <div
+                    class="hover:bg-zinc-900/70 px-1.5 py-1 rounded transition-colors leading-relaxed min-w-0 overflow-hidden"
+                  >
+                    <div class="break-words">
+                      <span class="text-zinc-500">[{g.time}]</span>
+                      <span class="text-zinc-300">{g.circle} </span>
+                      {#if g.outcome === "ok"}
+                        <span class="text-green-400 font-medium"
+                          >POST {g.model || g.endpoint}</span
+                        >
+                        {#if g.servedModel || g.agent}<span
+                            class="text-zinc-400"
+                          >
+                            → {g.servedModel || g.agent}</span
+                          >{/if}
+                        <span class="text-zinc-400">
+                          · {g.status}{#if g.ms}
+                            · {g.ms}ms{/if}</span
+                        >
+                      {:else if g.outcome === "live"}
+                        <span class="text-sky-300 font-medium animate-pulse"
+                          >POST {g.model || g.endpoint} · LIVE</span
+                        >
+                        {#if g.servedModel || g.agent}<span
+                            class="text-zinc-400"
+                          >
+                            → {g.servedModel || g.agent}</span
+                          >{/if}
+                      {:else if g.outcome === "refused"}
+                        <span class="text-amber-300 font-medium"
+                          >REFUSED {g.model}</span
+                        >
+                        <span class="text-amber-200/80"> · {g.reason}</span>
+                      {:else if g.outcome === "throttled"}
+                        <span class="text-red-400 font-medium">THROTTLED</span>
+                        <span class="text-red-300/90">
+                          · {g.errText}{#if g.retryAfter}
+                            · RETRY {g.retryAfter}s{/if}</span
+                        >
+                      {:else}
+                        <span class="text-red-400 font-medium"
+                          >ERROR{#if g.status}
+                            {g.status}{/if}{#if g.code}
+                            {g.code}{/if}</span
+                        >
+                        <span class="text-red-300/90"> · {g.errText}</span>
+                      {/if}
+                    </div>
+                    {#if g.outcome === "error" && (g.retryAfter || g.statusesSeen)}
+                      <div class="break-words text-red-300/70">
+                        {#if g.retryAfter}<span>RETRY {g.retryAfter}s</span
+                          >{/if}
+                        {#if g.statusesSeen}<span>
+                            · tried {g.statusesSeen}</span
+                          >{/if}
+                      </div>
+                    {/if}
+                    {#if g.chips.length > 0}
+                      <div class="flex flex-wrap gap-1 mt-1">
+                        {#each g.chips as chip, j (j)}
+                          <span
+                            class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {groupChipClass(
+                              chip,
+                            )}">{chip}</span
+                          >
+                        {/each}
+                      </div>
+                    {/if}
                   </div>
-                {/if}
-                {#if g.chips.length > 0}
-                  <div class="flex flex-wrap gap-1 mt-1">
-                    {#each g.chips as chip, j (j)}
-                      <span
-                        class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {groupChipClass(
-                          chip,
-                        )}">{chip}</span
-                      >
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/each}
-          {/if}
-        </div>
-      </Card>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        </div></Card
+      >
     {:else}
       <Card pad="none">
         <!-- Integrated Top Toolbar Header for Table -->

@@ -540,6 +540,79 @@ test.describe("dashboard hermetic mocks", () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test("Logs console follows newest entries and pauses on manual scroll-up", async ({
+    page,
+  }) => {
+    // 25 requests overflow the console viewport: follow mode must stick to
+    // the bottom on load, pause when the user scrolls up, and resume via
+    // the Follow toggle.
+    const t = new Date().toISOString();
+    const E = (message: string, fields: string) => ({
+      time: t,
+      level: "INFO",
+      message,
+      fields,
+    });
+    const entries = [];
+    for (let i = 0; i < 25; i++) {
+      const id = `follow${i}`;
+      entries.push(
+        E(
+          "chat request",
+          `req_id=${id}  model=openai/gpt-5.6-luna  msgs=3  tools=2`,
+        ),
+      );
+      entries.push(E("chat routing", `req_id=${id}  agent=stealth/ox-alpha`));
+      entries.push(
+        E(
+          "access",
+          `req_id=${id}  method=POST  path=/v1/chat/completions  status=200  ms=100`,
+        ),
+      );
+      entries.push(E("chat trace", `req_id=${id}  total_ms=100`));
+      entries.push(E("chat done", `req_id=${id}  ms=100`));
+    }
+    const f = loadFixtures();
+    await mockDashboard(page, f, { logs: { entries } });
+
+    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await expect(page.getByText("25 requests")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Follow on" })).toBeVisible();
+
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector(".bg-black.rounded-b-lg");
+        return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+      },
+      null,
+      { timeout: 5000 },
+    );
+
+    // Manual scroll-up pauses follow mode instead of yanking the reader.
+    await page.evaluate(() => {
+      const el = document.querySelector(".bg-black.rounded-b-lg");
+      if (el) {
+        el.scrollTop = 0;
+        el.dispatchEvent(new Event("scroll"));
+      }
+    });
+    await expect(
+      page.getByRole("button", { name: "Follow off" }),
+    ).toBeVisible();
+
+    // Toggling Follow back on sticks to the newest entry again.
+    await page.getByRole("button", { name: "Follow off" }).click();
+    await expect(page.getByRole("button", { name: "Follow on" })).toBeVisible();
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector(".bg-black.rounded-b-lg");
+        return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+      },
+      null,
+      { timeout: 5000 },
+    );
+  });
+
   test("Models lists 6 served models", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
@@ -679,7 +752,9 @@ test.describe("dashboard hermetic mocks", () => {
     );
     await page.goto("http://127.0.0.1:4173/admin/#settings");
     await configResp;
-    await expect(page.getByRole("combobox", { name: "LOG_LEVEL" })).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "LOG_LEVEL" }),
+    ).toBeVisible();
     await expect(page.getByRole("switch", { name: "SAFE_MODE" })).toBeVisible();
   });
 
