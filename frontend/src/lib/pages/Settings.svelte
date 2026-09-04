@@ -8,7 +8,6 @@
   import SecurityCard from "../components/SecurityCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
-  import ModelRoutingSettings from "./settings/ModelRoutingSettings.svelte";
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
@@ -440,9 +439,6 @@
 
     <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
     <TrafficSettings {formValues} {rawText} onField={setField} />
-
-    <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
-    <ModelRoutingSettings {formValues} {rawText} onField={setField} />
 
     <RawEditor
       {rawText}
