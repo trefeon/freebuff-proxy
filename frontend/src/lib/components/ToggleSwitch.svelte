@@ -72,7 +72,7 @@
     />
     <div
       aria-hidden="true"
-      class="relative flex items-center w-11 h-6 shrink-0 rounded-full border transition-colors duration-150 motion-safe:duration-150 bg-[var(--fp-surface-2)] border-[var(--fp-border-bright)] peer-checked:bg-[var(--fp-accent)] peer-checked:border-transparent peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--fp-accent)] peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-[var(--fp-bg)] peer-disabled:opacity-50 peer-disabled:cursor-not-allowed after:content-[''] after:ms-[2px] after:h-5 after:w-5 after:shrink-0 after:rounded-full after:bg-white after:ring-1 after:ring-black/10 after:transition-transform after:duration-150 motion-safe:after:duration-150 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full"
+      class="relative flex items-center w-11 h-6 shrink-0 rounded-full border transition-colors duration-150 motion-safe:duration-150 bg-[var(--fp-surface-2)] border-[var(--fp-border-bright)] peer-checked:bg-[var(--fp-accent)] peer-checked:border-transparent peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--fp-accent)] peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-[var(--fp-bg)] peer-disabled:opacity-50 peer-disabled:cursor-not-allowed after:content-[''] after:ms-[2px] after:h-[18px] after:w-[18px] after:shrink-0 after:rounded-full after:bg-white after:ring-1 after:ring-black/10 after:transition-transform after:duration-150 motion-safe:after:duration-150 peer-checked:after:translate-x-[20px] rtl:peer-checked:after:-translate-x-[20px]"
     ></div>
   </span>
   <span aria-hidden="true" class="text-xs text-[var(--fp-muted)] min-w-[52px]">
