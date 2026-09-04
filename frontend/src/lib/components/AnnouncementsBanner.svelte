@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import {
     Megaphone,
     Clock,
@@ -19,7 +20,7 @@
    */
   let notices = $state([]);
   let peakHours = $state(null);
-  let dismissed = $state(new Set());
+  let dismissed = new SvelteSet();
   let collapsed = $state(false);
   let loaded = $state(false);
 
@@ -29,7 +30,7 @@
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        dismissed = new Set(JSON.parse(stored));
+        for (const id of JSON.parse(stored)) dismissed.add(id);
       }
     } catch {
       // Ignore localStorage read errors
@@ -49,11 +50,9 @@
   });
 
   function dismissNotice(id) {
-    const next = new Set(dismissed);
-    next.add(id);
-    dismissed = next;
+    dismissed.add(id);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...dismissed]));
     } catch {
       // Ignore localStorage write errors
     }

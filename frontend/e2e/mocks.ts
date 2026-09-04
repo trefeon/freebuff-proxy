@@ -244,7 +244,6 @@ export async function mockDashboard(
     });
   });
 
-
   // Auth status
   await page.route("**/admin/api/auth/status", async (route) => {
     await route.fulfill({
