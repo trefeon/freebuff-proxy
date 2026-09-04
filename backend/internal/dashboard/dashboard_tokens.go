@@ -19,6 +19,9 @@ type tokensData struct {
 	TokenCount       int               `json:"token_count"`
 	Tokens           []tokenDetail     `json:"tokens"`
 	HasTokens        bool              `json:"has_tokens"`
+	// UnmeteredModels is the modelcat-derived unlimited-session rows
+	// (issue #342); the SPA falls back to its static list when absent.
+	UnmeteredModels []unmeteredRow `json:"unmetered_models,omitempty"`
 }
 
 type tokenDetail struct {
@@ -171,6 +174,7 @@ func (d *Dashboard) tokensData() tokensData {
 		td.Tokens = append(td.Tokens, detail)
 	}
 	td.HasTokens = len(td.Tokens) > 0
+	td.UnmeteredModels = unmeteredModels(d.reg)
 	// Bridge token cards (#187): live snapshots of bridge-mode entries.
 	if td.ShowBridge {
 		for _, snap := range d.pool.BridgeSnapshot() {

@@ -33,7 +33,12 @@ let consumers = 0;
 const LIVE_QS = "?view=live";
 const FULL_EVERY_POLLS = 30;
 const FULL_EVERY_MS = 5 * 60 * 1000;
-const STATIC_TOP_KEYS = ["mode", "in_bridge", "show_bridge"];
+const STATIC_TOP_KEYS = [
+  "mode",
+  "in_bridge",
+  "show_bridge",
+  "unmetered_models",
+];
 const STATIC_TOKEN_KEYS = [
   "email",
   "account_id",

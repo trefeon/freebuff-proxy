@@ -38,6 +38,29 @@ func servedModels(reg *registry.Registry) []string {
 	return out
 }
 
+type unmeteredRow struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// unmeteredModels derives the unlimited-session rows from modelcat (issue
+// #342): served models outside the shared premium pool (IsPremium covers
+// both the Premium flag and per-model Cap pools, so capped promo rows stay
+// metered). Deliberately NOT derived from quota rows — compact session
+// polls omit quota fields, which would falsely mark every model unmetered
+// between full admissions. Sorted for stable payloads.
+func unmeteredModels(reg *registry.Registry) []unmeteredRow {
+	out := make([]unmeteredRow, 0, 8)
+	for _, id := range servedModels(reg) {
+		if modelcat.IsPremium(id) {
+			continue
+		}
+		out = append(out, unmeteredRow{ID: id, Name: modelcat.DisplayName(id)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
 type aliasRow struct {
 	Alias string `json:"alias"`
 	Real  string `json:"real"`

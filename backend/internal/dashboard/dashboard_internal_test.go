@@ -393,3 +393,48 @@ func TestConfigDataEffectiveRows(t *testing.T) {
 		}
 	}
 }
+
+// TestUnmeteredModelsDerivation pins issue #342: the unlimited-session rows
+// come from modelcat (served minus shared premium pool), never from quota
+// rows — compact polls omit quota, which would falsely mark every model
+// unmetered. Luna (sole shared-premium row) must be absent; the unmetered
+// standard rows present; output sorted.
+func TestUnmeteredModelsDerivation(t *testing.T) {
+	cfg := &config.Config{UpstreamBaseURL: "https://www.codebuff.com"}
+	reg := registry.New(cfg, nil)
+	reg.LoadFallback()
+	got := unmeteredModels(reg)
+	if len(got) == 0 {
+		t.Fatal("unmeteredModels empty, want the unmetered standard rows")
+	}
+	byID := make(map[string]string, len(got))
+	for _, r := range got {
+		byID[r.ID] = r.Name
+		if r.Name == "" || r.Name == r.ID && modelcat.DisplayName(r.ID) != r.ID {
+			t.Errorf("row %q has empty display name", r.ID)
+		}
+	}
+	for _, premium := range modelcat.SharedPremiumModels() {
+		if _, ok := byID[premium]; ok {
+			t.Errorf("shared-premium model %q listed as unmetered", premium)
+		}
+	}
+	for _, want := range []string{
+		modelcat.Glm53ModelID,
+		modelcat.SolarPro4ModelID,
+		"deepseek/deepseek-v4-flash",
+		"mimo/mimo-v2.5",
+	} {
+		if !modelcat.IsServed(want) {
+			continue
+		}
+		if _, ok := byID[want]; !ok && !modelcat.IsPremium(want) {
+			t.Errorf("served non-premium model %q missing from unmetered list", want)
+		}
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1].ID >= got[i].ID {
+			t.Errorf("unmetered list not sorted: %q before %q", got[i-1].ID, got[i].ID)
+		}
+	}
+}

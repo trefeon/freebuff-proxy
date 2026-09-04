@@ -62,6 +62,19 @@
       (c) => c.premium_quota || c.freebucks,
     ).length,
   );
+
+  // Unmetered rows come from the backend modelcat derivation (issue #342);
+  // the static list below is the absent-tolerant fallback for old servers
+  // or empty payloads — never empty, never misleading.
+  const FALLBACK_UNMETERED = [
+    { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+    { id: "mimo/mimo-v2.5", name: "MiMo 2.5" },
+    { id: "upstage/solar-pro4", name: "Solar Pro 4" },
+    { id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash" },
+  ];
+  let unmetered = $derived(
+    data?.unmetered_models?.length ? data.unmetered_models : FALLBACK_UNMETERED,
+  );
 </script>
 
 <div class="space-y-6 page-enter">
@@ -416,78 +429,26 @@
                   )}
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div
-                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
-                  >
-                    <div>
-                      <div
-                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
-                      >
-                        upstage/solar-pro4
-                      </div>
-                      <div class="text-[11px] text-[var(--fp-dim)]">
-                        Solar Pro 4 · {$tr("Unmetered at full access")}
-                      </div>
-                    </div>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
-                      >∞</span
+                  {#each unmetered as m (m.id)}
+                    <div
+                      class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
                     >
-                  </div>
-                  <div
-                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
-                  >
-                    <div>
-                      <div
-                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                      <div>
+                        <div
+                          class="font-mono text-xs text-[var(--fp-text)] font-semibold"
+                        >
+                          {m.id}
+                        </div>
+                        <div class="text-[11px] text-[var(--fp-dim)]">
+                          {m.name} · {$tr("Unlimited sessions")}
+                        </div>
+                      </div>
+                      <span
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
+                        >∞</span
                       >
-                        deepseek/deepseek-v4-flash
-                      </div>
-                      <div class="text-[11px] text-[var(--fp-dim)]">
-                        DeepSeek V4 Flash · {$tr("Standard free row")}
-                      </div>
                     </div>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
-                      >∞</span
-                    >
-                  </div>
-                  <div
-                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
-                  >
-                    <div>
-                      <div
-                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
-                      >
-                        z-ai/glm-5.3-flash
-                      </div>
-                      <div class="text-[11px] text-[var(--fp-dim)]">
-                        GLM 5.3 Flash · {$tr("Standard free row")}
-                      </div>
-                    </div>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
-                      >∞</span
-                    >
-                  </div>
-                  <div
-                    class="p-2.5 rounded-lg bg-[var(--fp-surface-2)]/40 border border-[var(--fp-border)] flex items-center justify-between"
-                  >
-                    <div>
-                      <div
-                        class="font-mono text-xs text-[var(--fp-text)] font-semibold"
-                      >
-                        mimo/mimo-v2.5
-                      </div>
-                      <div class="text-[11px] text-[var(--fp-dim)]">
-                        MiMo 2.5 · {$tr("Fallback & limited-tier universal")}
-                      </div>
-                    </div>
-                    <span
-                      class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-medium"
-                      >∞</span
-                    >
-                  </div>
+                  {/each}
                 </div>
               </div>
 
