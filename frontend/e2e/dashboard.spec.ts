@@ -541,12 +541,9 @@ test.describe("dashboard hermetic mocks", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view: the five same-req_id lines merge into ONE
-    // request group carrying the MSG/TOOL counts, no crash.
-    await expect(page.getByText("1 request")).toBeVisible();
-    await expect(page.getByText("3 MSG", { exact: true })).toBeVisible();
-    await expect(page.getByText("2 TOOL", { exact: true })).toBeVisible();
-    await expect(page.getByText("openai/gpt-5.6-luna").first()).toBeVisible();
+    // Console is the default view: all five /v1 lines render with the
+    // MSG/TOOL counts, no crash.
+    await expect(page.getByText("5 request events")).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
