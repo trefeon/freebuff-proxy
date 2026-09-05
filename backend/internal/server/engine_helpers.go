@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -61,8 +63,14 @@ func (s *Server) traceChat(lease *pool.Lease, model string, ms int64, status, er
 	s.logger.Info("chat trace", attrs...)
 }
 
-// chatErrClass buckets an upstream error into the trace error column.
+// chatErrClass buckets an upstream error into the trace error column. A
+// canceled downstream client gets its own bucket: the access line keeps a
+// 200 default when nothing was (or could be) written, so a generic "error"
+// would render a context-free "ERROR 200" on the dashboard.
 func chatErrClass(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "client_canceled"
+	}
 	switch err.(type) {
 	case *upstream.RateLimitError:
 		return "rate_limited"

@@ -6,8 +6,10 @@ package server
 // so no network/timing flakiness is involved.
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -171,6 +173,53 @@ func TestRelayStreamMidStreamError(t *testing.T) {
 	}
 	if !strings.Contains(body, "data: [DONE]") {
 		t.Error("body missing [DONE] after the error frame")
+	}
+}
+
+// TestStreamErrorAttrs pins the mid-stream death correlation fields: req_id
+// rides along when the relay context carries one (chatCore stamps it) and is
+// omitted for lease-less direct relay calls, so the WARN is never noise.
+func TestStreamErrorAttrs(t *testing.T) {
+	stats := &relayStats{chunks: 3, bytes: 128}
+	toMap := func(attrs []any) map[string]any {
+		m := make(map[string]any, len(attrs)/2)
+		for i := 0; i+1 < len(attrs); i += 2 {
+			m[fmt.Sprint(attrs[i])] = attrs[i+1]
+		}
+		return m
+	}
+	withID := toMap(streamErrorAttrs(
+		context.WithValue(context.Background(), reqIDKey{}, "req-test-1"),
+		time.Now(), stats, errors.New("boom")))
+	if withID["req_id"] != "req-test-1" {
+		t.Errorf("req_id = %v, want req-test-1", withID["req_id"])
+	}
+	if withID["chunks"] != 3 || withID["bytes"] != 128 {
+		t.Errorf("progress = (%v, %v), want (3, 128)", withID["chunks"], withID["bytes"])
+	}
+	if _, ok := withID["elapsed_ms"]; !ok {
+		t.Error("missing elapsed_ms")
+	}
+	withoutID := toMap(streamErrorAttrs(context.Background(), time.Now(), stats, errors.New("boom")))
+	if v, ok := withoutID["req_id"]; ok {
+		t.Errorf("req_id = %v, want absent without a request context", v)
+	}
+}
+
+// TestRelayStreamErrorLogsReqID pins the anomaly-analysis contract: a
+// mid-stream death after WriteHeader(200) logs req_id + relay progress, so a
+// dashboard "ERROR 200" group resolves back to its request.
+func TestRelayStreamErrorLogsReqID(t *testing.T) {
+	var buf bytes.Buffer
+	s := &Server{logger: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))}
+	rec := httptest.NewRecorder()
+	ctx := context.WithValue(context.Background(), reqIDKey{}, "req-test-2")
+	s.relayStream(ctx, rec, &errAfterLineReader{}, &relayStats{}, time.Now())
+	out := buf.String()
+	for _, want := range []string{"upstream stream error", "req_id=req-test-2", "chunks=", "bytes=", "elapsed_ms="} {
+		if !strings.Contains(out, want) {
+			t.Errorf("stream error log missing %q: %q", want, out)
+		}
 	}
 }
 

@@ -1205,6 +1205,13 @@ func TestTransientRetrySkippedOnCanceledContext(t *testing.T) {
 		}
 		return false
 	})
+	// The cancel drop carries req_id: without it a client-abandoned request
+	// is uncorrelated (the access line keeps its 200 default).
+	for _, e := range ring.Recent(400) {
+		if e.Message == "request canceled by client" && entryField(e, "req_id") == "" {
+			t.Error(`"request canceled by client" missing req_id`)
+		}
+	}
 	for _, e := range ring.Recent(400) {
 		if strings.Contains(e.Message, "transient chat error") {
 			t.Errorf("canceled request logged a retry announcement: %s", e.Message)

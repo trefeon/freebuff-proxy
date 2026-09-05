@@ -219,6 +219,25 @@ func newStreamRelay(ctx context.Context, w http.ResponseWriter, r io.Reader) (fl
 	return flusher, keepalive, ch, &now, true
 }
 
+// streamErrorAttrs builds the structured attributes for a mid-stream death
+// (upstream read failure after WriteHeader(200)): the downstream access
+// line keeps status 200, so without req_id + relay progress (chunks/bytes/
+// elapsed) the failure is uncorrelated noise. req_id rides the request
+// context (chatCore stamps it); relays driven directly in tests carry none
+// and omit the key.
+func streamErrorAttrs(ctx context.Context, chatStart time.Time, stats *relayStats, err error) []any {
+	attrs := []any{
+		"err", err,
+		"elapsed_ms", time.Since(chatStart).Milliseconds(),
+		"chunks", stats.chunks,
+		"bytes", stats.bytes,
+	}
+	if reqID := reqIDFrom(ctx); reqID != "" {
+		attrs = append(attrs, "req_id", reqID)
+	}
+	return attrs
+}
+
 // maybeKeepalive writes the protocol's keepalive frame when the relay has
 // been silent past keepaliveInterval, advancing the client-write clock. The
 // three relays select on the same ticker; the frame text is the only

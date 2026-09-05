@@ -136,7 +136,7 @@ func (s *Server) relayStream(ctx context.Context, w http.ResponseWriter, r io.Re
 			if lc.err != nil {
 				if ctx.Err() == nil {
 					emitXMLFlush()
-					s.logger.Warn("upstream stream error", "err", lc.err)
+					s.logger.Warn("upstream stream error", streamErrorAttrs(ctx, chatStart, stats, lc.err)...)
 					_, _ = w.Write(convert.ErrorChunk("upstream stream interrupted: "+lc.err.Error(), "upstream_stream_error"))
 					_, _ = w.Write(convert.DONE)
 					flusher.Flush()

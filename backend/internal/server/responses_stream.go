@@ -141,7 +141,7 @@ func (s *Server) relayResponsesStream(ctx context.Context, w http.ResponseWriter
 		case lc := <-lines:
 			if lc.err != nil {
 				if ctx.Err() == nil {
-					s.logger.Warn("responses upstream stream error", "err", lc.err)
+					s.logger.Warn("responses upstream stream error", streamErrorAttrs(ctx, chatStart, stats, lc.err)...)
 					flushXMLCalls()
 					s.endResponsesStream(w, send, st, model, respID, createdAt, true, map[string]any{
 						"type":    "upstream_stream_error",

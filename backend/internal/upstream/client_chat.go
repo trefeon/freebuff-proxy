@@ -135,6 +135,18 @@ func (c *Client) do(req *http.Request, timeout time.Duration) (*http.Response, c
 	if req.GetBody != nil {
 		replayBody = req.GetBody
 	}
+	// Wire correlation at debug: every upstream attempt below logs its
+	// response ("upstream response"/"upstream ok"/"upstream error"), but
+	// without a start line a death that never answers (hang until the
+	// caller gives up) leaves no trace of which call was in flight.
+	// Headers stay out — the token must never reach the logs.
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		attrs := []any{"method", req.Method, "path", req.URL.Path}
+		if reqID := ReqID(ctx); reqID != "" {
+			attrs = append(attrs, "req_id", reqID)
+		}
+		slog.Debug("upstream request", attrs...)
+	}
 
 	for attempt := 1; ; attempt++ {
 		resp, err := c.http.Do(req)
