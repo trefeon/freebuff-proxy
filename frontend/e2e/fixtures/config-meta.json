@@ -261,11 +261,11 @@
     "key": "MATURITY_ENABLED",
     "group": "pool",
     "kind": "bool",
-    "default": "false",
+    "default": "true",
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Global kill-switch for streak-maturity automation: daily low-cost touches that keep locked tokens' streaks alive until their target. Default OFF (bot-shaped traffic must be explicit opt-in); per-token toggles on the Tokens page do nothing while this is off."
+    "description": "Global kill-switch for streak-maturity automation: daily low-cost touches that keep locked tokens' streaks alive until their target. Default true (probes run in dry-run mode); set false to disable all automated touches."
   },
   {
     "key": "MATURITY_TARGET_DAYS",

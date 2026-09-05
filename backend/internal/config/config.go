@@ -189,10 +189,10 @@ type Config struct {
 	// never created (issue #97).
 	AdoptCLISession bool
 	// MaturityEnabled is the global kill-switch for streak-maturity automation
-	// (MATURITY_ENABLED; default false). When false, no per-token maturity
-	// touch ever fires regardless of per-token toggles. Default OFF:
-	// a daily mechanical touch from a datacenter IP is a bot-shaped pattern
-	// and must be an explicit operator opt-in (docs/maturity-plan.md §4).
+	// (MATURITY_ENABLED; default true). When false, no per-token maturity
+	// touch ever fires regardless of per-token toggles. Default ON with
+	// MATURITY_DRY_RUN=true so dry-run probes run by default while live
+	// slot-claiming touches remain opt-in via dry-run toggle (docs/maturity-plan.md §4).
 	MaturityEnabled bool
 	// MaturityDryRun validates scheduler mechanics with zero side effects
 	// (MATURITY_DRY_RUN; default true): touches run only the zero-cost
@@ -462,6 +462,7 @@ func defaultRawConfig() rawConfig {
 		SessionReAdmitLead:               "60s",                        // #99: pre-emptive re-admit lead
 		SessionProbeCacheTTL:             "15s",                        // #60: admission probe cache TTL
 		FallbackAfter:                    "0",                          // #100: queue-wait fallback threshold (ms); 0 = disabled by default
+		MaturityEnabled:                  true,                         // streak-maturity automation on by default; dry-run probes prove schedule before live touches
 		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
 		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never burns premium quota
 	}

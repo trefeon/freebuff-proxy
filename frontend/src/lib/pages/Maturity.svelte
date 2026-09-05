@@ -133,10 +133,23 @@
       try {
         const cfgRes = await fetchAPI(adminApi.config);
         const envContent = cfgRes?.env_content || "";
-        globalEnabled =
-          (
-            getEnvValue(envContent, "MATURITY_ENABLED") || "false"
-          ).toLowerCase() === "true";
+        const eff = (cfgRes?.effective || []).find(
+          (e) => e.key === "MATURITY_ENABLED",
+        );
+        if (eff) {
+          const v = String(eff.value).trim().toLowerCase();
+          globalEnabled =
+            v === "true" || v === "1" || v === "on" || v === "yes";
+        } else {
+          const raw = getEnvValue(envContent, "MATURITY_ENABLED");
+          if (raw !== null && raw !== undefined && raw !== "") {
+            const v = String(raw).trim().toLowerCase();
+            globalEnabled =
+              v === "true" || v === "1" || v === "on" || v === "yes";
+          } else {
+            globalEnabled = true;
+          }
+        }
       } catch {
         globalEnabled = false;
       } finally {
