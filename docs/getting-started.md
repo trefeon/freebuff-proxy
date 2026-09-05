@@ -90,7 +90,7 @@ Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,tok
 > two or more tokens are configured. For full-trust isolation, route distinct
 > accounts through distinct residential exits (Option A per machine).
 
-See the [Getting Started — Access Tiers](#access-tiers--workarounds) section for per-model quota pools and effort ladders.
+See the [Getting Started — Access Tiers](#access-tiers-models--upstream-quotas) section for per-model quota pools and effort ladders.
 
 **Do NOT use any of these — they trigger the restricted cohort or an outright ban:**
 - Commercial VPN (NordVPN, ExpressVPN, Surfshark, etc.)
@@ -160,7 +160,7 @@ VERSION=$(git describe --tags 2>/dev/null || echo dev) docker compose up -d --bu
 
 ## Step 2: Verify It Works
 
-Run the diagnostic tool or curl:
+Dashboard first: on a running proxy, open `http://127.0.0.1:3457/admin` — the Overview smoke test plus **Tokens → Test All** (`POST /admin/tokens/test-all`) run the same zero-cost per-token validity probe as the CLI, and the Overview diagnostics card (`POST /admin/diag`) covers the same checks as `-doctor`. CLI second, for headless or pre-serve checks:
 
 ```bash
 # Diagnostic doctor check: config, port, DNS/TLS, registry, plus a
@@ -194,9 +194,11 @@ curl http://localhost:3457/v1/models
 Point your AI tool to:
 - **Base URL:** `http://localhost:3457/v1`
 - **API Key:** `not-needed` (or your token in bridge mode)
-- **Model:** `deepseek/deepseek-v4-flash` (full-tier only — limited-tier IPs are coerced to `mimo/mimo-v2.5`; see [Access Tiers](#access-tiers--workarounds))
+- **Model:** `deepseek/deepseek-v4-flash` (full-tier only — limited-tier IPs are coerced to `mimo/mimo-v2.5`; see [Access Tiers](#access-tiers-models--upstream-quotas))
 
-Fastest path: run `./freebuff-proxy -setup` to write the client config automatically.
+Dashboard first: the **Setup** page (`http://127.0.0.1:3457/admin/setup`) shows per-model copy blocks for every harness — copy, no file writes.
+
+CLI second: run `./freebuff-proxy -setup` to write the client config files automatically.
 
 See the [Client Integration Guide](client-integration.md) for copy-paste config for OpenCode, pi, 9router, LiteLLM, and more.
 
@@ -220,14 +222,16 @@ git checkout <previous-tag>
 docker compose up -d --build
 ```
 
+Dashboard twin: the Overview page shows an update badge with the release link when a newer release exists — the dashboard never swaps the binary, so perform the swap with the commands above, then restart the proxy.
+
 ## Troubleshooting
 
-Run `./freebuff-proxy -doctor` to diagnose problems automatically.
+Dashboard first: the Overview diagnostics card (`POST /admin/diag`) runs the same checks on a live server. CLI second: run `./freebuff-proxy -doctor` to diagnose problems automatically (also works pre-serve).
 
 | Error / Symptom | Cause & Fix |
 |---|---|
 | `403` + `free_mode_cli_required` | The request was missing the CLI system prompt marker or envelope. The proxy injects this automatically. Update to the latest version. |
-| `502` + `upstream_auth_rejected` | Token in `.env` is expired or invalid. Catch it before the first chat: `./freebuff-proxy -test-token` (or `-doctor`) probes the token with a zero-cost GET request and fails with a clear message. Then re-run `freebuff` to log in and update `AUTH_TOKENS`, or swap the token live on the dashboard Tokens page (no restart). |
+| `502` + `upstream_auth_rejected` | Token in `.env` is expired or invalid. Catch it before the first chat: dashboard first — **Tokens → Test All** (`POST /admin/tokens/test-all`); CLI second — `./freebuff-proxy -test-token` (or `-doctor`) probes the token with a zero-cost GET request and fails with a clear message. Then re-run `freebuff` to log in and update `AUTH_TOKENS`, or swap the token live on the dashboard Tokens page (no restart). |
 | Connection refused | Proxy is not running, or in Docker without `LISTEN_ADDR=:3457`. |
 | `403 account_banned` | Account suspended upstream. Token is dead; use a new established account. |
 | `502` + `free_mode_legacy_luna_agent` | The conversation uses a retired Luna agent. Start a new conversation. The proxy automatically retries with a fresh session. |

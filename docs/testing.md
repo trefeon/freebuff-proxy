@@ -18,7 +18,7 @@ Two ground rules before you start.
 
 ## 0. The binary, the version, the config
 
-Start by confirming you have a real build and it can see its config.
+Dashboard first (running proxy): the Overview status line shows the same version, and the diagnostics card (`POST /admin/diag`) covers the same checks as `-doctor`. CLI second (also works pre-serve):
 
 ```
 ./freebuff-proxy -version
@@ -170,9 +170,7 @@ running an older binary; these routes landed in the v0.9.8 cycle.
 
 ### The zero-cost probe
 
-`-test-token` verifies the first configured token without consuming a
-session slot. It is the fastest health signal for "is my account even
-alive".
+Dashboard first: **Tokens → Test All** (`POST /admin/tokens/test-all`) on the running proxy probes every token the same zero-cost way. CLI second: `-test-token` verifies the first configured token without consuming a session slot — the fastest headless signal for "is my account even alive".
 
 ```
 ./freebuff-proxy -test-token
@@ -197,6 +195,8 @@ the old session-handshake probes cost a slot per run, so they were gated
 behind a flag; the GET probe removed that cost entirely. The only case
 that skips probing is bridge mode, where the proxy holds no tokens to
 check.
+
+Dashboard first: the Overview diagnostics card (`POST /admin/diag`) runs the same checks on a live server. CLI second (also works pre-serve):
 
 ```
 ./freebuff-proxy -doctor
@@ -254,6 +254,8 @@ Task Scheduler at logon with limited privileges; you see the task under
 `schtasks /query /tn "freebuff-proxy"` if you want to inspect it.
 `-uninstall-service` reverses it.
 
+No dashboard twin: a browser tab cannot register OS services — install, status, and uninstall stay on the CLI.
+
 Linux:
 
 ```
@@ -266,6 +268,8 @@ Status comes from `systemctl --user is-active freebuff-proxy`, logs from
 `journalctl --user -u freebuff-proxy -n 50 -e`. The unit sets its working
 directory to the binary's location, so `.env` must live next to the
 binary, not in your shell's home.
+
+No dashboard twin here either: a browser tab cannot register OS services — the systemd unit stays a CLI path.
 
 ## 7. The restart and the upgrade
 
@@ -291,11 +295,13 @@ Tokens page remains the live path for add/remove and mode switch — those
 take effect immediately and persist to `AUTH_TOKENS` in `.env` (surviving
 a restart), no restart needed.
 
-Self-update is `./freebuff-proxy -update`, which checks GitHub and
+Dashboard first: the Overview update badge links the release when a newer one exists — the dashboard never swaps the binary. CLI second: self-update with `./freebuff-proxy -update`, which checks GitHub and
 replaces the binary with the latest release. It skips the swap if the
 checksum does not match. On Windows the swap defers until the current
 process exits, so do not be surprised if the command exits before the
 file changes.
+
+Apply the swap above, then restart the proxy to run the new binary.
 
 ## 8. Reading failures: the error taxonomy
 
@@ -323,7 +329,7 @@ sit still on quota days.
 Run through this in order when you are unsure. Each line is one command
 or one glance.
 
-1. `./freebuff-proxy -doctor` → no `[FAIL]` (token probe lines all `[ok]`).
+1. Overview diagnostics card (`POST /admin/diag`) shows no failures — or CLI second: `./freebuff-proxy -doctor` → no `[FAIL]` (token probe lines all `[ok]`).
 2. `curl http://127.0.0.1:3457/healthz` → JSON, `SessionStatus: active`,
    `UsagePct` under 100.
 3. `curl /v1/models` → non-empty model list.
@@ -332,7 +338,7 @@ or one glance.
 6. Dashboard Tokens page → `Account #1, #2, …` rows listed, at-risk cards
    render when present, no ERROR spam in logs.
 7. Logs show startup banner with `auth_tokens=N` matching your `.env`.
-8. `-test-token` exits 0 with `token OK`. (A quota 429 exits 1 — that is
+8. **Tokens → Test All** (`POST /admin/tokens/test-all`) all green — or CLI second: `-test-token` exits 0 with `token OK`. (A quota 429 exits 1 — that is
    a quota day, not a proxy fault; the checklist then reads as "healthy
    but quota-spent".)
 

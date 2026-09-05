@@ -45,21 +45,72 @@ func (f *tokenListFlag) Set(s string) error {
 // mode flags, while Set still accepts the comma-separated override.
 func (f *tokenListFlag) IsBoolFlag() bool { return true }
 
+// printGroupedHelp renders --help dashboard-first: serve flags up top, then
+// the headless and bootstrap flags as advanced. Flag names, defaults, and
+// exit codes are unchanged; only the grouping and the dashboard pointers are
+// new (issue #359, docs plus help strings only).
+func printGroupedHelp() {
+	fmt.Fprintln(os.Stderr, "Usage: freebuff-proxy [flags]")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Daily management lives in the dashboard (/admin). The flags below stay fully")
+	fmt.Fprintln(os.Stderr, "working as the headless and bootstrap path; nothing was removed or renamed.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Serve (default, no flag runs the proxy):")
+	printHelpFlag("config")
+	printHelpFlag("v")
+	printHelpFlag("version")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Advanced (headless-only; dashboard twin noted per flag):")
+	printHelpFlag("doctor")
+	printHelpFlag("test-token")
+	printHelpFlag("validate-tokens")
+	printHelpFlag("refresh-token")
+	printHelpFlag("setup")
+	printHelpFlag("yes")
+	printHelpFlag("update")
+	printHelpFlag("install-service")
+	printHelpFlag("uninstall-service")
+	printHelpFlag("service-status")
+}
+
+// printHelpFlag prints one registered flag in the same shape as the standard
+// flag package (placeholder plus usage line). The usage strings carry the
+// dashboard twin, so the grouping here only orders them.
+func printHelpFlag(name string) {
+	f := flag.Lookup(name)
+	if f == nil {
+		return
+	}
+	placeholder, usage := flag.UnquoteUsage(f)
+	if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && bf.IsBoolFlag() {
+		placeholder = ""
+	}
+	if f.Name == "refresh-token" {
+		usage += fmt.Sprintf(" (default %s)", f.DefValue)
+	}
+	if placeholder != "" {
+		fmt.Fprintf(os.Stderr, "  -%s %s\n    \t%s\n", f.Name, placeholder, usage)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "  -%s\n    \t%s\n", f.Name, usage)
+}
+
 func main() {
-	configPath := flag.String("config", "", "path to an optional JSON config file (keys mirror env names)")
-	verbose := flag.Bool("v", false, "verbose (debug) logging")
-	showVersion := flag.Bool("version", false, "print version and exit")
-	showDoctor := flag.Bool("doctor", false, "run environment and configuration diagnostics")
-	showUpdate := flag.Bool("update", false, "check for and download the latest release update")
-	showSetup := flag.Bool("setup", false, "run interactive client configuration helper")
-	testToken := flag.Bool("test-token", false, "probe the first configured token with a zero-cost GET probe (no session consumed) and exit 0/1")
+	configPath := flag.String("config", "", "path to an optional JSON config file (keys mirror env names). Dashboard: Settings page plus raw .env editor; apply with POST /admin/reload")
+	verbose := flag.Bool("v", false, "verbose (debug) logging. Dashboard: Logs viewer plus the Settings log level")
+	showVersion := flag.Bool("version", false, "print version and exit. Dashboard: Overview status line shows the same version")
+	showDoctor := flag.Bool("doctor", false, "run environment and configuration diagnostics. Dashboard: POST /admin/diag covers the same checks on a running server")
+	showUpdate := flag.Bool("update", false, "check for and download the latest release update. Dashboard: Overview update badge shows the release link plus restart; the dashboard never swaps the binary")
+	showSetup := flag.Bool("setup", false, "run interactive client configuration helper (writes client files). Dashboard: Setup page shows copy blocks only, no file writes")
+	testToken := flag.Bool("test-token", false, "probe the first configured token with a zero-cost GET probe (no session consumed) and exit 0/1. Dashboard: Tokens page per-token Test plus POST /admin/tokens/test-all on a running server")
 	validateTokens := &tokenListFlag{}
-	flag.Var(validateTokens, "validate-tokens", "validate every configured token with non-mutating upstream probes, print a health report, and exit 0 (healthy) / 1 (banned, invalid, or disposable mailbox) / 2 (config error); a comma-separated list overrides AUTH_TOKENS (-validate-tokens=tok1,tok2)")
-	installService := flag.Bool("install-service", false, "register the current binary as a background service and start it (Task Scheduler / systemd --user / launchd)")
-	uninstallService := flag.Bool("uninstall-service", false, "stop and unregister the background service")
-	serviceStatus := flag.Bool("service-status", false, "check whether the background service is registered and running (exit 0 registered, 1 not)")
-	autoYes := flag.Bool("yes", false, "auto-confirm prompts during setup")
-	refreshToken := flag.Int("refresh-token", -1, "re-authenticate token #N in .env via the headless GitHub login flow and exit (interactive: start → print login URL → poll; with -yes and GITHUB_USER/GITHUB_PASSWORD/GITHUB_TOTP set: protocol login)")
+	flag.Var(validateTokens, "validate-tokens", "validate every configured token with non-mutating upstream probes, print a health report, and exit 0 (healthy) / 1 (banned, invalid, or disposable mailbox) / 2 (config error); a comma-separated list overrides AUTH_TOKENS (-validate-tokens=tok1,tok2). Dashboard: POST /admin/tokens/test-all on a running server")
+	installService := flag.Bool("install-service", false, "register the current binary as a background service and start it (Task Scheduler / systemd --user / launchd). No dashboard twin: a browser tab cannot register OS services")
+	uninstallService := flag.Bool("uninstall-service", false, "stop and unregister the background service. No dashboard twin: a browser tab cannot remove OS services")
+	serviceStatus := flag.Bool("service-status", false, "check whether the background service is registered and running (exit 0 registered, 1 not). No dashboard twin: headless-only check for scripts")
+	autoYes := flag.Bool("yes", false, "auto-confirm prompts during setup. Headless-only modifier for -setup and -refresh-token")
+	refreshToken := flag.Int("refresh-token", -1, "re-authenticate token #N in .env via the headless login flow and exit (interactive: start, print login URL, poll; with -yes and GITHUB_USER/GITHUB_PASSWORD/GITHUB_TOTP set: protocol login). Dashboard: Tokens page login wizard adds a pool token; it does not re-auth slot N in place")
+	flag.Usage = printGroupedHelp
 	flag.Parse()
 
 	if w := cli.ModeFlagsExclusiveWarning(*showDoctor, *showUpdate, *showSetup, *testToken, *installService, *uninstallService, *serviceStatus, validateTokens.set); w != "" {

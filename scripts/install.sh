@@ -808,6 +808,7 @@ if [ -n "${BIN:-}" ] && [ -x "$BIN" ]; then
 fi
 
 c "Next steps:"
+echo "  Open the dashboard first: http://localhost:3457/admin - finish tokens plus config there"
 if [ "$METHOD" = "docker" ]; then
   echo "  1. View container status:  cd $REPO_DIR && docker compose ps"
   echo "  2. Follow container logs:  docker compose logs -f"

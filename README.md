@@ -116,7 +116,7 @@ For a guided walkthrough, read [Getting Started](docs/getting-started.md) (5 min
 - **CLI Impersonation**: egress presents as the official FreeBuff CLI — `Freebuff-CLI/1.0.0` ads-API User-Agent with a **Chrome/124 body UA**, `ai-sdk/openai-compatible/1.0.0/codebuff` chat UA, Bun/1.3.14 on session/auth endpoints, and your real device timezone/locale.
 - **Subagent-Ready Concurrency**: Single-flight session refresh prevents race conditions during high-volume tool-calling loops.
 - **Safe Mode**: On by default: anti-ban presets (TLS stealth, header sanitization, jitter, idle rotation).
-- **Operational Tooling**: `-doctor` diagnostics (config, port, DNS/TLS, registry; zero-cost per-token validity probes run by default), `-test-token` (zero-cost probe on the first token, prints live quota, exit 0/1 for installers and scripts), `-setup` interactive client configuration, and a SHA-256-verified `-update` self-updater.
+- **Management (dashboard first)**: daily work happens in `/admin` (tokens, config, logs, metrics, quota, setup copy blocks, update notice). The same checks stay scriptable headless: `-doctor` diagnostics (config, port, DNS/TLS, registry; zero-cost per-token validity probes run by default), `-test-token` and `-validate-tokens` (zero-cost probes with exit codes for installers and scripts), `-setup` interactive client configuration, and a SHA-256-verified `-update` self-updater. `-help` groups every flag with its dashboard twin.
 - **Quota Transparency**: Live per-model quota (from the upstream `rateLimitsByModel` admission payload) is surfaced in `GET /healthz` (per-token `quota` map) and `GET /metrics` (`freebuff_proxy_quota_recent` / `freebuff_proxy_quota_limit` gauges).
 
 ## How It Works
@@ -253,21 +253,24 @@ curl http://127.0.0.1:3457/healthz
 
 ## Command-Line Interface
 
-| Flag | Description |
-|---|---|
-| *(none)* | Run the proxy |
-| `-config <path>` | Load an optional JSON config file (keys mirror env names) |
-| `-v` | Verbose (debug) logging |
-| `-version` | Print version and exit |
-| `-doctor` | Run configuration and environment diagnostics: config, port, DNS/TLS reachability, model registry, plus a zero-cost validity probe per token |
-| `-test-token` | Probe the first configured token with a zero-cost upstream GET probe (no session claimed); prints `token OK` and live quota, exits `0`, or exits `1` (for installers/scripts) |
-| `-update` | Self-update from the latest GitHub release (SHA-256 verified against `checksums.txt`) |
-| `-setup` | Interactive client setup (detects installed clients) |
-| `-yes` | Auto-confirm `-setup` prompts |
-| `-refresh-token N` | Re-authenticate token #N in `.env` via the headless GitHub login flow and exit. Interactive: prints a login URL and polls. With `-yes` and `GITHUB_USER` / `GITHUB_PASSWORD` / `GITHUB_TOTP` set: protocol login |
-| `-install-service` | Register the current binary as a background service and start it: Task Scheduler on Windows (per-user, no admin), systemd `--user` unit on Linux, launchd LaunchAgent on macOS. Resolves `.env` from your platform config directory (a `./.env` in the working directory still wins), and auto-starts on logon/boot |
-| `-uninstall-service` | Stop and unregister the background service (idempotent) |
-| `-service-status` | Check whether the service is registered and running; exits `0` when registered, `1` when not (scriptable) |
+Daily management lives in the dashboard (`/admin`; see [Admin Dashboard](#admin-dashboard) and the [Dashboard Guide](docs/dashboard.md)). The CLI stays fully working as the headless and bootstrap path: no flag was removed or renamed, and every exit code still scripts the same way. `-help` prints the same Serve / Advanced grouping shown here.
+
+| Flag | Dashboard twin | Description |
+|---|---|---|
+| *(none)* | Overview, Tokens, Settings, Logs, Setup | Run the proxy; manage it from `/admin` |
+| `-config <path>` | Settings page, raw `.env` editor, `POST /admin/reload` | Load an optional JSON config file (keys mirror env names) |
+| `-v` | Logs viewer, Settings log level | Verbose (debug) logging |
+| `-version` | Overview status line | Print version and exit |
+| `-doctor` | `POST /admin/diag` (needs a running server) | Run configuration and environment diagnostics: config, port, DNS/TLS reachability, model registry, plus a zero-cost validity probe per token |
+| `-test-token` | Tokens page per-token Test, `POST /admin/tokens/test-all` | Probe the first configured token with a zero-cost upstream GET probe (no session claimed); prints `token OK` and live quota, exits `0`, or exits `1` (for installers/scripts) |
+| `-validate-tokens[=tok1,tok2]` | `POST /admin/tokens/test-all` (needs a running server) | Validate every configured token with non-mutating upstream probes, print a health report, and exit `0` (healthy) / `1` (banned, invalid, or disposable mailbox) / `2` (config error); a comma-separated list overrides `AUTH_TOKENS` |
+| `-refresh-token N` | Tokens page login wizard (adds a pool token; it does not re-auth slot N in place) | Re-authenticate token #N in `.env` via the headless login flow and exit. Interactive: prints a login URL and polls. With `-yes` and `GITHUB_USER` / `GITHUB_PASSWORD` / `GITHUB_TOTP` set: protocol login |
+| `-setup` | Setup page copy blocks (no file writes) | Interactive client setup (detects installed clients) |
+| `-yes` | None (headless modifier for `-setup` and `-refresh-token`) | Auto-confirm prompts |
+| `-update` | Overview update badge (release link plus restart; the dashboard never swaps the binary) | Self-update from the latest GitHub release (SHA-256 verified against `checksums.txt`) |
+| `-install-service` | None (a browser tab cannot register OS services) | Register the current binary as a background service and start it: Task Scheduler on Windows (per-user, no admin), systemd `--user` unit on Linux, launchd LaunchAgent on macOS. Resolves `.env` from your platform config directory (a `./.env` in the working directory still wins), and auto-starts on logon/boot |
+| `-uninstall-service` | None (a browser tab cannot remove OS services) | Stop and unregister the background service (idempotent) |
+| `-service-status` | None (headless check for scripts) | Check whether the service is registered and running; exits `0` when registered, `1` when not (scriptable) |
 
 ---
 
