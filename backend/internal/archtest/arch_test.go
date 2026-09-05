@@ -37,6 +37,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -190,11 +191,16 @@ func collect(dir string) ([]string, error) {
 // TestBackendDependencyMatrix scans every non-test Go file under backend/
 // (internal + cmd) and fails on any internal import not in the allowed matrix.
 func TestBackendDependencyMatrix(t *testing.T) {
-	// cwd is backend/internal/archtest; backend root is ../..
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
+	// Resolve backend root from this file's own path, never from the
+	// working directory: `go test` runs with cwd set to the package dir,
+	// but a compiled test binary inherits its invoker's cwd — a relative
+	// "../.." from the wrong cwd escapes the repo (observed live: walk
+	// reached D:\$RECYCLE.BIN and died on access denied).
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
 	}
+	root := filepath.Join(filepath.Dir(thisFile), "..", "..")
 	files, err := collect(root)
 	if err != nil {
 		t.Fatal(err)

@@ -306,3 +306,37 @@ func TestPrintPortInUseHintText(t *testing.T) {
 		}
 	}
 }
+
+// TestOpenAPIWarning pins the startup warning for a pooled deployment with
+// an open /v1 surface (AUTH_TOKENS set, no API_KEYS, non-loopback listen).
+// Bridge mode (no AUTH_TOKENS), configured API_KEYS, and loopback listens
+// must stay quiet.
+func TestOpenAPIWarning(t *testing.T) {
+	cases := []struct {
+		name     string
+		tokens   []string
+		keys     []string
+		listen   string
+		wantWarn bool
+	}{
+		{"pooled open remote warns", []string{"cb_x"}, nil, "0.0.0.0:3457", true},
+		{"pooled open bare-port warns", []string{"cb_x"}, nil, ":3457", true},
+		{"api keys set quiet", []string{"cb_x"}, []string{"k"}, "0.0.0.0:3457", false},
+		{"bridge mode quiet", nil, nil, "0.0.0.0:3457", false},
+		{"loopback quiet", []string{"cb_x"}, nil, "127.0.0.1:3457", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := openAPIWarning(tc.tokens, tc.keys, tc.listen)
+			if tc.wantWarn && got == "" {
+				t.Errorf("openAPIWarning(%v, %v, %q) = \"\", want a warning", tc.tokens, tc.keys, tc.listen)
+			}
+			if !tc.wantWarn && got != "" {
+				t.Errorf("openAPIWarning(%v, %v, %q) = %q, want empty", tc.tokens, tc.keys, tc.listen, got)
+			}
+			if tc.wantWarn && !strings.Contains(got, "API_KEYS") {
+				t.Errorf("warning %q does not name the missing API_KEYS", got)
+			}
+		})
+	}
+}

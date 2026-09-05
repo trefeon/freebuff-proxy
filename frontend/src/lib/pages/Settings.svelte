@@ -13,6 +13,7 @@
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
+  import { refreshTokens } from "../stores/tokens.js";
   import { parseEnv, setEnvValue as setEnvLine } from "../utils/env.js";
 
   // ---------------------------------------------------------------------------
@@ -185,6 +186,10 @@
       };
       if (result.ok) {
         await fetchData();
+        refreshTokens();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("fp-config-saved"));
+        }
       } else {
         // The server rejected the write and rolled the .env file back;
         // mirror that in the document and the form.

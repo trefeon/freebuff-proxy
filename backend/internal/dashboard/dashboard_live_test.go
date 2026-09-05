@@ -248,3 +248,64 @@ func TestLiveViewCarriesSessionCountdown(t *testing.T) {
 		t.Errorf("live session_expires_at = %q, want full %q", liveExp, fullExp)
 	}
 }
+
+// TestTokensLimitsSyncLive verifies that both full tokens and live hot-poll tokens
+// carry RequestsPerMinuteLimit and RequestsPerDayLimit when configured.
+func TestTokensLimitsSyncLive(t *testing.T) {
+	mock := testutil.NewMock()
+	t.Cleanup(mock.Close)
+	cfg := &config.Config{
+		AuthTokens:           []string{"tok-0"},
+		ListenAddr:           "127.0.0.1:3457",
+		RotationInterval:     time.Hour,
+		RequestTimeout:       15 * time.Minute,
+		SessionCallTimeout:   5 * time.Second,
+		RegistryRefresh:      6 * time.Hour,
+		UpstreamBaseURL:      mock.URL(),
+		MaxRequestsPerMinute: 15,
+		MaxRequestsPerDay:    1000,
+	}
+	client, err := upstream.New("tok-0", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := session.NewManager(client)
+	reg := registry.New(cfg, nil)
+	reg.LoadFallback()
+	p, err := pool.New(cfg, []*upstream.Client{client}, []*session.Manager{sess}, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := dashboard.New(func() *config.Config { return cfg }, p, reg, nil, nil)
+	mux := http.NewServeMux()
+	mux.Handle("GET /admin/api/tokens", d.APIHandler("tokens"))
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	full := getJSON(t, ts.URL+"/admin/api/tokens")
+	live := getJSON(t, ts.URL+"/admin/api/tokens?view=live")
+
+	fullToks, _ := full["tokens"].([]any)
+	if len(fullToks) != 1 {
+		t.Fatalf("full tokens len = %d, want 1", len(fullToks))
+	}
+	fullCard, _ := fullToks[0].(map[string]any)
+	if got := int(fullCard["requests_per_minute_limit"].(float64)); got != 15 {
+		t.Errorf("full requests_per_minute_limit = %d, want 15", got)
+	}
+	if got := int(fullCard["requests_per_day_limit"].(float64)); got != 1000 {
+		t.Errorf("full requests_per_day_limit = %d, want 1000", got)
+	}
+
+	liveToks, _ := live["tokens"].([]any)
+	if len(liveToks) != 1 {
+		t.Fatalf("live tokens len = %d, want 1", len(liveToks))
+	}
+	liveCard, _ := liveToks[0].(map[string]any)
+	if got := int(liveCard["requests_per_minute_limit"].(float64)); got != 15 {
+		t.Errorf("live requests_per_minute_limit = %d, want 15", got)
+	}
+	if got := int(liveCard["requests_per_day_limit"].(float64)); got != 1000 {
+		t.Errorf("live requests_per_day_limit = %d, want 1000", got)
+	}
+}

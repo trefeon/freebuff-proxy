@@ -18,6 +18,8 @@ jobs:
   # tag push cannot release past a lint failure. The frontend job mirrors
   # ci.yml's SPA build so a stale committed dashboard bundle also blocks.
   test:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -49,6 +51,8 @@ jobs:
   # Reproduce the embedded dashboard bundle from source and fail when the
   # committed backend/internal/dashboard/dist is stale (mirrors ci.yml).
   frontend:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

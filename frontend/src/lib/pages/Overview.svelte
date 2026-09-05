@@ -137,7 +137,15 @@
     tick = setInterval(() => {
       now = Date.now();
     }, 1000);
-    return () => clearInterval(tick);
+    function onConfigSaved() {
+      staticPart = null;
+      fetchData();
+    }
+    window.addEventListener("fp-config-saved", onConfigSaved);
+    return () => {
+      clearInterval(tick);
+      window.removeEventListener("fp-config-saved", onConfigSaved);
+    };
   });
 
   function retry() {

@@ -21,7 +21,10 @@ type tokensData struct {
 	HasTokens        bool              `json:"has_tokens"`
 	// UnmeteredModels is the modelcat-derived unlimited-session rows
 	// (issue #342); the SPA falls back to its static list when absent.
-	UnmeteredModels []unmeteredRow `json:"unmetered_models,omitempty"`
+	UnmeteredModels   []unmeteredRow `json:"unmetered_models,omitempty"`
+	TokenRotation     string         `json:"token_rotation,omitempty"`
+	RateLimitFailover bool           `json:"rate_limit_failover"`
+	MaturityEnabled   bool           `json:"maturity_enabled"`
 }
 
 type tokenDetail struct {
@@ -66,9 +69,16 @@ func utcAttr(t time.Time) string {
 
 func (d *Dashboard) tokensData() tokensData {
 	cfg := d.cfg()
-	td := tokensData{BridgeTokens: d.pool.BridgeCount(), TokenCount: d.pool.TokenCount(), Mode: cfg.EffectiveMode()}
-	td.InBridge = td.Mode == "bridge"
-	// Hybrid mode shows BOTH surfaces: the pooled table and the live bridge
+	mode := cfg.EffectiveMode()
+	td := tokensData{
+		BridgeTokens:      d.pool.BridgeCount(),
+		TokenCount:        d.pool.TokenCount(),
+		Mode:              mode,
+		InBridge:          mode == "bridge",
+		TokenRotation:     cfg.TokenRotation,
+		RateLimitFailover: cfg.RateLimitFailover,
+		MaturityEnabled:   cfg.MaturityEnabled,
+	}
 	// client cards. Pure bridge hides the (empty) pooled table; pure pooled
 	// has no bridge cards.
 	td.ShowBridge = td.Mode == "bridge" || td.Mode == "hybrid"
@@ -203,11 +213,14 @@ type tokenLiveDetail struct {
 
 // tokensLiveData is the hot-poll subset of tokensData: live numbers only.
 type tokensLiveData struct {
-	BridgeTokens     int               `json:"bridge_tokens"`
-	BridgeTokenCards []bridgeTokenCard `json:"bridge_token_cards,omitempty"`
-	TokenCount       int               `json:"token_count"`
-	Tokens           []tokenLiveDetail `json:"tokens"`
-	HasTokens        bool              `json:"has_tokens"`
+	BridgeTokens      int               `json:"bridge_tokens"`
+	BridgeTokenCards  []bridgeTokenCard `json:"bridge_token_cards,omitempty"`
+	TokenCount        int               `json:"token_count"`
+	Tokens            []tokenLiveDetail `json:"tokens"`
+	HasTokens         bool              `json:"has_tokens"`
+	TokenRotation     string            `json:"token_rotation,omitempty"`
+	RateLimitFailover bool              `json:"rate_limit_failover"`
+	MaturityEnabled   bool              `json:"maturity_enabled"`
 }
 
 // tokensLiveData builds the 10s hot-poll payload by stripping the
@@ -216,37 +229,47 @@ type tokensLiveData struct {
 func (d *Dashboard) tokensLiveData() tokensLiveData {
 	full := d.tokensData()
 	live := tokensLiveData{
-		BridgeTokens:     full.BridgeTokens,
-		BridgeTokenCards: full.BridgeTokenCards,
-		TokenCount:       full.TokenCount,
-		HasTokens:        full.HasTokens,
+		BridgeTokens:      full.BridgeTokens,
+		BridgeTokenCards:  full.BridgeTokenCards,
+		TokenCount:        full.TokenCount,
+		HasTokens:         full.HasTokens,
+		TokenRotation:     full.TokenRotation,
+		RateLimitFailover: full.RateLimitFailover,
+		MaturityEnabled:   full.MaturityEnabled,
 	}
 	for _, tok := range full.Tokens {
 		c := tok.tokenCard
 		live.Tokens = append(live.Tokens, tokenLiveDetail{
 			tokenLiveCard: tokenLiveCard{
-				Index:            c.Index,
-				SessionStatus:    c.SessionStatus,
-				QueuePosition:    c.QueuePosition,
-				QueueDepth:       c.QueueDepth,
-				ActiveRuns:       c.ActiveRuns,
-				Requests:         c.Requests,
-				Messages24h:      c.Messages24h,
-				UsagePct:         c.UsagePct,
-				RiskLevel:        c.RiskLevel,
-				CooldownActive:   c.CooldownActive,
-				CooldownUntil:    c.CooldownUntil,
-				Locked:           c.Locked,
-				BanType:          c.BanType,
-				BannedUntil:      c.BannedUntil,
-				TransientRetries: c.TransientRetries,
-				Streak:           c.Streak,
-				TodayUsed:        c.TodayUsed,
-				LastUsage:        c.LastUsage,
-				StreakUpdatedAt:  c.StreakUpdatedAt,
-				Freebucks:        c.Freebucks,
-				FreeWindows:      c.FreeWindows,
-				Subscription:     c.Subscription,
+				Index:                  c.Index,
+				SessionStatus:          c.SessionStatus,
+				QueuePosition:          c.QueuePosition,
+				QueueDepth:             c.QueueDepth,
+				ActiveRuns:             c.ActiveRuns,
+				Requests:               c.Requests,
+				Messages24h:            c.Messages24h,
+				UsagePct:               c.UsagePct,
+				RequestsPerMinute:      c.RequestsPerMinute,
+				RequestsPerDay:         c.RequestsPerDay,
+				RequestsPerMinuteLimit: c.RequestsPerMinuteLimit,
+				RequestsPerDayLimit:    c.RequestsPerDayLimit,
+				RequestsPerDayResetIn:  c.RequestsPerDayResetIn,
+				RiskLevel:              c.RiskLevel,
+				CooldownActive:         c.CooldownActive,
+				CooldownUntil:          c.CooldownUntil,
+				Locked:                 c.Locked,
+				BanType:                c.BanType,
+				BannedUntil:            c.BannedUntil,
+				TransientRetries:       c.TransientRetries,
+				AllowlistSkips:         c.AllowlistSkips,
+				Streak:                 c.Streak,
+				TodayUsed:              c.TodayUsed,
+				LastUsage:              c.LastUsage,
+				StreakUpdatedAt:        c.StreakUpdatedAt,
+				Freebucks:              c.Freebucks,
+				FreeWindows:            c.FreeWindows,
+				Subscription:           c.Subscription,
+				Maturity:               c.Maturity,
 			},
 			SessionInstance:         tok.SessionInstance,
 			SessionModel:            tok.SessionModel,

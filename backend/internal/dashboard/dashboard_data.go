@@ -83,6 +83,7 @@ type tokenCard struct {
 	BanType                string  `json:"ban_type,omitempty"`
 	BannedUntil            string  `json:"banned_until,omitempty"`
 	TransientRetries       int64   `json:"transient_retries"`
+	AllowlistSkips         int64   `json:"allowlist_skips,omitempty"`
 	HasStanding            bool    `json:"has_standing"`
 	StandingLevel          string  `json:"standing_level"`
 	StandingLabel          string  `json:"standing_label"`

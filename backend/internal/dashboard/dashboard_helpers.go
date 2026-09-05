@@ -30,6 +30,7 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 		RequestsPerDayResetIn:  int(t.RequestsPerDayResetIn.Seconds()),
 		RiskLevel:              t.RiskLevel,
 		TransientRetries:       t.TransientRetries,
+		AllowlistSkips:         t.AllowlistSkips,
 		Locked:                 t.Locked,
 	}
 	if !t.CooldownUntil.IsZero() && time.Now().Before(t.CooldownUntil) {

@@ -56,6 +56,7 @@
       });
       if (save.ok) {
         tokenRotation = newMode;
+        refreshTokens();
       }
     } catch (e) {
       console.warn("Failed to update token rotation", e);
@@ -81,6 +82,7 @@
       });
       if (save.ok) {
         rateLimitFailover = nextVal;
+        refreshTokens();
       }
     } catch (e) {
       console.warn("Failed to update rate limit failover", e);
@@ -111,8 +113,13 @@
   function applyTokens(v) {
     if (!v) return;
     data = v;
+    if (v.token_rotation) {
+      tokenRotation = v.token_rotation;
+    }
+    if (v.rate_limit_failover !== undefined) {
+      rateLimitFailover = v.rate_limit_failover;
+    }
     // Seed the per-token spawn-model map so no TokenCard binding ever sees
-    // undefined — Svelte 5 rejects bind:spawnModel={undefined} for a prop
     // with a fallback (props_invalid_value) and unmounts the table.
     (v?.tokens ?? []).forEach((t, i) => {
       const idx = t.index ?? i;
@@ -377,6 +384,10 @@
     const tick = setInterval(() => {
       now = Date.now();
     }, 1000);
+    function onConfigSaved() {
+      refreshTokens();
+    }
+    window.addEventListener("fp-config-saved", onConfigSaved);
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);
@@ -411,6 +422,7 @@
       unsubErr?.();
       clearInterval(tick);
       clearInterval(oauthTimer);
+      window.removeEventListener("fp-config-saved", onConfigSaved);
     };
   });
 </script>
