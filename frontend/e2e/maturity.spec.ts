@@ -93,9 +93,7 @@ test.describe("account maturity", () => {
       (r) =>
         r.method() === "POST" && r.url().includes("/admin/tokens/0/maturity"),
     );
-    await page
-      .getByLabel("Streak target for Account #1")
-      .fill("14");
+    await page.getByLabel("Streak target for Account #1").fill("14");
     await page.getByRole("button", { name: "Save" }).first().click();
     await saveReq;
     expect(posts[0].body).toContain("14");
