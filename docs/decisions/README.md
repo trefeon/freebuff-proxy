@@ -37,6 +37,7 @@ Related tests:
 | [ADR-0009](ADR-0009-reasoning-effort-cache.md) | Reasoning effort mapping and multi-turn cache | Accepted |
 | [ADR-0010](ADR-0010-release-strategy.md) | Release strategy and versioning | Accepted |
 | [ADR-0011](ADR-0011-model-catalog.md) | Model catalog, registry, and fallback resolution | Accepted |
+| [ADR-0012](ADR-0012-anti-ban-contract.md) | Anti-ban contract with upstream | Accepted |
 | [ADR-0013](ADR-0013-request-timeout-ttfb.md) | REQUEST_TIMEOUT guards TTFB only | Accepted |
 | [ADR-0014](ADR-0014-rpm-admission-atomic.md) | RPM admission counted atomically at lease grant | Accepted |
 | [ADR-0015](ADR-0015-tool-calls-plural-dialect.md) | `<tool_calls>` plural dialect extracts like singular | Accepted |

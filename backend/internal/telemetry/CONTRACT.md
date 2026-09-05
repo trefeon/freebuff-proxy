@@ -9,6 +9,7 @@ per-token messages/requests/runs/cooldown, per-model quota gauges
 `freebuff_proxy_quota_recent`/`_limit`), structured logging helpers, header
 and secret redaction for logs, and Prometheus label escaping. Consumers:
 server (`/metrics`), pool (quota gauges), upstream (classification lines),
+dashboard (log stream via `logring` on top).
 ## Public API (stable surface)
 
 - Logging: `NewLogger(verbose, logFile)`, `New(level, logFile, format)`,
