@@ -2,7 +2,7 @@
 
 Status: PR1 (display) shipped; PR2 automation landed as preserve-only v1
 (`feat/maturity-automation`): global kill-switch MATURITY_ENABLED (default
-off), dry-run probes default on, unmetered touch model only, per-token
+on with MATURITY_DRY_RUN=true), dry-run probes default on, unmetered touch model only, per-token
 target lock + auto-release, todayUsed + slot + 6h throttle skips, 3-day
 no-advance auto-stop. Warming = administrative lock (excluded from Acquire)
 plus automation; the touch admits via the token's own session manager
@@ -137,12 +137,12 @@ A daily mechanical touch from a datacenter IP to farm streaks is a
 bot pattern in the eyes of upstream abuse detection — this proxy's
 entire philosophy is anti-ban / CLI fidelity, and a flag costs pool
 accounts, not just streaks. Mitigations baked into the design:
-default OFF with honest UI copy, jittered per-token daytime slots,
-preserve-before-build (keep existing streaks alive first; building
-from 0 for 7 straight days on many tokens is the most bot-like
-shape and needs explicit approval), unmetered models only, audit
-log, global kill-switch. Fleet rollout only after one token passes
-the 7-day soak. Start with preserve-only.
+default ON in dry-run mode (zero session slots claimed) with honest UI copy,
+jittered per-token daytime slots, preserve-before-build (keep existing
+streaks alive first; building from 0 for 7 straight days on many tokens
+is the most bot-like shape and needs explicit approval), unmetered models
+only, audit log, global kill-switch. Fleet rollout only after one token
+passes the 7-day soak. Start with preserve-only.
 
 ## 5. Execution order
 

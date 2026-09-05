@@ -24,9 +24,9 @@
   let unsubStore = null;
   let unsubErr = null;
 
-  // Global kill-switch state (MATURITY_ENABLED, default off) for the honest
+  // Global kill-switch state (MATURITY_ENABLED, default true) for the honest
   // header notice. Settings renders the toggle itself (catalog Essential).
-  let globalEnabled = $state(false);
+  let globalEnabled = $state(true);
   let globalLoaded = $state(false);
 
   // Per-token draft controls + busy flags, keyed by token index.
