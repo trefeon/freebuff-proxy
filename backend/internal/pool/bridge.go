@@ -422,6 +422,16 @@ sessionReady:
 
 	p.logger.Debug("pool: bridge lease acquired", "model", effectiveModel, "agent", effectiveAgentID, "instance_id", ss.InstanceID,
 		"country", ss.CountryCode)
+	// MAX_REQUESTS_PER_MINUTE admission enforced atomically at grant time,
+	// mirroring Acquire: the pre-filter above only reads the window, and a
+	// concurrent burst must not pass the cap before any record lands.
+	// Admission is always recorded (even with cap 0 = unlimited) so the
+	// bridge snapshot counters stay meaningful.
+	if !p.bridgeTryAdmitRequest(entry) {
+		p.LeaseRelease(&Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
+			Bridge: entry, AcquiredAt: time.Now()})
+		return nil, p.bridgeRpmLimitError(entry)
+	}
 	// Track the activity and end any idle-maintenance pause, mirroring
 	// Acquire: without this, IDLE_ROTATION_TIMEOUT was dead config in
 	// bridge mode — lastActive stayed zero forever, so the pool never

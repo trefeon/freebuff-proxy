@@ -577,6 +577,23 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			"country", ss.CountryCode)
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
+		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
+			entry: tok, AcquiredAt: time.Now()}
+		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
+		// lease grant. The pre-filter above only reads the rolling window;
+		// recording later (in Chat) raced it — a concurrent burst (agent
+		// spawn batches) all passed the cap before any record landed. On a
+		// full window the run is released and the token counted as
+		// rate-limited so the loop tries the next one. Admission is always
+		// recorded (even with cap 0 = unlimited) so the token snapshot
+		// counters stay meaningful.
+		if !p.tryAdmitRequest(tok) {
+			p.LeaseRelease(lease)
+			rateLimited = appendRateLimit(rateLimited, p.rpmLimitError(idx))
+			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
+			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
+			continue
+		}
 		// Track the activity and end any idle-maintenance pause: the next
 		// maintain tick resumes rotation/refresh work.
 		p.lastActiveMu.Lock()
@@ -590,8 +607,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.lastTokenByModel[effectiveModel] = idx
 		p.lastTokenMu.Unlock()
-		return &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			entry: tok, AcquiredAt: time.Now()}, nil
+		return lease, nil
 	}
 
 	// Failover precedence (PRD §6 error matrix): when buckets are mixed the

@@ -25,9 +25,8 @@ func TestAcquirePerMinuteRequestCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chatOnce(t, p, lease) // records the admitted request + successful chat
+	chatOnce(t, p, lease) // admission counted at Acquire; chat records the successful chat
 	p.LeaseRelease(lease)
-
 	if got := p.Snapshot()[0].RequestsPerMinute; got != 1 {
 		t.Errorf("RequestsPerMinute = %d, want 1", got)
 	}
@@ -280,5 +279,95 @@ func TestRequestLedgerDayBucketRollsAtPacificMidnight(t *testing.T) {
 	l3 := newAccountLedger()
 	if d := l3.dayRequestResetIn(time.Now()); d <= 0 || d > 26*time.Hour {
 		t.Errorf("dayRequestResetIn = %s, want (0, 26h]", d)
+	}
+}
+
+// TestAcquireRPMAdmitBurstIsAtomic pins that RPM admission counting is
+// atomic with the lease grant: two concurrent acquires against cap=1 must
+// admit exactly one (the other 429s) — never both. Regression: the old
+// check-in-Acquire / record-in-Chat split let a concurrent burst (agent
+// spawn batches) pass the cap before any record landed, since Chat records
+// after an upstream call the test path never makes.
+func TestAcquireRPMAdmitBurstIsAtomic(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newTestPoolCfg(t, func(c *config.Config) { c.MaxRequestsPerMinute = 1 }, mock)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := p.Acquire(context.Background(), modelA)
+			results <- err
+		}()
+	}
+	close(start)
+	var okCount, cappedCount int
+	for range 2 {
+		if err := <-results; err == nil {
+			okCount++
+		} else if errors.Is(err, upstream.ErrRateLimited) {
+			cappedCount++
+		} else {
+			t.Fatalf("unexpected acquire error: %v", err)
+		}
+	}
+	if okCount != 1 || cappedCount != 1 {
+		t.Errorf("burst admit = %d ok / %d capped, want 1/1 (admission counting must be atomic with the grant)", okCount, cappedCount)
+	}
+}
+
+// TestAcquireCountsAdmissionAtGrant pins that an admitted request is
+// counted the moment the lease is granted — before any chat. A lease with
+// no follow-up chat still consumed its admission slot.
+func TestAcquireCountsAdmissionAtGrant(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newTestPool(t, mock) // RPM cap 0 (unlimited) — counting still happens
+
+	lease, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.LeaseRelease(lease)
+	if got := p.Snapshot()[0].RequestsPerMinute; got != 1 {
+		t.Errorf("RequestsPerMinute right after Acquire = %d, want 1 (admission counted at lease grant)", got)
+	}
+}
+
+// TestBridgeRPMAdmitBurstIsAtomic is the bridge-mode mirror: two
+// concurrent AcquireBridge calls for one client token against cap=1 must
+// admit exactly one.
+func TestBridgeRPMAdmitBurstIsAtomic(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newBridgePool(t, mock)
+	cfg := p.cfg.Load()
+	cfg.MaxRequestsPerMinute = 1
+	p.cfg.Store(cfg)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := p.AcquireBridge(context.Background(), "client-a", modelA)
+			results <- err
+		}()
+	}
+	close(start)
+	var okCount, cappedCount int
+	for range 2 {
+		if err := <-results; err == nil {
+			okCount++
+		} else if errors.Is(err, upstream.ErrRateLimited) {
+			cappedCount++
+		} else {
+			t.Fatalf("unexpected bridge acquire error: %v", err)
+		}
+	}
+	if okCount != 1 || cappedCount != 1 {
+		t.Errorf("bridge burst admit = %d ok / %d capped, want 1/1", okCount, cappedCount)
 	}
 }

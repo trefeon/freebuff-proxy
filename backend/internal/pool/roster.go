@@ -224,16 +224,24 @@ func (r *tokenRoster) recordChatEntry(entry *tokenEntry) {
 	entry.ledger.recordDayRequest(now)
 }
 
-// recordRequestEntry appends one ADMITTED chat request for a lease's backing
-// entry by pointer (MAX_REQUESTS_PER_MINUTE): success or failure upstream,
-// the request was sent — counted at the exact rate upstream observes.
-func (r *tokenRoster) recordRequestEntry(entry *tokenEntry) {
+// tryAdmitRequest atomically checks and records one ADMITTED chat request
+// for the entry (MAX_REQUESTS_PER_MINUTE) under the roster lock: the 60s
+// window is pruned and the request appended only while the count is below
+// the cap. Returns false when the window is full — the caller treats the
+// token as rate-limited and moves on. Atomicity is the point: the old
+// check-in-Acquire / record-in-Chat split let a concurrent burst (agent
+// spawn batches) pass the cap before any record landed.
+func (r *tokenRoster) tryAdmitRequest(entry *tokenEntry, cap int) bool {
 	if entry == nil {
-		return
+		return false
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if cap > 0 && entry.ledger.rpmCount(time.Now()) >= cap {
+		return false
+	}
 	entry.ledger.recordRequest(time.Now())
+	return true
 }
 
 // rpmCount returns the entry at token's admitted-request count in the

@@ -160,7 +160,7 @@ var keyCatalog = []KeyDef{
 		Description: `Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP).`},
 	{Key: "RATE_LIMIT_FAILOVER", Group: GroupPool, Kind: "bool", Hidden: true,
 		Default:     "true",
-		Description: `Automatically rotate and lease another available token when an in-flight request encounters a 429 rate limit (default true).`},
+		Description: `Rotate to another available token when an in-flight request hits a token-level 429 (rate limit / throttle). turn_spend_limited is TERMINAL (upstream per-turn spend breaker — a retry re-trips instantly) and is excluded from failover (default true).`},
 	{Key: "RATE_LIMIT_PER_IP", Group: GroupPool, Kind: "text", Essential: true,
 		Default:     "0",
 		Description: `Requests/second allowed per client IP (0 = disabled; e.g. 20).`},

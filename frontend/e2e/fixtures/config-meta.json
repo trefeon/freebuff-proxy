@@ -330,7 +330,7 @@
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Automatically rotate and lease another available token when an in-flight request encounters a 429 rate limit (default true)."
+    "description": "Rotate to another available token when an in-flight request hits a token-level 429 (rate limit / throttle). turn_spend_limited is TERMINAL (upstream per-turn spend breaker — a retry re-trips instantly) and is excluded from failover (default true)."
   },
   {
     "key": "RATE_LIMIT_PER_IP",
