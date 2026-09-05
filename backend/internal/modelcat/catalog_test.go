@@ -397,17 +397,18 @@ func catalogIDs() []string {
 }
 
 // TestCatalogFactsPinned asserts the documented catalog reality directly:
-// the served set, the shared premium pool (Luna alone since 2026-09-04;
-// GLM 5.3 Flash is unmetered), the paused map (all five withdrawn rows
-// recommend the default model), per-model caps (none at this pin), and
-// per-model effort ladders. This pins what the doc comments CLAIM so a
-// stale claim (e.g. "GLM 5.3 Flash is premium") fails here before an
-// operator reads it.
+// the served set, the shared premium pool (Luna + Muse Spark 1.3 since
+// 2026-09-04; GLM 5.3 Flash is unmetered), the paused map (all four
+// withdrawn rows recommend the default model), per-model caps (none at
+// this pin), and per-model effort ladders. This pins what the doc comments
+// CLAIM so a stale claim (e.g. "GLM 5.3 Flash is premium") fails here
+// before an operator reads it.
 func TestCatalogFactsPinned(t *testing.T) {
 	// Served set, catalog order.
 	wantServed := []string{
 		"openai/gpt-5.6-luna",
 		"upstage/solar-pro4",
+		"meta/muse-spark-1.3-contributor",
 		"z-ai/glm-5.3-flash",
 		"deepseek/deepseek-v4-flash",
 		"mimo/mimo-v2.5",
@@ -416,10 +417,10 @@ func TestCatalogFactsPinned(t *testing.T) {
 		t.Errorf("ServedIDs() = %v, want %v", got, wantServed)
 	}
 
-	// Shared premium pool = Luna alone since 2026-09-04 (solar's entitlement
-	// went unmetered; gemini is paused-withdrawn and cannot consume the
-	// pool). GLM 5.3 Flash unmetered.
-	wantPremium := []string{"openai/gpt-5.6-luna"}
+	// Shared premium pool = Luna + Muse Spark 1.3 since 2026-09-04 (solar's
+	// entitlement went unmetered; gemini is Pro-paywalled and cannot consume
+	// the pool). GLM 5.3 Flash unmetered.
+	wantPremium := []string{"openai/gpt-5.6-luna", "meta/muse-spark-1.3-contributor"}
 	if got := SharedPremiumModels(); !slices.Equal(got, wantPremium) {
 		t.Errorf("SharedPremiumModels() = %v, want %v", got, wantPremium)
 	}
@@ -436,7 +437,6 @@ func TestCatalogFactsPinned(t *testing.T) {
 		"deepseek/deepseek-v4-pro": DefaultModelID,
 		"minimax/minimax-m3":       DefaultModelID,
 		"z-ai/glm-5.2":             DefaultModelID,
-		"google/gemini-3.8-flash":  DefaultModelID,
 	}
 	if got := PausedMap(); !maps.Equal(got, wantPaused) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)
@@ -455,12 +455,13 @@ func TestCatalogFactsPinned(t *testing.T) {
 
 	// Effort ladders for served models (nil = the route ignores it).
 	wantEfforts := map[string][]string{
-		"openai/gpt-5.6-luna":        {"low", "medium", "high", "xhigh", "max"},
-		"deepseek/deepseek-v4-flash": {"low", "high", "max"},
-		"mimo/mimo-v2.5":             {"high"},
-		"upstage/solar-pro4":         nil,
-		"z-ai/glm-5.2":               nil,
-		"z-ai/glm-5.3-flash":         {"low", "high", "max"},
+		"openai/gpt-5.6-luna":             {"low", "medium", "high", "xhigh", "max"},
+		"meta/muse-spark-1.3-contributor": {"minimal", "low", "medium", "high", "xhigh"},
+		"deepseek/deepseek-v4-flash":      {"low", "high", "max"},
+		"mimo/mimo-v2.5":                  {"high"},
+		"upstage/solar-pro4":              nil,
+		"z-ai/glm-5.2":                    nil,
+		"z-ai/glm-5.3-flash":              {"low", "high", "max"},
 	}
 	for id, want := range wantEfforts {
 		if got := Efforts(id); !slices.Equal(got, want) {

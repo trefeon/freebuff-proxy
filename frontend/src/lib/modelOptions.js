@@ -11,9 +11,14 @@ export const fallbackModelOptions = [
     tag: "premium",
   },
   {
-    id: "upstage/solar-pro4",
-    label: "upstage/solar-pro4 (5 premium quota)",
+    id: "meta/muse-spark-1.3-contributor",
+    label: "meta/muse-spark-1.3-contributor (5 premium quota)",
     tag: "premium",
+  },
+  {
+    id: "upstage/solar-pro4",
+    label: "upstage/solar-pro4 (unlimited session)",
+    tag: "unmetered",
   },
   {
     id: "mimo/mimo-v2.5",

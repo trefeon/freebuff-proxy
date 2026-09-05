@@ -55,30 +55,41 @@ type ModelInfo struct {
 // test enforces it.
 var Catalog = []ModelInfo{
 	{ID: "stealth/ox-alpha", DisplayName: "Ox Alpha",
-		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 1_000_000,
+		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 1_000_000,
 		Efforts: []string{"low", "high", "max"}},
 	{ID: "deepseek/deepseek-v4-pro", DisplayName: "DeepSeek V4 Pro",
-		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 1_048_576,
+		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 1_048_576,
 		Efforts: []string{"low", "high", "max"}},
 	{ID: "minimax/minimax-m3", DisplayName: "MiniMax M3",
-		PausedReplacement: "deepseek/deepseek-v4-flash", ContextWindow: 524_288,
+		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 524_288,
 		Efforts: []string{"high"}},
 	{ID: "openai/gpt-5.6-luna", DisplayName: "GPT-5.6 Luna",
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
 		Served: true, ContextWindow: 500_000},
-	// google/gemini-3.8-flash reached every surface 2026-09-03 and was
-	// withdrawn days later (upstream FREEBUFF_PAUSED_FREE_MODEL_IDS):
-	// recognized and coerced, never served. Premium stays false while
-	// paused (it cannot consume the pool); restore the flag together with
-	// Served when upstream re-lists it. No context entry upstream (falls
-	// back to DefaultContextWindow); the $0.50 per-session spend ceiling
-	// is upstream-enforced and unreachable while paused, so unmodeled.
+	// google/gemini-3.8-flash returned 2026-09-04 behind the Pro paywall,
+	// Web-only (upstream FREEBUFF_PRO_ONLY_CATALOG_MODEL_IDS): removed from
+	// FREEBUFF_PAUSED_FREE_MODEL_IDS, but NOT back in FREEBUFF_MODELS, so no
+	// CLI/Desktop surface may serve it. The proxy has no Pro surface, so the
+	// row stays recognized-but-never-served: no PausedReplacement (upstream
+	// no longer pauses it), no Served. No context entry upstream; the $0.50
+	// per-session spend ceiling is upstream-enforced, so unmodeled.
 	{ID: "google/gemini-3.8-flash", DisplayName: "Gemini 3.8 Flash",
-		PausedReplacement: "deepseek/deepseek-v4-flash",
-		Efforts:           []string{"low", "medium", "high", "xhigh", "max"}},
-	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "deepseek/deepseek-v4-flash"},
+		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
+	// meta/muse-spark-1.3-contributor joined every surface 2026-09-04
+	// (upstream SUPPORTED_FREEBUFF_MODELS + FREEBUFF_MODELS, last on
+	// purpose — the one row that may answer on a different model when its
+	// shared ceiling is full). Premium shared-pool row; rate-limited with a
+	// 15s queue window, then answers on DeepSeek V4 Flash. Contributor
+	// terms: Meta trains on prompts and completions (dataUse 'training'),
+	// and upstream keeps no traces for it. Full ladder, defaultEffort
+	// xhigh. No context entry upstream (only 1.2 has one), so it falls
+	// back to DefaultContextWindow.
+	{ID: "meta/muse-spark-1.3-contributor", DisplayName: "Muse Spark 1.3",
+		Served: true, Premium: true,
+		Efforts: []string{"minimal", "low", "medium", "high", "xhigh"}},
+	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "z-ai/glm-5.3-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
 		Served: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "high", "max"}},
@@ -96,10 +107,11 @@ var Catalog = []ModelInfo{
 }
 
 // DefaultModelID mirrors upstream DEFAULT_FREEBUFF_MODEL_ID, pinned to
-// FREEBUFF_MODELS[0] (DeepSeek V4 Flash leads the picker as of 2026-09-02;
-// see upstream freebuff-models.ts's note on the move). It is what the
-// upstream CLI resolves a blank model pick to.
-const DefaultModelID = "deepseek/deepseek-v4-flash"
+// FREEBUFF_MODELS[0] (GLM 5.3 Flash leads the picker again as of 2026-09-05,
+// retaking the lead from DeepSeek V4 Flash 09-02→09-05; see upstream
+// freebuff-models.ts's note on the move). It is what the upstream CLI
+// resolves a blank model pick to, and what paused-model refusals recommend.
+const DefaultModelID = "z-ai/glm-5.3-flash"
 
 // FallbackModelID mirrors upstream FALLBACK_FREEBUFF_MODEL_ID: the model
 // guaranteed available on EVERY tier that unavailable picks are coerced to.
@@ -225,8 +237,8 @@ func IsPremium(id string) bool {
 }
 
 // SharedPremiumModels returns the ids metered by the shared daily premium
-// pool: Luna alone since 2026-09-04 (solar left the pool when its
-// entitlement went unmetered; gemini is paused-withdrawn).
+// pool: Luna + Muse Spark 1.3 since 2026-09-04 (solar left the pool when its
+// entitlement went unmetered; gemini is Pro-paywalled).
 // GLM 5.3 Flash is unmetered.
 func SharedPremiumModels() []string {
 	var out []string
