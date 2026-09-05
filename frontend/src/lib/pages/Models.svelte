@@ -137,6 +137,9 @@
               {#each data.models as m (m.id)}
                 {@const bound = Boolean(m.agent)}
                 {@const st = modelState(m)}
+                {@const effectivePrice =
+                  priceLabel(m.id) || m.price_label || "—"}
+                {@const effectivePool = poolChip(m.id) || m.pool || "—"}
                 <tr>
                   <td>
                     <div class="flex flex-col gap-0.5 min-w-0">
@@ -217,20 +220,15 @@
                         ? 'text-[var(--fp-accent)]'
                         : m.pool === 'referral'
                           ? 'text-amber-400'
-                          : 'text-[var(--fp-muted)]'}"
-                      >{poolChip(m.id) || m.pool || "—"}</span
-                    ></td
-                  >
-                  <td
-                    ><span
-                      class="fp-num text-xs font-semibold {m.price === 0
+                          : 'text-[var(--fp-muted)]'}">{effectivePool}</span
+                    >
+                  </td>
+                  <td>
+                    <span
+                      class="fp-num text-xs font-semibold {effectivePrice ===
+                      '0 Freebucks/hr'
                         ? 'text-emerald-400'
-                        : 'text-[var(--fp-accent)]'}"
-                      >{priceLabel(m.id) ||
-                        m.price_label ||
-                        (m.price != null
-                          ? `${m.price} Freebucks/hr`
-                          : "—")}</span
+                        : 'text-[var(--fp-accent)]'}">{effectivePrice}</span
                     ></td
                   >
                 </tr>
@@ -303,7 +301,7 @@
                 class="flex items-center justify-between gap-2 text-xs pt-1 border-t border-[var(--fp-border)]/60"
               >
                 <span
-                  class="font-semibold {m.price === 0
+                  class="font-semibold {effectivePrice === '0 Freebucks/hr'
                     ? 'text-emerald-400'
                     : 'text-[var(--fp-accent)]'}"
                 >

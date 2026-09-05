@@ -209,23 +209,19 @@ func (d *Dashboard) modelsData() modelsData {
 		if p, ok := livePrices[id]; ok {
 			row.Price = p
 			effectivePrices[id] = p
+			if p == 0 {
+				row.PriceLabel = "0 Freebucks/hr"
+			} else {
+				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(p))
+			}
 		}
 		if id == modelcat.Glm52ModelID {
 			row.PriceLabel = "Referral grant"
 			row.Pool = "referral"
 		} else if modelcat.IsPremium(id) {
 			row.Pool = "premium"
-			if row.Price > 0 {
-				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
-			}
 		} else {
 			row.Pool = "unlimited"
-			if row.Price == 0 {
-				row.PriceLabel = "0 Freebucks/hr"
-				effectivePrices[id] = 0
-			} else if row.Price > 0 {
-				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
-			}
 		}
 		if agent, err := d.reg.AgentForModel(id); err == nil {
 			row.Agent = agent
