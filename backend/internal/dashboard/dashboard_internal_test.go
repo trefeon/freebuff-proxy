@@ -363,8 +363,9 @@ func TestLiveCardRequestLimits(t *testing.T) {
 
 // TestModelsDataServedGateOnly pins the served-model filter on modelsData:
 // the vendor registry also carries god-only/eval rows (luna-es since
-// snapshot 0603bc1) that must never appear in the dashboard models view,
-// and Count must reflect the filtered set, not the raw registry size.
+// snapshot 0603bc1) that must never appear in the dashboard models view.
+// One exception: the referral row (GLM 5.2, Served=false) is listed so
+// users discover the grant path. Count = served set + 1.
 func TestModelsDataServedGateOnly(t *testing.T) {
 	cfg := &config.Config{
 		RotationInterval:   time.Hour,
@@ -380,13 +381,30 @@ func TestModelsDataServedGateOnly(t *testing.T) {
 	}
 	d := New(func() *config.Config { return cfg }, nil, reg, nil, nil)
 	md := d.modelsData()
-	if md.Count != len(modelcat.ServedIDs()) {
-		t.Errorf("Count = %d, want %d (served set)", md.Count, len(modelcat.ServedIDs()))
+	if md.Count != len(modelcat.ServedIDs())+1 {
+		t.Errorf("Count = %d, want %d (served set + referral row)", md.Count, len(modelcat.ServedIDs())+1)
 	}
+	var sawReferral bool
 	for _, row := range md.Models {
+		if row.ID == modelcat.Glm52ModelID {
+			sawReferral = true
+			if row.Served {
+				t.Errorf("referral row %q has Served=true, want false", row.ID)
+			}
+			if row.Quota != "referral +1/day" {
+				t.Errorf("referral row quota = %q, want %q", row.Quota, "referral +1/day")
+			}
+			continue
+		}
 		if !modelcat.IsServed(row.ID) {
 			t.Errorf("models view contains unserved model %q", row.ID)
 		}
+		if !row.Served {
+			t.Errorf("served row %q has Served=false, want true", row.ID)
+		}
+	}
+	if !sawReferral {
+		t.Error("models view missing the referral row (z-ai/glm-5.2)")
 	}
 }
 

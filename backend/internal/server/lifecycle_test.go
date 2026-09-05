@@ -406,8 +406,8 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if err := json.Unmarshal([]byte(bodyOf(t, mdResp)), &md); err != nil {
 			t.Fatalf("models API not JSON: %v", err)
 		}
-		if md.Count != 6 || len(md.Models) != 6 {
-			t.Fatalf("models API count = %d/%d, want 6", md.Count, len(md.Models))
+		if md.Count != 7 || len(md.Models) != 7 {
+			t.Fatalf("models API count = %d/%d, want 7", md.Count, len(md.Models))
 		}
 		allowed := map[string]bool{"unlimited session": true, "5 premium quota": true, "referral +1/day": true, "unmetered": true, "shared premium pool": true, "5/day shared premium": true}
 		for _, m := range md.Models {

@@ -613,7 +613,7 @@ test.describe("dashboard hermetic mocks", () => {
     );
   });
 
-  test("Models lists 7 served models", async ({ page }) => {
+  test("Models lists 7 rows with referral row", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
@@ -636,9 +636,12 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByText("meta/muse-spark-1.3-contributor").first(),
     ).toBeVisible();
-    // Count rows: header + 7 data rows
+    // Count rows: header + 7 data rows (6 served + 1 referral)
     const rows = page.locator("table tbody tr");
     await expect(rows).toHaveCount(7);
+    await expect(page.getByText("z-ai/glm-5.2").first()).toBeVisible();
+    await expect(page.getByText("referral +1/day").first()).toBeVisible();
+    await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
   });
 
   test("Overview shows client integration and base_url", async ({ page }) => {

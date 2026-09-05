@@ -15,6 +15,17 @@
   let loading = $state(true);
   let error = $state("");
 
+  // Row state: grant-gated referral rows carry an agent binding but
+  // served=false — they render "referral", not "served". Rows without a
+  // binding (and legacy payloads without the served flag) stay "unbound".
+  function modelState(m) {
+    if (!m.agent) return "unbound";
+    if (m.served === false) return "referral";
+    return "served";
+  }
+  function modelTone(state) {
+    return state === "served" ? "good" : state === "referral" ? "info" : "idle";
+  }
   async function load() {
     loading = true;
     error = "";
@@ -30,7 +41,7 @@
   onMount(load);
 
   const servedCount = $derived(
-    data ? data.models.filter((m) => m.agent).length : 0,
+    data ? data.models.filter((m) => modelState(m) === "served").length : 0,
   );
 </script>
 
@@ -91,6 +102,7 @@
             <tbody>
               {#each data.models as m (m.id)}
                 {@const bound = Boolean(m.agent)}
+                {@const st = modelState(m)}
                 <tr>
                   <td>
                     <div class="flex items-center gap-1.5">
@@ -107,10 +119,7 @@
                     </div>
                   </td>
                   <td>
-                    <StatusBadge
-                      status={bound ? $tr("served") : $tr("unbound")}
-                      tone={bound ? "good" : "idle"}
-                    />
+                    <StatusBadge status={$tr(st)} tone={modelTone(st)} />
                   </td>
                   <td>
                     {#if bound}
@@ -138,6 +147,7 @@
         >
           {#each data.models as m (m.id)}
             {@const bound = Boolean(m.agent)}
+            {@const st = modelState(m)}
             <li class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0">
               <div class="flex items-start justify-between gap-2 min-w-0">
                 <code
@@ -155,10 +165,7 @@
               <div
                 class="flex items-center justify-between gap-2 border-t border-[var(--fp-border)] pt-2"
               >
-                <StatusBadge
-                  status={bound ? $tr("served") : $tr("unbound")}
-                  tone={bound ? "good" : "idle"}
-                />
+                <StatusBadge status={$tr(st)} tone={modelTone(st)} />
                 <span
                   class="fp-num text-xs text-[var(--fp-muted)] text-right break-words min-w-0"
                   >{m.quota || "unlimited session"}</span

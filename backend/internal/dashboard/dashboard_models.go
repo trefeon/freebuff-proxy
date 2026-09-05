@@ -20,9 +20,10 @@ type modelsData struct {
 }
 
 type modelRow struct {
-	ID    string `json:"id"`
-	Agent string `json:"agent"`
-	Quota string `json:"quota"`
+	ID     string `json:"id"`
+	Agent  string `json:"agent"`
+	Quota  string `json:"quota"`
+	Served bool   `json:"served"`
 }
 
 // servedModels returns the registry ids that pass the strict ServedModels
@@ -144,12 +145,15 @@ func (d *Dashboard) modelsData() modelsData {
 	// Served gate: the dashboard shows the models this proxy actually
 	// serves (issue #189 strict set), not the raw upstream registry — the
 	// vendor catalog now carries god-only/eval rows (e.g. luna-es) that
-	// must never be presented as servable.
+	// must never be presented as servable. One exception: the referral
+	// row (GLM 5.2) is listed with Served=false so users discover the
+	// grant path; the quota label ("referral +1/day") carries the terms.
 	for _, id := range d.reg.Models() {
-		if !modelcat.IsServed(id) {
+		served := modelcat.IsServed(id)
+		if !served && id != modelcat.Glm52ModelID {
 			continue
 		}
-		row := modelRow{ID: id}
+		row := modelRow{ID: id, Served: served}
 		if agent, err := d.reg.AgentForModel(id); err == nil {
 			row.Agent = agent
 		}

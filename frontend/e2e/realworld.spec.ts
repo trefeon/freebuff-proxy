@@ -131,11 +131,13 @@ test.describe("real-world data", () => {
   }) => {
     await mockDashboard(page, loadFixtures(RW));
     await page.goto(admin("models"));
-    await expect(page.getByText("5 premium quota")).toHaveCount(6);
+    await expect(page.getByText("5 premium quota")).toHaveCount(4);
     await expect(page.getByText("unlimited session")).toHaveCount(8);
     await expect(
       page.getByText("meta/muse-spark-1.3-contributor").first(),
     ).toBeVisible();
+    await expect(page.getByText("referral +1/day")).toHaveCount(2);
+    await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
     await page.goto(admin("logs"));
     await expect(page.getByText("2 requests")).toBeVisible();
     await expect(page.getByText("502").first()).toBeVisible();
