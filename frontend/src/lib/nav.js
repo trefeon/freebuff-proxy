@@ -6,6 +6,7 @@ import {
   Settings as SettingsIcon,
   FileText,
   FlaskConical,
+  Flame,
 } from "@lucide/svelte";
 import Overview from "./pages/Overview.svelte";
 import Tokens from "./pages/Tokens.svelte";
@@ -17,6 +18,7 @@ import DevTools from "./pages/DevTools.svelte";
 import Setup from "./pages/Setup.svelte";
 import Metrics from "./pages/Metrics.svelte";
 import Traces from "./pages/Traces.svelte";
+import Maturity from "./pages/Maturity.svelte";
 
 // Single source of truth for the dashboard page set (issue #290). Both the
 // sidebar's tab list (lib/Sidebar.svelte) and App.svelte's page mount derive
@@ -38,6 +40,7 @@ export const NAV_ITEMS = [
     icon: LayoutDashboard,
   },
   { id: "tokens", component: Tokens, label: "Tokens", icon: Key },
+  { id: "maturity", component: Maturity, label: "Maturity", icon: Flame },
   { id: "quota", component: QuotaTracker, label: "Quota Tracker", icon: Gauge },
   { id: "models", component: Models, label: "Models", icon: Cpu },
   { id: "logs", component: Logs, label: "Logs", icon: FileText },

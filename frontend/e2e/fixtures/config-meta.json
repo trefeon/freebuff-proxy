@@ -236,6 +236,60 @@
     "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset)."
   },
   {
+    "key": "MATURITY_ALLOW_PREMIUM",
+    "group": "pool",
+    "kind": "bool",
+    "default": "false",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Allow the per-token premium-short touch mode (one short premium admission instead of the unmetered touch). Default false: premium touches burn daily quota and stay opt-in per token."
+  },
+  {
+    "key": "MATURITY_DRY_RUN",
+    "group": "pool",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Maturity touches run only the zero-cost session probe and never claim a session slot (scheduler mechanics validation). Set false after the dry-run log lines prove slots, skips and throttles behave."
+  },
+  {
+    "key": "MATURITY_ENABLED",
+    "group": "pool",
+    "kind": "bool",
+    "default": "false",
+    "restart_only": false,
+    "secret": false,
+    "essential": true,
+    "description": "Global kill-switch for streak-maturity automation: daily low-cost touches that keep locked tokens' streaks alive until their target. Default OFF (bot-shaped traffic must be explicit opt-in); per-token toggles on the Tokens page do nothing while this is off."
+  },
+  {
+    "key": "MATURITY_TARGET_DAYS",
+    "group": "pool",
+    "kind": "int",
+    "default": "7",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Default streak target for newly-enabled tokens (1-28 days); a token whose streak reaches its target auto-releases its administrative lock."
+  },
+  {
+    "key": "MATURITY_TOUCH_MODEL",
+    "group": "pool",
+    "kind": "text",
+    "default": "deepseek/deepseek-v4-flash",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Unmetered model the maturity touch admits (must be a served, non-premium, uncapped catalog row — never burns premium quota for farming)."
+  },
+  {
     "key": "MODEL_LOCKS",
     "group": "pool",
     "kind": "text",

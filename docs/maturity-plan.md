@@ -1,7 +1,13 @@
-# Streak Display + Maturity Automation — Full Plan (no code yet)
+# Streak Display + Maturity Automation — Full Plan
 
-Status: planning only. PR1 (display) and PR2 (automation) land separately.
-Target: v1.8.9+ follow-ups after PoolReview triage.
+Status: PR1 (display) shipped; PR2 automation landed as preserve-only v1
+(`feat/maturity-automation`): global kill-switch MATURITY_ENABLED (default
+off), dry-run probes default on, unmetered touch model only, per-token
+target lock + auto-release, todayUsed + slot + 6h throttle skips, 3-day
+no-advance auto-stop. Warming = administrative lock (excluded from Acquire)
+plus automation; the touch admits via the token's own session manager
+(wire-identical to a CLI open, no client traffic served). Fleet rollout
+still needs the §3 ladder experiment + 7-day soak on one token.
 
 ## 0. Binding principles
 

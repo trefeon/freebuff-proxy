@@ -233,6 +233,9 @@ type TokenSnapshot struct {
 	TodayUsed       bool      `json:"today_used,omitempty"`
 	LastUsageDate   string    `json:"last_usage,omitempty"`
 	StreakUpdatedAt time.Time `json:"streak_updated_at,omitempty"`
+	// Maturity is the streak-maturity automation view (nil until maturity
+	// is first enabled for the token).
+	Maturity *MaturitySnapshot `json:"maturity,omitempty"`
 }
 
 // Pool balances requests across the configured tokens.
@@ -435,6 +438,11 @@ type tokenEntry struct {
 	quarantine  atomic.Pointer[quarantineState]
 	streak      atomic.Pointer[upstream.StreakInfo]
 	streakFetch atomic.Bool
+	// maturityMu guards maturity, the streak-maturity automation state
+	// (docs/maturity-plan.md PR2). Zero value = disabled; entry rebuilds
+	// (SetConfig slot changes) drop it — re-enable after a token swap.
+	maturityMu sync.Mutex
+	maturity   maturityState
 }
 
 func (e *tokenEntry) Email() string {

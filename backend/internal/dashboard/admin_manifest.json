@@ -38,6 +38,8 @@
   {"method": "POST", "path": "/admin/tokens/{id}/unlock", "auth": "sensitive", "js": {"export": "tokenActions", "key": "unlock"}},
   {"method": "POST", "path": "/admin/tokens/{id}/lock", "auth": "sensitive", "js": {"export": "tokenActions", "key": "lock"}},
   {"method": "POST", "path": "/admin/tokens/{id}/unlock-lock", "auth": "sensitive", "js": {"export": "tokenActions", "key": "unlockLock"}},
+  {"method": "POST", "path": "/admin/tokens/{id}/maturity", "auth": "sensitive", "js": null},
+  {"method": "POST", "path": "/admin/tokens/{id}/maturity/touch", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/bridge-tokens/{key}/lock", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/bridge-tokens/{key}/unlock", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/tokens/{id}/finish", "auth": "sensitive", "js": {"export": "tokenActions", "key": "finish"}},

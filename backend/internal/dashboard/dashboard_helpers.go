@@ -87,7 +87,36 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 			card.StreakUpdatedAt = t.StreakUpdatedAt.Format(time.RFC3339)
 		}
 	}
+	if t.Maturity != nil {
+		card.Maturity = maturityCardFromSnapshot(t.Maturity)
+	}
 	card.AllowedModels = t.AllowedModels
+	return card
+}
+
+// maturityCardFromSnapshot renders the pool maturity view with string times
+// for the dashboard API (nil-safe: nil in, nil out).
+func maturityCardFromSnapshot(m *pool.MaturitySnapshot) *maturityCard {
+	if m == nil {
+		return nil
+	}
+	card := &maturityCard{
+		Enabled:       m.Enabled,
+		Target:        m.Target,
+		Mode:          m.Mode,
+		Badge:         m.Badge,
+		LastAction:    m.LastAction,
+		LastResult:    m.LastResult,
+		LastAdvanced:  m.LastAdvanced,
+		Warn:          m.Warn,
+		NoAdvanceDays: m.NoAdvanceDays,
+	}
+	if !m.Slot.IsZero() {
+		card.Slot = m.Slot.Format(time.RFC3339)
+	}
+	if !m.LastTouch.IsZero() {
+		card.LastTouch = m.LastTouch.Format(time.RFC3339)
+	}
 	return card
 }
 
@@ -131,6 +160,7 @@ type tokenLiveCard struct {
 	TodayUsed       bool              `json:"today_used,omitempty"`
 	LastUsage       string            `json:"last_usage,omitempty"`
 	StreakUpdatedAt string            `json:"streak_updated_at,omitempty"`
+	Maturity        *maturityCard     `json:"maturity,omitempty"`
 }
 
 // liveCardFromSnapshot builds the hot-poll card for one token snapshot.
@@ -180,6 +210,9 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 		if !t.StreakUpdatedAt.IsZero() {
 			card.StreakUpdatedAt = t.StreakUpdatedAt.Format(time.RFC3339)
 		}
+	}
+	if t.Maturity != nil {
+		card.Maturity = maturityCardFromSnapshot(t.Maturity)
 	}
 	return card
 }

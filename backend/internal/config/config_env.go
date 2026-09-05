@@ -121,6 +121,11 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideString(&raw.FallbackAfter, "FALLBACK_AFTER_MS")
 	overrideString(&raw.FallbackModels, "FALLBACK_MODEL")
 	overrideBool(&raw.AdoptCLISession, "ADOPT_CLI_SESSION")
+	overrideBool(&raw.MaturityEnabled, "MATURITY_ENABLED")
+	overrideBool(&raw.MaturityDryRun, "MATURITY_DRY_RUN")
+	overrideString(&raw.MaturityTouchModel, "MATURITY_TOUCH_MODEL")
+	overrideInt(&raw.MaturityTargetDays, "MATURITY_TARGET_DAYS")
+	overrideBool(&raw.MaturityAllowPremium, "MATURITY_ALLOW_PREMIUM")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
@@ -435,6 +440,17 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		return Config{}, err
 	}
 
+	// MATURITY_TARGET_DAYS defaults to 7 (one full streak interval); an
+	// explicit value is range-checked in Validate (1..28).
+	maturityTargetDays := 7
+	if raw.MaturityTargetDays != nil {
+		maturityTargetDays = *raw.MaturityTargetDays
+	}
+	maturityTouchModel := strings.TrimSpace(raw.MaturityTouchModel)
+	if maturityTouchModel == "" {
+		maturityTouchModel = "deepseek/deepseek-v4-flash"
+	}
+
 	cfg := Config{
 		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
 		UpstreamBaseURL:                  upstreamBaseURL,
@@ -492,6 +508,11 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		FallbackAfter:                    fallbackAfter,
 		FallbackModels:                   fallbackModels,
 		AdoptCLISession:                  raw.AdoptCLISession,
+		MaturityEnabled:                  raw.MaturityEnabled,
+		MaturityDryRun:                   raw.MaturityDryRun,
+		MaturityTouchModel:               maturityTouchModel,
+		MaturityTargetDays:               maturityTargetDays,
+		MaturityAllowPremium:             raw.MaturityAllowPremium,
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -665,6 +686,11 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.FallbackAfter, get, "FALLBACK_AFTER_MS")
 	overrideStringFrom(&raw.FallbackModels, get, "FALLBACK_MODEL")
 	overrideBoolFrom(&raw.AdoptCLISession, get, "ADOPT_CLI_SESSION")
+	overrideBoolFrom(&raw.MaturityEnabled, get, "MATURITY_ENABLED")
+	overrideBoolFrom(&raw.MaturityDryRun, get, "MATURITY_DRY_RUN")
+	overrideStringFrom(&raw.MaturityTouchModel, get, "MATURITY_TOUCH_MODEL")
+	overrideIntFrom(&raw.MaturityTargetDays, get, "MATURITY_TARGET_DAYS")
+	overrideBoolFrom(&raw.MaturityAllowPremium, get, "MATURITY_ALLOW_PREMIUM")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")

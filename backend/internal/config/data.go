@@ -165,6 +165,16 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.FormatBool(c.AdoptCLISession), false
 	case "WAITING_ROOM_CHAIN":
 		return strconv.FormatBool(c.WaitingRoomChain), false
+	case "MATURITY_ENABLED":
+		return strconv.FormatBool(c.MaturityEnabled), false
+	case "MATURITY_DRY_RUN":
+		return strconv.FormatBool(c.MaturityDryRun), false
+	case "MATURITY_TOUCH_MODEL":
+		return c.MaturityTouchModel, false
+	case "MATURITY_TARGET_DAYS":
+		return strconv.Itoa(c.MaturityTargetDays), false
+	case "MATURITY_ALLOW_PREMIUM":
+		return strconv.FormatBool(c.MaturityAllowPremium), false
 	default:
 		// A catalog key with no Config field (new upstream knob not yet
 		// wired into Config): fall back to the catalog default so the

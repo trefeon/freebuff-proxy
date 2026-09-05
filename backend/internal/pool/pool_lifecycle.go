@@ -315,6 +315,11 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// LeaseRelease drains them; the park grace covers an Acquire that loaded
 	// the pre-removal snapshot (see RemoveLastToken).
 	p.pruneRetired()
+	// Streak-maturity automation rides every pass — including idle
+	// stretches, whose quiet accounts are exactly the ones whose streaks
+	// need keeping. It never fires on unhealthy accounts (banned, cooling,
+	// quarantined, country-blocked) and defaults to dry-run probes.
+	p.maturityTick(ctx)
 	// Idle handling — tryIdleFinish atomically checks the threshold and
 	// marks idleFinished in one lastActiveMu critical section (TOCTOU fix).
 	// The first idle pass FINISHes all runs so rotation/refresh stops

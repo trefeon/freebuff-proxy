@@ -57,6 +57,8 @@ func (c Config) Validate() error {
 		return errors.New("RATE_LIMIT_PER_IP cannot be negative")
 	case c.RateLimitBurst < 0:
 		return errors.New("RATE_LIMIT_BURST cannot be negative")
+	case c.MaturityTargetDays < 0 || c.MaturityTargetDays > 28:
+		return errors.New("MATURITY_TARGET_DAYS must be between 1 and 28 (one full streak interval is 7)")
 	}
 	for src, target := range c.QuotaFallbackModels {
 		if strings.TrimSpace(src) == "" || strings.TrimSpace(target) == "" {
@@ -119,7 +121,6 @@ func (c Config) Validate() error {
 			return fmt.Errorf("AUTH_TOKENS token #%d is a placeholder %q -- replace with a real FreeBuff token (run: freebuff)", i+1, tok)
 		}
 	}
-
 	if c.TLSFingerprint != "" {
 		switch strings.ToLower(c.TLSFingerprint) {
 		case "chrome120", "chrome126", "safari17", "safari18", "firefox120", "firefox128", "edge126", "random", "auto":
@@ -127,6 +128,16 @@ func (c Config) Validate() error {
 		default:
 			return fmt.Errorf("TLS_FINGERPRINT %q must be one of: chrome120, chrome126, safari17, safari18, firefox120, firefox128, edge126, random, auto", c.TLSFingerprint)
 		}
+	}
+
+	// The maturity touch model must look like a catalog id
+	// (provider/model). Whether it is actually served and unmetered
+	// (never burns premium quota) is enforced where modelcat is visible —
+	// the pool skips misconfigured touches with a warn log and the admin
+	// maturity endpoint rejects them (config is a bottom-layer package
+	// and must not import modelcat).
+	if c.MaturityTouchModel != "" && !strings.Contains(c.MaturityTouchModel, "/") {
+		return fmt.Errorf("MATURITY_TOUCH_MODEL %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash)", c.MaturityTouchModel)
 	}
 
 	if c.LogLevel != "" {
