@@ -875,6 +875,12 @@ func TestResolveModelSuffixStripping(t *testing.T) {
 		{"minimax/minimax-m3(max)", "minimax/minimax-m3"},
 		{"gpt-4o", "deepseek/deepseek-v4-pro"},
 		{"gpt-4o(max)", "deepseek/deepseek-v4-pro"},
+		// Claude Code 1M-context marker (reference/agents/claude-code):
+		// "[1m]"/"[200k]" strip to the bare id, aliases still resolve.
+		{"deepseek/deepseek-v4-flash[1m]", "deepseek/deepseek-v4-flash"},
+		{"deepseek/deepseek-v4-pro[200k]", "deepseek/deepseek-v4-pro"},
+		{"gpt-4o[1m]", "deepseek/deepseek-v4-pro"},
+		{"claude-sonnet-4-5[1m]", "claude-sonnet-4-5"},
 		{"unknown", "unknown"},
 	}
 
@@ -925,11 +931,12 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"deepseek/deepseek-v4-flash",
 		"openai/gpt-5.6-luna",
 		"upstage/solar-pro4",
+		"meta/muse-spark-1.3-contributor",
 		"z-ai/glm-5.3-flash",
 		"mimo/mimo-v2.5",
 	}
-	if len(modelcat.ServedMap()) != 5 {
-		t.Fatalf("len(modelcat.ServedMap()) = %d, want exactly 5", len(modelcat.ServedMap()))
+	if len(modelcat.ServedMap()) != 6 {
+		t.Fatalf("len(modelcat.ServedMap()) = %d, want exactly 6", len(modelcat.ServedMap()))
 	}
 	for _, m := range wantModels {
 		if !modelcat.IsServed(m) {
@@ -996,11 +1003,11 @@ func TestPausedModelPolicy(t *testing.T) {
 	}
 
 	got := modelcat.WithdrawnModelMessage("minimax/minimax-m3")
-	want := "MiniMax M3 is no longer available in Freebuff. We recommend using DeepSeek V4 Flash instead."
+	want := "MiniMax M3 is no longer available in Freebuff. We recommend using GLM 5.3 Flash instead."
 	if got != want {
 		t.Errorf("WithdrawnModelMessage = %q, want %q (mirror freebuffWithdrawnModelMessage)", got, want)
 	}
-	if got := modelcat.WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "DeepSeek V4 Flash") {
-		t.Errorf("WithdrawnModelMessage(ox-alpha) = %q, want DeepSeek V4 Flash replacement", got)
+	if got := modelcat.WithdrawnModelMessage("stealth/ox-alpha"); !strings.Contains(got, "GLM 5.3 Flash") {
+		t.Errorf("WithdrawnModelMessage(ox-alpha) = %q, want GLM 5.3 Flash replacement", got)
 	}
 }

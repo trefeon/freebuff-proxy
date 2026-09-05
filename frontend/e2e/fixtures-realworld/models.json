@@ -15,7 +15,7 @@
     },
     {
       "id": "openai/gpt-5.6-luna",
-      "agent": "base2-free-luna",
+      "agent": "base3-free-luna",
       "quota": "5 premium quota"
     },
     {

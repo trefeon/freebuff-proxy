@@ -84,10 +84,12 @@ var Catalog = []ModelInfo{
 	// 15s queue window, then answers on DeepSeek V4 Flash. Contributor
 	// terms: Meta trains on prompts and completions (dataUse 'training'),
 	// and upstream keeps no traces for it. Full ladder, defaultEffort
-	// xhigh. No context entry upstream (only 1.2 has one), so it falls
-	// back to DefaultContextWindow.
+	// xhigh. Meta publishes 1,048,576 for every Muse Spark variant, entered
+	// as 1,000,000 like Luna (upstream only keys the retired 1.2 id, so the
+	// parity context check has no 1.3 entry to compare — this is the
+	// documented upstream figure, not a guess).
 	{ID: "meta/muse-spark-1.3-contributor", DisplayName: "Muse Spark 1.3",
-		Served: true, Premium: true,
+		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"minimal", "low", "medium", "high", "xhigh"}},
 	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "z-ai/glm-5.3-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
