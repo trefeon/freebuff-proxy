@@ -760,9 +760,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     // The accounting revamp notice renders once at page level, not per
     // account card (the per-card unmetered models section was removed to
     // keep cards compact — issue #332/#335 section dropped).
-    await expect(
-      page.getByText(/Upstream Accounting Revamp \(Freebucks\)/),
-    ).toHaveCount(1);
+    await expect(page.getByText("Meet Freebucks")).toHaveCount(1);
     await expect(page.getByText("Unmetered Models")).toHaveCount(0);
     // Per-account request-limit chips render per card; a day-capped account
     // shows the Pacific-midnight reset countdown.

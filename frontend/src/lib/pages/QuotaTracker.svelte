@@ -93,15 +93,12 @@
   <div
     class="p-4 rounded-xl bg-[var(--fp-surface-2)] border border-[var(--fp-border)] text-xs text-[var(--fp-text)] space-y-2.5 shadow-sm"
   >
-    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+    <div class="flex items-center gap-2">
       <span class="text-emerald-400 font-bold font-mono text-sm select-none"
         >★</span
       >
       <strong class="text-[var(--fp-text)] font-semibold text-sm tracking-wide"
         >{$tr("Meet Freebucks")}</strong
-      >
-      <span class="text-[var(--fp-muted)] font-mono text-[11px]"
-        >({$tr("Upstream Accounting Revamp (Freebucks)")})</span
       >
     </div>
     <p class="text-[var(--fp-text)]/90 leading-relaxed font-normal">
