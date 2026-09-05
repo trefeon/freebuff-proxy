@@ -525,7 +525,7 @@ func TestXMLStreamExtractorPluralDialect(t *testing.T) {
 	if text != "Let me check:\n" {
 		t.Errorf("pre-opener text = %q, want %q", text, "Let me check:\n")
 	}
-	text, calls = x.Feed("ls>\n<function=read_file>\n<parameter=path>a.go</parameter>\n</function>\n</tool_calls>")
+	text, calls := x.Feed("ls>\n<function=read_file>\n<parameter=path>a.go</parameter>\n</function>\n</tool_calls>")
 	if len(calls) != 1 || calls[0].Function.Name != "read_file" {
 		t.Fatalf("want read_file call, got %d calls: %+v", len(calls), calls)
 	}
@@ -547,7 +547,7 @@ func TestXMLStreamExtractorPluralDanglingFlush(t *testing.T) {
 	if text != "intro " {
 		t.Errorf("pre-opener text = %q, want %q", text, "intro ")
 	}
-	text, calls = x.Flush()
+	text, calls := x.Flush()
 	if len(calls) != 0 {
 		t.Fatalf("unclosed block parsed %d calls, want 0", len(calls))
 	}
