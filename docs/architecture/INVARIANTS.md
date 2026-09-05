@@ -2,6 +2,7 @@
 
 Behavioral contracts that must never change accidentally. IDs group by area.
 Every invariant has: why it exists, current implementation, tests that protect
+it, what would break it. Treat this file as a contract, not prose.
 Precedence: this register is canonical. Package `CONTRACT.md` files elaborate
 the same invariants task-locally and must not contradict them; the root
 `AGENTS.md` entrypoint states them in one line each with pointers here.

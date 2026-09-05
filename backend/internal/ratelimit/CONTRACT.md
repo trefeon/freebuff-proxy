@@ -7,6 +7,7 @@ Task-local contract for agents modifying this package. Load before editing any f
 Per-IP token-bucket rate limiter for the client-facing surface
 (`RATE_LIMIT_PER_IP`, `RATE_LIMIT_BURST`; `0` disables; burst defaults to
 2x the rate). Protects the gateway from a single abusive client; it is NOT
+upstream quota enforcement (that lives in pool cooldowns/ledgers).
 ## Public API (stable surface)
 
 - `Limiter`, `New(rate, burst, maxEntries)`, `Allow(key) (allowed,

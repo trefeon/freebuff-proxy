@@ -78,6 +78,7 @@ Official reference specifications and SDKs reside in `reference/` (gitignored): 
 - **Hermetic Test Suite**: Always unset `AUTH_TOKENS` and `ADMIN_TOKEN` when running tests to avoid polluting bridge-mode test environments:
   ```bash
   env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...
+  ```
 - **Anti-Ban Contract** (canonical: INV-UP-001..005):
   - Upstream session POST sends `x-freebuff-model` and `x-freebuff-instance-id`; chat POST carries **NO** model header.
   - Pinned `ai-sdk` User-Agent on chat requests; honest `FINISH` on run termination.
