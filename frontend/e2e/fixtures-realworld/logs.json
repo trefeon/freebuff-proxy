@@ -1,0 +1,56 @@
+{
+  "enabled": true,
+  "level": "",
+  "msg": "",
+  "has_filter": false,
+  "entries": [
+    {
+      "time": "2026-09-05T05:20:01Z",
+      "level": "info",
+      "message": "chat request",
+      "fields": "req_id=req-aaa1  model=deepseek/deepseek-v4-flash  agent=base2-free-deepseek-flash  stream=true  remote=127.0.0.1  msgs=3  tools=2"
+    },
+    {
+      "time": "2026-09-05T05:20:01Z",
+      "level": "info",
+      "message": "chat routing",
+      "fields": "req_id=req-aaa1  token=1  model=deepseek/deepseek-v4-flash  agent=base2-free-deepseek-flash  instance_id=inst-ox99"
+    },
+    {
+      "time": "2026-09-05T05:20:04Z",
+      "level": "info",
+      "message": "chat done",
+      "fields": "req_id=req-aaa1  model=deepseek/deepseek-v4-flash  agent=base2-free-deepseek-flash  stream=true  ms=2450  bytes=12480"
+    },
+    {
+      "time": "2026-09-05T05:20:04Z",
+      "level": "info",
+      "message": "access",
+      "fields": "req_id=req-aaa1  method=POST  path=/v1/chat/completions  status=200  ms=2452  remote=127.0.0.1"
+    },
+    {
+      "time": "2026-09-05T05:21:10Z",
+      "level": "info",
+      "message": "chat request",
+      "fields": "req_id=req-bbb2  model=openai/gpt-5.6-luna  agent=base2-free-luna  stream=false  remote=127.0.0.1  msgs=1  tools=0"
+    },
+    {
+      "time": "2026-09-05T05:21:10Z",
+      "level": "info",
+      "message": "chat routing",
+      "fields": "req_id=req-bbb2  token=2  model=openai/gpt-5.6-luna  agent=base2-free-luna  instance_id=inst-luna01"
+    },
+    {
+      "time": "2026-09-05T05:21:12Z",
+      "level": "error",
+      "message": "error handling request 1: upstream timeout",
+      "fields": "req_id=req-bbb2  model=openai/gpt-5.6-luna  path=/v1/chat/completions"
+    },
+    {
+      "time": "2026-09-05T05:21:12Z",
+      "level": "info",
+      "message": "access",
+      "fields": "req_id=req-bbb2  method=POST  path=/v1/chat/completions  status=502  ms=2259  remote=127.0.0.1"
+    }
+  ]
+}
