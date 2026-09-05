@@ -180,6 +180,14 @@ func NewWithIndex(token string, tokenIndex int, cfg *config.Config) (*Client, er
 	transport.MaxConnsPerHost = 64 // cap bursts; 0=unlimited would spike 64 TLS handshakes on cold start (h1 path). h2 multiplexes within this cap.
 	transport.WriteBufferSize = 32 * 1024
 	transport.ReadBufferSize = 32 * 1024
+	// REQUEST_TIMEOUT guards only the wait for response HEADERS (TTFB) —
+	// never the streamed body. The old request-context deadline cut healthy
+	// long streams at the default 15m: a turn-heavy agent session died
+	// mid-stream with the connection still feeding data. The body now runs
+	// until upstream EOF or the caller's context cancels (client
+	// disconnect). Control calls are unaffected: they keep their own ctx
+	// deadlines (SessionCallTimeout), which stay tighter than this bound.
+	transport.ResponseHeaderTimeout = c.requestTimeout
 	var baseDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	var stealthProf *stealth.Profile

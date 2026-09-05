@@ -265,7 +265,7 @@ var keyCatalog = []KeyDef{
 		Description: `Random delay range [0, REQUEST_JITTER) before upstream chat calls; SAFE_MODE sets 200ms when unset; 0 disables.`},
 	{Key: "REQUEST_TIMEOUT", Group: GroupUpstream, Kind: "text", RestartOnly: true, Hidden: true,
 		Default:     "15m",
-		Description: `Upstream request timeout.`},
+		Description: `Upstream response-header (TTFB) timeout; the streamed chat body runs until upstream finishes or the client disconnects (never cut by this knob).`},
 	{Key: "SESSION_CALL_TIMEOUT", Group: GroupUpstream, Kind: "text", RestartOnly: true, Hidden: true,
 		Default:     "30s",
 		Description: `Session call timeout.`},
