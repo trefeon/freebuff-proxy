@@ -255,8 +255,7 @@
         ></span
       >
       <span
-        >reqs <span class="fp-num text-[var(--fp-text)]"
-          >{token.requests}</span
+        >reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span
         ></span
       >
     </div>
