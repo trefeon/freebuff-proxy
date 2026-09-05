@@ -48,6 +48,12 @@ type ModelInfo struct {
 	// Efforts is the upstream reasoning-effort ladder (nil = route accepts
 	// and ignores reasoning_effort, so conversion uses the default ladder).
 	Efforts []string
+	// Tagline is the upstream catalog description (used in picker & catalog).
+	Tagline string
+	// Notice is the upstream warning or special offer (e.g. AI training, promo).
+	Notice string
+	// Badges are the capability/freshness chips (e.g. Reasoning: max*, Images, NEW).
+	Badges []string
 }
 
 // Catalog is the full free-catalog table, in upstream SUPPORTED_FREEBUFF_MODELS
@@ -64,9 +70,11 @@ var Catalog = []ModelInfo{
 		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 524_288,
 		Efforts: []string{"high"}},
 	{ID: "openai/gpt-5.6-luna", DisplayName: "GPT-5.6 Luna",
+		Tagline: "Strong all-around", Badges: []string{"Reasoning: high", "Images"},
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
+		Tagline: "Fast & Direct", Notice: "Labor Day weekend (through Sep 7 PT)",
 		Served: true, ContextWindow: 500_000},
 	// google/gemini-3.8-flash returned 2026-09-04 behind the Pro paywall,
 	// Web-only (upstream FREEBUFF_PRO_ONLY_CATALOG_MODEL_IDS): removed from
@@ -89,16 +97,25 @@ var Catalog = []ModelInfo{
 	// parity context check has no 1.3 entry to compare — this is the
 	// documented upstream figure, not a guess).
 	{ID: "meta/muse-spark-1.3-contributor", DisplayName: "Muse Spark 1.3",
+		Tagline: "Queues, then falls back", Badges: []string{"Reasoning: xhigh", "NEW"},
+		Notice: "May use data for AI training",
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"minimal", "low", "medium", "high", "xhigh"}},
-	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2", PausedReplacement: "z-ai/glm-5.3-flash"},
+	{ID: "z-ai/glm-5.2", DisplayName: "GLM 5.2",
+		Tagline: "Referral reward", Badges: []string{"Referral only"},
+		Notice:            "Unlocked via referral code",
+		PausedReplacement: "z-ai/glm-5.3-flash"},
 	{ID: "z-ai/glm-5.3-flash", DisplayName: "GLM 5.3 Flash",
+		Tagline: "Deep reasoning", Badges: []string{"Reasoning: max*", "Images", "NEW"},
 		Served: true, ContextWindow: 1_000_000,
 		Efforts: []string{"low", "high", "max"}},
-	{ID: "deepseek/deepseek-v4-flash", DisplayName: "DeepSeek V4 Flash",
+	{ID: "deepseek/deepseek-v4-flash", DisplayName: "DeepSeek V4 Flash 07/31",
+		Tagline: "Smart & Fast", Badges: []string{"Reasoning: high", "NEW"},
+		Notice: "May use data for AI training",
 		Served: true, ContextWindow: 1_048_576,
 		Efforts: []string{"low", "high", "max"}},
 	{ID: "mimo/mimo-v2.5", DisplayName: "MiMo 2.5",
+		Tagline: "Balanced", Badges: []string{"Images"},
 		Served: true, Efforts: []string{"high"}},
 	// anthropic/claude-fable-5 stays in the catalog (upstream SUPPORTED list,
 	// parity test) but is NOT served: it is a paid-API model metered by its
@@ -188,6 +205,30 @@ func DisplayName(id string) string {
 		return m.DisplayName
 	}
 	return id
+}
+
+// Tagline returns the upstream catalog description for id.
+func Tagline(id string) string {
+	if m := byID(id); m != nil {
+		return m.Tagline
+	}
+	return ""
+}
+
+// Notice returns the upstream warning or special offer for id.
+func Notice(id string) string {
+	if m := byID(id); m != nil {
+		return m.Notice
+	}
+	return ""
+}
+
+// Badges returns the capability/freshness chips for id.
+func Badges(id string) []string {
+	if m := byID(id); m != nil {
+		return slices.Clone(m.Badges)
+	}
+	return nil
 }
 
 // IsServed reports whether id passes the ServedModels gate.

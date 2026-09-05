@@ -90,7 +90,7 @@
       "notice": "Unlocked via referral code",
       "price": 0,
       "price_label": "Referral grant",
-      "pool": "—",
+      "pool": "referral",
       "agent": "base2-free-glm",
       "served": false,
       "quota": "referral +1/day"

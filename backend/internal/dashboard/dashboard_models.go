@@ -34,65 +34,6 @@ type modelRow struct {
 	Efforts     []string `json:"efforts,omitempty"`
 }
 
-type modelMeta struct {
-	DisplayName  string
-	Tagline      string
-	Badges       []string
-	Notice       string
-	DefaultPrice float64
-}
-
-// defaultModelMeta pins the official Freebuff CLI TUI display information
-// (reference/freebuff/common/src/constants/freebuff-models.ts & freebucks.ts):
-// display names, taglines, badges, notices, and default Freebucks/hr prices.
-var defaultModelMeta = map[string]modelMeta{
-	"upstage/solar-pro4": {
-		DisplayName:  "Solar Pro 4",
-		Tagline:      "Fast & Direct",
-		Notice:       "Labor Day weekend (through Sep 7 PT)",
-		DefaultPrice: 0,
-	},
-	"z-ai/glm-5.3-flash": {
-		DisplayName:  "GLM 5.3 Flash",
-		Tagline:      "Deep reasoning",
-		Badges:       []string{"Reasoning: max*", "Images", "NEW"},
-		DefaultPrice: 5,
-	},
-	"mimo/mimo-v2.5": {
-		DisplayName:  "MiMo 2.5",
-		Tagline:      "Balanced",
-		Badges:       []string{"Images"},
-		DefaultPrice: 10,
-	},
-	"deepseek/deepseek-v4-flash": {
-		DisplayName:  "DeepSeek V4 Flash 07/31",
-		Tagline:      "Smart & Fast",
-		Badges:       []string{"Reasoning: high", "NEW"},
-		Notice:       "May use data for AI training",
-		DefaultPrice: 15,
-	},
-	"meta/muse-spark-1.3-contributor": {
-		DisplayName:  "Muse Spark 1.3",
-		Tagline:      "Queues, then falls back",
-		Badges:       []string{"Reasoning: xhigh", "NEW"},
-		Notice:       "May use data for AI training",
-		DefaultPrice: 15,
-	},
-	"openai/gpt-5.6-luna": {
-		DisplayName:  "GPT-5.6 Luna",
-		Tagline:      "Strong all-around",
-		Badges:       []string{"Reasoning: high", "Images"},
-		DefaultPrice: 20,
-	},
-	"z-ai/glm-5.2": {
-		DisplayName:  "GLM 5.2",
-		Tagline:      "Referral reward",
-		Badges:       []string{"Referral only"},
-		Notice:       "Unlocked via referral code",
-		DefaultPrice: 0,
-	},
-}
-
 // servedModels returns the registry ids that pass the strict ServedModels
 // gate (issue #189 set): the vendor catalog also carries god-only/eval rows
 // (luna-es) that must never appear as servable in dashboard/setup views.
@@ -258,36 +199,33 @@ func (d *Dashboard) modelsData() modelsData {
 			Served:  served,
 			Efforts: modelcat.Efforts(id),
 		}
-		if meta, ok := defaultModelMeta[id]; ok {
-			row.DisplayName = meta.DisplayName
-			row.Tagline = meta.Tagline
-			row.Badges = meta.Badges
-			row.Notice = meta.Notice
-			row.Price = meta.DefaultPrice
-		} else {
-			row.DisplayName = modelcat.DisplayName(id)
-		}
-		if p, ok := livePrices[id]; ok {
-			row.Price = p
-		}
+		row.DisplayName = modelcat.DisplayName(id)
+		row.Tagline = modelcat.Tagline(id)
+		row.Badges = modelcat.Badges(id)
+		row.Notice = modelcat.Notice(id)
 		if n, ok := liveNotices[id]; ok && n != "" {
 			row.Notice = n
 		}
+		if p, ok := livePrices[id]; ok {
+			row.Price = p
+			effectivePrices[id] = p
+		}
 		if id == modelcat.Glm52ModelID {
 			row.PriceLabel = "Referral grant"
-			row.Pool = "—"
-		} else if row.Price == 0 {
-			row.PriceLabel = "0 Freebucks/hr"
-			row.Pool = "unlimited"
-			effectivePrices[id] = 0
-		} else {
-			row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
-			if modelcat.IsPremium(id) {
-				row.Pool = "premium"
-			} else {
-				row.Pool = "unlimited"
+			row.Pool = "referral"
+		} else if modelcat.IsPremium(id) {
+			row.Pool = "premium"
+			if row.Price > 0 {
+				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
 			}
-			effectivePrices[id] = row.Price
+		} else {
+			row.Pool = "unlimited"
+			if row.Price == 0 {
+				row.PriceLabel = "0 Freebucks/hr"
+				effectivePrices[id] = 0
+			} else if row.Price > 0 {
+				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
+			}
 		}
 		if agent, err := d.reg.AgentForModel(id); err == nil {
 			row.Agent = agent
