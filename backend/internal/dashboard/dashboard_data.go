@@ -119,6 +119,27 @@ type tokenCard struct {
 	TodayUsed       bool     `json:"today_used,omitempty"`
 	LastUsage       string   `json:"last_usage,omitempty"`
 	StreakUpdatedAt string   `json:"streak_updated_at,omitempty"`
+	// Maturity is the streak-maturity automation view (nil until maturity
+	// is first enabled for the token).
+	Maturity *maturityCard `json:"maturity,omitempty"`
+}
+
+// maturityCard is the dashboard view of pool.MaturitySnapshot: automation
+// toggle + streak target + touch mode + badge + today's slot + last touch
+// (time, action, result, advance) + non-advance warning. Nil when the token
+// never opted in.
+type maturityCard struct {
+	Enabled       bool   `json:"enabled"`
+	Target        int    `json:"target"`
+	Mode          string `json:"mode"`
+	Badge         string `json:"badge,omitempty"`
+	Slot          string `json:"slot,omitempty"`
+	LastTouch     string `json:"last_touch,omitempty"`
+	LastAction    string `json:"last_action,omitempty"`
+	LastResult    string `json:"last_result,omitempty"`
+	LastAdvanced  string `json:"last_advanced,omitempty"`
+	Warn          bool   `json:"warn,omitempty"`
+	NoAdvanceDays int    `json:"no_advance_days,omitempty"`
 }
 
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):

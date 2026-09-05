@@ -188,6 +188,30 @@ type Config struct {
 	// refresh); while the CLI process is alive a competing session is
 	// never created (issue #97).
 	AdoptCLISession bool
+	// MaturityEnabled is the global kill-switch for streak-maturity automation
+	// (MATURITY_ENABLED; default false). When false, no per-token maturity
+	// touch ever fires regardless of per-token toggles. Default OFF:
+	// a daily mechanical touch from a datacenter IP is a bot-shaped pattern
+	// and must be an explicit operator opt-in (docs/maturity-plan.md §4).
+	MaturityEnabled bool
+	// MaturityDryRun validates scheduler mechanics with zero side effects
+	// (MATURITY_DRY_RUN; default true): touches run only the zero-cost
+	// session probe and never claim a session slot. Turn it off only after
+	// the dry-run log lines prove slots, skips and throttles behave.
+	MaturityDryRun bool
+	// MaturityTouchModel is the unmetered model the maturity touch admits
+	// (MATURITY_TOUCH_MODEL; default deepseek/deepseek-v4-flash). Must be a
+	// served, non-premium, uncapped catalog row so the touch never burns
+	// premium quota for farming.
+	MaturityTouchModel string
+	// MaturityTargetDays is the default streak target for newly-enabled
+	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose
+	// streak reaches its target auto-releases its administrative lock.
+	MaturityTargetDays int
+	// MaturityAllowPremium gates the per-token premium-short touch mode
+	// (MATURITY_ALLOW_PREMIUM; default false). When false, mode
+	// "premium-short" is rejected and only unmetered touches run.
+	MaturityAllowPremium bool
 	// WaitingRoomChain, when enabled (WAITING_ROOM_CHAIN=false default),
 	// fires the reference ad-chain + streak requests before the next
 	// session create after an upstream 428 waiting_room_required (issue
@@ -336,6 +360,11 @@ type rawConfig struct {
 	FallbackAfter                    string                  `json:"FALLBACK_AFTER_MS"`
 	FallbackModels                   string                  `json:"FALLBACK_MODEL"`
 	AdoptCLISession                  bool                    `json:"ADOPT_CLI_SESSION"`
+	MaturityEnabled                  bool                    `json:"MATURITY_ENABLED"`
+	MaturityDryRun                   bool                    `json:"MATURITY_DRY_RUN"`
+	MaturityTouchModel               string                  `json:"MATURITY_TOUCH_MODEL"`
+	MaturityTargetDays               *int                    `json:"MATURITY_TARGET_DAYS"`
+	MaturityAllowPremium             bool                    `json:"MATURITY_ALLOW_PREMIUM"`
 	WaitingRoomChain                 bool                    `json:"WAITING_ROOM_CHAIN"`
 	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
@@ -423,16 +452,18 @@ func defaultRawConfig() rawConfig {
 		TransientRetries:                 nil,  // nil = 1 (one retry after a transient transport failure; 0 disables)
 		SessionPersist:                   true, // session persistence on by default: restart resumes unexpired sessions
 		SessionStateFile:                 ".freebuff-session-state.json",
-		HTTP2Upstream:                    true,        // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
-		SessionCreateMaxParallelGlobal:   ptrInt(128), // #86: concurrent session admissions cap
-		SessionCreateMaxParallelPerModel: ptrInt(32),  // #86: per-model concurrent admissions cap
-		RunFinishQueueSize:               ptrInt(64),  // #90: bounded deferred-FINISH queue
-		RunFinishInlineTimeout:           "250ms",     // #90: inline FINISH fallback bound
-		RunsDrainQueueCap:                ptrInt(64),  // #55: draining-runs list cap
-		RunsDrainTTL:                     "10m",       // #55: draining-runs TTL eviction
-		SessionReAdmitLead:               "60s",       // #99: pre-emptive re-admit lead
-		SessionProbeCacheTTL:             "15s",       // #60: admission probe cache TTL
-		FallbackAfter:                    "0",         // #100: queue-wait fallback threshold (ms); 0 = disabled by default
+		HTTP2Upstream:                    true,                         // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
+		SessionCreateMaxParallelGlobal:   ptrInt(128),                  // #86: concurrent session admissions cap
+		SessionCreateMaxParallelPerModel: ptrInt(32),                   // #86: per-model concurrent admissions cap
+		RunFinishQueueSize:               ptrInt(64),                   // #90: bounded deferred-FINISH queue
+		RunFinishInlineTimeout:           "250ms",                      // #90: inline FINISH fallback bound
+		RunsDrainQueueCap:                ptrInt(64),                   // #55: draining-runs list cap
+		RunsDrainTTL:                     "10m",                        // #55: draining-runs TTL eviction
+		SessionReAdmitLead:               "60s",                        // #99: pre-emptive re-admit lead
+		SessionProbeCacheTTL:             "15s",                        // #60: admission probe cache TTL
+		FallbackAfter:                    "0",                          // #100: queue-wait fallback threshold (ms); 0 = disabled by default
+		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
+		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never burns premium quota
 	}
 }
 

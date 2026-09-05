@@ -241,6 +241,7 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			TodayUsed:               todayUsed,
 			LastUsageDate:           lastUsage,
 			StreakUpdatedAt:         streakUpdated,
+			Maturity:                p.maturitySnapshot(tok, streak),
 			UpgradeHint:             ss.UpgradeHint,
 			ServerMessage:           ss.ServerMessage,
 			Locked:                  tok.locked.Load(),

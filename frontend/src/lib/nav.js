@@ -6,9 +6,11 @@ import {
   Settings as SettingsIcon,
   FileText,
   FlaskConical,
+  Flame,
 } from "@lucide/svelte";
 import Overview from "./pages/Overview.svelte";
 import Tokens from "./pages/Tokens.svelte";
+import Maturity from "./pages/Maturity.svelte";
 import QuotaTracker from "./pages/QuotaTracker.svelte";
 import Models from "./pages/Models.svelte";
 import Settings from "./pages/Settings.svelte";
@@ -38,6 +40,7 @@ export const NAV_ITEMS = [
     icon: LayoutDashboard,
   },
   { id: "tokens", component: Tokens, label: "Tokens", icon: Key },
+  { id: "maturity", component: Maturity, label: "Maturity", icon: Flame },
   { id: "quota", component: QuotaTracker, label: "Quota Tracker", icon: Gauge },
   { id: "models", component: Models, label: "Models", icon: Cpu },
   { id: "logs", component: Logs, label: "Logs", icon: FileText },

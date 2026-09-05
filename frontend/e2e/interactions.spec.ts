@@ -654,6 +654,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#overview");
     for (const [link, heading] of [
       ["Tokens", "Tokens"],
+      ["Maturity", "Account Maturity"],
       ["Quota Tracker", "Quota Tracker"],
       ["Models", "Models"],
       ["Logs", "Logs"],
