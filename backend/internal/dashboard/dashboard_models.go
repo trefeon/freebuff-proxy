@@ -20,11 +20,77 @@ type modelsData struct {
 }
 
 type modelRow struct {
-	ID      string   `json:"id"`
-	Agent   string   `json:"agent"`
-	Quota   string   `json:"quota"`
-	Served  bool     `json:"served"`
-	Efforts []string `json:"efforts,omitempty"`
+	ID          string   `json:"id"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Tagline     string   `json:"tagline,omitempty"`
+	Notice      string   `json:"notice,omitempty"`
+	Badges      []string `json:"badges,omitempty"`
+	Price       float64  `json:"price"`
+	PriceLabel  string   `json:"price_label,omitempty"`
+	Pool        string   `json:"pool,omitempty"`
+	Agent       string   `json:"agent"`
+	Quota       string   `json:"quota"`
+	Served      bool     `json:"served"`
+	Efforts     []string `json:"efforts,omitempty"`
+}
+
+type modelMeta struct {
+	DisplayName  string
+	Tagline      string
+	Badges       []string
+	Notice       string
+	DefaultPrice float64
+}
+
+// defaultModelMeta pins the official Freebuff CLI TUI display information
+// (reference/freebuff/common/src/constants/freebuff-models.ts & freebucks.ts):
+// display names, taglines, badges, notices, and default Freebucks/hr prices.
+var defaultModelMeta = map[string]modelMeta{
+	"upstage/solar-pro4": {
+		DisplayName:  "Solar Pro 4",
+		Tagline:      "Fast & Direct",
+		Notice:       "Labor Day weekend (through Sep 7 PT)",
+		DefaultPrice: 0,
+	},
+	"z-ai/glm-5.3-flash": {
+		DisplayName:  "GLM 5.3 Flash",
+		Tagline:      "Deep reasoning",
+		Badges:       []string{"Reasoning: max*", "Images", "NEW"},
+		DefaultPrice: 5,
+	},
+	"mimo/mimo-v2.5": {
+		DisplayName:  "MiMo 2.5",
+		Tagline:      "Balanced",
+		Badges:       []string{"Images"},
+		DefaultPrice: 10,
+	},
+	"deepseek/deepseek-v4-flash": {
+		DisplayName:  "DeepSeek V4 Flash 07/31",
+		Tagline:      "Smart & Fast",
+		Badges:       []string{"Reasoning: high", "NEW"},
+		Notice:       "May use data for AI training",
+		DefaultPrice: 15,
+	},
+	"meta/muse-spark-1.3-contributor": {
+		DisplayName:  "Muse Spark 1.3",
+		Tagline:      "Queues, then falls back",
+		Badges:       []string{"Reasoning: xhigh", "NEW"},
+		Notice:       "May use data for AI training",
+		DefaultPrice: 15,
+	},
+	"openai/gpt-5.6-luna": {
+		DisplayName:  "GPT-5.6 Luna",
+		Tagline:      "Strong all-around",
+		Badges:       []string{"Reasoning: high", "Images"},
+		DefaultPrice: 20,
+	},
+	"z-ai/glm-5.2": {
+		DisplayName:  "GLM 5.2",
+		Tagline:      "Referral reward",
+		Badges:       []string{"Referral only"},
+		Notice:       "Unlocked via referral code",
+		DefaultPrice: 0,
+	},
 }
 
 // servedModels returns the registry ids that pass the strict ServedModels
@@ -114,6 +180,20 @@ func (d *Dashboard) firstFreebucksPrices() map[string]float64 {
 	return nil
 }
 
+// firstFreebucksPriceNotices returns the first token snapshot's Freebucks
+// price-notices map (live promo taglines). nil when absent.
+func (d *Dashboard) firstFreebucksPriceNotices() map[string]string {
+	if d.pool == nil {
+		return nil
+	}
+	for _, t := range d.pool.Snapshot() {
+		if t.Freebucks != nil && len(t.Freebucks.PriceNotices) > 0 {
+			return t.Freebucks.PriceNotices
+		}
+	}
+	return nil
+}
+
 // livePremiumQuotaLabel renders "<limit> premium quota" from the first token
 // quota snapshot carrying an entry for the premium model ("5 premium quota").
 // "" when no token has live data for the model. Uses Limit only (not
@@ -165,12 +245,50 @@ func (d *Dashboard) modelsData() modelsData {
 	// must never be presented as servable. One exception: the referral
 	// row (GLM 5.2) is listed with Served=false so users discover the
 	// grant path; the quota label ("referral +1/day") carries the terms.
+	livePrices := d.firstFreebucksPrices()
+	liveNotices := d.firstFreebucksPriceNotices()
+	effectivePrices := make(map[string]float64)
 	for _, id := range d.reg.Models() {
 		served := modelcat.IsServed(id)
 		if !served && id != modelcat.Glm52ModelID {
 			continue
 		}
-		row := modelRow{ID: id, Served: served, Efforts: modelcat.Efforts(id)}
+		row := modelRow{
+			ID:      id,
+			Served:  served,
+			Efforts: modelcat.Efforts(id),
+		}
+		if meta, ok := defaultModelMeta[id]; ok {
+			row.DisplayName = meta.DisplayName
+			row.Tagline = meta.Tagline
+			row.Badges = meta.Badges
+			row.Notice = meta.Notice
+			row.Price = meta.DefaultPrice
+		} else {
+			row.DisplayName = modelcat.DisplayName(id)
+		}
+		if p, ok := livePrices[id]; ok {
+			row.Price = p
+		}
+		if n, ok := liveNotices[id]; ok && n != "" {
+			row.Notice = n
+		}
+		if id == modelcat.Glm52ModelID {
+			row.PriceLabel = "Referral grant"
+			row.Pool = "—"
+		} else if row.Price == 0 {
+			row.PriceLabel = "0 Freebucks/hr"
+			row.Pool = "unlimited"
+			effectivePrices[id] = 0
+		} else {
+			row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(row.Price))
+			if modelcat.IsPremium(id) {
+				row.Pool = "premium"
+			} else {
+				row.Pool = "unlimited"
+			}
+			effectivePrices[id] = row.Price
+		}
 		if agent, err := d.reg.AgentForModel(id); err == nil {
 			row.Agent = agent
 		}
@@ -178,13 +296,10 @@ func (d *Dashboard) modelsData() modelsData {
 		md.Models = append(md.Models, row)
 	}
 	// Metered price order (issue #350 — mirrors sortModelsByPrice in
-	// cli/src/utils/freebucks.ts): when any token reports Freebucks
-	// prices, rows sort cheapest-first so the menu's subject (cost) leads;
-	// ties break on display name, unpriced rows sort last. Unmetered
-	// accounts keep the pinned catalog order.
-	if prices := d.firstFreebucksPrices(); len(prices) > 0 {
-		sortModelRowsByPrice(md.Models, prices)
-	}
+	// cli/src/utils/freebucks.ts): rows sort cheapest-first so the menu's
+	// subject (cost) leads; ties break on display name, unpriced/referral
+	// rows sort last.
+	sortModelRowsByPrice(md.Models, effectivePrices)
 	md.Count = len(md.Models)
 	cfg := d.cfg()
 	for alias, real := range cfg.ModelAliases {
