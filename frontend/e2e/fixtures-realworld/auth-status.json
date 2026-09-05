@@ -1,0 +1,6 @@
+{
+  "authenticated": true,
+  "is_default_admin_token": false,
+  "require_login": false,
+  "has_password": true
+}

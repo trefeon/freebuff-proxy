@@ -1,0 +1,28 @@
+{
+  "notices": [
+    {
+      "id": "upstream-tier-change",
+      "type": "announcement",
+      "title": "Official Upstream Announcement",
+      "message": "Solar Pro 4 is now unmetered at full access and available with limited access.",
+      "badge": "Freebuff Team",
+      "tone": "accent"
+    },
+    {
+      "id": "deepseek-peak-live",
+      "type": "warning",
+      "title": "DeepSeek peak pricing active",
+      "message": "DeepSeek requests cost more until 10:00 UTC.",
+      "tone": "warning"
+    }
+  ],
+  "peak_hours": {
+    "is_peak": true,
+    "current_utc": "2026-09-05T05:00:00Z",
+    "window_start_utc": "00:00 UTC",
+    "window_end_utc": "10:00 UTC",
+    "next_window_at": "2026-09-06T00:00:00Z",
+    "next_window_in": "19h 0m"
+  },
+  "count": 2
+}
