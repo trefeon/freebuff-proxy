@@ -44,7 +44,7 @@ test.describe("real-world data", () => {
     }
     await expect(page.getByText("BANNED (TEMPORARY)").first()).toBeVisible();
     await expect(
-      page.getByText(/\d+d( \d+h)? remaining/).first(),
+      page.getByText(/\d+d( \d+h)?\s+remaining/).first(),
     ).toBeVisible();
     await expect(page.getByText("LOCKED").first()).toBeVisible();
     await expect(
