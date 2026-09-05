@@ -93,6 +93,58 @@ export function formatFreebucks(v) {
   return String(Math.round(n * 100) / 100);
 }
 
+// "4h 12m", "38m", "2d 5h" — until the daily pool refills; "now" once it
+// has passed. Port of upstream freebucksResetCountdown (same shape as the
+// Web/Desktop pickers; issue #354).
+export function freebucksResetCountdown(resetAt, nowMs) {
+  const remainingMs = Date.parse(resetAt) - nowMs;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return "now";
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+// "$25", "$4.20", "$0" — whole dollars until the figure is small enough
+// that the cents are the story. Port of upstream formatAllowanceUsd
+// (issue #354).
+export function formatAllowanceUsd(usd) {
+  const safe = Math.max(0, Number(usd) || 0);
+  if (safe >= 10) return `$${Math.round(safe)}`;
+  if (safe >= 1) return `$${safe.toFixed(1).replace(/\.0$/, "")}`;
+  return `$${safe.toFixed(2)}`;
+}
+
+// The one-line header for a metered account:
+// `7.5/10 Freebucks daily · resets in 4h 12m · 5 in wallet · $258 monthly
+// usage left` (countdown only when a clock is given, wallet only when there
+// is something in it, monthly only when the server sent it — never a `$0`
+// that reads as spent). Port of upstream freebucksHeaderLine (issue #354);
+// `t` is the translator (defaults to identity = upstream-exact English).
+export function freebucksHeaderLine(fb, nowMs, t = (s) => s) {
+  if (!fb?.daily) return "";
+  const parts = [
+    `${formatFreebucks(fb.daily.remaining)}/${formatFreebucks(fb.daily.limit)} ${t("Freebucks daily")}`,
+  ];
+  if (nowMs !== undefined && fb.daily.reset_at) {
+    parts.push(
+      `${t("resets in")} ${freebucksResetCountdown(fb.daily.reset_at, nowMs)}`,
+    );
+  }
+  const walletBalance = fb.wallet?.balance ?? 0;
+  if (walletBalance > 0) {
+    parts.push(`${formatFreebucks(walletBalance)} ${t("in wallet")}`);
+  }
+  if (fb.monthly != null && fb.monthly.remaining != null) {
+    parts.push(
+      `${formatAllowanceUsd(fb.monthly.remaining)} ${t("monthly usage left")}`,
+    );
+  }
+  return parts.join(" · ");
+}
 export function freebucksPriceLabel(price) {
   return `${formatFreebucks(price)} Freebucks/hr`;
 }
