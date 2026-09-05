@@ -3,7 +3,7 @@
   "traces": [
     {
       "time": "2026-08-27T10:00:00Z",
-      "token": 0,
+      "token": "0",
       "model": "deepseek/deepseek-v4-flash",
       "status": "ok",
       "ms": "1234ms",
@@ -14,7 +14,7 @@
     },
     {
       "time": "2026-08-27T10:01:00Z",
-      "token": 1,
+      "token": "1",
       "model": "openai/gpt-5.6-luna",
       "status": "error",
       "ms": "842ms",

@@ -29,7 +29,7 @@
     if (!body) return $tr("Invalid password.");
     try {
       const data = JSON.parse(body);
-      const err = data?.error;
+      const err = data?.error ?? data?.message;
       const msg = typeof err === "string" ? err : err?.message;
       if (typeof msg !== "string" || !msg.trim())
         return $tr("Invalid password.");

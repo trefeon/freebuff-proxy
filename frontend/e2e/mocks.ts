@@ -21,6 +21,7 @@ export type Fixtures = {
   version: unknown;
   upstreamDrift: unknown;
   authStatus: unknown;
+  notices: unknown;
 };
 
 /**
@@ -48,6 +49,7 @@ export function loadFixtures(fixtureDir?: string): Fixtures {
     authStatus: JSON.parse(
       readFileSync(join(dir, "auth-status.json"), "utf-8"),
     ),
+    notices: JSON.parse(readFileSync(join(dir, "notices.json"), "utf-8")),
   };
 }
 
@@ -236,7 +238,7 @@ export async function mockDashboard(
       },
       count: 1,
     };
-    const body = overrides["/admin/api/notices"] ?? defaultNotices;
+    const body = overrides["notices"] ?? pick("notices") ?? defaultNotices;
     await route.fulfill({
       status: 200,
       contentType: "application/json",

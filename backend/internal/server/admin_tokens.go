@@ -156,6 +156,24 @@ func (a *adminHandlers) handleTokenDropSession(w http.ResponseWriter, r *http.Re
 	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" session dropped — next request will re-admit fresh.")
 }
 
+// spawnModelFromRequest reads the spawn model id from a form field or a JSON
+// body (SessionSpawnPanel posts JSON via postAPI; Go FormValue never parses
+// a JSON body, so without the fallback the picker was silently ignored and
+// every spawn fell back to the default model).
+func spawnModelFromRequest(r *http.Request) string {
+	model := strings.TrimSpace(r.FormValue("model"))
+	if model != "" {
+		return model
+	}
+	var req struct {
+		Model string `json:"model"`
+	}
+	if body, err := io.ReadAll(r.Body); err == nil {
+		_ = json.Unmarshal(body, &req)
+	}
+	return strings.TrimSpace(req.Model)
+}
+
 func (a *adminHandlers) handleTokenSpawnSession(w http.ResponseWriter, r *http.Request) {
 	id, err := tokenActionID(r)
 	if err != nil {
@@ -165,7 +183,7 @@ func (a *adminHandlers) handleTokenSpawnSession(w http.ResponseWriter, r *http.R
 	// Cap the body before FormValue: ParseForm would otherwise slurp the
 	// entire request into memory. The form field is a model id, a few bytes.
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	model := strings.TrimSpace(r.FormValue("model"))
+	model := spawnModelFromRequest(r)
 	if model == "" {
 		model = modelcat.FallbackModelID
 	}

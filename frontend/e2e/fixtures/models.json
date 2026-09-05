@@ -5,27 +5,33 @@
   "models": [
     {
       "id": "deepseek/deepseek-v4-flash",
-      "agent": "base2-free-deepseek-flash"
+      "agent": "base2-free-deepseek-flash",
+      "quota": "unlimited session"
     },
     {
       "id": "mimo/mimo-v2.5",
-      "agent": "base2-free-mimo"
+      "agent": "base2-free-mimo",
+      "quota": "unlimited session"
     },
     {
       "id": "openai/gpt-5.6-luna",
-      "agent": "base2-free-luna"
+      "agent": "base2-free-luna",
+      "quota": "5 premium quota"
     },
     {
       "id": "upstage/solar-pro4",
-      "agent": "base2-free-solar-pro4"
+      "agent": "base2-free-solar-pro4",
+      "quota": "unlimited session"
     },
     {
       "id": "z-ai/glm-5.2",
-      "agent": "base2-free-glm"
+      "agent": "base2-free-glm",
+      "quota": "5 premium quota"
     },
     {
       "id": "z-ai/glm-5.3-flash",
-      "agent": "base2-free-glm-5-3-flash"
+      "agent": "base2-free-glm-5-3-flash",
+      "quota": "unlimited session"
     }
   ],
   "aliases": []

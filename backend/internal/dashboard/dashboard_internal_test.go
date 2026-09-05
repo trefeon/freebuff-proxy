@@ -333,6 +333,34 @@ func TestCardFromSnapshotBanAndLocked(t *testing.T) {
 	}
 }
 
+// TestLiveCardRequestLimits pins the RPD/RPM regression: the hot-poll card
+// must carry the request counters, caps, and Pacific-midnight countdown.
+// They were once full-shape only, so the first ?view=live poll rendered
+// them undefined in QuotaTracker until the next full refresh.
+func TestLiveCardRequestLimits(t *testing.T) {
+	snap := pool.TokenSnapshot{
+		Token:                  0,
+		RequestsPerMinute:      7,
+		RequestsPerDay:         120,
+		RequestsPerMinuteLimit: 30,
+		RequestsPerDayLimit:    1500,
+		RequestsPerDayResetIn:  3*time.Hour + 20*time.Minute,
+	}
+	live := liveCardFromSnapshot(snap)
+	if live.RequestsPerMinute != 7 {
+		t.Errorf("live RequestsPerMinute = %d, want 7", live.RequestsPerMinute)
+	}
+	if live.RequestsPerDay != 120 {
+		t.Errorf("live RequestsPerDay = %d, want 120", live.RequestsPerDay)
+	}
+	if live.RequestsPerMinuteLimit != 30 || live.RequestsPerDayLimit != 1500 {
+		t.Errorf("live limits = %d/%d, want 30/1500", live.RequestsPerMinuteLimit, live.RequestsPerDayLimit)
+	}
+	if live.RequestsPerDayResetIn != 12000 {
+		t.Errorf("live RequestsPerDayResetIn = %d, want 12000", live.RequestsPerDayResetIn)
+	}
+}
+
 // TestModelsDataServedGateOnly pins the served-model filter on modelsData:
 // the vendor registry also carries god-only/eval rows (luna-es since
 // snapshot 0603bc1) that must never appear in the dashboard models view,

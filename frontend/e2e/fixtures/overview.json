@@ -2,6 +2,9 @@
   "base_url": "http://127.0.0.1:3457/v1",
   "mode": "pooled",
   "in_bridge": false,
+  "show_bridge": false,
+  "bridge_tokens": 0,
+  "bridge_token_cards": [],
   "models": [
     "deepseek/deepseek-v4-flash",
     "mimo/mimo-v2.5",
@@ -18,6 +21,7 @@
   "fingerprint_rotations": 4,
   "has_tokens": true,
   "is_default_admin_token": false,
+  "require_login": false,
   "tokens": [
     {
       "index": 0,

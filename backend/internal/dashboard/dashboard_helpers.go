@@ -97,21 +97,30 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 // the SPA merges them back by index. Quota-adjacent cards (freebucks, free
 // windows, subscription) stay live: they change mid-session.
 type tokenLiveCard struct {
-	Index            int    `json:"index"`
-	SessionStatus    string `json:"session_status"`
-	QueuePosition    int    `json:"queue_position"`
-	QueueDepth       int    `json:"queue_depth"`
-	ActiveRuns       int    `json:"active_runs"`
-	Requests         int    `json:"requests"`
-	Messages24h      int    `json:"messages_24h"`
-	UsagePct         int    `json:"usage_pct"`
-	RiskLevel        string `json:"risk_level"`
-	CooldownActive   bool   `json:"cooldown_active"`
-	CooldownUntil    string `json:"cooldown_until"`
-	Locked           bool   `json:"locked"`
-	BanType          string `json:"ban_type,omitempty"`
-	BannedUntil      string `json:"banned_until,omitempty"`
-	TransientRetries int64  `json:"transient_retries"`
+	Index         int    `json:"index"`
+	SessionStatus string `json:"session_status"`
+	QueuePosition int    `json:"queue_position"`
+	QueueDepth    int    `json:"queue_depth"`
+	ActiveRuns    int    `json:"active_runs"`
+	Requests      int    `json:"requests"`
+	Messages24h   int    `json:"messages_24h"`
+	UsagePct      int    `json:"usage_pct"`
+	// Per-token request limits (issue: RPD/RPM): live counters + configured
+	// caps (0 = unlimited) + Pacific-midnight reset countdown. These must
+	// stay live: the QuotaTracker usage display reads them from the hot
+	// poll, and the static cache does not carry them.
+	RequestsPerMinute      int    `json:"requests_per_minute"`
+	RequestsPerDay         int    `json:"requests_per_day"`
+	RequestsPerMinuteLimit int    `json:"requests_per_minute_limit"`
+	RequestsPerDayLimit    int    `json:"requests_per_day_limit"`
+	RequestsPerDayResetIn  int    `json:"requests_per_day_reset_in"` // seconds
+	RiskLevel              string `json:"risk_level"`
+	CooldownActive         bool   `json:"cooldown_active"`
+	CooldownUntil          string `json:"cooldown_until"`
+	Locked                 bool   `json:"locked"`
+	BanType                string `json:"ban_type,omitempty"`
+	BannedUntil            string `json:"banned_until,omitempty"`
+	TransientRetries       int64  `json:"transient_retries"`
 	// AllowlistSkips is live (like TransientRetries): every poll refreshes
 	// it, so it stays out of the SPA's static cache.
 	AllowlistSkips  int64             `json:"allowlist_skips,omitempty"`
@@ -127,17 +136,22 @@ type tokenLiveCard struct {
 // liveCardFromSnapshot builds the hot-poll card for one token snapshot.
 func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	card := tokenLiveCard{
-		Index:            t.Token,
-		SessionStatus:    t.SessionStatus,
-		QueuePosition:    t.SessionQueuePosition,
-		QueueDepth:       t.SessionQueueDepth,
-		ActiveRuns:       t.ActiveRuns,
-		Requests:         t.Requests,
-		Messages24h:      t.Messages24h,
-		UsagePct:         t.UsagePct,
-		RiskLevel:        t.RiskLevel,
-		TransientRetries: t.TransientRetries,
-		Locked:           t.Locked,
+		Index:                  t.Token,
+		SessionStatus:          t.SessionStatus,
+		QueuePosition:          t.SessionQueuePosition,
+		QueueDepth:             t.SessionQueueDepth,
+		ActiveRuns:             t.ActiveRuns,
+		Requests:               t.Requests,
+		Messages24h:            t.Messages24h,
+		UsagePct:               t.UsagePct,
+		RequestsPerMinute:      t.RequestsPerMinute,
+		RequestsPerDay:         t.RequestsPerDay,
+		RequestsPerMinuteLimit: t.RequestsPerMinuteLimit,
+		RequestsPerDayLimit:    t.RequestsPerDayLimit,
+		RequestsPerDayResetIn:  int(t.RequestsPerDayResetIn.Seconds()),
+		RiskLevel:              t.RiskLevel,
+		TransientRetries:       t.TransientRetries,
+		Locked:                 t.Locked,
 	}
 	card.AllowlistSkips = t.AllowlistSkips
 	if !t.CooldownUntil.IsZero() && time.Now().Before(t.CooldownUntil) {

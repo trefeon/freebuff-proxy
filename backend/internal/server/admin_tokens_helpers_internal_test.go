@@ -45,6 +45,39 @@ func TestParseTokenIndex(t *testing.T) {
 		})
 	}
 }
+func TestSpawnModelFromRequest(t *testing.T) {
+	newReq := func(contentType, body string) *http.Request {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPost, "/admin/tokens/0/session", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		return req
+	}
+	cases := []struct {
+		name string
+		req  *http.Request
+		want string
+	}{
+		{"empty stays empty", newReq("", ""), ""},
+		{"form model", newReq("application/x-www-form-urlencoded", url.Values{"model": []string{"mimo/mimo-v2.5"}}.Encode()), "mimo/mimo-v2.5"},
+		{"json model", newReq("application/json", `{"model":"openai/gpt-5.6-luna"}`), "openai/gpt-5.6-luna"},
+		{"json trims space", newReq("application/json", `{"model":"  z-ai/glm-5.3-flash  "}`), "z-ai/glm-5.3-flash"},
+		{"json empty", newReq("application/json", `{"model":""}`), ""},
+		{"garbage json", newReq("application/json", `not-json`), ""},
+		{"wrong key", newReq("application/json", `{"foo":"x"}`), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := spawnModelFromRequest(tc.req); got != tc.want {
+				t.Errorf("spawnModelFromRequest = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestRemoveAtCopyKeepsInput(t *testing.T) {
 	src := []string{"a", "b", "c"}

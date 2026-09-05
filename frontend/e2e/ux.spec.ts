@@ -776,6 +776,85 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     );
   });
 
+  // ---------------------------------------------------------------------------
+  // 10b. Quota Tracker: request-limit chips survive the ?view=live hot poll
+  // ---------------------------------------------------------------------------
+  // Regression: requests_per_* rode the full shape only, so the first live
+  // poll wiped the req/min + req/day chips until the next full refresh.
+  test("quota: request-limit chips survive the live hot poll", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(
+      page,
+      f,
+      {
+        tokens: tokensPayload([
+          tokenRow(0, {
+            has_quota: true,
+            quota: [],
+            requests_per_minute: 2,
+            requests_per_minute_limit: 30,
+            requests_per_day: 5,
+            requests_per_day_limit: 1500,
+            requests_per_day_reset_in: 3600,
+          }),
+        ]),
+      },
+      { loginPage: true },
+    );
+    // Live-shape override (registered after mockDashboard so it wins for the
+    // hot-poll URL): the true live card carries session/quota rows plus the
+    // request-limit counters — and nothing account-stable.
+    await page.route("**/admin/api/tokens?view=live", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          bridge_tokens: 0,
+          token_count: 1,
+          has_tokens: true,
+          tokens: [
+            {
+              index: 0,
+              session_status: "idle",
+              active_runs: 0,
+              requests: 0,
+              messages_24h: 0,
+              usage_pct: 0,
+              risk_level: "low",
+              requests_per_minute: 2,
+              requests_per_minute_limit: 30,
+              requests_per_day: 5,
+              requests_per_day_limit: 1500,
+              requests_per_day_reset_in: 3600,
+              session_instance: "",
+              session_model: "",
+              session_remaining_seconds: 0,
+              quota: [],
+              has_quota: false,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(page.getByText("req/min")).toBeVisible();
+    // Wait for the 10s hot poll to land, then prove the chips persist.
+    await page.waitForResponse(
+      (r) =>
+        r.url().includes("/admin/api/tokens") &&
+        r.url().includes("view=live") &&
+        r.status() === 200,
+      { timeout: 15000 },
+    );
+    await expect(page.getByText("req/min")).toBeVisible();
+    await expect(page.getByText("req/day")).toBeVisible();
+    await expect(page.getByText("5/1500")).toBeVisible();
+    await expect(page.getByText("2/30")).toBeVisible();
+  });
+
   test("quota: streak indicator renders progress dots and perk countdown", async ({
     page,
   }) => {
@@ -912,7 +991,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       page,
       f,
       {
-        "/admin/api/notices": {
+        notices: {
           notices: [
             {
               id: "test-tier-notice",

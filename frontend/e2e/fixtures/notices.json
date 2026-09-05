@@ -1,0 +1,21 @@
+{
+  "notices": [
+    {
+      "id": "upstream-tier-change",
+      "type": "announcement",
+      "title": "Official Upstream Announcement",
+      "message": "Solar Pro 4 is now unmetered at full access and available with limited access.",
+      "badge": "Freebuff Team",
+      "tone": "accent"
+    }
+  ],
+  "peak_hours": {
+    "is_peak": false,
+    "current_utc": "2026-08-27T10:00:00Z",
+    "window_start_utc": "00:00 UTC",
+    "window_end_utc": "10:00 UTC",
+    "next_window_at": "2026-08-27T16:00:00Z",
+    "next_window_in": "12h 0m"
+  },
+  "count": 1
+}
