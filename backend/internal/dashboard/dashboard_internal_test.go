@@ -524,7 +524,8 @@ func TestSortModelRowsByPrice(t *testing.T) {
 	if got[3] != "z-ai/glm-5.2" {
 		t.Errorf("last = %q, want unpriced glm-5.2", got[3])
 	}
-	if !(got[1] == "a" && got[2] == "c" || got[1] == "c" && got[2] == "a") {
+	middleOK := got[1] == "a" && got[2] == "c" || got[1] == "c" && got[2] == "a"
+	if !middleOK {
 		t.Errorf("middle = %v, want a and c in display-name order", got[1:3])
 	}
 	// Empty prices: every row ties → display-name order (upstream

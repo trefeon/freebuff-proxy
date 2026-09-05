@@ -270,7 +270,7 @@
     {#if token.cooldown_active}
       {@const cd = cooldownLabel(token)}
       <span class="fp-num text-xs text-[var(--fp-warning)] whitespace-nowrap">
-        {cd}{#if cd !== "expiring" && cd !== "—"}{" "}{$tr("remaining")}{/if}
+        {cd}{#if cd !== "expiring" && cd !== "—"}&nbsp;{$tr("remaining")}{/if}
       </span>
     {:else}
       <span class="fp-num text-xs text-[var(--fp-dim)]">—</span>

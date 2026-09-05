@@ -308,7 +308,10 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 		entry    *bridgeEntry
 		lastUsed time.Time
 		spend    spendView
+		rpm      int
+		rpd      int
 	}
+	now := time.Now()
 	entries := make([]keyEntry, 0, len(p.bridge))
 	for k, e := range p.bridge {
 		// Copy lastUsed AND the spend view while the lock is held:
@@ -316,7 +319,8 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 		// spend ledger under bridgeMu, so unlocked reads here would race
 		// (torn values under -race). ledgerView rolls the ledger window —
 		// a write — so it must run under bridgeMu like the recorders do.
-		entries = append(entries, keyEntry{key: k, entry: e, lastUsed: e.lastUsed, spend: e.ledger.spendSnapshot()})
+		// Same for rpmCount/dayRequestCount: both prune/roll in place.
+		entries = append(entries, keyEntry{key: k, entry: e, lastUsed: e.lastUsed, spend: e.ledger.spendSnapshot(), rpm: e.ledger.rpmCount(now), rpd: e.ledger.dayRequestCount(now)})
 	}
 	p.bridgeMu.Unlock()
 
@@ -374,8 +378,8 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			QuotaByModel:      quotaByModel,
 			SpendDay:          float64(spend.Day),
 			SpendPct:          spendPct,
-			RequestsPerMinute: e.ledger.rpmCount(time.Now()),
-			RequestsPerDay:    e.ledger.dayRequestCount(time.Now()),
+			RequestsPerMinute: ke.rpm,
+			RequestsPerDay:    ke.rpd,
 			PremiumQuota:      premium,
 			Freebucks:         sess.Freebucks,
 			FreeWindows:       sess.FreeWindows,

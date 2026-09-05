@@ -297,6 +297,22 @@ func (r *Registry) ResolveModel(model string) string {
 		}
 	}
 
+	// Claude Code's extended-context marker (reference/agents/claude-code):
+	// the CLI appends "[1m]" to models it believes support the 1M-context beta
+	// and mirrors the capability in anthropic-beta. The marker is a client-side
+	// context hint, not part of the upstream model id — strip it so alias
+	// lookup and the served-model gate resolve the bare id. Mirrors 9router's
+	// stripModelContextMarker (reference/agents/9router).
+	if strings.HasSuffix(model, "]") {
+		if idx := strings.LastIndex(model, "["); idx > 0 {
+			tag := strings.ToLower(strings.TrimSpace(model[idx+1 : len(model)-1]))
+			switch tag {
+			case "1m", "200k":
+				model = strings.TrimSpace(model[:idx])
+			}
+		}
+	}
+
 	var cfg *config.Config
 	if r != nil {
 		cfg = r.cfg.Load()

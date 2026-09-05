@@ -697,12 +697,7 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				fb.QuotaExempt = *raw.Freebucks.QuotaExempt
 			}
 			for _, c := range raw.Freebucks.PriceChanges {
-				fb.PriceChanges = append(fb.PriceChanges, FreebucksPriceChange{
-					At:      c.At,
-					ModelID: c.ModelID,
-					Price:   c.Price,
-					Tagline: c.Tagline,
-				})
+				fb.PriceChanges = append(fb.PriceChanges, FreebucksPriceChange(c))
 			}
 			// Apply the server's announced schedule at parse time so every
 			// consumer (pool meter, dashboard prices) reads effective prices
