@@ -294,23 +294,29 @@ func TestAcquireRPMAdmitBurstIsAtomic(t *testing.T) {
 	p := newTestPoolCfg(t, func(c *config.Config) { c.MaxRequestsPerMinute = 1 }, mock)
 
 	start := make(chan struct{})
-	results := make(chan error, 2)
+	type burstResult struct {
+		lease *Lease
+		err   error
+	}
+	results := make(chan burstResult, 2)
 	for range 2 {
 		go func() {
 			<-start
-			_, err := p.Acquire(context.Background(), modelA)
-			results <- err
+			lease, err := p.Acquire(context.Background(), modelA)
+			results <- burstResult{lease, err}
 		}()
 	}
 	close(start)
 	var okCount, cappedCount int
 	for range 2 {
-		if err := <-results; err == nil {
+		res := <-results
+		if res.err == nil {
 			okCount++
-		} else if errors.Is(err, upstream.ErrRateLimited) {
+			p.LeaseRelease(res.lease) // winner: release, don't strand the run
+		} else if errors.Is(res.err, upstream.ErrRateLimited) {
 			cappedCount++
 		} else {
-			t.Fatalf("unexpected acquire error: %v", err)
+			t.Fatalf("unexpected acquire error: %v", res.err)
 		}
 	}
 	if okCount != 1 || cappedCount != 1 {
@@ -348,23 +354,29 @@ func TestBridgeRPMAdmitBurstIsAtomic(t *testing.T) {
 	p.cfg.Store(cfg)
 
 	start := make(chan struct{})
-	results := make(chan error, 2)
+	type bridgeBurstResult struct {
+		lease *Lease
+		err   error
+	}
+	results := make(chan bridgeBurstResult, 2)
 	for range 2 {
 		go func() {
 			<-start
-			_, err := p.AcquireBridge(context.Background(), "client-a", modelA)
-			results <- err
+			lease, err := p.AcquireBridge(context.Background(), "client-a", modelA)
+			results <- bridgeBurstResult{lease, err}
 		}()
 	}
 	close(start)
 	var okCount, cappedCount int
 	for range 2 {
-		if err := <-results; err == nil {
+		res := <-results
+		if res.err == nil {
 			okCount++
-		} else if errors.Is(err, upstream.ErrRateLimited) {
+			p.LeaseRelease(res.lease) // winner: release, don't strand the run
+		} else if errors.Is(res.err, upstream.ErrRateLimited) {
 			cappedCount++
 		} else {
-			t.Fatalf("unexpected bridge acquire error: %v", err)
+			t.Fatalf("unexpected bridge acquire error: %v", res.err)
 		}
 	}
 	if okCount != 1 || cappedCount != 1 {
