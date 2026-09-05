@@ -10,6 +10,7 @@
   import CopyButton from "../components/CopyButton.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
+  import { tokensData, ensureTokensStore } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
   let data = $state(null);
   let loading = $state(true);
@@ -38,6 +39,35 @@
     }
   }
 
+  // Live pool/price join: quota chips (N of M) and Freebucks $/hr come from
+  // the shared tokens snapshot, keyed by model id across pool tokens.
+  let live = $state(null);
+  function poolChip(id) {
+    for (const t of live?.tokens ?? []) {
+      const q = (t.quota ?? []).find((r) => r.model === id);
+      if (q && q.pool && q.pool !== "unlimited" && q.pool_label) {
+        return `${q.pool_label}: ${q.recent ?? "?"} of ${q.limit} used`;
+      }
+    }
+    return "";
+  }
+  function priceLabel(id) {
+    for (const t of live?.tokens ?? []) {
+      const p = t.freebucks?.prices?.[id];
+      if (p != null) return `$${p}/hr`;
+    }
+    return "";
+  }
+  onMount(() => {
+    const release = ensureTokensStore();
+    const unsub = tokensData.subscribe((v) => {
+      if (v) live = v;
+    });
+    return () => {
+      release();
+      unsub();
+    };
+  });
   onMount(load);
 
   const servedCount = $derived(
@@ -97,6 +127,8 @@
                 <th scope="col">{$tr("Served")}</th>
                 <th scope="col">{$tr("Agent")}</th>
                 <th scope="col">{$tr("Premium Quota")}</th>
+                <th scope="col">{$tr("Pool")}</th>
+                <th scope="col">{$tr("Price")}</th>
               </tr>
             </thead>
             <tbody>
@@ -132,7 +164,20 @@
                   </td>
                   <td
                     ><span class="fp-num text-xs text-[var(--fp-muted)]"
-                      >{m.quota || "unlimited session"}</span
+                      >{m.quota || "unlimited session"}{#if m.efforts?.length}
+                        <span class="text-[var(--fp-dim)]">
+                          · {$tr("Reasoning")}: {m.efforts.join("/")}</span
+                        >{/if}</span
+                    ></td
+                  >
+                  <td
+                    ><span class="fp-num text-xs text-[var(--fp-muted)]"
+                      >{poolChip(m.id) || "—"}</span
+                    ></td
+                  >
+                  <td
+                    ><span class="fp-num text-xs text-[var(--fp-muted)]"
+                      >{priceLabel(m.id) || "—"}</span
                     ></td
                   >
                 </tr>
@@ -162,13 +207,28 @@
                   />
                 </span>
               </div>
+              {#if poolChip(m.id) || priceLabel(m.id)}
+                <div
+                  class="flex items-center justify-between gap-2 text-xs min-w-0"
+                >
+                  <span class="text-[var(--fp-dim)] shrink-0"
+                    >{poolChip(m.id)}</span
+                  >
+                  <span class="fp-num text-[var(--fp-muted)]"
+                    >{priceLabel(m.id)}</span
+                  >
+                </div>
+              {/if}
               <div
                 class="flex items-center justify-between gap-2 border-t border-[var(--fp-border)] pt-2"
               >
                 <StatusBadge status={$tr(st)} tone={modelTone(st)} />
                 <span
                   class="fp-num text-xs text-[var(--fp-muted)] text-right break-words min-w-0"
-                  >{m.quota || "unlimited session"}</span
+                  >{m.quota || "unlimited session"}{#if m.efforts?.length}
+                    <span class="text-[var(--fp-dim)]">
+                      · {m.efforts.join("/")}</span
+                    >{/if}</span
                 >
               </div>
               <div

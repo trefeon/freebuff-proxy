@@ -5,6 +5,7 @@ package dashboard
 // package (43.8% → the functions below were almost entirely untested).
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -401,6 +402,9 @@ func TestModelsDataServedGateOnly(t *testing.T) {
 		}
 		if !row.Served {
 			t.Errorf("served row %q has Served=false, want true", row.ID)
+		}
+		if got, want := row.Efforts, modelcat.Efforts(row.ID); !slices.Equal(got, want) {
+			t.Errorf("row %q Efforts = %v, want modelcat %v", row.ID, got, want)
 		}
 	}
 	if !sawReferral {

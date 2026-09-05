@@ -20,10 +20,11 @@ type modelsData struct {
 }
 
 type modelRow struct {
-	ID     string `json:"id"`
-	Agent  string `json:"agent"`
-	Quota  string `json:"quota"`
-	Served bool   `json:"served"`
+	ID      string   `json:"id"`
+	Agent   string   `json:"agent"`
+	Quota   string   `json:"quota"`
+	Served  bool     `json:"served"`
+	Efforts []string `json:"efforts,omitempty"`
 }
 
 // servedModels returns the registry ids that pass the strict ServedModels
@@ -153,7 +154,7 @@ func (d *Dashboard) modelsData() modelsData {
 		if !served && id != modelcat.Glm52ModelID {
 			continue
 		}
-		row := modelRow{ID: id, Served: served}
+		row := modelRow{ID: id, Served: served, Efforts: modelcat.Efforts(id)}
 		if agent, err := d.reg.AgentForModel(id); err == nil {
 			row.Agent = agent
 		}

@@ -7,24 +7,28 @@
       "id": "deepseek/deepseek-v4-flash",
       "agent": "base2-free-deepseek-flash",
       "served": true,
+      "efforts": ["low", "high", "max"],
       "quota": "unlimited session"
     },
     {
       "id": "mimo/mimo-v2.5",
       "agent": "base2-free-mimo",
       "served": true,
+      "efforts": ["high"],
       "quota": "unlimited session"
     },
     {
       "id": "openai/gpt-5.6-luna",
       "agent": "base3-free-luna",
       "served": true,
+      "efforts": ["low", "medium", "high", "xhigh", "max"],
       "quota": "5 premium quota"
     },
     {
       "id": "meta/muse-spark-1.3-contributor",
       "agent": "base2-free-muse-spark-1-3",
       "served": true,
+      "efforts": ["minimal", "low", "medium", "high", "xhigh"],
       "quota": "5 premium quota"
     },
     {
@@ -43,6 +47,7 @@
       "id": "z-ai/glm-5.3-flash",
       "agent": "base2-free-glm-5-3-flash",
       "served": true,
+      "efforts": ["low", "high", "max"],
       "quota": "unlimited session"
     }
   ],

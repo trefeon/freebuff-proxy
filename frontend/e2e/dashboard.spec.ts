@@ -61,6 +61,10 @@ test.describe("dashboard hermetic mocks", () => {
     ).toBeVisible();
     const table = page.locator("table.fp-table");
     await expect(table.getByText("Account #1")).toBeVisible({ timeout: 10000 });
+    // No fixture token carries a grant: the locked referral pitch shows.
+    await expect(
+      page.getByText("Refer friends → +1 premium session/day").first(),
+    ).toBeVisible();
     const expandBtn = table
       .locator('button[aria-label*="Expand details"]')
       .first();
@@ -641,6 +645,9 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(rows).toHaveCount(7);
     await expect(page.getByText("z-ai/glm-5.2").first()).toBeVisible();
     await expect(page.getByText("referral +1/day").first()).toBeVisible();
+    await expect(page.getByText("low/high/max").first()).toBeVisible();
+    await expect(page.getByText("Pool").first()).toBeVisible();
+    await expect(page.getByText("Price").first()).toBeVisible();
     await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
   });
 

@@ -44,6 +44,11 @@ test.describe("real-world data", () => {
       ),
     ).toBeVisible();
     await expect(page.getByText("Requests 37")).toBeVisible();
+    // Referral banner: unlocked grant on account #2.
+    await expect(
+      page.getByText("premium session(s)/day from referrals").first(),
+    ).toBeVisible();
+    await expect(page.getByText("FREE-abc123").first()).toBeVisible();
     await expect(page.getByText("SPEND TODAY")).toHaveCount(2);
     await expect(page.getByText("Used 2 / Limit 4")).toBeVisible();
     await expect(page.getByText("Banned — TEMPORARY")).toBeVisible();
@@ -138,6 +143,9 @@ test.describe("real-world data", () => {
     ).toBeVisible();
     await expect(page.getByText("referral +1/day")).toHaveCount(2);
     await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
+    await expect(page.getByText("Premium: 4 of 5 used").first()).toBeVisible();
+    await expect(page.getByText("$0.01/hr").first()).toBeVisible();
+    await expect(page.getByText("low/high/max").first()).toBeVisible();
     await page.goto(admin("logs"));
     await expect(page.getByText("2 requests")).toBeVisible();
     await expect(page.getByText("502").first()).toBeVisible();
