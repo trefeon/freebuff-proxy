@@ -169,7 +169,7 @@
       ? 'bg-[var(--fp-accent)]/15 border-y-2 border-[var(--fp-accent)]'
       : ''}"
 >
-  <td class="w-16">
+  <td class="w-[84px]">
     <div class="inline-flex items-center gap-1">
       {#if totalTokens > 1}
         <div
@@ -222,7 +222,8 @@
   <td>
     <div class="flex flex-col gap-0.5">
       <div class="flex items-center gap-1.5">
-        <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
+        <span
+          class="fp-num text-xs font-semibold whitespace-nowrap text-[var(--fp-text)]"
           >Account #{idx + 1}</span
         >
         {#if idx === 0}
@@ -257,8 +258,9 @@
   </td>
   <td>
     {#if token.session_instance}
-      <code class="fp-num text-xs text-[var(--fp-muted)] break-all select-all"
-        >{token.session_instance}</code
+      <code
+        class="fp-num text-xs text-[var(--fp-muted)] truncate block max-w-full select-all"
+        title={token.session_instance}>{token.session_instance}</code
       >
     {:else}
       <span class="text-xs text-[var(--fp-dim)]">—</span>
@@ -267,8 +269,8 @@
   <td class="num">
     {#if token.cooldown_active}
       {@const cd = cooldownLabel(token)}
-      <span class="fp-num text-xs text-[var(--fp-warning)]">
-        {cd}{#if cd !== "expiring" && cd !== "—"} {$tr("remaining")}{/if}
+      <span class="fp-num text-xs text-[var(--fp-warning)] whitespace-nowrap">
+        {cd}{#if cd !== "expiring" && cd !== "—"}{" "}{$tr("remaining")}{/if}
       </span>
     {:else}
       <span class="fp-num text-xs text-[var(--fp-dim)]">—</span>
@@ -282,17 +284,18 @@
             >{token.messages_24h}/{token.daily_limit}</span
           >
           {$tr("msgs today")}
-          (<span class="fp-num text-[var(--fp-text)]"
-            >{token.usage_pct}%</span
-          >)
+          (<span class="fp-num text-[var(--fp-text)]">{token.usage_pct}%</span>)
         {:else}
           <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
           {$tr("msgs 24h")}
         {/if}
       </span>
       <span class="text-[11px] text-[var(--fp-dim)]">
-        runs <span class="fp-num text-[var(--fp-text)]">{token.active_runs}</span>
-        · reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
+        runs <span class="fp-num text-[var(--fp-text)]"
+          >{token.active_runs}</span
+        >
+        · reqs
+        <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
       </span>
     </div>
   </td>

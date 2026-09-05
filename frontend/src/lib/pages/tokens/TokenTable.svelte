@@ -141,19 +141,19 @@
   {:else}
     <!-- Desktop: table (md+) -->
     <div class="hidden md:block overflow-x-auto">
-      <table class="fp-table w-full min-w-[760px]">
+      <table class="fp-table w-full min-w-[980px]">
         <thead>
           <tr>
-            <th class="w-8"></th>
+            <th class="w-[84px]"></th>
             <th>{$tr("Account")}</th>
-            <th>{$tr("Status")}</th>
-            <th>{$tr("Instance")}</th>
-            <th class="num">{$tr("Cooldown")}</th>
-            <th class="num">{$tr("Usage")}</th>
-            <th class="text-right">{$tr("Actions")}</th>
+            <th class="w-48">{$tr("Status")}</th>
+            <th class="w-40">{$tr("Instance")}</th>
+            <th class="num w-32">{$tr("Cooldown")}</th>
+            <th class="num w-44">{$tr("Usage")}</th>
+            <th class="text-right w-60">{$tr("Actions")}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="[&_td]:align-middle">
           {#each tokens as token, i (token.index ?? i)}
             {@const idx = token.index ?? i}
             <TokenCard
