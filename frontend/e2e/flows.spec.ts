@@ -62,4 +62,24 @@ test.describe("user flows", () => {
       .poll(async () => hits, { timeout: 5000 })
       .toBeGreaterThan(before);
   });
+
+  test("quota: exempt account shows quota exempt chip", async ({ page }) => {
+    const f = loadFixtures(RW);
+    const tokens = JSON.parse(JSON.stringify(f.tokens));
+    const list = tokens.tokens ?? tokens;
+    const withFb = (Array.isArray(list) ? list : []).find((t) => t.freebucks);
+    if (!withFb) throw new Error("RW tokens fixture has no freebucks row");
+    withFb.freebucks.quota_exempt = true;
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tokens),
+      });
+    });
+    await page.goto(admin("quota"));
+    await expect(page.getByText("quota exempt").first()).toBeVisible();
+  });
 });

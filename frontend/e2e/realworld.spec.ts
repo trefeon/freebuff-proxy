@@ -24,7 +24,18 @@ test.describe("real-world data", () => {
   });
 
   test("tokens: every account state + bridge clients", async ({ page }) => {
-    await mockDashboard(page, loadFixtures(RW));
+    const f = loadFixtures(RW);
+    // Pin the banned account's cooldown 30d out: the static fixture date
+    // would otherwise age past "Nd" into "expiring" and break the countdown
+    // assert on later runs.
+    const tokens = JSON.parse(JSON.stringify(f.tokens));
+    const list = tokens.tokens ?? tokens;
+    const banned = (Array.isArray(list) ? list : []).find(
+      (t) => t.cooldown_active,
+    );
+    if (banned)
+      banned.cooldown_until = new Date(Date.now() + 30 * 864e5).toISOString();
+    await mockDashboard(page, { ...f, tokens });
     await page.goto(admin("tokens"));
     for (const n of [1, 2, 3, 4, 5]) {
       await expect(
@@ -32,7 +43,9 @@ test.describe("real-world data", () => {
       ).toBeVisible();
     }
     await expect(page.getByText("BANNED (TEMPORARY)").first()).toBeVisible();
-    await expect(page.getByText(/\d+d \d+h remaining/).first()).toBeVisible();
+    await expect(
+      page.getByText(/\d+d( \d+h)? remaining/).first(),
+    ).toBeVisible();
     await expect(page.getByText("LOCKED").first()).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Unlock" }).first(),

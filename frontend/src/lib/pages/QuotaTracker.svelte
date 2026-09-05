@@ -100,7 +100,7 @@
         >{$tr("Upstream Accounting Revamp (Freebucks)")}</strong
       >
       {$tr(
-        "Codebuff is transitioning accounts from the legacy 4 sessions/day pool to daily Freebucks allowances (~75 Freebucks/day). Legacy accounts stay on the daily session pool until upstream finishes rollout.",
+        "Codebuff is transitioning accounts from the legacy 4 sessions/day pool to daily Freebucks allowances. Legacy accounts stay on the daily session pool until upstream finishes rollout. Per-account Daily pools below are live upstream values.",
       )}
     </div>
   </div>

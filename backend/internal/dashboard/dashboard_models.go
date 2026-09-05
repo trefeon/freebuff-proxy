@@ -98,6 +98,22 @@ func (d *Dashboard) quotaFor(id string) string {
 	return "unlimited session"
 }
 
+// firstFreebucksPrices returns the first token snapshot's Freebucks price
+// map (issue #350 price sort). Prices are parse-time effective (the
+// announced schedule is already applied), so the sort reads the same
+// numbers the pool meter gates on. nil when no token reports prices.
+func (d *Dashboard) firstFreebucksPrices() map[string]float64 {
+	if d.pool == nil {
+		return nil
+	}
+	for _, t := range d.pool.Snapshot() {
+		if t.Freebucks != nil && len(t.Freebucks.Prices) > 0 {
+			return t.Freebucks.Prices
+		}
+	}
+	return nil
+}
+
 // livePremiumQuotaLabel renders "<limit> premium quota" from the first token
 // quota snapshot carrying an entry for the premium model ("5 premium quota").
 // "" when no token has live data for the model. Uses Limit only (not
@@ -161,6 +177,14 @@ func (d *Dashboard) modelsData() modelsData {
 		row.Quota = d.quotaFor(id)
 		md.Models = append(md.Models, row)
 	}
+	// Metered price order (issue #350 — mirrors sortModelsByPrice in
+	// cli/src/utils/freebucks.ts): when any token reports Freebucks
+	// prices, rows sort cheapest-first so the menu's subject (cost) leads;
+	// ties break on display name, unpriced rows sort last. Unmetered
+	// accounts keep the pinned catalog order.
+	if prices := d.firstFreebucksPrices(); len(prices) > 0 {
+		sortModelRowsByPrice(md.Models, prices)
+	}
 	md.Count = len(md.Models)
 	cfg := d.cfg()
 	for alias, real := range cfg.ModelAliases {
@@ -169,4 +193,20 @@ func (d *Dashboard) modelsData() modelsData {
 	sort.Slice(md.Aliases, func(i, j int) bool { return md.Aliases[i].Alias < md.Aliases[j].Alias })
 	md.HasAliases = len(md.Aliases) > 0
 	return md
+}
+
+// sortModelRowsByPrice orders catalog rows cheapest-first by the metered
+// price map (pure form of the modelsData sort, kept separate for testing).
+func sortModelRowsByPrice(rows []modelRow, prices map[string]float64) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		pi, iok := prices[rows[i].ID]
+		pj, jok := prices[rows[j].ID]
+		if iok != jok {
+			return iok
+		}
+		if iok && pi != pj {
+			return pi < pj
+		}
+		return modelcat.DisplayName(rows[i].ID) < modelcat.DisplayName(rows[j].ID)
+	})
 }

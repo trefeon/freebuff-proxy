@@ -150,6 +150,9 @@ type freebucksCard struct {
 	Monthly *freebucksWindowCard `json:"monthly,omitempty"`
 	PlanID  string               `json:"plan_id,omitempty"`
 	Prices  map[string]float64   `json:"prices,omitempty"`
+	// QuotaExempt is the server-authorized quota exemption (wire drift
+	// 2026-09-05, issue #350): new sessions stay usable at zero balance.
+	QuotaExempt bool `json:"quota_exempt,omitempty"`
 }
 
 // freebucksWalletCard is the dashboard view of the never-expiring Freebucks

@@ -157,6 +157,13 @@ func freebucksCappedForSnapshot(snap session.SessionSnapshot, model string) (boo
 	// the period is spent, fresh sessions stop upstream regardless of the
 	// daily balance. Absent on older servers (nil) — no behavior change.
 	monthlySpent := fb.Monthly != nil && fb.Monthly.RemainingUsd <= 0
+	// Server-authorized quota exemption (wire drift 2026-09-05, issue
+	// #350): new sessions stay usable at zero balance — the meter's
+	// canStart is exempt || balance >= price. The monthly allowance still
+	// gates (separate upstream refusal).
+	if fb.QuotaExempt && !monthlySpent {
+		return false, 0
+	}
 	if fb.Balance >= price && !monthlySpent {
 		return false, 0
 	}

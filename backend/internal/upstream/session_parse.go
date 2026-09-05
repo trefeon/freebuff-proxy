@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -167,10 +168,22 @@ type FreebucksMonthlyAllowance struct {
 	ResetAt      time.Time `json:"resetAt"`
 }
 
+// FreebucksPriceChange is one server-announced scheduled repricing (wire
+// drift 2026-09-05, issue #350): applied only once due, never to admitted
+// sessions, and only to models already on the meter.
+type FreebucksPriceChange struct {
+	At      string  `json:"at"`
+	ModelID string  `json:"modelId"`
+	Price   float64 `json:"price"`
+	Tagline string  `json:"tagline"`
+}
+
 // FreebucksInfo is the caller's Freebucks position (issue #232, shape
 // issue #321): spendable balance (= daily.remaining + wallet.balance) +
 // the daily pool + the never-expiring wallet + the USD spend ceiling +
-// the plan id ("" when the account is on the free allowance).
+// the plan id ("" when the account is on the free allowance) +
+// the server-authorized quota exemption + per-model prices with their
+// display copy + the announced repricing schedule (issue #350).
 type FreebucksInfo struct {
 	Balance float64                    `json:"balance"`
 	Daily   FreebucksWindow            `json:"daily"`
@@ -178,7 +191,57 @@ type FreebucksInfo struct {
 	Spend   FreebucksSpendCeiling      `json:"spend"`
 	Monthly *FreebucksMonthlyAllowance `json:"monthly,omitempty"`
 	PlanID  string                     `json:"planId,omitempty"`
-	Prices  map[string]float64         `json:"prices"`
+	// QuotaExempt: new sessions stay usable at zero balance (server-sent;
+	// the meter's canStart is exempt || balance >= price).
+	QuotaExempt bool               `json:"quotaExempt,omitempty"`
+	Prices      map[string]float64 `json:"prices"`
+	// PriceNotices overrides the static model tagline with price-resolved
+	// copy (mirrors taglineFor in freebuff-model-selector.tsx).
+	PriceNotices map[string]string      `json:"priceNotices,omitempty"`
+	PriceChanges []FreebucksPriceChange `json:"priceChanges,omitempty"`
+}
+
+// ApplyFreebucksPriceChanges applies the server's announced repricing
+// schedule to already-parsed info (mirrors applyFreebucksPriceChanges in
+// freebuff-price-changes.ts): due changes (at <= now) apply in chronological
+// order, reprice only models already on the meter, refresh their notice
+// copy, and are consumed; future changes are kept for the next call.
+func ApplyFreebucksPriceChanges(fb *FreebucksInfo, now time.Time) {
+	if fb == nil || len(fb.PriceChanges) == 0 {
+		return
+	}
+	var pending []FreebucksPriceChange
+	var ready []FreebucksPriceChange
+	for _, c := range fb.PriceChanges {
+		at, err := time.Parse(time.RFC3339, c.At)
+		if err != nil || at.After(now) {
+			pending = append(pending, c)
+			continue
+		}
+		ready = append(ready, c)
+	}
+	if len(ready) == 0 {
+		return
+	}
+	sort.Slice(ready, func(i, j int) bool {
+		ai, _ := time.Parse(time.RFC3339, ready[i].At)
+		aj, _ := time.Parse(time.RFC3339, ready[j].At)
+		return ai.Before(aj)
+	})
+	if fb.Prices == nil {
+		fb.Prices = map[string]float64{}
+	}
+	if fb.PriceNotices == nil && len(ready) > 0 {
+		fb.PriceNotices = map[string]string{}
+	}
+	for _, c := range ready {
+		if _, ok := fb.Prices[c.ModelID]; !ok {
+			continue
+		}
+		fb.Prices[c.ModelID] = c.Price
+		fb.PriceNotices[c.ModelID] = c.Tagline
+	}
+	fb.PriceChanges = pending
 }
 
 // AvailabilityWindow is the parsed daily availability window from a
@@ -438,16 +501,29 @@ type rawFreebucksMonthlyAllowance struct {
 }
 
 // rawFreebucks mirrors upstream FreebuffFreebucksInfo (issue #321 wire
-// drift): spendable balance + the daily pool window + the never-expiring
-// wallet + the USD spend ceiling + the monthly allowance + the plan id.
+// drift, #350 for exemption/notices/schedule): spendable balance + the
+// daily pool window + the never-expiring wallet + the USD spend ceiling +
+// the monthly allowance + the plan id + the quota exemption + per-model
+// price-notice copy + the announced repricing schedule.
 type rawFreebucks struct {
-	Balance float64                       `json:"balance"`
-	Daily   rawFreebucksWindow            `json:"daily"`
-	Wallet  *rawFreebucksWallet           `json:"wallet"`
-	Spend   *rawFreebucksSpendCeiling     `json:"spend"`
-	Monthly *rawFreebucksMonthlyAllowance `json:"monthly"`
-	PlanID  *string                       `json:"planId"`
-	Prices  map[string]float64            `json:"prices"`
+	Balance      float64                       `json:"balance"`
+	Daily        rawFreebucksWindow            `json:"daily"`
+	Wallet       *rawFreebucksWallet           `json:"wallet"`
+	Spend        *rawFreebucksSpendCeiling     `json:"spend"`
+	Monthly      *rawFreebucksMonthlyAllowance `json:"monthly"`
+	PlanID       *string                       `json:"planId"`
+	QuotaExempt  *bool                         `json:"quotaExempt"`
+	Prices       map[string]float64            `json:"prices"`
+	PriceNotices map[string]string             `json:"priceNotices"`
+	PriceChanges []rawFreebucksPriceChange     `json:"priceChanges"`
+}
+
+// rawFreebucksPriceChange mirrors FreebuffPriceChange (issue #350).
+type rawFreebucksPriceChange struct {
+	At      string  `json:"at"`
+	ModelID string  `json:"modelId"`
+	Price   float64 `json:"price"`
+	Tagline string  `json:"tagline"`
 }
 
 type rawFreeWindows struct {
@@ -613,9 +689,25 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		}
 		if raw.Freebucks != nil {
 			fb := &FreebucksInfo{
-				Balance: raw.Freebucks.Balance,
-				Prices:  raw.Freebucks.Prices,
+				Balance:      raw.Freebucks.Balance,
+				Prices:       raw.Freebucks.Prices,
+				PriceNotices: raw.Freebucks.PriceNotices,
 			}
+			if raw.Freebucks.QuotaExempt != nil {
+				fb.QuotaExempt = *raw.Freebucks.QuotaExempt
+			}
+			for _, c := range raw.Freebucks.PriceChanges {
+				fb.PriceChanges = append(fb.PriceChanges, FreebucksPriceChange{
+					At:      c.At,
+					ModelID: c.ModelID,
+					Price:   c.Price,
+					Tagline: c.Tagline,
+				})
+			}
+			// Apply the server's announced schedule at parse time so every
+			// consumer (pool meter, dashboard prices) reads effective prices
+			// (issue #350 — mirrors freebucksOf applying the schedule).
+			ApplyFreebucksPriceChanges(fb, time.Now())
 			if raw.Freebucks.PlanID != nil {
 				fb.PlanID = *raw.Freebucks.PlanID
 			}

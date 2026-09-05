@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"freebuff-proxy/backend/internal/testutil"
 )
@@ -103,4 +104,73 @@ func TestParseFreebucksAbsent(t *testing.T) {
 	if st.InstanceID != "inst-plain" {
 		t.Errorf("InstanceID = %q, want inst-plain", st.InstanceID)
 	}
+}
+
+// TestParseFreebucksPriceDrift pins issue #350: quotaExempt, priceNotices
+// and priceChanges parse; due changes apply at parse time (reprice +
+// notice refresh + consume), future ones are kept, and models off the
+// meter are never repriced.
+func TestParseFreebucksPriceDrift(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"active","instanceId":"inst-fb350","model":"openai/gpt-5.6-luna","expiresAt":"2030-01-01T00:00:00Z","freebucks":{"balance":0,"daily":{"limit":20,"spent":20,"remaining":0,"resetAt":"2026-09-01T07:00:00Z"},"quotaExempt":true,"prices":{"openai/gpt-5.6-luna":2},"priceNotices":{"openai/gpt-5.6-luna":"old copy"},"priceChanges":[{"at":"2020-01-02T00:00:00Z","modelId":"openai/gpt-5.6-luna","price":5,"tagline":"new copy"},{"at":"2020-01-01T00:00:00Z","modelId":"openai/gpt-5.6-luna","price":3,"tagline":"mid copy"},{"at":"2999-01-01T00:00:00Z","modelId":"openai/gpt-5.6-luna","price":9,"tagline":"future copy"},{"at":"2020-01-03T00:00:00Z","modelId":"off/meter","price":1,"tagline":"unpriced"}]}}`))
+	}
+	client, err := NewForAuth(testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := client.ProbeAccount(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb := st.Freebucks
+	if fb == nil {
+		t.Fatal("Freebucks = nil, want parsed block")
+	}
+	if !fb.QuotaExempt {
+		t.Error("QuotaExempt = false, want true")
+	}
+	// Due changes apply oldest-first: 2 -> 3 -> 5.
+	if fb.Prices["openai/gpt-5.6-luna"] != 5 {
+		t.Errorf("Prices[luna] = %v, want 5 (last due change wins)", fb.Prices["openai/gpt-5.6-luna"])
+	}
+	if fb.PriceNotices["openai/gpt-5.6-luna"] != "new copy" {
+		t.Errorf("PriceNotices[luna] = %q, want new copy", fb.PriceNotices["openai/gpt-5.6-luna"])
+	}
+	if _, ok := fb.Prices["off/meter"]; ok {
+		t.Error("off-meter model repriced, want untouched")
+	}
+	if len(fb.PriceChanges) != 1 || fb.PriceChanges[0].Tagline != "future copy" {
+		t.Errorf("PriceChanges = %+v, want only the future change", fb.PriceChanges)
+	}
+}
+
+// TestApplyFreebucksPriceChangesUnit: bad timestamps are kept pending (never
+// applied), nil prices map is allocated, empty schedule is a no-op.
+func TestApplyFreebucksPriceChangesUnit(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	fb := &FreebucksInfo{
+		Prices: map[string]float64{"m": 2},
+		PriceChanges: []FreebucksPriceChange{
+			{At: "not-a-time", ModelID: "m", Price: 7, Tagline: "bad"},
+			{At: "2020-05-05T00:00:00Z", ModelID: "m", Price: 4, Tagline: "due"},
+		},
+	}
+	ApplyFreebucksPriceChanges(fb, now)
+	if fb.Prices["m"] != 4 {
+		t.Errorf("Prices[m] = %v, want 4", fb.Prices["m"])
+	}
+	if len(fb.PriceChanges) != 1 || fb.PriceChanges[0].Tagline != "bad" {
+		t.Errorf("PriceChanges = %+v, want only the unparsable change kept", fb.PriceChanges)
+	}
+	var nilFB *FreebucksInfo
+	ApplyFreebucksPriceChanges(nilFB, now) // must not panic
+	empty := &FreebucksInfo{}
+	ApplyFreebucksPriceChanges(empty, now) // must not panic
 }

@@ -503,3 +503,27 @@ func TestFreebucksCappedMonthlyAllowance(t *testing.T) {
 		t.Error("capped on fully-past windows, want unknown (revalidate)")
 	}
 }
+
+// TestFreebucksCappedQuotaExempt pins issue #350: a server-authorized quota
+// exemption bypasses the balance<price cap (the meter's canStart is exempt
+// || balance >= price) but never the monthly-allowance gate.
+func TestFreebucksCappedQuotaExempt(t *testing.T) {
+	mkSnap := func(fb *upstream.FreebucksInfo) session.SessionSnapshot {
+		return session.SessionSnapshot{Freebucks: fb}
+	}
+	exempt := &upstream.FreebucksInfo{
+		Balance:     0,
+		Daily:       upstream.FreebucksWindow{Limit: 20, Spent: 20, Remaining: 0, ResetAt: time.Now().Add(time.Hour)},
+		Wallet:      upstream.FreebucksWallet{},
+		QuotaExempt: true,
+		Prices:      map[string]float64{"openai/gpt-5.6-luna": 2},
+	}
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(exempt), "openai/gpt-5.6-luna"); capped {
+		t.Error("capped with QuotaExempt at zero balance, want not capped")
+	}
+	// Monthly spent still gates even when exempt.
+	exempt.Monthly = &upstream.FreebucksMonthlyAllowance{LimitUsd: 10, SpentUsd: 10, RemainingUsd: 0, ResetAt: time.Now().Add(24 * time.Hour)}
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(exempt), "openai/gpt-5.6-luna"); !capped {
+		t.Error("not capped with spent monthly allowance, want capped despite exempt")
+	}
+}

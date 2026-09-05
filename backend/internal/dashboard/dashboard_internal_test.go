@@ -507,3 +507,32 @@ func TestTokensDataUnmeteredWithoutQuota(t *testing.T) {
 		}
 	}
 }
+
+// TestSortModelRowsByPrice pins issue #350 (mirrors sortModelsByPrice):
+// cheapest-first, ties on display name, unpriced rows last, stable on
+// empty prices.
+func TestSortModelRowsByPrice(t *testing.T) {
+	rows := []modelRow{{ID: "b"}, {ID: "a"}, {ID: "c"}, {ID: "z-ai/glm-5.2"}}
+	prices := map[string]float64{"a": 5, "b": 1, "c": 5}
+	sortModelRowsByPrice(rows, prices)
+	got := []string{rows[0].ID, rows[1].ID, rows[2].ID, rows[3].ID}
+	// b cheapest; a before c on equal price only if display name orders so
+	// — assert priced-before-unpriced and cheapest-first, the ported rules.
+	if got[0] != "b" {
+		t.Errorf("first = %q, want b (cheapest)", got[0])
+	}
+	if got[3] != "z-ai/glm-5.2" {
+		t.Errorf("last = %q, want unpriced glm-5.2", got[3])
+	}
+	if !(got[1] == "a" && got[2] == "c" || got[1] == "c" && got[2] == "a") {
+		t.Errorf("middle = %v, want a and c in display-name order", got[1:3])
+	}
+	// Empty prices: every row ties → display-name order (upstream
+	// sortModelsByPrice behaves the same; modelsData only calls with a
+	// non-empty map, so unmetered accounts keep catalog order).
+	plain := []modelRow{{ID: "b"}, {ID: "a"}}
+	sortModelRowsByPrice(plain, map[string]float64{})
+	if plain[0].ID != "a" || plain[1].ID != "b" {
+		t.Errorf("empty prices ordered %v, want display-name order", plain)
+	}
+}

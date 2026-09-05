@@ -99,6 +99,9 @@
   let fbPlanId = $derived(
     freebucks?.plan_id ?? freebucks?.planId ?? freebucks?.PlanID ?? null,
   );
+  let fbExempt = $derived(
+    freebucks?.quota_exempt ?? freebucks?.quotaExempt ?? false,
+  );
   let fbWallet = $derived.by(() => {
     const w = freebucks?.wallet ?? freebucks?.Wallet ?? null;
     if (!w) return null;
@@ -269,6 +272,14 @@
             >wallet {fmtNum(fbWallet.balance)} +{fmtNum(
               fbWallet.monthlyBonus,
             )}/mo</span
+          >
+        {/if}
+        {#if fbExempt}
+          <span
+            class="shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded border border-[var(--fp-border)] bg-[var(--fp-surface)] text-[var(--fp-muted)]"
+            title={$tr(
+              "Server-authorized: new sessions stay usable at zero balance",
+            )}>{$tr("quota exempt")}</span
           >
         {/if}
         {#if fbSpend && fbSpend.limitUsd > 0}
