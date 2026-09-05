@@ -52,3 +52,23 @@ tasks:
     desc: Run proxy server
     cmds:
       - go run ./backend/cmd/freebuff-proxy
+
+  verify:
+    desc: Canonical fast gate (format, vet, build, hermetic Go tests, frontend checks)
+    cmds:
+      - test -z "$(gofmt -l backend)"
+      - go vet ./backend/...
+      - go build ./backend/...
+      - env -u AUTH_TOKENS -u ADMIN_TOKEN go test ./backend/...
+      - npm --prefix frontend run check
+      - npm --prefix frontend run lint
+      - npm --prefix frontend run format:check
+
+  verify:full:
+    desc: Full CI-equivalent gate (verify + race + frontend build/e2e + dist freshness)
+    cmds:
+      - task: verify
+      - task: test:race
+      - npm --prefix frontend run build
+      - npm --prefix frontend run test:e2e
+      - git diff --exit-code -- backend/internal/dashboard/dist
