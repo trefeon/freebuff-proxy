@@ -693,6 +693,19 @@ func TestRequestLimits(t *testing.T) {
 	} else if cfg.MaxRequestsPerDay != 42 || cfg.MaxRequestsPerMinute != 7 {
 		t.Errorf("file = %d/%d, want 42/7", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
 	}
+
+	// .env file value (clearEnv chdirs to a fresh temp dir, so ./.env is the
+	// file ResolveEnvFile reads).
+	t.Setenv("MAX_REQUESTS_PER_DAY", "")
+	t.Setenv("MAX_REQUESTS_PER_MINUTE", "")
+	if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok\nMAX_REQUESTS_PER_DAY=1000\nMAX_REQUESTS_PER_MINUTE=15\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(""); err != nil {
+		t.Fatalf("Load (.env): %v", err)
+	} else if cfg.MaxRequestsPerDay != 1000 || cfg.MaxRequestsPerMinute != 15 {
+		t.Errorf(".env values = %d/%d, want 1000/15", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
+	}
 }
 
 // TestMaxSpendPerDay pins the advisory spend-ceiling knob (issue #122):

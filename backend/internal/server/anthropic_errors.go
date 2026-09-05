@@ -26,7 +26,7 @@ func isAnthropicRequest(r *http.Request) bool {
 }
 
 // anthropicErrorType maps HTTP status code and internal error code to standard
-// Anthropic error types per reference/anthropic-sdk-typescript.
+// Anthropic error types per reference/protocols/anthropic-sdk-typescript.
 func anthropicErrorType(status int, code string) string {
 	switch {
 	case status == http.StatusUnauthorized:

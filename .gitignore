@@ -80,6 +80,16 @@ devdocs/
 # ── docs/ is public: only top-level .md files are committed ──
 docs/*
 !docs/*.md
+# ── docs/ subdirectories committed by the hardening program ──
+!docs/architecture/
+!docs/decisions/
+!docs/development/
+!docs/testing/
+!docs/security/
+!docs/operations/
+!docs/upstream/
+!docs/api/
+!docs/maintenance/
 
 # ── proxy session persistence (SHA-256 token keys + instance state) ──
 .freebuff-session-state.json

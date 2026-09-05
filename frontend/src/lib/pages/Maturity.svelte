@@ -39,6 +39,9 @@
   function applyTokens(v) {
     if (!v) return;
     data = v;
+    if (v.maturity_enabled !== undefined) {
+      globalEnabled = Boolean(v.maturity_enabled);
+    }
     for (const t of v?.tokens ?? []) {
       const idx = t.index ?? 0;
       if (!(idx in drafts)) {
@@ -129,6 +132,10 @@
         loading = false;
       }
     });
+    function onConfigSaved() {
+      refreshTokens();
+    }
+    window.addEventListener("fp-config-saved", onConfigSaved);
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);
@@ -160,6 +167,7 @@
       release();
       unsubStore?.();
       unsubErr?.();
+      window.removeEventListener("fp-config-saved", onConfigSaved);
     };
   });
 

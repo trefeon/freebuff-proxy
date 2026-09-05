@@ -38,6 +38,9 @@ const STATIC_TOP_KEYS = [
   "in_bridge",
   "show_bridge",
   "unmetered_models",
+  "token_rotation",
+  "rate_limit_failover",
+  "maturity_enabled",
 ];
 const STATIC_TOKEN_KEYS = [
   "email",

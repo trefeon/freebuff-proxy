@@ -170,8 +170,8 @@ func TestToolMapperCounts(t *testing.T) {
 	}
 }
 
-// TestAllHarnessToolsBidirectionalMapping verifies that every tool from all 12
-// harnesses in reference/harnesses renames to an official signature tool for upstream
+// TestAllHarnessToolsBidirectionalMapping verifies that every tool from the
+// client harnesses in reference/harnesses renames to an official signature tool for upstream
 // and restores cleanly back to the client's original casing/name downstream.
 func TestAllHarnessToolsBidirectionalMapping(t *testing.T) {
 	testCases := []struct {
@@ -231,6 +231,17 @@ func TestAllHarnessToolsBidirectionalMapping(t *testing.T) {
 		{"Kilocode", "webfetch", "read_url"},
 		// Gemini-CLI
 		{"Gemini-CLI", "read_many_files", "read_files"},
+		// Claude Code (PascalCase names; mapping is case-insensitive and
+		// restore must return the EXACT client casing)
+		{"Claude-Code", "Bash", "run_terminal_command"},
+		{"Claude-Code", "Read", "read_files"},
+		{"Claude-Code", "Edit", "str_replace"},
+		{"Claude-Code", "Write", "write_file"},
+		{"Claude-Code", "Grep", "code_search"},
+		{"Claude-Code", "LS", "list_directory"},
+		{"Claude-Code", "TodoWrite", "write_todos"},
+		{"Claude-Code", "WebFetch", "read_url"},
+		{"Claude-Code", "WebSearch", "web_search"},
 	}
 
 	for _, tc := range testCases {

@@ -13,12 +13,14 @@ What does this change do and why? Link any related issue.
 ## Checklist
 
 - [ ] Code builds: `go build ./...`
-- [ ] `go vet ./...` clean
-- [ ] Tests pass: `go test ./...` (CI also runs `-race`)
-- [ ] Tests added/updated for the change
-- [ ] Public docs updated if behavior or config changed (`README.md`,
-      `docs/`)
-- [ ] No secrets: no real tokens, `.env`, or `config.json` content
+- [ ] `gofmt` clean, `go vet ./...` clean
+- [ ] Tests pass: `task test` hermetic (CI also runs `-race`)
+- [ ] Tests added/updated in the owning package, behavior-first
+- [ ] Behavior/protocol/config changes documented (`README.md`, `docs/api/`, config tables)
+- [ ] Architecture: no new import edges (`archtest` green); CONTRACT.md/ADR updated if ownership moved
+- [ ] Security: no secrets in the diff; admin/auth/error paths reviewed; redaction intact
+- [ ] Generated assets rebuilt if frontend changed (`dashboard/dist` fresh)
+- [ ] Upstream reference involved? SHA recorded; pins + parity updated
 
 ## Notes
 

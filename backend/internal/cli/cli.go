@@ -263,6 +263,9 @@ func Serve(configPath string, verbose bool, version string) int {
 	if w := adminTokenCleartextWarning(cfg.AdminToken, cfg.ListenAddr); w != "" {
 		logger.Warn(w)
 	}
+	if w := openAPIWarning(cfg.AuthTokens, cfg.APIKeys, cfg.ListenAddr); w != "" {
+		logger.Warn(w)
+	}
 	logger.Info("listening", "addr", cfg.ListenAddr)
 
 	// Human-readable startup banner for interactive terminals. Suppressed
@@ -354,6 +357,17 @@ func adminTokenCleartextWarning(adminToken, listenAddr string) string {
 		return ""
 	}
 	return "ADMIN_TOKEN is set but LISTEN_ADDR binds a non-loopback interface and the proxy does not serve TLS — the admin login POST and session cookie travel in cleartext. Bind LISTEN_ADDR to a loopback address (e.g. 127.0.0.1:3457) or terminate TLS in front of the proxy"
+}
+
+// openAPIWarning returns the startup warning for a pooled deployment whose
+// /v1 surface is reachable without client credentials: AUTH_TOKENS set, no
+// API_KEYS, non-loopback LISTEN_ADDR. Empty when there is nothing to warn
+// about (bridge mode, API_KEYS set, or loopback-only listen).
+func openAPIWarning(authTokens, apiKeys []string, listenAddr string) string {
+	if len(authTokens) == 0 || len(apiKeys) > 0 || listenIsLoopback(listenAddr) {
+		return ""
+	}
+	return "AUTH_TOKENS is set but API_KEYS is empty and LISTEN_ADDR binds a non-loopback interface — the /v1 API and the token pool are open to the network. Set API_KEYS or bind LISTEN_ADDR to a loopback address (e.g. 127.0.0.1:3457)"
 }
 
 // listenIsLoopback reports whether a LISTEN_ADDR binds only loopback

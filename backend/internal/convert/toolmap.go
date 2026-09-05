@@ -102,6 +102,13 @@ var clientToOfficial = map[string]string{
 	"searchweb":            "web_search",
 	"viewsubdirectory":     "list_directory",
 	"singlefindandreplace": "str_replace",
+	// Kimi-CLI (reference/agents/kimi-cli src/kimi_cli/tools/*)
+	"writefile":   "write_file",
+	"settodolist": "write_todos",
+	"fetchurl":    "read_url",
+	// Crush (reference/agents/crush internal/agent/tools/*.go)
+	"todos": "write_todos",
+	"rg":    "code_search",
 
 	// Pi / Oh My Pi (OMP)
 	"powershell": "run_terminal_command",

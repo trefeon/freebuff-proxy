@@ -651,6 +651,8 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideBoolFrom(&raw.LogAccess, get, "LOG_ACCESS")
 	overrideIntFrom(&raw.LogRingSize, get, "LOG_RING_SIZE")
 	overrideIntFrom(&raw.MaxMessagesPerDay, get, "MAX_MESSAGES_PER_DAY")
+	overrideIntFrom(&raw.MaxRequestsPerDay, get, "MAX_REQUESTS_PER_DAY")
+	overrideIntFrom(&raw.MaxRequestsPerMinute, get, "MAX_REQUESTS_PER_MINUTE")
 	overrideIntFrom(&raw.BridgeDailyLimit, get, "BRIDGE_DAILY_LIMIT")
 	overrideIntFrom(&raw.MaxSpendPerDay, get, "MAX_SPEND_PER_DAY")
 	overrideBoolFrom(&raw.BridgeEnabled, get, "BRIDGE_ENABLED")
