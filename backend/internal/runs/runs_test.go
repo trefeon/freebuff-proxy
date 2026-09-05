@@ -338,13 +338,32 @@ func TestMaintainSkipsDuringCooldown(t *testing.T) {
 	}
 }
 
+// syncBuffer is a thread-safe bytes.Buffer wrapper so concurrent slog emissions
+// and String() reads in parallel test workers don't race under -race.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // captureSlog swaps the default slog handler for one recording Debug+
 // messages and returns a restore func plus a snapshot of everything logged
 // since capture. Used to assert that quiet paths emit no log lines.
 func captureSlog() (restore func(), logged func() string) {
-	var buf bytes.Buffer
+	buf := new(syncBuffer)
 	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	return func() { slog.SetDefault(prev) }, func() string { return buf.String() }
 }
 
