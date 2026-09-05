@@ -269,11 +269,12 @@ func freebucksCardFromInfo(info *upstream.FreebucksInfo) *freebucksCard {
 		return nil
 	}
 	card := &freebucksCard{
-		Balance:     info.Balance,
-		Daily:       freebucksWindowCardFromWindow(info.Daily),
-		PlanID:      info.PlanID,
-		Prices:      info.Prices,
-		QuotaExempt: info.QuotaExempt,
+		Balance:      info.Balance,
+		Daily:        freebucksWindowCardFromWindow(info.Daily),
+		PlanID:       info.PlanID,
+		Prices:       info.Prices,
+		PriceNotices: info.PriceNotices,
+		QuotaExempt:  info.QuotaExempt,
 	}
 	card.Wallet = freebucksWalletCard{
 		Balance:      info.Wallet.Balance,
