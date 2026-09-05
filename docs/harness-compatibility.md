@@ -13,8 +13,10 @@ one (Gemini CLI) is not, because it speaks a fourth, Gemini-native wire.
 | Example model used below | `deepseek/deepseek-v4-flash` (unmetered) |
 | Fallback model | `mimo/mimo-v2.5` |
 
-Served model IDs: `openai/gpt-5.6-luna`, `upstage/solar-pro4`, `z-ai/glm-5.2`,
-`z-ai/glm-5.3-flash`, `deepseek/deepseek-v4-flash`, `mimo/mimo-v2.5`.
+Served model IDs: `openai/gpt-5.6-luna`, `meta/muse-spark-1.3-contributor`,
+`upstage/solar-pro4`, `z-ai/glm-5.3-flash`, `deepseek/deepseek-v4-flash`,
+`mimo/mimo-v2.5` (`z-ai/glm-5.2` referral-gated; `google/gemini-3.8-flash`
+Pro-only, not served).
 
 Ready-to-edit config templates live in [`examples/harnesses/`](../examples/harnesses/).
 

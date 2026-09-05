@@ -69,17 +69,19 @@ If you are a beginner, you don't need to write code or compile anything:
 
 **Access Tiers & Upstream Models.** FreeBuff determines your access tier via Cloudflare TCP-layer GeoIP (not HTTP headers — spoofing is impossible). A residential IP in a Tier-1 country (US, UK, DE, JP, CA, etc.) gets `accessTier: "full"` with all premium models available (**5 premium sessions/day base** — 4 at the floor when trust levels are enforced). Non-Tier-1 country IPs get `accessTier: "limited"` where `mimo/mimo-v2.5` (`MiMo 2.5`) is the sole active model.
 
-> **📢 Official Freebuff Upstream Notice** (vendor snapshot `89ce3f5` · npm `0.0.161` `2026-08-30`):
+> **📢 Official Freebuff Upstream Notice** (vendor snapshot `b14414d59` · npm `0.0.168` `2026-09-05`):
 > *"Every model runs on your normal daily sessions — no per-model caps; your shared premium allowance still charges partial time, rounded up to a tenth. MiMo, DeepSeek V4 Flash and GLM 5.3 Flash are unmetered. —❤️ Freebuff Team"*
-> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` and `Solar Pro 4`. `GLM 5.3 Flash` is unmetered — no per-model cap.)
+> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` and `Muse Spark 1.3`. `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are unmetered — no per-model cap.)
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
 | **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool. |
-| **Premium** | **Solar Pro 4** `NEW` | `upstage/solar-pro4` | **Limited-time trial**, experimental, OpenRouter BYOK (Upstage), text-only, context `500_000`. Shares `5/day` premium pool **+ `1/day` per-model cap (`solar_pro4`)**. |
-| **Unlimited**| **GLM 5.3 Flash** `NEW` | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; now the default pick, per vendor `0.0.161`). |
-| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; off-peak-only serving window removed `2026-08-28`). |
+| **Premium** | **Muse Spark 1.3** `NEW` | `meta/muse-spark-1.3-contributor` | **Queues, then falls back** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Shares `5/day` premium pool. |
+| **Unlimited**| **Solar Pro 4** | `upstage/solar-pro4` | Graduated from trial `2026-09-04` (no longer experimental). OpenRouter BYOK (Upstage), text-only, context `500_000`. **Unmetered** — always available, no per-model cap. |
+| **Unlimited**| **GLM 5.3 Flash** | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; default pick again since `2026-09-05`, per vendor `0.0.168`). |
+| **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; default pick `2026-09-02`→`2026-09-05`). |
 | **Unlimited**| **MiMo 2.5** | `mimo/mimo-v2.5` | **Balanced**, Images. **Unlimited across all tiers**. |
+| **Pro-only** | **Gemini 3.8 Flash** | `google/gemini-3.8-flash` | Returned `2026-09-04` behind the Pro paywall, Web-only. The proxy has no Pro surface, so this row is **not served**. |
 | **Disabled** | **MiniMax M3** | `minimax/minimax-m3` | **Withdrawn** upstream (2026-08-20). |
 | **Disabled** | **DeepSeek V4 Pro** | `deepseek/deepseek-v4-pro` | **Withdrawn** upstream (2026-08-26, cost). |
 | **Disabled** | **Ox Alpha** | `stealth/ox-alpha` | **Withdrawn** upstream (2026-08-27, free promotion ended). |
