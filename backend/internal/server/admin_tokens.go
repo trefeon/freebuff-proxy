@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,69 @@ func tokenActionID(r *http.Request) (int, error) {
 		return 0, errors.New("invalid token id")
 	}
 	return id, nil
+}
+
+// parseTokenIndex reads a 0-based token index from the request: a form field
+// first, then a JSON body (number or quoted string) for SPA postAPI callers
+// whose application/json FormValue never parses. keys lists the accepted
+// parameter names in priority order ("token", then "index").
+//
+// It returns idx=-1, ok=true when the parameter is absent (legacy
+// last-token behavior for callers that send none), and ok=false when present
+// but unparsable or out of [0, count).
+func parseTokenIndex(w http.ResponseWriter, r *http.Request, keys []string, count int) (idx int, ok bool) {
+	raw := ""
+	for _, k := range keys {
+		if v := strings.TrimSpace(r.FormValue(k)); v != "" {
+			raw = v
+			break
+		}
+	}
+	if raw == "" {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err == nil && len(bytes.TrimSpace(body)) > 0 {
+			var jreq map[string]json.RawMessage
+			if jerr := json.Unmarshal(body, &jreq); jerr == nil {
+				for _, k := range keys {
+					msg, found := jreq[k]
+					if !found || len(msg) == 0 {
+						continue
+					}
+					var n int
+					if uerr := json.Unmarshal(msg, &n); uerr == nil {
+						raw = strconv.Itoa(n)
+					} else {
+						var s string
+						if serr := json.Unmarshal(msg, &s); serr == nil {
+							raw = strings.TrimSpace(s)
+						}
+					}
+					if raw != "" {
+						break
+					}
+				}
+			}
+		}
+	}
+	if raw == "" {
+		return -1, true
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 0 || n >= count {
+		return -1, false
+	}
+	return n, true
+}
+
+// removeAtCopy returns a copy of s with element i dropped. The input is never
+// mutated: appending on s[:i] in place would clobber the shared backing array
+// (e.g. the live config's AUTH_TOKENS slice).
+func removeAtCopy(s []string, i int) []string {
+	out := append([]string{}, s...)
+	if i < 0 || i >= len(out) {
+		return out
+	}
+	return append(out[:i], out[i+1:]...)
 }
 
 func (a *adminHandlers) handleTokenUnlock(w http.ResponseWriter, r *http.Request) {
@@ -379,14 +443,10 @@ func (a *adminHandlers) handleTokenRemove(w http.ResponseWriter, r *http.Request
 	// when the parameter is absent (compat for callers that do not send
 	// one). A middle removal is refused by the pool while any request is
 	// in flight — surfaced as a plain error message.
-	idx := -1
-	if raw := r.FormValue("token"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 0 || n >= len(cfg.AuthTokens) {
-			a.dash.RenderConfigResult(w, r, false, "Invalid token index.")
-			return
-		}
-		idx = n
+	idx, ok := parseTokenIndex(w, r, []string{"token", "index"}, len(cfg.AuthTokens))
+	if !ok {
+		a.dash.RenderConfigResult(w, r, false, "Invalid token index.")
+		return
 	}
 	removed := ""
 	if idx >= 0 {
@@ -404,10 +464,8 @@ func (a *adminHandlers) handleTokenRemove(w http.ResponseWriter, r *http.Request
 		a.dash.RenderConfigResult(w, r, false, err.Error())
 		return
 	}
-	tokens := cfg.AuthTokens
-	if idx >= 0 {
-		tokens = append(tokens[:idx], tokens[idx+1:]...)
-	} else if len(tokens) > 0 {
+	tokens := removeAtCopy(cfg.AuthTokens, idx)
+	if idx < 0 && len(tokens) > 0 {
 		tokens = tokens[:len(tokens)-1]
 	}
 	if err := a.syncTokensAfterMutation(tokens); err != nil {

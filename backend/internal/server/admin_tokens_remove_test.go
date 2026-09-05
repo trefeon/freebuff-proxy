@@ -57,6 +57,46 @@ func TestDashboardTokenRemoveBadIndex(t *testing.T) {
 	}
 }
 
+// TestDashboardTokenRemoveJSONIndex pins the SPA wire format: Tokens.svelte
+// posts application/json {token: <0-based index>} via postAPI, which
+// FormValue never parses. The indexed token — never the last one — must
+// leave the pool and the .env.
+func TestDashboardTokenRemoveJSONIndex(t *testing.T) {
+	t.Chdir(t.TempDir())
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" },
+		testutil.NewMock(), testutil.NewMock())
+	cookie := authedCookie(t, ts)
+	// Remove index 0 of tok-0/tok-1 via JSON, exactly like the SPA.
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/tokens/remove",
+		strings.NewReader(`{"token":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := bodyOf(t, resp)
+	if !strings.Contains(body, "Token removed") {
+		t.Fatalf("remove response = %q, want success", body)
+	}
+	if got := p.TokenCount(); got != 1 {
+		t.Fatalf("pool TokenCount = %d, want 1 (only tok-1 remains)", got)
+	}
+	env, err := os.ReadFile(".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(env), "tok-0") {
+		t.Errorf(".env still contains the removed token: %s", env)
+	}
+	if !strings.Contains(string(env), "tok-1") {
+		t.Errorf(".env missing the remaining token: %s", env)
+	}
+}
+
 func postTokenAction(t *testing.T, base, cookie, path, token string) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, base+path,
