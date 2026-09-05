@@ -521,7 +521,7 @@ func TestExtractXMLToolCallsPluralDialect(t *testing.T) {
 // the block leaked as literal "<tool_calls>" text to the harness.
 func TestXMLStreamExtractorPluralDialect(t *testing.T) {
 	var x XMLToolCallExtractor
-	text, calls := x.Feed("Let me check:\n<tool_cal")
+	text, _ := x.Feed("Let me check:\n<tool_cal")
 	if text != "Let me check:\n" {
 		t.Errorf("pre-opener text = %q, want %q", text, "Let me check:\n")
 	}
@@ -543,7 +543,7 @@ func TestXMLStreamExtractorPluralDialect(t *testing.T) {
 // removed instead of reaching the client as literal text.
 func TestXMLStreamExtractorPluralDanglingFlush(t *testing.T) {
 	var x XMLToolCallExtractor
-	text, calls := x.Feed("intro <tool_calls>\n<function=read_file>")
+	text, _ := x.Feed("intro <tool_calls>\n<function=read_file>")
 	if text != "intro " {
 		t.Errorf("pre-opener text = %q, want %q", text, "intro ")
 	}
