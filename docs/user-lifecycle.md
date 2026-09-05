@@ -89,9 +89,7 @@ keeps it alive, and logs to `/tmp/freebuff-proxy.{log,err}`.
 
 ## 2. First run
 
-`-doctor` is the sanity check (config, port, DNS/TLS, registry, per-token
-zero-cost probes). `-setup` is the interactive client configurator (Continue /
-opencode / aider) — it does **not** write the proxy `.env`.
+Dashboard first (running proxy): the Overview diagnostics card (`POST /admin/diag`) is the sanity check, and the **Setup** page shows copy blocks for every client. CLI second: `-doctor` is the headless sanity check (config, port, DNS/TLS, registry, per-token zero-cost probes), and `-setup` is the interactive client configurator (Continue / opencode / aider) — it does **not** write the proxy `.env`.
 
 ```bash
 ./freebuff-proxy -doctor
@@ -116,6 +114,8 @@ Summary: 10 passed, 0 warnings, 0 failed
 A missing token or unreachable upstream is reported honestly: warnings do not
 change the exit code (still `0`); a config error or failed reachability check
 makes it exit `1`.
+
+Dashboard first: the **Setup** page (`http://127.0.0.1:3457/admin/setup`) shows per-model copy blocks — copy, no file writes. CLI second (writes client files):
 
 ```bash
 ./freebuff-proxy -setup
@@ -145,9 +145,13 @@ Start the proxy:
 
 ## 3. Add tokens
 
-Add a token to `.env` (`AUTH_TOKENS` is a comma-separated list) by heads-up
-generation, or in the dashboard. Edit the `.env` directly and reload, or use
-the dashboard Tokens page (in-browser OAuth login wizard, then **Add Token**).
+Dashboard first: open `http://127.0.0.1:3457/admin`, log in with `ADMIN_TOKEN`, then use the Tokens page (in-browser OAuth login wizard, then **Add Token**). CLI second: generate heads-up and append to `.env` (`AUTH_TOKENS` is a comma-separated list), then reload.
+
+**Dashboard** — open `http://127.0.0.1:3457/admin`, log in with `ADMIN_TOKEN`,
+then **Tokens → Add Token to Pool**. The wizard runs the same headless OAuth
+flow and persists the token to `.env`. The `/admin/tokens/*` routes are
+session-cookie dashboard endpoints (they return an HTMX fragment, not a JSON
+API), so a human uses the dashboard; a script uses `gen-token.* --append`.
 
 **CLI generate (headless OAuth)**
 
@@ -160,12 +164,6 @@ the dashboard Tokens page (in-browser OAuth login wizard, then **Add Token**).
 Browser login...
 Token cb_... added to ~/.config/freebuff-proxy/.env
 ```
-
-**Dashboard** — open `http://127.0.0.1:3457/admin`, log in with `ADMIN_TOKEN`,
-then **Tokens → Add Token to Pool**. The wizard runs the same headless OAuth
-flow and persists the token to `.env`. The `/admin/tokens/*` routes are
-session-cookie dashboard endpoints (they return an HTMX fragment, not a JSON
-API), so a human uses the dashboard; a script uses `gen-token.* --append`.
 
 `AUTH_TOKENS=` empty means bridge mode (clients bring their own token).
 
@@ -208,8 +206,7 @@ data: {"type":"message_stop"}
 
 ## 5. Monitor
 
-Health is a single JSON read: `GET /healthz` returns `status`, `mode`, model
-count, per-token snapshot (incl. per-model `quota`), and `bridge_tokens`.
+Dashboard first: the admin dashboard at `http://127.0.0.1:3457/admin` gives the live overview (token risk cards), Traces (per-request routing outcome), Logs, Metrics, and Prometheus `GET /metrics`. CLI second: health is a single JSON read — `GET /healthz` returns `status`, `mode`, model count, per-token snapshot (incl. per-model `quota`), and `bridge_tokens`.
 
 ```bash
 curl -s http://127.0.0.1:3457/healthz
@@ -221,11 +218,8 @@ curl -s http://127.0.0.1:3457/healthz
  "bridge_tokens":0,"bridge_entries":[]}
 ```
 
-The admin dashboard at `http://127.0.0.1:3457/admin` gives the live overview
-(token risk cards), Traces (per-request routing outcome), Logs, Metrics, and
-Prometheus `GET /metrics` for `freebuff_proxy_quota_recent`/`_limit`. If the
-port is bound non-loopback and `ADMIN_TOKEN` is unset, sensitive dashboard
-routes require a loopback client.
+The quota gauges live at `GET /metrics` as `freebuff_proxy_quota_recent`/`_limit`.
+If the port is bound non-loopback and `ADMIN_TOKEN` is unset, sensitive dashboard routes require a loopback client.
 
 ## 6. Edit config
 
@@ -254,8 +248,7 @@ page (**Remove** pops the last token; the pool is construction-fixed, so an
 `.env` edit adds/removes on the next reload or restart). The `/admin/tokens/*`
 routes are session-cookie dashboard endpoints (HTMX fragment, not a JSON API).
 
-`-refresh-token N` re-authenticates a stale token in `.env` via the headless
-GitHub login flow:
+Dashboard first: the Tokens page OAuth login wizard mints a fresh token in the browser and persists it to `.env`. CLI second: `-refresh-token N` re-authenticates a stale token in `.env` via the headless GitHub login flow:
 
 ```bash
 ./freebuff-proxy -refresh-token 0
@@ -265,8 +258,7 @@ GitHub login flow:
 
 Each model's live session quota surfaces on `/healthz` (per-token `quota`
 map) and `/metrics` (`freebuff_proxy_quota_recent` / `freebuff_proxy_quota_limit`).
-`-test-token` gives a one-shot, zero-cost read that prints the quota and exits
-`0` (healthy) or `1` (bad).
+Dashboard first: the Quota Tracker page plus **Tokens → Test All** (`POST /admin/tokens/test-all`) give the same live read in the browser. CLI second: `-test-token` gives a one-shot, zero-cost read that prints the quota and exits `0` (healthy) or `1` (bad).
 
 ```bash
 ./freebuff-proxy -test-token
@@ -283,8 +275,7 @@ account out.
 
 ## 9. Update
 
-**Self-updater** (SHA-256 verified against the release `checksums.txt`; a
-release without the checksums manifest is refused).
+Dashboard first: the Overview update badge links the release when a newer one exists — the dashboard never swaps the binary. CLI second: **self-updater** (SHA-256 verified against the release `checksums.txt`; a release without the checksums manifest is refused).
 
 ```bash
 ./freebuff-proxy -update

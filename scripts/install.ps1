@@ -404,6 +404,7 @@ if (Test-Path -LiteralPath $exe) {
 }
 
 Write-Host "Next steps:" -ForegroundColor Cyan
+Write-Host "  Open the dashboard first: http://localhost:3457/admin - finish tokens plus config there"
 Write-Host "  1. 1-Click Client Setup:   cd `"$Dir`"; .\freebuff-proxy.exe -setup"
 Write-Host "  2. Start the proxy server: cd `"$Dir`"; .\start-proxy.cmd"
 Write-Host "     (or run freebuff-proxy.exe directly; the runtime finds its config in %APPDATA%\freebuff-proxy)"
