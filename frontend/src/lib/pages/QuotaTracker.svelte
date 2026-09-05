@@ -15,7 +15,11 @@
   } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
   import { formatLocalDate } from "../utils/format.js";
-  import { modelDisplayInfo, sortModelsByPrice } from "../utils/freebucks.js";
+  import {
+    freebucksHeaderLine,
+    modelDisplayInfo,
+    sortModelsByPrice,
+  } from "../utils/freebucks.js";
 
   let data = $state(null);
   let loading = $state(true);
@@ -224,6 +228,12 @@
                 </div>
               {/if}
               {#if token.freebucks}
+                <p
+                  class="text-xs text-[var(--fp-muted)] font-mono"
+                  data-testid="freebucks-header"
+                >
+                  {freebucksHeaderLine(token.freebucks, now, $tr)}
+                </p>
                 <PremiumQuotaBar
                   freebucks={token.freebucks}
                   freeWindows={token.free_windows}

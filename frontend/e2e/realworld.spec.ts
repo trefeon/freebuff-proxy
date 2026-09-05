@@ -134,6 +134,13 @@ test.describe("real-world data", () => {
     await expect(page.getByText("req/min")).toHaveCount(5);
     await expect(page.getByText("req/day")).toHaveCount(5);
     await expect(page.getByText("2/30")).toHaveCount(1);
+    // Upstream header line (issue #354): daily · countdown · wallet ·
+    // monthly, rendered per metered token above its quota bar.
+    await expect(
+      page.locator('[data-testid="freebucks-header"]').first(),
+    ).toContainText(
+      /7\.5\/10 Freebucks daily · resets in .* · 5 in wallet · \$258 monthly usage left/,
+    );
     await expect(page.getByText("1500/1500")).toHaveCount(1);
     await expect(
       page.getByText("daily limit reached — resets 1h"),
