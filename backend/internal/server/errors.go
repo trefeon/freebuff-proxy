@@ -186,12 +186,19 @@ func (s *Server) rateLimitWarnShouldLog(key string) bool {
 // request's effective model, lease the acquired token lease (nil when the
 // error fired before acquisition — e.g. an unfit-egress refusal).
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, model string, lease *pool.Lease) {
+	// A dropped client leaves no downstream status (the access wrapper keeps
+	// its 200 default), so req_id is the only correlation key — always log
+	// it here, or the dashboard renders a context-free "ERROR 200".
+	reqID := ""
+	if r != nil {
+		reqID = reqIDFrom(r.Context())
+	}
 	if errors.Is(err, context.Canceled) {
-		s.logger.Debug("request canceled by client", "err", err)
+		s.logger.Debug("request canceled by client", "req_id", reqID, "err", err)
 		return
 	}
 	if r != nil && r.Context().Err() != nil {
-		s.logger.Debug("client context canceled; not writing error", "err", err)
+		s.logger.Debug("client context canceled; not writing error", "req_id", reqID, "err", err)
 		return
 	}
 

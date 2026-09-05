@@ -105,28 +105,33 @@ func TestModeFlagsExclusiveWarning(t *testing.T) {
 }
 
 // TestResolveLogLevel pins the effective log-level precedence: LOG_LEVEL
-// config wins when set and parseable (even over -v), -v → debug, else
-// info, and an unparseable LOG_LEVEL silently falls back to info.
+// config wins when set and parseable (even over -v), -v → debug, a dev
+// build (version "dev") defaults to debug when unset, else info, and an
+// unparseable LOG_LEVEL silently falls back to info.
 func TestResolveLogLevel(t *testing.T) {
 	cases := []struct {
 		name     string
 		logLevel string
 		verbose  bool
+		version  string
 		want     slog.Level
 	}{
-		{"empty not verbose", "", false, slog.LevelInfo},
-		{"empty verbose", "", true, slog.LevelDebug},
-		{"config wins", "warn", false, slog.LevelWarn},
-		{"config beats verbose", "error", true, slog.LevelError},
-		{"config case-insensitive", "DEBUG", false, slog.LevelDebug},
-		{"trace level", "trace", false, telemetry.LevelTrace},
-		{"trace case-insensitive", "TRACE", true, telemetry.LevelTrace},
-		{"unparseable falls back to info", "bogus", true, slog.LevelInfo},
+		{"empty not verbose release", "", false, "1.2.3", slog.LevelInfo},
+		{"empty verbose release", "", true, "1.2.3", slog.LevelDebug},
+		{"empty not verbose dev", "", false, "dev", slog.LevelDebug},
+		{"verbose dev", "", true, "dev", slog.LevelDebug},
+		{"config wins", "warn", false, "1.2.3", slog.LevelWarn},
+		{"config beats verbose", "error", true, "dev", slog.LevelError},
+		{"config beats dev default", "info", false, "dev", slog.LevelInfo},
+		{"config case-insensitive", "DEBUG", false, "1.2.3", slog.LevelDebug},
+		{"trace level", "trace", false, "1.2.3", telemetry.LevelTrace},
+		{"trace case-insensitive", "TRACE", true, "dev", telemetry.LevelTrace},
+		{"unparseable falls back to info", "bogus", true, "dev", slog.LevelInfo},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := resolveLogLevel(tc.logLevel, tc.verbose); got != tc.want {
-				t.Errorf("resolveLogLevel(%q, %v) = %v, want %v", tc.logLevel, tc.verbose, got, tc.want)
+			if got := resolveLogLevel(tc.logLevel, tc.verbose, tc.version); got != tc.want {
+				t.Errorf("resolveLogLevel(%q, %v, %q) = %v, want %v", tc.logLevel, tc.verbose, tc.version, got, tc.want)
 			}
 		})
 	}

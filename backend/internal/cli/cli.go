@@ -58,8 +58,9 @@ func Serve(configPath string, verbose bool, version string) int {
 		return 1
 	}
 
-	// Effective log level: LOG_LEVEL config wins, else -v → debug, else info.
-	level := resolveLogLevel(cfg.LogLevel, verbose)
+	// Effective log level: LOG_LEVEL config wins, else -v → debug, else a
+	// dev build (no ldflags version stamp) defaults to debug, else info.
+	level := resolveLogLevel(cfg.LogLevel, verbose, version)
 	logger := telemetry.New(level, cfg.LogFile, cfg.LogFormat)
 	// The dashboard log viewer reads from an in-memory ring that mirrors
 	// every record the process logger emits (no log file or docker needed).
@@ -414,9 +415,11 @@ func ModeFlagsExclusiveWarning(flags ...bool) string {
 }
 
 // resolveLogLevel applies the effective log-level precedence: a set
-// LOG_LEVEL config wins, -v → debug, else info. An unparseable LOG_LEVEL
-// silently falls back to info (ParseLevel returns level 0, which is Info).
-func resolveLogLevel(cfgLogLevel string, verbose bool) slog.Level {
+// LOG_LEVEL config wins, -v → debug, a dev build (version "dev", i.e. no
+// ldflags version stamp) defaults to debug so anomalies are analyzable
+// without flags, else info. An unparseable LOG_LEVEL silently falls back
+// to info (ParseLevel returns level 0, which is Info).
+func resolveLogLevel(cfgLogLevel string, verbose bool, version string) slog.Level {
 	if cfgLogLevel != "" {
 		if lv, ok := telemetry.ParseLevel(cfgLogLevel); ok {
 			return lv
@@ -424,6 +427,9 @@ func resolveLogLevel(cfgLogLevel string, verbose bool) slog.Level {
 		return slog.LevelInfo
 	}
 	if verbose {
+		return slog.LevelDebug
+	}
+	if version == "dev" {
 		return slog.LevelDebug
 	}
 	return slog.LevelInfo

@@ -120,7 +120,7 @@ func (s *Server) relayAnthropicStream(ctx context.Context, w http.ResponseWriter
 		case lc := <-lines:
 			if lc.err != nil {
 				if ctx.Err() == nil {
-					s.logger.Warn("anthropic upstream stream error", "err", lc.err)
+					s.logger.Warn("anthropic upstream stream error", streamErrorAttrs(ctx, chatStart, stats, lc.err)...)
 					s.flushAnthropicXMLToolCalls(send, st, xmlExtractor, &xmlCallIndex)
 					send(map[string]any{
 						"type": "error",

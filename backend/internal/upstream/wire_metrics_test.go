@@ -163,6 +163,12 @@ func TestDoKeepsUpstreamOkForSuccess(t *testing.T) {
 	if entryFields(entries, "upstream response") != nil {
 		t.Errorf("`upstream response` must not fire for 200 responses")
 	}
+	startFields := entryFields(entries, "upstream request")
+	if startFields == nil {
+		t.Errorf("missing `upstream request` start line for 200 response")
+	} else if joined := strings.Join(startFields, " "); !strings.Contains(joined, "path=/api/v1/chat/completions") {
+		t.Errorf("`upstream request` missing method path: %s", joined)
+	}
 }
 
 // TestRateLimitClassificationLedger pins the ledger counters: distinct upstream
