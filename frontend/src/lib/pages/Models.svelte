@@ -244,10 +244,7 @@
           {#each data.models as m (m.id)}
             {@const bound = Boolean(m.agent)}
             {@const st = modelState(m)}
-            {@const effectivePrice =
-              priceLabel(m.id) ||
-              m.price_label ||
-              (m.price != null ? `${m.price} Freebucks/hr` : "—")}
+            {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
             {@const effectivePool = poolChip(m.id) || m.pool || "—"}
             <li class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0">
               <div class="flex items-start justify-between gap-2 min-w-0">
