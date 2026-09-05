@@ -420,13 +420,19 @@ func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 		if st, ok := target["status"].(string); ok {
 			rle.Status = st
 		}
-		// Per-turn spend ceiling (wire drift note 2026-09-04): upstream
-		// kills runaway turns with {"error":"turn_spend_limit",...} — a
-		// loop-protection refusal, NOT session-quota exhaustion. Distinct
-		// status so the pool backs off without burning quota-fallback
-		// budget and the server skips the daily-quota advisory.
-		if es, ok := raw["error"].(string); ok && es == "turn_spend_limit" {
-			rle.Status = "turn_spend_limited"
+		// Per-turn spend ceiling: upstream kills runaway turns with
+		// {"error":"turn_spend_limit",...} — loop protection, NOT
+		// session-quota exhaustion. TERMINAL (ErrTurnSpendLimited, no
+		// RetryAfter): the breaker's own retryAfterMs does not clear it —
+		// live 2026-09-05 every 60s client retry re-tripped instantly for
+		// 20+ minutes — so returning a RateLimitError here would hand the
+		// client a futile Retry-After drumbeat. Distinct type also keeps
+		// it out of the pool cooldown + quota-fallback budget.
+		if es, ok := raw["error"].(string); ok && es == string(WireCodeTurnSpendLimit) {
+			// parseRateLimit is only entered on 429 (or rate_limited/
+			// spend_limited markers), and the breaker only rides 429 —
+			// canonicalize to 429 for telemetry consistency.
+			return &TurnSpendLimitError{Status: http.StatusTooManyRequests, Body: truncate(body, 200)}
 		}
 		if period, ok := target["period"].(string); ok {
 			rle.Period = period

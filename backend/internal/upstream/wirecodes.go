@@ -38,6 +38,9 @@ const (
 	WireCodeFreeModeInvalidAgentModel WireCode = "free_mode_invalid_agent_model"
 	// WireCodeSessionSuperseded: another instance took over the account (409).
 	WireCodeSessionSuperseded WireCode = "session_superseded"
+	// WireCodeTurnSpendLimit: upstream killed a runaway turn (429
+	// per-turn spend ceiling, usually a stuck agent loop).
+	WireCodeTurnSpendLimit WireCode = "turn_spend_limit"
 	// WireCodeFreebuffUpdateRequired: the CLI app version is out of date.
 	WireCodeFreebuffUpdateRequired WireCode = "freebuff_update_required"
 	// WireCodeSessionExpired: the free session has expired.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -238,4 +239,43 @@ func TestChatAttemptRateLimitFailover(t *testing.T) {
 			t.Errorf("acquires = %d, want 1 (no retry)", acquires)
 		}
 	})
+}
+
+func TestChatAttemptTurnSpendTerminal(t *testing.T) {
+	// turn_spend_limit is terminal for the current request: a failed turn
+	// must surface immediately — no failover re-acquire onto another token
+	// (that would burn a second account into the same agent loop), no
+	// cooldown scheduled (a genuinely new turn must flow), and exactly one
+	// upstream chat call.
+	runA := &runs.Run{RunID: "run-1", TraceSessionID: "trace-1", ClientID: "client-1", AgentID: "agent-1"}
+	firstLease := &pool.Lease{Token: 0, Model: "deepseek/deepseek-v4-flash", AgentID: "agent-1", Run: runA, SessionInstanceID: "inst-1"}
+
+	tsle := &upstream.TurnSpendLimitError{Status: http.StatusTooManyRequests, Body: `{"error":"turn_spend_limit"}`}
+	acquires, chats := 0, 0
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	s.cfg.Store(&config.Config{RateLimitFailover: true}) // failover on, must still not spin
+	backend := &fakeAttemptBackend{
+		acquire: func(ctx context.Context, model string) (*pool.Lease, error) {
+			acquires++
+			return firstLease, nil
+		},
+		chat: func(ctx context.Context, l *pool.Lease, opts upstream.ChatOptions, body []byte) (io.ReadCloser, error) {
+			chats++
+			return nil, tsle
+		},
+		cooldownRate: func(l *pool.Lease, err *upstream.RateLimitError) {
+			t.Error("cooldownRate must not fire for turn_spend")
+		},
+	}
+
+	_, _, err := s.chatAttempt(context.Background(), "deepseek/deepseek-v4-flash", []byte(`{}`), &chatTraceState{reqID: "req-ts"}, backend)
+	if !errors.Is(err, upstream.ErrTurnSpendLimited) {
+		t.Fatalf("expected ErrTurnSpendLimited, got: %v", err)
+	}
+	if acquires != 1 {
+		t.Errorf("acquires = %d, want 1 (no failover re-acquire)", acquires)
+	}
+	if chats != 1 {
+		t.Errorf("upstream chat calls = %d, want 1", chats)
+	}
 }

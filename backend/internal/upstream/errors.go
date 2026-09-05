@@ -94,6 +94,16 @@ var (
 	// send-message.ts handleFreebuffGateError, use-freebuff-session.ts
 	// nextDelayMs returns null for superseded = stop polling).
 	ErrSessionSuperseded = errors.New("upstream session superseded")
+	// ErrTurnSpendLimited: 429 turn_spend_limit — upstream killed a runaway
+	// turn (per-turn spend ceiling, usually a stuck agent loop). TERMINAL
+	// for the current request: retrying the same turn re-trips the breaker
+	// instantly (observed live: every 60s retry re-tripped for 20+ minutes),
+	// so the server must NOT hand the client a Retry-After drumbeat, must
+	// NOT schedule a token cooldown, and must NOT failover-spin across the
+	// pool (each re-POST burns another account into the same loop). The
+	// upstream message goes to the client verbatim so the agent sees the
+	// loop warning and starts a fresh turn.
+	ErrTurnSpendLimited = errors.New("upstream turn spend limited")
 )
 
 // WaitingRoomError is the concrete value behind ErrWaitingRoom; callers
@@ -154,6 +164,22 @@ func (e *SessionSupersededError) Error() string {
 }
 
 func (e *SessionSupersededError) Unwrap() error { return ErrSessionSuperseded }
+
+// TurnSpendLimitError is the concrete value behind ErrTurnSpendLimited: a
+// 429 turn_spend_limit loop-protection refusal. It carries NO RetryAfter —
+// upstream's retryAfterMs on this breaker does not clear it (live: instant
+// re-trips for 20+ minutes) — so callers surface it immediately and never
+// schedule a cooldown or failover-spin on it.
+type TurnSpendLimitError struct {
+	Status int
+	Body   string // truncated upstream body (carries the loop warning)
+}
+
+func (e *TurnSpendLimitError) Error() string {
+	return fmt.Sprintf("upstream %d: %s", e.Status, e.Body)
+}
+
+func (e *TurnSpendLimitError) Unwrap() error { return ErrTurnSpendLimited }
 
 // UpstreamError is a non-recoverable upstream failure surfaced verbatim.
 type UpstreamError struct {

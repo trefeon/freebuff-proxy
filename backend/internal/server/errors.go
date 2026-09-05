@@ -54,7 +54,7 @@ func quotaSummary(st *upstream.SessionState) string {
 }
 
 // openAIError is the OpenAI error body with an optional human-readable hint (#19).
-// Per OpenAPI 3.1 specification (reference/openai-openapi/openapi.yaml), code,
+// Per OpenAPI 3.1 specification (reference/protocols/openai-openapi/openapi.yaml), code,
 // message, param, and type are standard; param is null when unset.
 type openAIError struct {
 	Message string  `json:"message"`
@@ -207,6 +207,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 	var wrr *upstream.WaitingRoomRequiredError
 	var sse *upstream.SessionSupersededError
 	var ue *upstream.UpstreamError
+	var tsle *upstream.TurnSpendLimitError
 	var rle *upstream.RateLimitError
 	var ice *upstream.IpCappedError
 	var sle *upstream.SessionLimitError
@@ -223,6 +224,22 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		if retryAfter < 0 {
 			retryAfter = 0
 		}
+	case errors.As(err, &tsle):
+		// turn_spend_limit: upstream killed this turn (loop protection).
+		// 429 keeps the overload-family status clients expect, code stays
+		// "turn_spend_limited", but — critically — NO Retry-After: the
+		// breaker's retryAfterMs does not clear it (live 2026-09-05: 20+
+		// min of instant 60s re-trips), and a Retry-After header would
+		// hand the harness a futile retry drumbeat. The upstream body
+		// (loop warning) goes to the client verbatim so the agent
+		// abandons this turn. No cooldown is scheduled in chatAttempt, so
+		// a genuinely new turn flows immediately.
+		status, code = http.StatusTooManyRequests, "turn_spend_limited"
+		message = tsle.Body
+		if message == "" {
+			message = "upstream turn spend limit exceeded (runaway turn — start a fresh turn, do not retry this one)"
+		}
+		retryAfter = 0
 	case errors.As(err, &rle):
 		status, code = http.StatusTooManyRequests, "rate_limited"
 		switch rle.Status {
@@ -248,11 +265,6 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 			// distinct code so operators can spot it in logs, and the pool's
 			// escalation guard alerts at 3 hits/60s.
 			code = "free_mode_invalid_agent_model"
-		case "turn_spend_limited":
-			// Upstream killed a runaway turn (per-turn spend ceiling,
-			// usually a stuck agent loop) — not session-quota exhaustion,
-			// so the daily-quota advisory below must not fire.
-			code = "turn_spend_limited"
 		}
 		message, retryAfter = rle.Error(), rle.RetryAfter
 		resetAt, window = rle.ResetAt, rle.Window

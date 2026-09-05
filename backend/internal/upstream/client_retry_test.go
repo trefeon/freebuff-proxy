@@ -1513,23 +1513,31 @@ func TestClassifyMonthlyCapQuotaShaped(t *testing.T) {
 }
 
 // TestClassifyTurnSpendLimited pins the per-turn spend ceiling: a
-// turn_spend_limit refusal is loop protection, not quota exhaustion —
-// distinct status, bounded 60s backoff from retryAfterMs, never the
-// Pacific-midnight lock.
+// turn_spend_limit refusal is loop protection, not quota exhaustion — a
+// TERMINAL TurnSpendLimitError (never a RateLimitError, never the
+// Pacific-midnight lock). Upstream's retryAfterMs on this breaker does not
+// clear it: live 2026-09-05 every 60s client retry re-tripped instantly for
+// 20+ minutes, so handing the client a Retry-After would be a futile
+// retry drumbeat. The type carries no RetryAfter; callers surface it
+// immediately and schedule no cooldown.
 func TestClassifyTurnSpendLimited(t *testing.T) {
 	errSpend := classifyError(http.StatusTooManyRequests, `{"error":"turn_spend_limit","message":"Something went wrong with this turn.","retryAfterMs":60000}`, http.Header{})
+	var tsle *TurnSpendLimitError
+	if !errors.As(errSpend, &tsle) {
+		t.Fatalf("turn-spend 429 = %T %v, want *TurnSpendLimitError", errSpend, errSpend)
+	}
+	if !errors.Is(errSpend, ErrTurnSpendLimited) {
+		t.Error("turn-spend 429 does not unwrap to ErrTurnSpendLimited")
+	}
+	if tsle.Status != http.StatusTooManyRequests {
+		t.Errorf("Status = %d, want 429", tsle.Status)
+	}
+	if !strings.Contains(tsle.Body, "Something went wrong with this turn") {
+		t.Errorf("Body = %q, want the upstream loop warning intact", tsle.Body)
+	}
 	var rleSpend *RateLimitError
-	if !errors.As(errSpend, &rleSpend) {
-		t.Fatalf("turn-spend 429 = %T %v, want *RateLimitError", errSpend, errSpend)
-	}
-	if rleSpend.Status != "turn_spend_limited" {
-		t.Errorf("Status = %q, want turn_spend_limited", rleSpend.Status)
-	}
-	if rleSpend.RetryAfter != time.Minute {
-		t.Errorf("RetryAfter = %v, want 1m", rleSpend.RetryAfter)
-	}
-	if IsDailyCapReset(rleSpend) {
-		t.Error("IsDailyCapReset(turn_spend) = true, want false (not a quota window)")
+	if errors.As(errSpend, &rleSpend) {
+		t.Errorf("turn-spend 429 = RateLimitError (%v), want the terminal type (no cooldown/backoff)", rleSpend)
 	}
 }
 

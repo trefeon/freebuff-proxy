@@ -78,6 +78,8 @@ func chatErrClass(err error) string {
 		return "waiting_room"
 	case *upstream.SessionSupersededError:
 		return "session_superseded"
+	case *upstream.TurnSpendLimitError:
+		return "turn_spend_limited"
 	case *upstream.UpstreamError:
 		return "upstream"
 	default:
@@ -146,6 +148,8 @@ func attemptStatus(err error) int {
 	case *upstream.CapacityDeferredError:
 		return e.Status
 	case *upstream.SessionSupersededError:
+		return e.Status
+	case *upstream.TurnSpendLimitError:
 		return e.Status
 	case *upstream.SessionLimitError:
 		return e.Status

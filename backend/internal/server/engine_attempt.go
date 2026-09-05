@@ -295,6 +295,18 @@ func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byt
 			release()
 			backend.InvalidateSessionSuperseded(lease)
 			return nil, nil, err
+		case errors.Is(err, upstream.ErrTurnSpendLimited):
+			// turn_spend_limit: upstream killed THIS turn (per-turn spend
+			// ceiling, usually a stuck agent loop). TERMINAL for the
+			// current request — retrying the same turn re-trips instantly
+			// (live 2026-09-05: 20+ min of 60s re-trips), and
+			// failover-spinning across the pool would burn one account
+			// after another into the same loop. Surface immediately: no
+			// cooldown (a genuinely new turn must flow), no re-acquire.
+			// The client-visible error carries the loop warning so the
+			// agent abandons this turn and starts fresh.
+			release()
+			return nil, nil, err
 		case errors.Is(err, upstream.ErrRunInvalid):
 			release()
 			backend.InvalidateRun(lease, lease.AgentID)
