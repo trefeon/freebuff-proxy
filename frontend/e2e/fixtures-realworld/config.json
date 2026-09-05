@@ -1,0 +1,51 @@
+{
+  "env_content": "PORT=3457\nAUTH_TOKENS=tok0,tok1\n",
+  "has_env_file": true,
+  "effective": [
+    {
+      "key": "LISTEN_ADDR",
+      "value": "127.0.0.1:3457",
+      "secret": false
+    },
+    {
+      "key": "UPSTREAM_BASE_URL",
+      "value": "https://www.codebuff.com",
+      "secret": false
+    },
+    {
+      "key": "AUTH_TOKENS",
+      "value": "2 token(s)",
+      "secret": true
+    },
+    {
+      "key": "API_KEYS",
+      "value": "1 key(s)",
+      "secret": true
+    },
+    {
+      "key": "ADMIN_TOKEN",
+      "value": "set",
+      "secret": true
+    },
+    {
+      "key": "SAFE_MODE",
+      "value": "true",
+      "secret": false
+    },
+    {
+      "key": "COST_MODE",
+      "value": "free",
+      "secret": false
+    },
+    {
+      "key": "MAX_MESSAGES_PER_DAY",
+      "value": "0",
+      "secret": false
+    },
+    {
+      "key": "MODEL_ALIASES",
+      "value": "3 alias(es)",
+      "secret": true
+    }
+  ]
+}
