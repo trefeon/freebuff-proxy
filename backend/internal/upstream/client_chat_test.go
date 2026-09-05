@@ -1062,3 +1062,79 @@ func TestDeviceOSWireContract(t *testing.T) {
 		}
 	}
 }
+
+// TestChatStreamSurvivesPastRequestTimeout pins that REQUEST_TIMEOUT guards
+// only the wait for response headers (TTFB), never the streamed body.
+// Regression: the request-context deadline cut healthy long streams at
+// REQUEST_TIMEOUT (default 15m) — a turn-heavy session died mid-stream with
+// the connection still feeding data (observed live 2026-09-06).
+func TestChatStreamSurvivesPastRequestTimeout(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	const chunkCount = 10
+	mock.ChatHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		for range chunkCount {
+			_, _ = io.WriteString(w, testutil.SSEEvent(`{"id":"c","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`))
+			flusher.Flush()
+			time.Sleep(150 * time.Millisecond)
+		}
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}
+
+	client, err := New("tok-a", testConfig(mock.URL(), func(c *config.Config) {
+		c.RequestTimeout = 400 * time.Millisecond // far shorter than the 1.5s stream
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rc, err := client.ChatCompletions(context.Background(), ChatOptions{Model: "m", RunID: "r"}, []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rc.Close() }()
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("stream cut at REQUEST_TIMEOUT while upstream was still feeding (want TTFB-only timeout): %v", err)
+	}
+	if got := strings.Count(string(data), `"content":"x"`); got != chunkCount {
+		t.Errorf("stream delivered %d chunks, want %d (truncated mid-stream?)", got, chunkCount)
+	}
+	if !strings.Contains(string(data), "[DONE]") {
+		t.Error("stream missing [DONE] terminal frame")
+	}
+}
+
+// TestChatTTFBTimeoutStillAborts pins that the TTFB guard is not lost: an
+// upstream that never sends response headers still aborts the attempt at
+// REQUEST_TIMEOUT instead of hanging forever.
+func TestChatTTFBTimeoutStillAborts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second) // stall before headers
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client, err := New("tok-a", testConfig(srv.URL, func(c *config.Config) {
+		c.RequestTimeout = 300 * time.Millisecond
+		c.TransientRetries = 0
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	rc, err := client.ChatCompletions(context.Background(), ChatOptions{Model: "m", RunID: "r"}, []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`))
+	if err == nil {
+		_ = rc.Close()
+		t.Fatal("want error for stalled response headers")
+	}
+	if elapsed := time.Since(start); elapsed > 1500*time.Millisecond {
+		t.Errorf("header timeout took %v, want abort near REQUEST_TIMEOUT (300ms)", elapsed)
+	}
+}

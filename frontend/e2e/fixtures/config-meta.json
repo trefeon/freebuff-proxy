@@ -707,7 +707,7 @@
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Upstream request timeout."
+    "description": "Upstream response-header (TTFB) timeout; the streamed chat body runs until upstream finishes or the client disconnects (never cut by this knob)."
   },
   {
     "key": "SESSION_CALL_TIMEOUT",

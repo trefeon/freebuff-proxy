@@ -104,15 +104,14 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 		if err != nil {
 			return nil, err
 		}
-		// The streamed response body must stay readable after this call returns,
-		// so the request timeout is applied here (not inside do) and released
-		// only when the body is closed.
+		// The streamed response body must stay readable after this call
+		// returns, so no deadline is attached to the request context: the
+		// transport's ResponseHeaderTimeout (REQUEST_TIMEOUT) bounds only
+		// the wait for response headers, and the body streams until
+		// upstream EOF or the caller cancels (client disconnect). cancel
+		// stays nil here; cancelBody exists so a future deadline-based
+		// caller still gets correct release-on-close semantics.
 		var cancel context.CancelFunc
-		if _, hasDeadline := req.Context().Deadline(); !hasDeadline && c.requestTimeout > 0 {
-			reqCtx, cancelFn := context.WithTimeout(req.Context(), c.requestTimeout)
-			cancel = cancelFn
-			req = req.WithContext(reqCtx)
-		}
 		req.Header.Set("Accept", "application/json, text/event-stream")
 		// Chat is the ONLY path carrying the ai-sdk UA: the real
 		// CLI pins it on model calls alone; newRequest defaulted this
