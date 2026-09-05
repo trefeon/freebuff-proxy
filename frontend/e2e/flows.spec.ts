@@ -82,4 +82,49 @@ test.describe("user flows", () => {
     await page.goto(admin("quota"));
     await expect(page.getByText("quota exempt").first()).toBeVisible();
   });
+  test("tokens: paywalled model disables spawn", async ({ page }) => {
+    const f = loadFixtures(RW);
+    const tokens = JSON.parse(JSON.stringify(f.tokens));
+    const list = tokens.tokens ?? tokens;
+    const metered = (Array.isArray(list) ? list : []).find((t) => t.freebucks);
+    if (!metered) throw new Error("RW tokens fixture has no freebucks row");
+    metered.freebucks.balance = 1;
+    metered.freebucks.prices = { "deepseek/deepseek-v4-flash": 9999 };
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tokens),
+      });
+    });
+    await page.unroute("**/admin/api/config");
+    await page.route("**/admin/api/config", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          env_content: "PORT=3457\nAUTH_TOKENS=tok0\nDEVTOOLS_ENABLED=true\n",
+          has_env_file: true,
+        }),
+      });
+    });
+    await page.goto(admin("tokens"));
+    const table = page.locator("table.fp-table");
+    await table.locator('button[aria-label*="Expand details"]').first().click();
+    await expect(table.getByText("Dev Session:")).toBeVisible();
+    const picker = table.locator("select").first();
+    await expect(
+      picker.locator('option[value="deepseek/deepseek-v4-flash"]'),
+    ).toBeDisabled();
+    await picker.evaluate((el, v) => {
+      (el as HTMLSelectElement).value = v;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, "deepseek/deepseek-v4-flash");
+    await expect(table.getByText(/Not enough Freebucks/).first()).toBeVisible();
+    await expect(
+      table.getByRole("button", { name: "Make Session" }),
+    ).toBeDisabled();
+  });
 });

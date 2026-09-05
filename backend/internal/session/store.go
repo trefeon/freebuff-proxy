@@ -39,6 +39,16 @@ type persistedState struct {
 	// GlmPromo is the raw upstream glmPromo block ({dailySessions,
 	// endsAt}); "" when absent (issue #178).
 	GlmPromo string `json:"glm_promo,omitempty"`
+	// Account blocks persisted so a restart keeps the dashboard's
+	// referral banner, Freebucks card, windows, subscription and standing
+	// until the next full admission refreshes them (rework 2026-09-05):
+	// compact polls never carry them, so without this the UI goes blank
+	// on every restart. All optional — old files load with nils.
+	Referral     *upstream.SessionReferral  `json:"referral,omitempty"`
+	Freebucks    *upstream.FreebucksInfo    `json:"freebucks,omitempty"`
+	FreeWindows  *upstream.FreeWindowsInfo  `json:"free_windows,omitempty"`
+	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
+	Standing     *upstream.SessionStanding  `json:"standing,omitempty"`
 }
 
 // persistedQuota is one model's live session quota persisted on disk.
@@ -228,6 +238,11 @@ func (s *Store) Load(key string) *cachedState {
 		countryBlockReason: ps.CountryBlockReason,
 		accessTier:         ps.AccessTier,
 		glmPromo:           ps.GlmPromo,
+		referral:           ps.Referral,
+		freebucks:          ps.Freebucks,
+		freeWindows:        ps.FreeWindows,
+		subscription:       ps.Subscription,
+		standing:           ps.Standing,
 	}
 	if len(ps.QuotaByModel) > 0 {
 		cs.quotaByModel = make(map[string]upstream.ModelQuota, len(ps.QuotaByModel))
@@ -303,10 +318,70 @@ func (s *Store) Save(key string, cs *cachedState) {
 		}
 		s.data[key] = ps
 	}
+	// Account blocks: value-copy the scalar structs; deep-copy Freebucks
+	// (its price maps are mutated in place by the schedule applier, so a
+	// shared reference would race the live state).
+	if cs.referral != nil {
+		ps := s.data[key]
+		r := *cs.referral
+		ps.Referral = &r
+		s.data[key] = ps
+	}
+	if cs.freebucks != nil {
+		ps := s.data[key]
+		ps.Freebucks = cloneFreebucksInfo(cs.freebucks)
+		s.data[key] = ps
+	}
+	if cs.freeWindows != nil {
+		ps := s.data[key]
+		w := *cs.freeWindows
+		ps.FreeWindows = &w
+		s.data[key] = ps
+	}
+	if cs.subscription != nil {
+		ps := s.data[key]
+		sub := *cs.subscription
+		ps.Subscription = &sub
+		s.data[key] = ps
+	}
+	if cs.standing != nil {
+		ps := s.data[key]
+		st := *cs.standing
+		if len(st.NextSteps) > 0 {
+			st.NextSteps = append([]upstream.StandingNextStep(nil), st.NextSteps...)
+		}
+		ps.Standing = &st
+		s.data[key] = ps
+	}
 	if s.flushLockedUnlessReadFailed() {
 		ps := s.data[key]
 		s.recordPendingLocked(key, &ps)
 	}
+}
+
+// cloneFreebucksInfo deep-copies the map/slice fields ApplyFreebucksPriceChanges
+// mutates in place, so the persisted snapshot cannot race live state.
+func cloneFreebucksInfo(fb *upstream.FreebucksInfo) *upstream.FreebucksInfo {
+	if fb == nil {
+		return nil
+	}
+	out := *fb
+	if len(fb.Prices) > 0 {
+		out.Prices = make(map[string]float64, len(fb.Prices))
+		for k, v := range fb.Prices {
+			out.Prices[k] = v
+		}
+	}
+	if len(fb.PriceNotices) > 0 {
+		out.PriceNotices = make(map[string]string, len(fb.PriceNotices))
+		for k, v := range fb.PriceNotices {
+			out.PriceNotices[k] = v
+		}
+	}
+	if len(fb.PriceChanges) > 0 {
+		out.PriceChanges = append([]upstream.FreebucksPriceChange(nil), fb.PriceChanges...)
+	}
+	return &out
 }
 
 // Remove drops key from the store (session invalidated/ended at runtime).

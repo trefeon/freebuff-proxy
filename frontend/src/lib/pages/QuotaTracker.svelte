@@ -255,7 +255,7 @@
                           <tr>
                             <td
                               ><code
-                                class="fp-num text-xs {q.near_limit
+                                class="fp-num text-xs whitespace-nowrap {q.near_limit
                                   ? 'text-[#f5a623] font-medium'
                                   : 'text-[var(--fp-text)]'}">{q.model}</code
                               ></td
@@ -275,7 +275,7 @@
                                 ? 'text-[#f5a623]'
                                 : 'text-[var(--fp-dim)]'}">{q.period}</td
                             >
-                            <td class="fp-num text-xs">
+                            <td class="fp-num text-xs whitespace-nowrap">
                               <span
                                 class={q.near_limit
                                   ? "text-[#f5a623] font-medium"
@@ -287,7 +287,7 @@
                               </span>
                             </td>
                             <td
-                              class="fp-num text-xs {q.near_limit
+                              class="fp-num text-xs whitespace-nowrap {q.near_limit
                                 ? 'text-[#f5a623]'
                                 : 'text-[var(--fp-dim)]'}"
                               >{q.has_entitlement ? q.entitled : "—"}</td

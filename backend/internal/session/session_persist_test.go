@@ -674,3 +674,51 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 		t.Errorf("quota entitlement base = %v, want 5", q.Entitlement["base"])
 	}
 }
+
+// TestPersistAccountBlocksRoundTrip pins the rework: referral, freebucks
+// (with schedule), windows, subscription and standing survive a restart so
+// the dashboard keeps its banner/cards until the next full admission.
+func TestPersistAccountBlocksRoundTrip(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	key := "test-token-key"
+
+	slot := activeSlot("inst-acct-1", "openai/gpt-5.6-luna")
+	slot.referral = &upstream.SessionReferral{Code: "FREE-abc", QualifiedCount: 2}
+	slot.freebucks = &upstream.FreebucksInfo{
+		Balance:     75,
+		QuotaExempt: true,
+		Prices:      map[string]float64{"openai/gpt-5.6-luna": 2},
+		PriceChanges: []upstream.FreebucksPriceChange{
+			{At: "2999-01-01T00:00:00Z", ModelID: "openai/gpt-5.6-luna", Price: 9, Tagline: "future"},
+		},
+	}
+	slot.freeWindows = &upstream.FreeWindowsInfo{DayUsed: 1, DayLimit: 6}
+	slot.subscription = &upstream.SubscriptionInfo{DayUsed: 0, DayLimit: 0}
+	slot.standing = &upstream.SessionStanding{Level: "trusted", NextSteps: []upstream.StandingNextStep{{ID: "a", Label: "b"}}}
+
+	store.Save(key, slot)
+
+	store2 := NewStore(store.path)
+	loaded := store2.Load(key)
+	if loaded == nil {
+		t.Fatal("loaded state is nil")
+	}
+	if loaded.referral == nil || loaded.referral.Code != "FREE-abc" {
+		t.Errorf("referral = %+v, want code FREE-abc", loaded.referral)
+	}
+	if loaded.freebucks == nil || loaded.freebucks.Balance != 75 || !loaded.freebucks.QuotaExempt {
+		t.Errorf("freebucks = %+v, want balance 75 exempt", loaded.freebucks)
+	}
+	if len(loaded.freebucks.PriceChanges) != 1 {
+		t.Errorf("priceChanges = %+v, want 1 future change kept", loaded.freebucks.PriceChanges)
+	}
+	if loaded.freeWindows == nil || loaded.freeWindows.DayLimit != 6 {
+		t.Errorf("freeWindows = %+v, want day limit 6", loaded.freeWindows)
+	}
+	if loaded.subscription == nil {
+		t.Error("subscription = nil, want persisted block")
+	}
+	if loaded.standing == nil || loaded.standing.Level != "trusted" || len(loaded.standing.NextSteps) != 1 {
+		t.Errorf("standing = %+v, want trusted + 1 step", loaded.standing)
+	}
+}

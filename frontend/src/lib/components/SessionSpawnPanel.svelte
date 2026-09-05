@@ -7,10 +7,13 @@
   import { confirmAction } from "../stores/confirm.js";
   import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
   import { onMount } from "svelte";
+  import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
 
-  let { idx, onSpawn } = $props();
+  let { idx, token = null, onSpawn } = $props();
 
   let spawnModel = $state("mimo/mimo-v2.5");
+
+  let intent = $derived(spawnIntent(token, spawnModel));
 
   let modelOptions = $state(fallbackModelOptions);
   onMount(() => {
@@ -51,16 +54,35 @@
     class="fp-input !text-xs !py-1 !pl-2.5 !h-8 !w-48"
   >
     {#each modelOptions as m (m.id)}
-      <option value={m.id}>{m.label}</option>
+      {@const opt = spawnIntent(token, m.id)}
+      <option
+        value={m.id}
+        disabled={opt.kind === "paywall"}
+        title={opt.kind === "paywall" ? "Not enough Freebucks" : m.label}
+        >{m.label}{opt.kind === "paywall" ? " — paywalled" : ""}</option
+      >
     {/each}
   </select>
+  {#if intent.kind === "paywall"}
+    <p class="text-[11px] text-[var(--fp-warning)] mt-1">
+      {$tr("Not enough Freebucks (price {price}, balance {balance})", {
+        price: intent.price,
+        balance: token?.freebucks?.balance ?? 0,
+      })}
+    </p>
+  {/if}
+  {#if intent.kind === "confirm" && intentAskLine(intent, token?.session_model)}
+    <p class="text-[11px] text-[var(--fp-muted)] mt-1">
+      {intentAskLine(intent, token?.session_model)}
+    </p>
+  {/if}
 </td>
 <td class="text-right">
   <div class="inline-flex items-center gap-1.5 justify-end">
     <Button
       variant="primary"
       size="sm"
-      disabled={actionPending}
+      disabled={actionPending || intent.kind === "paywall"}
       onclick={() =>
         triggerAction(
           "session",
@@ -68,7 +90,11 @@
           $tr("Spawn upstream session on account #{idx} for {model}?", {
             idx: idx + 1,
             model: spawnModel,
-          }),
+          }) +
+            (intent.kind === "confirm" &&
+            intentAskLine(intent, token?.session_model)
+              ? " " + intentAskLine(intent, token?.session_model)
+              : ""),
         )}
     >
       <Zap size={13} />

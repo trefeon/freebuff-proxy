@@ -14,6 +14,7 @@
   import { adminApi, adminActions } from "../api/paths.js";
   import { refreshTokens } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
+  import { spawnIntent } from "../utils/freebucks.js";
   import { onMount } from "svelte";
 
   /**
@@ -44,6 +45,12 @@
   onMount(() => {
     fetchModelOptions().then((rows) => (modelOptions = rows));
   });
+  // Meter pre-check (issue #350 — mirrors freebucksRowIntent): paywalled
+  // options disable in place; the Make Session button refuses a paywalled
+  // pick where the balance is already on screen.
+  let selectedIntent = $derived(
+    spawnIntent(token, spawnModel || "mimo/mimo-v2.5"),
+  );
   // --- Per-token model-lock editor (MODEL_LOCKS slot syntax) ---
   // Reads/writes the canonical .env through the existing config endpoints
   // (same round-trip as Settings save) and hot-applies via pool.SetConfig —
@@ -169,20 +176,50 @@
           class="fp-input !text-xs !py-1 !pl-2.5 !h-7 !w-44 !inline-block"
         >
           {#each modelOptions as m (m.id)}
-            <option value={m.id}>{m.label}</option>
+            {@const intent = spawnIntent(token, m.id)}
+            <option
+              value={m.id}
+              disabled={intent.kind === "paywall"}
+              title={intent.kind === "paywall"
+                ? $tr(
+                    "Not enough Freebucks (price {price}, balance {balance})",
+                    {
+                      price: intent.price,
+                      balance: token?.freebucks?.balance ?? 0,
+                    },
+                  )
+                : m.label}
+              >{m.label}{intent.kind === "paywall"
+                ? " — paywalled"
+                : ""}</option
+            >
           {/each}
         </select>
         <Button
           variant="secondary"
           size="sm"
           class="!h-7 !text-xs !px-2.5"
-          disabled={actionPending}
+          disabled={actionPending || selectedIntent.kind === "paywall"}
+          title={selectedIntent.kind === "paywall"
+            ? $tr("Not enough Freebucks (price {price}, balance {balance})", {
+                price: selectedIntent.price,
+                balance: token?.freebucks?.balance ?? 0,
+              })
+            : $tr("Make Session")}
           onclick={() => onSpawn?.(spawnModel || "mimo/mimo-v2.5")}
         >
           <Zap size={12} />
           <span>{$tr("Make Session")}</span>
         </Button>
       </div>
+      {#if selectedIntent.kind === "paywall"}
+        <p class="text-[11px] text-[var(--fp-warning)] w-full">
+          {$tr("Not enough Freebucks (price {price}, balance {balance})", {
+            price: selectedIntent.price,
+            balance: token?.freebucks?.balance ?? 0,
+          })}
+        </p>
+      {/if}
 
       <div class="flex items-center gap-1.5">
         <Button

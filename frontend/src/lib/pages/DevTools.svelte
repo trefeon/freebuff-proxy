@@ -548,7 +548,7 @@
                         <span class="text-xs text-[var(--fp-dim)]">—</span>
                       {/if}
                     </td>
-                    <SessionSpawnPanel {idx} onSpawn={handleSpawn} />
+                    <SessionSpawnPanel {idx} {token} onSpawn={handleSpawn} />
                   </tr>
                 {/each}
               </tbody>

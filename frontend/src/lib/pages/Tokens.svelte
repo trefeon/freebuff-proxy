@@ -21,6 +21,7 @@
   } from "../stores/tokens.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
+  import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
   import { confirmAction } from "../stores/confirm.js";
   let data = $state(null);
   let loading = $state(true);
@@ -235,13 +236,18 @@
   }
   function handleSpawn(idx, model) {
     const m = model || "mimo/mimo-v2.5";
+    // Confirm-intent line (issue #350 — mirrors askLineFor): warn when the
+    // pick spends wallet Freebucks or ends the live session.
+    const token = data?.tokens?.find?.((t) => t.index === idx);
+    const intent = spawnIntent(token, m);
+    const askLine = intentAskLine(intent, token?.session_model);
     triggerAction(
       tokenActions.session(idx),
       { model: m },
       $tr("Create upstream session for account #{idx} on {model}?", {
         idx: idx + 1,
         model: m,
-      }),
+      }) + (askLine ? " " + askLine : ""),
     );
   }
 
