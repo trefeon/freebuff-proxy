@@ -4,6 +4,14 @@ The embedded admin web UI gives you live relay state, per-token quotas, an in-br
 
 Built with **Svelte 5 + Tailwind CSS v4** and self-hosted **IBM Plex Sans & IBM Plex Mono** typography, it follows an **"instrument panel"** design system: a dense, dark-mode-only operational console with hairline borders, tabular-numeric metrics, and live LED status indicators. It is embedded directly into the Go binary at build time (`//go:embed`) with zero runtime Node.js or external CDN dependencies.
 
+## Management policy (WebUI-first, issue #359)
+
+The dashboard (`/admin`) is the default daily path. The CLI stays fully working as the headless and bootstrap path.
+
+- Frozen flag set: no flag is removed or renamed, and every exit code keeps scripting the same way.
+- Dashboard-canonical: token add/remove/swap/test/lock, config edit plus reload, restart, logs, metrics, quota, maturity, setup copy blocks, and the update notice live in `/admin`.
+- Hide, never delete: pre-serve checks (`-doctor`, `-test-token`, `-validate-tokens`), OS service registration (`-install-service`, `-uninstall-service`, `-service-status`), slot re-auth (`-refresh-token`), client-file setup (`-setup`), and the binary swap (`-update`) stay on the CLI because a browser tab cannot do them. `-help` groups them as advanced with the dashboard twin noted per flag.
+
 ---
 
 ## Access
