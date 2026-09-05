@@ -1,9 +1,9 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
-  "upstream_sha": "331ea4eb4f34019b8e027f66870e860128e153cd",
-  "checked_at": "2026-09-05T15:15:41Z",
-  "vendor_version": "0.0.170",
-  "vendor_version_pinned": "0.0.170",
+  "upstream_sha": "e84cd53bbb33784679d386af8e6019fa29d9b4e3",
+  "checked_at": "2026-09-05T20:22:09Z",
+  "vendor_version": "0.0.171",
+  "vendor_version_pinned": "0.0.171",
   "files": [
     {"group":"registry","file":"common/src/constants/free-agents.ts","pinned_sha":"be9bab9e044f","vendor_sha":"be9bab9e044f","status":"SAME"},
     {"group":"registry","file":"common/src/constants/freebuff-model-ids.ts","pinned_sha":"b4a0f2aca8ea","vendor_sha":"b4a0f2aca8ea","status":"SAME"},
@@ -16,7 +16,7 @@
     {"group":"wire","file":"common/src/constants/freebuff-signup-block.ts","pinned_sha":"","vendor_sha":"b42006247502","status":"SAME"},
     {"group":"wire","file":"common/src/constants/freebuff-peak-hours.ts","pinned_sha":"","vendor_sha":"cfdbd3412df7","status":"SAME"},
     {"group":"wire","file":"common/src/util/freebuff-model-availability.ts","pinned_sha":"","vendor_sha":"43971606f941","status":"SAME"},
-    {"group":"wire","file":"cli/src/components/freebuff-model-selector.tsx","pinned_sha":"","vendor_sha":"7e4a9d1ba924","status":"SAME"},
+    {"group":"wire","file":"cli/src/components/freebuff-model-selector.tsx","pinned_sha":"","vendor_sha":"1c164addf803","status":"DRIFT"},
     {"group":"wire","file":"common/src/types/freebuff-session.ts","pinned_sha":"","vendor_sha":"6c7e2af63fb4","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/constants.ts","pinned_sha":"","vendor_sha":"233ab67d1922","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/prompt-agent-stream.ts","pinned_sha":"","vendor_sha":"7bf7ca49fb51","status":"SAME"},
