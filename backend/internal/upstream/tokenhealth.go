@@ -337,6 +337,8 @@ func (c *Client) probeSession(ctx context.Context) (TokenHealthState, string) {
 		return TokenOK, "account at concurrent-session limit (409; not a token problem)"
 	case errors.Is(err, ErrModelIPLimited):
 		return TokenRateLimited, "model limited on this egress IP (session fine, soft)"
+	case errors.Is(err, ErrTurnSpendLimited):
+		return TokenRateLimited, "turn spend breaker tripped upstream (runaway turn killed; soft — start a fresh turn, not a token problem)"
 	case errors.Is(err, ErrWaitingRoom), errors.Is(err, ErrWaitingRoomRequired):
 		return TokenUnknown, "upstream waiting room (transient; retry later)"
 	case errors.Is(err, ErrFreeModeCLIRequired):

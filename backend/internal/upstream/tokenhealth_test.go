@@ -446,6 +446,15 @@ func TestCheckTokenHealthSessionClassification(t *testing.T) {
 			wantHint:  "ip_capped",
 		},
 		{
+			name: "429 turn_spend_limit is soft, not a token problem",
+			session: func(w http.ResponseWriter) {
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = io.WriteString(w, `{"error":"turn_spend_limit","message":"Something went wrong with this turn.","retryAfterMs":60000}`)
+			},
+			wantState: TokenRateLimited,
+			wantHint:  "turn spend",
+		},
+		{
 			name: "402 no credits",
 			session: func(w http.ResponseWriter) {
 				w.WriteHeader(http.StatusPaymentRequired)

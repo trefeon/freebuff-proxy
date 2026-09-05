@@ -565,6 +565,71 @@ func TestReplayMessages429Envelope(t *testing.T) {
 	}
 }
 
+// TestReplayMessagesTurnSpendLimited replays an upstream turn_spend_limit
+// refusal on the Anthropic surface: /v1/messages shares chatCore/writeError
+// with the OpenAI surface, so it must get the same terminal framing — 429
+// + Anthropic envelope (rate_limit_error / turn_spend_limited) with the
+// upstream loop warning and NO Retry-After — never the retry drumbeat.
+func TestReplayMessagesTurnSpendLimited(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var mu sync.Mutex
+	chatCalls := 0
+	mock.ChatHandler = func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		chatCalls++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"error":"turn_spend_limit","message":"Something went wrong with this turn.","retryAfterMs":60000}`)
+	}
+	ts, _ := newTestServerCfg(t, []string{"replay-key"}, nil, mock)
+	headers := map[string]string{
+		"Content-Type":      "application/json",
+		"x-api-key":         "replay-key",
+		"anthropic-version": "2023-06-01",
+	}
+	body := `{"model":"deepseek/deepseek-v4-flash","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`
+	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/messages", []byte(body), headers)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429: %s", resp.StatusCode, truncate(string(data), 300))
+	}
+	var envelope struct {
+		Type  string `json:"type"`
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		t.Fatalf("429 response is not parseable: %v: %s", err, data)
+	}
+	if envelope.Type != "error" {
+		t.Errorf("top-level type = %q, want error (Anthropic envelope)", envelope.Type)
+	}
+	if envelope.Error.Type != "rate_limit_error" {
+		t.Errorf("error.type = %q, want rate_limit_error", envelope.Error.Type)
+	}
+	if envelope.Error.Code != "turn_spend_limited" {
+		t.Errorf("error.code = %q, want turn_spend_limited", envelope.Error.Code)
+	}
+	if !strings.Contains(envelope.Error.Message, "Something went wrong with this turn") {
+		t.Errorf("error.message missing the upstream loop warning: %q", envelope.Error.Message)
+	}
+	if ra := resp.Header.Get("Retry-After"); ra != "" {
+		t.Errorf("Retry-After = %q, want none (no retry drumbeat for a killed turn)", ra)
+	}
+	if ver := resp.Header.Get("anthropic-version"); ver != "2023-06-01" {
+		t.Errorf("anthropic-version = %q, want 2023-06-01", ver)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if chatCalls != 1 {
+		t.Errorf("upstream chat calls = %d, want 1 (never re-POST into a turn-spend refusal)", chatCalls)
+	}
+}
+
 // TestReplayMessagesCountTokensPaused replays the issue #140 count_tokens
 // contract: a paused (withdrawn) model id fed to /v1/messages/count_tokens
 // returns a NUMBER — {"input_tokens": N} with zero upstream contact — not a
