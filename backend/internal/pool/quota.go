@@ -269,9 +269,13 @@ func (p *Pool) usageResetIn(token int) time.Duration { return p.roster.usageRese
 
 // --- per-token request limits (MAX_REQUESTS_PER_DAY / _PER_MINUTE) ---
 
-// recordRequestEntry appends one ADMITTED chat request for the lease's
-// backing entry by pointer (see roster.recordRequestEntry).
-func (p *Pool) recordRequestEntry(entry *tokenEntry) { p.roster.recordRequestEntry(entry) }
+// tryAdmitRequest atomically records one ADMITTED chat request for the
+// lease's backing entry at lease-grant time (MAX_REQUESTS_PER_MINUTE):
+// returns false when the rolling 60s window is already at the cap, so the
+// acquire loop counts the token as rate-limited and tries the next one.
+func (p *Pool) tryAdmitRequest(entry *tokenEntry) bool {
+	return p.roster.tryAdmitRequest(entry, p.cfg.Load().MaxRequestsPerMinute)
+}
 
 // rpmCount returns how many admitted requests token sent within the last
 // 60s window, pruning expired timestamps.
@@ -337,16 +341,21 @@ func (p *Pool) bridgeRecordChat(entry *bridgeEntry) {
 	p.bridgeDailyUsage++
 }
 
-// bridgeRecordRequest appends one ADMITTED chat request for the bridge
-// entry (MAX_REQUESTS_PER_MINUTE): success or failure upstream, the request
-// was sent.
-func (p *Pool) bridgeRecordRequest(entry *bridgeEntry) {
+// bridgeTryAdmitRequest atomically checks and records one ADMITTED chat
+// request for the bridge entry (MAX_REQUESTS_PER_MINUTE) under bridgeMu, at
+// AcquireBridge grant time — burst-safe like the pooled path. Returns false
+// when the 60s window is at the cap.
+func (p *Pool) bridgeTryAdmitRequest(entry *bridgeEntry) bool {
 	if entry == nil {
-		return
+		return false
 	}
 	p.bridgeMu.Lock()
 	defer p.bridgeMu.Unlock()
+	if cap := p.cfg.Load().MaxRequestsPerMinute; cap > 0 && entry.ledger.rpmCount(time.Now()) >= cap {
+		return false
+	}
 	entry.ledger.recordRequest(time.Now())
+	return true
 }
 
 // bridgeRpmCount returns how many admitted requests the bridge entry sent

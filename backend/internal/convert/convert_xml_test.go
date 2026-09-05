@@ -483,3 +483,75 @@ func TestAccumulator_AssistantToolCallContentNull(t *testing.T) {
 		t.Fatalf("len(tool_calls) = %d, want 1", len(calls))
 	}
 }
+
+// TestExtractXMLToolCallsPluralDialect pins the <tool_calls> (plural) XML
+// dialect: some models emit the plural wrapper around the same
+// <function=...>/<parameter=...> payload, and it must extract like the
+// singular form instead of leaking literal "<tool_calls>" into content.
+func TestExtractXMLToolCallsPluralDialect(t *testing.T) {
+	raw := "Reading VansRouter executor first half\n<tool_calls>\n<function=read_file>\n<parameter=path>VansRouter executor first half</parameter>\n</function>\n</tool_calls>"
+	cleaned, calls := extractXMLToolCalls(raw)
+	if len(calls) != 1 {
+		t.Fatalf("want 1 tool call, got %d", len(calls))
+	}
+	if calls[0].Function.Name != "read_file" {
+		t.Errorf("name = %q, want read_file", calls[0].Function.Name)
+	}
+	if strings.Contains(cleaned, "<tool_calls>") || strings.Contains(cleaned, "</tool_calls>") {
+		t.Errorf("cleaned content still carries the plural tags: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "Reading VansRouter executor first half") {
+		t.Errorf("cleaned content lost the prose: %q", cleaned)
+	}
+
+	// JSON payload inside the plural wrapper.
+	rawJSON := "x <tool_calls>{\"name\":\"read_file\",\"arguments\":{\"path\":\"a.go\"}}</tool_calls> y"
+	cleanedJSON, callsJSON := extractXMLToolCalls(rawJSON)
+	if len(callsJSON) != 1 || callsJSON[0].Function.Name != "read_file" {
+		t.Fatalf("plural JSON payload not extracted: %d calls, first %+v", len(callsJSON), callsJSON)
+	}
+	if strings.Contains(cleanedJSON, "<tool_calls>") {
+		t.Errorf("cleaned JSON content still carries plural tags: %q", cleanedJSON)
+	}
+}
+
+// TestXMLStreamExtractorPluralDialect streams a <tool_calls> block split
+// across fragments: the opener lands mid-tag, the payload and closer in a
+// later fragment. Regression: the plural opener was not a stream shape, so
+// the block leaked as literal "<tool_calls>" text to the harness.
+func TestXMLStreamExtractorPluralDialect(t *testing.T) {
+	var x XMLToolCallExtractor
+	text, calls := x.Feed("Let me check:\n<tool_cal")
+	if text != "Let me check:\n" {
+		t.Errorf("pre-opener text = %q, want %q", text, "Let me check:\n")
+	}
+	text, calls = x.Feed("ls>\n<function=read_file>\n<parameter=path>a.go</parameter>\n</function>\n</tool_calls>")
+	if len(calls) != 1 || calls[0].Function.Name != "read_file" {
+		t.Fatalf("want read_file call, got %d calls: %+v", len(calls), calls)
+	}
+	if text != "" {
+		t.Errorf("block fragment leaked as text: %q", text)
+	}
+	text, calls = x.Feed("done")
+	if text != "done" || len(calls) != 0 {
+		t.Errorf("post-block text = %q calls = %d", text, len(calls))
+	}
+}
+
+// TestXMLStreamExtractorPluralDanglingFlush pins Flush scrubbing of an
+// unclosed <tool_calls> block: no call parses, and the dangling tags are
+// removed instead of reaching the client as literal text.
+func TestXMLStreamExtractorPluralDanglingFlush(t *testing.T) {
+	var x XMLToolCallExtractor
+	text, calls := x.Feed("intro <tool_calls>\n<function=read_file>")
+	if text != "intro " {
+		t.Errorf("pre-opener text = %q, want %q", text, "intro ")
+	}
+	text, calls = x.Flush()
+	if len(calls) != 0 {
+		t.Fatalf("unclosed block parsed %d calls, want 0", len(calls))
+	}
+	if strings.Contains(text, "<tool_calls>") || strings.Contains(text, "<function") {
+		t.Errorf("dangling tags survived Flush: %q", text)
+	}
+}

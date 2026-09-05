@@ -22,11 +22,11 @@ import (
 // reference common/src/tools/constants.ts — the CLI's stream parser
 // util/stream-xml-parser.ts extracts exactly this tag from model output).
 var (
-	xmlToolCallBlockRe = regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>|<codebuff_tool_call>(.*?)</codebuff_tool_call>|<function_call>(.*?)</function_call>|<\|?tool[_\-]?call[_\-]?start\|?>(.*?)<\|?tool[_\-]?call[_\-]?end\|?>`)
+	xmlToolCallBlockRe = regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>|<codebuff_tool_call>(.*?)</codebuff_tool_call>|<function_call>(.*?)</function_call>|<\|?tool[_\-]?call[_\-]?start\|?>(.*?)<\|?tool[_\-]?call[_\-]?end\|?>|<tool_calls>(.*?)</tool_calls>`)
 	fencedToolCallRe   = regexp.MustCompile("(?s)```(?:json|tool_?call)?\\s*\\n?(\\{\\s*\"(?:name|function|cb_tool_name)\"\\s*:\\s*.*?\\})\\s*\\n?```")
 	xmlFunctionHeadRe  = regexp.MustCompile(`(?i)<function[=\s]+["']?([^>"\s]+)["']?>`)
 	xmlParamRe         = regexp.MustCompile(`(?s)<parameter[=\s]+["']?([^>"\s]+)["']?>(.*?)</parameter>|<param[=\s]+["']?([^>"\s]+)["']?>(.*?)</param>`)
-	danglingToolTagsRe = regexp.MustCompile(`(?i)</?(?:tool_call|codebuff_tool_call|function_call|function|parameter|param|\|?tool[_\-]?call[_\-]?(?:start|end)\|?)(?:[=\s][^>]*)?>`)
+	danglingToolTagsRe = regexp.MustCompile(`(?i)</?(?:tool_call|tool_calls|codebuff_tool_call|function_call|function|parameter|param|\|?tool[_\-]?call[_\-]?(?:start|end)\|?)(?:[=\s][^>]*)?>`)
 )
 
 // extractXMLToolCalls parses text-based tool calls (Hermes/Qwen/MiMo XML format)
@@ -52,10 +52,10 @@ func extractXMLToolCallsBytes(content []byte) (string, []*toolCall) {
 
 	// 1. Check XML block matches (<tool_call>...</tool_call>).
 	// FindAllSubmatchIndex reports each alternation group's span; the
-	// matching branch's group (1..4) carries the raw payload.
+	// matching branch's group (1..5) carries the raw payload.
 	for _, loc := range matches {
 		raw := ""
-		for g := 1; g <= 4 && 2*g+1 < len(loc); g++ {
+		for g := 1; g <= 5 && 2*g+1 < len(loc); g++ {
 			if loc[2*g] >= 0 && loc[2*g+1] > loc[2*g] {
 				raw = string(content[loc[2*g]:loc[2*g+1]])
 				break
@@ -211,6 +211,7 @@ type xmlStreamShape int
 const (
 	xmlShapeNone xmlStreamShape = iota
 	xmlShapeToolCall
+	xmlShapeToolCalls
 	xmlShapeCodebuff
 	xmlShapeFunctionCall
 	xmlShapePipe
@@ -223,6 +224,7 @@ const (
 // xmlStreamClosers maps literal block shapes to their closing tag.
 var xmlStreamClosers = map[xmlStreamShape]string{
 	xmlShapeToolCall:     "</tool_call>",
+	xmlShapeToolCalls:    "</tool_calls>",
 	xmlShapeCodebuff:     "</codebuff_tool_call>",
 	xmlShapeFunctionCall: "</function_call>",
 }
@@ -232,6 +234,7 @@ var xmlStreamClosers = map[xmlStreamShape]string{
 // conversion).
 var xmlStreamCloserBytes = map[xmlStreamShape][]byte{
 	xmlShapeToolCall:     []byte("</tool_call>"),
+	xmlShapeToolCalls:    []byte("</tool_calls>"),
 	xmlShapeCodebuff:     []byte("</codebuff_tool_call>"),
 	xmlShapeFunctionCall: []byte("</function_call>"),
 }
@@ -408,6 +411,7 @@ func (x *XMLToolCallExtractor) findOpener(s string) int {
 	// Literal openers.
 	for shape, open := range map[xmlStreamShape]string{
 		xmlShapeToolCall:     "<tool_call>",
+		xmlShapeToolCalls:    "<tool_calls>",
 		xmlShapeCodebuff:     "<codebuff_tool_call>",
 		xmlShapeFunctionCall: "<function_call>",
 	} {
@@ -506,6 +510,7 @@ func xmlStreamFencePending(s string, from int) bool {
 // handled separately (xmlStreamFencePending / xmlStreamFenceBrace).
 var xmlStreamLiteralOpeners = []string{
 	"<tool_call>",
+	"<tool_calls>",
 	"<codebuff_tool_call>",
 	"<function_call>",
 	"<|tool_call_start|>",
@@ -578,7 +583,7 @@ func xmlFenceCloseEnd(s []byte, from int) int {
 // buf, or -1 while the block is still open.
 func (x *XMLToolCallExtractor) closerEnd() int {
 	switch x.shape {
-	case xmlShapeToolCall, xmlShapeCodebuff, xmlShapeFunctionCall:
+	case xmlShapeToolCall, xmlShapeToolCalls, xmlShapeCodebuff, xmlShapeFunctionCall:
 		if i := bytes.Index(x.buf, xmlStreamCloserBytes[x.shape]); i >= 0 {
 			return i + len(xmlStreamClosers[x.shape])
 		}

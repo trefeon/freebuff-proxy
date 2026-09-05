@@ -903,14 +903,10 @@ func (p *Pool) Chat(ctx context.Context, lease *Lease, opts upstream.ChatOptions
 		return nil, errors.New("pool: chat: invalid lease")
 	}
 	rc, err := t.client.ChatCompletions(ctx, opts, body)
-	// Per-minute request accounting (MAX_REQUESTS_PER_MINUTE): every request
-	// that went upstream counts, success or failure — the exact rate
-	// upstream observes (retries that later fail are throttled too).
-	if t.bridge != nil {
-		p.bridgeRecordRequest(t.bridge)
-	} else if t.entry != nil {
-		p.recordRequestEntry(t.entry)
-	}
+	// Per-minute request accounting (MAX_REQUESTS_PER_MINUTE) happens at
+	// lease-grant time in Acquire/AcquireBridge — atomically, so a burst
+	// cannot pass the cap before any record lands. Only the success-side
+	// records (daily message cap, Pacific-day request cap) live here.
 	if err == nil {
 		if t.bridge != nil {
 			// Only chats that actually went upstream count against the
