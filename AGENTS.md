@@ -127,8 +127,9 @@ are rejected; every change lands as: feature branch (`feat/`, `fix/`,
 (branch auto-deleted). Never `git push --force`.
 - The dashboard SPA is embedded in every build (no build tag) and toggled at runtime via `DASHBOARD_ENABLED`.
 - Rebuild the embedded SPA first with `task frontend:build` before compiling the binary.
-- `dev` is the integration branch for testing: work lands there first, merges
-  to `main` via PR + green CI when stable, then `dev` re-syncs from `main`.
+- Work lands via short feature branches (`feat/`, `fix/`, `docs/`,
+  `refactor/`) off `main`, never long-lived branches: branch → PR → squash
+  merge → deploy `main` to prod only when asked. There is no `dev` branch.
 
 ### Deployment topology (MANDATORY)
 
@@ -139,7 +140,7 @@ are rejected; every change lands as: feature branch (`feat/`, `fix/`,
   artifacts only: build the docker image on acerblue-local, transfer it,
   `docker compose up -d` (no `--build`). NEVER touch its `.env`, state dir,
   or restart it during active sessions without being asked.
-- `dev` = testing. The dev box is the homelab reachable via the
+- Testing happens on the dev box, the homelab reachable via the
   `acerblue-local` ssh host over LAN: preview builds and bugfix
   verification run there on an isolated port (`:3458`) with isolated
   state, never against its own `:3457` homelab gateway or its `.env`.
