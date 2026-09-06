@@ -357,7 +357,7 @@ func (s *Server) requireAdminToken(next http.Handler) http.HandlerFunc {
 		}
 		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.AdminToken)) != 1 {
 			s.writeJSONError(w, http.StatusUnauthorized,
-				"Invalid admin token", "invalid_request_error", "invalid_admin_token", 0)
+				"Invalid password", "invalid_request_error", "invalid_admin_token", 0)
 			return
 		}
 		next.ServeHTTP(w, r)

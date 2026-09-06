@@ -2,7 +2,7 @@
 3639408ac5d8 common/src/constants/foreign-client-signals.ts
 cfdbd3412df7 common/src/constants/freebuff-peak-hours.ts
 b42006247502 common/src/constants/freebuff-signup-block.ts
-89d40cb6fc87 common/src/constants/freebuff-spend-ceilings.ts
+2358dc352d90 common/src/constants/freebuff-spend-ceilings.ts
 555339c61867 common/src/constants/freebuff-standing.ts
 c2508c4590f2 common/src/tools/constants.ts
 6c7e2af63fb4 common/src/types/freebuff-session.ts

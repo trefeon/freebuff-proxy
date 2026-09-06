@@ -38,19 +38,27 @@ func TestEvaluateDeepSeekPeak(t *testing.T) {
 }
 
 func TestNoticeConstants(t *testing.T) {
+	// Exact copy parity with upstream
+	// common/src/constants/freebuff-spend-ceilings.ts (vendor 13105816):
+	// a silent reword here desyncs refusal UX from the official CLI.
+	want := map[string]string{
+		"CapacityNotice":         "Capacity is now limited per account — sustained automated abuse forced us to cap how much any one account can use.",
+		"RestrictedNotice":       "This account has reduced capacity: it was flagged for VPN or proxy usage, a restricted location, or an email domain commonly used by bot farms. If you are on a VPN, connecting directly restores normal limits.",
+		"BudgetNotice":           "You have used all of today’s free usage on this account.",
+		"FreebucksCeilingNotice": "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at three times what its Freebucks are worth, to protect the service from runaway usage.",
+	}
+	got := map[string]string{
+		"CapacityNotice":         CapacityNotice,
+		"RestrictedNotice":       RestrictedNotice,
+		"BudgetNotice":           BudgetNotice,
+		"FreebucksCeilingNotice": FreebucksCeilingNotice,
+	}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("%s = %q, want upstream copy %q", name, got[name], w)
+		}
+	}
 	if TierChangeNotice == "" {
 		t.Errorf("TierChangeNotice is empty")
-	}
-	if CapacityNotice == "" {
-		t.Errorf("CapacityNotice is empty")
-	}
-	if RestrictedNotice == "" {
-		t.Errorf("RestrictedNotice is empty")
-	}
-	if BudgetNotice == "" {
-		t.Errorf("BudgetNotice is empty")
-	}
-	if FreebucksCeilingNotice == "" {
-		t.Errorf("FreebucksCeilingNotice is empty")
 	}
 }

@@ -4,6 +4,7 @@
   import EmptyState from "../../components/EmptyState.svelte";
   import TokenCard from "../../components/TokenCard.svelte";
   import TokenCardMobile from "../../components/TokenCardMobile.svelte";
+  import { RefreshCw } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
 
   /**
@@ -29,6 +30,8 @@
    * @prop {(from: number, to: number) => void} [onSwap]
    * @prop {(from: number, to: number) => void} [onMove]
    * @prop {() => void} onRetry
+   * @prop {() => void} [onProbeAll] - refresh-all quotas handler (card header)
+   * @prop {boolean} [probeAllPending=false]
    */
   let {
     tokens = [],
@@ -48,6 +51,8 @@
     onSwap,
     onMove,
     onRetry,
+    onProbeAll = null,
+    probeAllPending = false,
   } = $props();
 
   let draggingIndex = $state(null);
@@ -115,6 +120,27 @@
       )
     : $tr("Tap a card to see session & quota details")}
 >
+  {#snippet actions()}
+    {#if onProbeAll}
+      <Button
+        variant="secondary"
+        size="sm"
+        onclick={onProbeAll}
+        disabled={probeAllPending || actionPending}
+        title={$tr(
+          "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
+        )}
+      >
+        {#if probeAllPending}
+          <RefreshCw size={14} class="animate-spin" />
+          <span>{$tr("Probing…")}</span>
+        {:else}
+          <RefreshCw size={14} />
+          <span>{$tr("Probe all")}</span>
+        {/if}
+      </Button>
+    {/if}
+  {/snippet}
   {#if loading}
     <div class="flex flex-col gap-3">
       <div class="skeleton skeleton-text w-1/3"></div>
@@ -139,17 +165,19 @@
       )}
     />
   {:else}
-    <!-- Desktop: table (md+) -->
-    <div class="hidden md:block overflow-x-auto">
-      <table class="fp-table w-full min-w-[980px]">
+    <!-- Desktop: fluid table (lg+). No min-width floor: columns compress
+      via truncate guards and the card-width container query below, so the
+      card never sidescrolls. Below lg the stacked cards take over. -->
+    <div class="hidden lg:block overflow-x-auto @container">
+      <table class="fp-table w-full">
         <thead>
           <tr>
             <th class="w-[84px]"></th>
             <th>{$tr("Account")}</th>
-            <th class="w-48">{$tr("Status")}</th>
-            <th class="w-40">{$tr("Instance")}</th>
-            <th class="num w-32">{$tr("Cooldown")}</th>
-            <th class="num w-44">{$tr("Usage")}</th>
+            <th class="w-40">{$tr("Status")}</th>
+            <th class="w-32">{$tr("Instance")}</th>
+            <th class="num w-28">{$tr("Cooldown")}</th>
+            <th class="num w-40">{$tr("Usage")}</th>
             <th class="text-right w-[1%] whitespace-nowrap">{$tr("Actions")}</th
             >
           </tr>
@@ -184,8 +212,8 @@
         </tbody>
       </table>
     </div>
-    <!-- Mobile: stacked cards (< md) - no horizontal scrolling -->
-    <div class="md:hidden flex flex-col gap-3 p-4">
+    <!-- Narrow: stacked cards (< lg) - no horizontal scrolling -->
+    <div class="lg:hidden flex flex-col gap-3 p-4">
       {#each tokens as token, i (token.index ?? i)}
         {@const idx = token.index ?? i}
         <TokenCardMobile

@@ -136,8 +136,8 @@ func TestAdminCSRFLoginNotBlocked(t *testing.T) {
 	}
 	defer func() { _ = r.Body.Close() }()
 	body, _ := io.ReadAll(r.Body)
-	if r.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), "Invalid admin token") {
-		t.Errorf("cookie-carrying login with wrong token = %d, want 401 invalid token: %s", r.StatusCode, body)
+	if r.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), "Invalid password") {
+		t.Errorf("cookie-carrying login with wrong password = %d, want 401 invalid password: %s", r.StatusCode, body)
 	}
 
 	// A correct-token login with the cookie but no header still succeeds.
@@ -273,8 +273,8 @@ func TestAdminLoginTrimsAndBoundsToken(t *testing.T) {
 	// semantics beyond a failed attempt.
 	long := strings.Repeat("x", 400)
 	r, body = post(long)
-	if r.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "Invalid admin token") {
-		t.Errorf("over-long token login = %d, want 401: %s", r.StatusCode, body)
+	if r.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "Invalid password") {
+		t.Errorf("over-long password login = %d, want 401: %s", r.StatusCode, body)
 	}
 }
 

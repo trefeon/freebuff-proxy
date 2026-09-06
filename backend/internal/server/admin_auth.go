@@ -541,7 +541,7 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 			attempts = maxLoginFails
 		}
 		a.logfunc().Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
-		a.dash.RenderLogin(w, r, "Invalid admin token.")
+		a.dash.RenderLogin(w, r, "Invalid password.")
 		return
 	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AdminToken)) == 1 {
@@ -562,7 +562,7 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 	// T15: audit a failed login — remote, running attempt count, and
 	// reason only; the credential itself is never logged.
 	a.logfunc().Warn("admin login failed", "remote", ip, "attempts", attempts, "reason", "invalid_token")
-	a.dash.RenderLogin(w, r, "Invalid admin token.")
+	a.dash.RenderLogin(w, r, "Invalid password.")
 }
 
 // handleAdminLogout clears the fb_admin session cookie (MaxAge=-1, same

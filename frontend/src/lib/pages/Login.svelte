@@ -107,7 +107,7 @@
     {/if}
 
     <form onsubmit={handleLogin} class="space-y-5">
-      <Field label={$tr("Admin token")} id="token">
+      <Field label={$tr("Password")} id="token">
         <input
           id="token"
           bind:this={tokenInput}
@@ -115,7 +115,7 @@
           type="password"
           autocomplete="off"
           required
-          placeholder={$tr("Enter admin token")}
+          placeholder={$tr("Enter password")}
           class="fp-input fp-mono w-full"
         />
       </Field>
@@ -135,10 +135,10 @@
       class="pt-5 mt-6 border-t border-[var(--fp-border)] text-center space-y-1"
     >
       <p class="text-[11px] text-[var(--fp-dim)] leading-relaxed">
-        {$tr("Enter your admin token to access the dashboard.")}
+        {$tr("Enter your dashboard password to sign in.")}
       </p>
       <p class="text-[10px] text-[var(--fp-dim)]">
-        {$tr("Set ADMIN_TOKEN in your .env file to configure access.")}
+        {$tr("Set the dashboard password via ADMIN_TOKEN in your .env file.")}
       </p>
     </div>
   </Card>

@@ -148,7 +148,7 @@ func TestDashboardLoginFlow(t *testing.T) {
 		t.Fatalf("wrong-token status = %d, want 401", resp.StatusCode)
 	}
 	body := bodyOf(t, resp)
-	if !strings.Contains(body, "Invalid admin token") {
+	if !strings.Contains(body, "Invalid password") {
 		t.Error("wrong-token response missing error message")
 	}
 	if c := resp.Cookies(); len(c) != 0 {

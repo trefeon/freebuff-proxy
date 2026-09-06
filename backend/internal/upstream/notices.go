@@ -27,7 +27,7 @@ const (
 
 	// FreebucksCeilingNotice is FREEBUFF_FREEBUCKS_CEILING_NOTICE
 	// (common/src/constants/freebuff-spend-ceilings.ts:244-245).
-	FreebucksCeilingNotice = "You have reached today’s usage limit on this account — your Freebucks cover the session price, and a hard daily ceiling catches only the heaviest days."
+	FreebucksCeilingNotice = "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at three times what its Freebucks are worth, to protect the service from runaway usage."
 )
 
 // DeepSeekPeakHoursWindow holds the live evaluation of DeepSeek pricing windows
