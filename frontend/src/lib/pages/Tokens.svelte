@@ -714,25 +714,6 @@
   >
   <ReferralBanner tokens={data?.tokens ?? []} />
 
-  <div class="flex justify-end">
-    <Button
-      variant="secondary"
-      onclick={handleProbeAll}
-      disabled={actionPending}
-      title={$tr(
-        "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
-      )}
-    >
-      {#if probingAll}
-        <RefreshCw size={15} class="animate-spin" />
-        <span>{$tr("Probing…")}</span>
-      {:else}
-        <RefreshCw size={15} />
-        <span>{$tr("Probe all")}</span>
-      {/if}
-    </Button>
-  </div>
-
   <TokenTable
     tokens={data?.tokens ?? []}
     tokenCount={data?.token_count ?? 0}
@@ -750,6 +731,8 @@
     onDropSession={handleDropSession}
     onSwap={handleSwap}
     onMove={handleMove}
+    onProbeAll={handleProbeAll}
+    probeAllPending={probingAll}
     onRetry={() => {
       error = "";
       refreshTokens();

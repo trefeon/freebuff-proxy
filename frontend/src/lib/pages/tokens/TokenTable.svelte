@@ -4,6 +4,7 @@
   import EmptyState from "../../components/EmptyState.svelte";
   import TokenCard from "../../components/TokenCard.svelte";
   import TokenCardMobile from "../../components/TokenCardMobile.svelte";
+  import { RefreshCw } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
 
   /**
@@ -29,6 +30,8 @@
    * @prop {(from: number, to: number) => void} [onSwap]
    * @prop {(from: number, to: number) => void} [onMove]
    * @prop {() => void} onRetry
+   * @prop {() => void} [onProbeAll] - refresh-all quotas handler (card header)
+   * @prop {boolean} [probeAllPending=false]
    */
   let {
     tokens = [],
@@ -48,6 +51,8 @@
     onSwap,
     onMove,
     onRetry,
+    onProbeAll = null,
+    probeAllPending = false,
   } = $props();
 
   let draggingIndex = $state(null);
@@ -115,6 +120,27 @@
       )
     : $tr("Tap a card to see session & quota details")}
 >
+  {#snippet actions()}
+    {#if onProbeAll}
+      <Button
+        variant="secondary"
+        size="sm"
+        onclick={onProbeAll}
+        disabled={probeAllPending || actionPending}
+        title={$tr(
+          "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
+        )}
+      >
+        {#if probeAllPending}
+          <RefreshCw size={14} class="animate-spin" />
+          <span>{$tr("Probing…")}</span>
+        {:else}
+          <RefreshCw size={14} />
+          <span>{$tr("Probe all")}</span>
+        {/if}
+      </Button>
+    {/if}
+  {/snippet}
   {#if loading}
     <div class="flex flex-col gap-3">
       <div class="skeleton skeleton-text w-1/3"></div>
@@ -139,17 +165,19 @@
       )}
     />
   {:else}
-    <!-- Desktop: table (md+) -->
+    <!-- Desktop: table (md+). Column budget fits ~800px content so the
+      card never sidescrolls at laptop widths; action labels collapse to
+      icons below 1100px (TokenCard) to hold the budget. -->
     <div class="hidden md:block overflow-x-auto">
-      <table class="fp-table w-full min-w-[980px]">
+      <table class="fp-table w-full min-w-[800px]">
         <thead>
           <tr>
             <th class="w-[84px]"></th>
             <th>{$tr("Account")}</th>
-            <th class="w-48">{$tr("Status")}</th>
-            <th class="w-40">{$tr("Instance")}</th>
-            <th class="num w-32">{$tr("Cooldown")}</th>
-            <th class="num w-44">{$tr("Usage")}</th>
+            <th class="w-40">{$tr("Status")}</th>
+            <th class="w-32">{$tr("Instance")}</th>
+            <th class="num w-28">{$tr("Cooldown")}</th>
+            <th class="num w-40">{$tr("Usage")}</th>
             <th class="text-right w-[1%] whitespace-nowrap">{$tr("Actions")}</th
             >
           </tr>

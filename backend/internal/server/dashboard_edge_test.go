@@ -88,6 +88,16 @@ func TestDashboardTokenTestAllTwoTokens(t *testing.T) {
 	if !strings.Contains(body, `"ok":true`) {
 		t.Errorf("test-all missing ok:true: %s", body)
 	}
+	// Probe-only, no admission: each token saw exactly one zero-cost GET
+	// probe and zero session creates.
+	for i, mock := range []*testutil.MockUpstream{mock0, mock1} {
+		if got := mock.SessionCreatesSnapshot(); got != 0 {
+			t.Errorf("token %d session creates = %d, want 0 (probe claims no session)", i, got)
+		}
+		if got := mock.SessionProbesSnapshot(); got != 1 {
+			t.Errorf("token %d session probes = %d, want 1", i, got)
+		}
+	}
 }
 
 // TestDashboardTokenTestAllEmptyRegistry: the zero-cost probe needs no

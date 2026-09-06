@@ -256,9 +256,10 @@
           size="sm"
           disabled={actionPending}
           onclick={() => onAction("clear")}
+          title={$tr("Clear cooldown")}
         >
           <Unlock size={13} />
-          <span>{$tr("Clear")}</span>
+          <span class="hidden min-[1100px]:inline">{$tr("Clear")}</span>
         </Button>
       {/if}
       {#if token.locked}
@@ -267,9 +268,10 @@
           size="sm"
           disabled={actionPending}
           onclick={() => onAction("unlock")}
+          title={$tr("Unlock")}
         >
           <Unlock size={13} />
-          <span>{$tr("Unlock")}</span>
+          <span class="hidden min-[1100px]:inline">{$tr("Unlock")}</span>
         </Button>
       {:else}
         <Button
@@ -277,9 +279,10 @@
           size="sm"
           disabled={actionPending}
           onclick={() => onAction("lock")}
+          title={$tr("Lock")}
         >
           <Lock size={13} />
-          <span>{$tr("Lock")}</span>
+          <span class="hidden min-[1100px]:inline">{$tr("Lock")}</span>
         </Button>
       {/if}
       <Button
@@ -287,9 +290,10 @@
         size="sm"
         disabled={actionPending}
         onclick={() => onAction("remove")}
+        title={$tr("Remove")}
       >
         <Trash2 size={13} />
-        <span>{$tr("Remove")}</span>
+        <span class="hidden min-[1100px]:inline">{$tr("Remove")}</span>
       </Button>
     </div>
   </td>
