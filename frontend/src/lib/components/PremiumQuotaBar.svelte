@@ -111,14 +111,6 @@
       nextBonusAt: w.next_bonus_at ?? w.nextBonusAt ?? w.NextBonusAt ?? null,
     };
   });
-  let fbSpend = $derived.by(() => {
-    const s = freebucks?.spend ?? freebucks?.Spend ?? null;
-    if (!s) return null;
-    return {
-      limitUsd: s.limit_usd ?? s.limitUsd ?? s.LimitUsd ?? 0,
-      resetAt: s.reset_at ?? s.resetAt ?? s.ResetAt ?? null,
-    };
-  });
   let fbPrices = $derived(freebucks?.prices ?? freebucks?.Prices ?? null);
 
   let fbWindows = $derived.by(() => {
@@ -280,12 +272,6 @@
             title={$tr(
               "Server-authorized: new sessions stay usable at zero balance",
             )}>{$tr("quota exempt")}</span
-          >
-        {/if}
-        {#if fbSpend && fbSpend.limitUsd > 0}
-          <span
-            class="fp-num shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded border border-[var(--fp-border)] bg-[var(--fp-surface)] text-[var(--fp-muted)]"
-            >ceiling ${fmtNum(fbSpend.limitUsd)}</span
           >
         {/if}
       </div>
