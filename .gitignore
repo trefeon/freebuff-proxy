@@ -57,6 +57,8 @@ Desktop.ini
 .codegraph/
 uicheck/
 scripts/token_ref/
+# Host-specific dev deploy scripts (ssh targets, LAN names) stay local.
+scripts/dev-acer.sh
 frontend/verify-ui.mjs
 frontend/test-results/
 test-results/

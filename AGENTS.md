@@ -196,4 +196,5 @@ Before touching a backend package, read `backend/internal/<pkg>/CONTRACT.md` (Pu
 
 - This repository is **public**. Only public-safe, secret-free content may ever be committed.
 - Dev-only and reverse-engineering artifacts stay **gitignored** (`reference/`, `devdocs/`, `.env*`, `config*.json`, `*.session-state.json`).
+- Host-specific dev tooling (deploy scripts with ssh targets, LAN names, local paths) is NEVER committed, even secret-free: keep it as an untracked local file (gitignored, e.g. `scripts/dev-*.sh`). A PR adding a file under `scripts/` must prove it contains no hostnames, IPs, LAN names, usernames, or absolute local paths.
 - Commits follow Conventional Commits (`feat(...)`, `fix(...)`, `refactor(...)`, `docs(...)`, `test(...)`).
