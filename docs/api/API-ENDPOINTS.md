@@ -45,7 +45,7 @@ endpoint change (see AI-CODE-REVIEW.md).
 | `POST /admin/api/change-password` | session (BOOTSTRAP EXEMPTION: reachable remotely with factory default — see SECURITY-MODEL gap 1) | requires current password |
 | `POST /admin/reload` | Bearer `ADMIN_TOKEN` (falls back to loopback + legacy `API_KEYS` gates when unset) | hot-reload config from disk |
 | `POST /admin/config` | session (sensitive: loopback-gated under factory default) | validate + atomic `.env` persist + reload, rollback on rejection |
-| `POST /admin/tokens/...` | session (sensitive) | `/add`, `/remove` (last), `/test-all`, per-token `/test`, `/unlock`, `/finish`; persisted to `.env` |
+| `POST /admin/tokens/...` | session (sensitive) | `/add`, `/remove` (last), `/test-all`, per-token `/test`, `/unlock`, `/finish`; persisted to `.env`. `/test-all` probes every pooled token with a zero-cost upstream GET (no session claimed) and refreshes the cached quota snapshots; the Quota Tracker header and Tokens page **Probe all** buttons call it, then refetch the store (test-all answers one JSON object per token concatenated, so the UI drains the body as text) |
 | `POST /admin/mode` | session (sensitive) | runtime mode switch hybrid/pooled/bridge, persisted |
 | `POST /admin/smoke` | session (sensitive) | one real chat through the pool: model/token/latency/preview |
 | `POST /admin/diag` | session (sensitive) | same checks as `-doctor`, zero-cost probes |

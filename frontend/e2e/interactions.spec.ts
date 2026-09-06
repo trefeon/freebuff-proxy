@@ -329,6 +329,45 @@ test.describe("operator interactions (hermetic mocks)", () => {
   });
 
   // -------------------------------------------------------------------------
+  // 3c. Tokens page probe-all shares the same store helper + endpoint.
+  // -------------------------------------------------------------------------
+  test("tokens: probe-all posts test-all and shows confirmation", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+    const state = { tokens: [tokenRow(0), tokenRow(1)] };
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tokensPayload(state.tokens)),
+      });
+    });
+    await page.route("**/admin/tokens/test-all", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: `{"token":0,"ok":true,"message":"ok"}{"token":1,"ok":true,"message":"ok"}`,
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await expect(
+      page.getByRole("heading", { name: "Tokens", exact: true }),
+    ).toBeVisible();
+    const probe = page.waitForRequest(
+      (r) =>
+        r.method() === "POST" && r.url().includes("/admin/tokens/test-all"),
+    );
+    await page.getByRole("button", { name: "Probe all" }).click();
+    await probe;
+    await expect(
+      page.getByText("Quotas refreshed from upstream."),
+    ).toBeVisible();
+  });
+
+  // -------------------------------------------------------------------------
   // 4. Dismissing the confirm dialog sends no request and keeps the row.
   // -------------------------------------------------------------------------
   test("tokens: dismissing the confirm dialog sends no request", async ({

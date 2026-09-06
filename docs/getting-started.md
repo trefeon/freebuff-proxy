@@ -160,7 +160,7 @@ VERSION=$(git describe --tags 2>/dev/null || echo dev) docker compose up -d --bu
 
 ## Step 2: Verify It Works
 
-Dashboard first: on a running proxy, open `http://127.0.0.1:3457/admin` — the Overview smoke test plus **Tokens → Test All** (`POST /admin/tokens/test-all`) run the same zero-cost per-token validity probe as the CLI, and the Overview diagnostics card (`POST /admin/diag`) covers the same checks as `-doctor`. CLI second, for headless or pre-serve checks:
+Dashboard first: on a running proxy, open `http://127.0.0.1:3457/admin` — the Overview smoke test plus **Tokens → Test All** (`POST /admin/tokens/test-all`) run the same zero-cost per-token validity probe as the CLI, and the Overview diagnostics card (`POST /admin/diag`) covers the same checks as `-doctor`. The probe also refreshes the cached quota snapshots, so **Quota Tracker → Probe all** (same button above the token table on the Tokens page) reloads every account's displayed quota without serving a request — the fix for idle accounts showing frozen numbers. CLI second, for headless or pre-serve checks:
 
 ```bash
 # Diagnostic doctor check: config, port, DNS/TLS, registry, plus a

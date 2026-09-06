@@ -18,6 +18,7 @@
     tokensError as tokensErrorStore,
     ensureTokensStore,
     refreshTokens,
+    probeAllQuotas,
   } from "../stores/tokens.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
@@ -100,6 +101,7 @@
   let expandedToken = $state(null);
   let spawnModels = $state({});
   let actionPending = $state(false);
+  let probingAll = $state(false);
   let now = $state(Date.now());
 
   const tokenValid = $derived(
@@ -271,6 +273,26 @@
       {},
       $tr("Finish active runs on account #{idx}?", { idx: idx + 1 }),
     );
+  }
+
+  // Probe-all: same zero-cost upstream GET per token as the per-row probe
+  // buttons (no session claimed), fanned out via test-all. No confirm: the
+  // effect is cache freshness only, nothing is spent or ended. Uses the
+  // shared store helper (not triggerAction/postAPI: test-all answers with
+  // concatenated per-token JSON objects that res.json() cannot parse).
+  async function handleProbeAll() {
+    if (probingAll) return;
+    probingAll = true;
+    try {
+      await probeAllQuotas();
+      actionOK = true;
+      actionMessage = $tr("Quotas refreshed from upstream.");
+    } catch (e) {
+      actionOK = false;
+      actionMessage = e.message || $tr("Quota refresh failed");
+    } finally {
+      probingAll = false;
+    }
   }
   function handleDropSession(idx) {
     return triggerAction(
@@ -691,6 +713,25 @@
     </div></Card
   >
   <ReferralBanner tokens={data?.tokens ?? []} />
+
+  <div class="flex justify-end">
+    <Button
+      variant="secondary"
+      onclick={handleProbeAll}
+      disabled={actionPending}
+      title={$tr(
+        "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
+      )}
+    >
+      {#if probingAll}
+        <RefreshCw size={15} class="animate-spin" />
+        <span>{$tr("Probing…")}</span>
+      {:else}
+        <RefreshCw size={15} />
+        <span>{$tr("Probe all")}</span>
+      {/if}
+    </Button>
+  </div>
 
   <TokenTable
     tokens={data?.tokens ?? []}
