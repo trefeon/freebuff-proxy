@@ -228,6 +228,59 @@ func TestQuotaStateWindowSemantics(t *testing.T) {
 	}
 }
 
+// TestQuotaResetRollsForwardOnNextAcquire pins the #351 full loop against a
+// mocked upstream: an exhausted window refuses the acquire, the reset
+// instant passes, and the very next acquire serves again. The reset is
+// 300ms out so no wall-clock day passes; the mock flips to the fresh
+// window the rolled admission would carry.
+func TestQuotaResetRollsForwardOnNextAcquire(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	quotaBody := func(recent int, reset time.Time) map[string]any {
+		return map[string]any{
+			modelA: map[string]any{
+				"model":       modelA,
+				"limit":       5,
+				"recentCount": recent,
+				"period":      "pacific_day",
+				"resetAt":     reset.UTC().Format("2006-01-02T15:04:05.000Z"),
+			},
+		}
+	}
+	mock.RateLimitsByModel = quotaBody(5, time.Now().Add(2*time.Second))
+	p := newTestPool(t, mock)
+
+	// Admit through a different model: the session (and its exhausted
+	// modelA window) is stored, but nothing is hot for modelA yet.
+	admit, err := p.Acquire(context.Background(), modelB)
+	if err != nil {
+		t.Fatalf("admitting acquire: want lease, got %v", err)
+	}
+	p.LeaseRelease(admit)
+
+	// Window still exhausted with a future reset, and no hot session to
+	// reuse: the token is limited without ever hitting upstream. The 2s
+	// margin keeps this deterministic even if CI stalls between acquires.
+	if _, err := p.Acquire(context.Background(), modelA); err == nil {
+		t.Fatal("acquire on exhausted window: want limit error, got lease")
+	}
+
+	// The pool caches admissions within the probe TTL (#60): flipping the
+	// mock alone is invisible until something re-admits, and the capped
+	// acquire cools the token until the window's reset. Sleeping past the
+	// reset lets the window genuinely roll, so the cached numbers go
+	// stale and the next acquire revalidates — exactly the production
+	// path.
+	time.Sleep(3 * time.Second)
+	mock.RateLimitsByModel = quotaBody(0, time.Now().Add(24*time.Hour))
+
+	lease, err := p.Acquire(context.Background(), modelA)
+	if err != nil {
+		t.Fatalf("acquire after reset: want lease, got %v", err)
+	}
+	_ = lease
+}
+
 // TestBridgeQuotaMirrorsPooled pins the single-implementation contract: for
 // identical quota state the pooled and bridge quota views agree (both
 // delegate to quotaStateForSnapshot), so the window semantics cannot drift

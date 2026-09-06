@@ -8,7 +8,32 @@
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { tokensData, ensureTokensStore } from "../stores/tokens.js";
+  import { sortModelsByPrice } from "../utils/freebucks.js";
   import { tr } from "../i18n.js";
+  // Cheapest-first order on the meter (upstream picker revamp): merge the
+  // live per-token price maps first-win, and sort only when at least one
+  // price exists — unmetered accounts keep the deliberate catalog order.
+  const meteredPrices = $derived(
+    (() => {
+      const map = {};
+      for (const t of live?.tokens ?? []) {
+        for (const [id, p] of Object.entries(t.freebucks?.prices ?? {})) {
+          if (!(id in map)) map[id] = p;
+        }
+      }
+      return map;
+    })(),
+  );
+  const orderedModels = $derived(
+    data == null || Object.keys(meteredPrices).length === 0
+      ? (data?.models ?? [])
+      : sortModelsByPrice(
+          data.models.map((m) => m.id),
+          { prices: meteredPrices },
+        )
+          .map((id) => data.models.find((m) => m.id === id))
+          .filter(Boolean),
+  );
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -117,7 +142,7 @@
               <th scope="col">{$tr("Price")}</th>
             </tr>
           </thead><tbody>
-            {#each data.models as m (m.id)}
+            {#each orderedModels as m (m.id)}
               {@const bound = Boolean(m.agent)}
               {@const st = modelState(m)}
               {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
@@ -222,7 +247,7 @@
         class="md:hidden flex flex-col gap-2.5 p-3.5"
         aria-label={$tr("Model Catalog")}
       >
-        {#each data.models as m (m.id)}
+        {#each orderedModels as m (m.id)}
           {@const bound = Boolean(m.agent)}
           {@const st = modelState(m)}
           {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}

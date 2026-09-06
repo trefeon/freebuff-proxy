@@ -252,6 +252,31 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("before restart").first()).toBeVisible();
     await expect(page.getByText("stealth/ox-alpha").first()).toBeVisible();
   });
+  test("Quota Tracker header carries the reset countdown when given a clock", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    // Metered account (issue #364): the header joins the daily figures with
+    // the live "resets in" countdown once the page clock is passed in.
+    const meteredTokens = JSON.parse(JSON.stringify(f.tokens));
+    meteredTokens.tokens[0].freebucks = {
+      balance: 50,
+      daily: { remaining: 30, limit: 75, reset_at: "2030-01-01T00:00:00Z" },
+      wallet: { balance: 20 },
+      monthly: { remaining: 20 },
+      prices: {},
+    };
+    await mockDashboard(page, f, { tokens: meteredTokens });
+
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    const header = page.getByTestId("freebucks-header").first();
+    await expect(header).toContainText("30/75 Freebucks daily");
+    await expect(header).toContainText("resets in");
+    await expect(header).toContainText("20 in wallet");
+  });
 
   test("Settings renders catalog groups and saves a toggled bool into the .env", async ({
     page,
@@ -649,6 +674,29 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("Pool").first()).toBeVisible();
     await expect(page.getByText("Price").first()).toBeVisible();
     await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
+  });
+  test("Models sorts cheapest-first on the meter", async ({ page }) => {
+    const f = loadFixtures();
+    // Metered account: luna at 2/hr sorts above flash at 15/hr even
+    // though the catalog lists flash first (upstream picker revamp).
+    const pricedTokens = JSON.parse(JSON.stringify(f.tokens));
+    pricedTokens.tokens[0].freebucks = {
+      balance: 50,
+      daily: { remaining: 30, limit: 75, reset_at: "2030-01-01T00:00:00Z" },
+      wallet: { balance: 20 },
+      monthly: { remaining: 20 },
+      prices: {
+        "openai/gpt-5.6-luna": 2,
+        "deepseek/deepseek-v4-flash": 15,
+      },
+    };
+    await mockDashboard(page, f, { tokens: pricedTokens });
+
+    await page.goto("http://127.0.0.1:4173/admin/#models");
+    await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
+    const rows = page.locator("table tbody tr");
+    await expect(rows).toHaveCount(7);
+    await expect(rows.first()).toContainText("openai/gpt-5.6-luna");
   });
 
   test("Overview shows client integration and base_url", async ({ page }) => {
