@@ -127,6 +127,28 @@ are rejected; every change lands as: feature branch (`feat/`, `fix/`,
 (branch auto-deleted). Never `git push --force`.
 - The dashboard SPA is embedded in every build (no build tag) and toggled at runtime via `DASHBOARD_ENABLED`.
 - Rebuild the embedded SPA first with `task frontend:build` before compiling the binary.
+- `dev` is the integration branch for testing: work lands there first, merges
+  to `main` via PR + green CI when stable, then `dev` re-syncs from `main`.
+
+### Deployment topology (MANDATORY)
+
+- `main` = production. The ONLY prod box is the small VPS reachable via the
+  `vps-sg` ssh host (addresses live in local ssh config, never in repo),
+  serving `:3457` from `~/freebuff-proxy`. It is a small VPS (892MB RAM):
+  NEVER build, test, or run extra containers on it. It receives finished
+  artifacts only: build the docker image on acerblue-local, transfer it,
+  `docker compose up -d` (no `--build`). NEVER touch its `.env`, state dir,
+  or restart it during active sessions without being asked.
+- `dev` = testing. The dev box is the homelab reachable via the
+  `acerblue-local` ssh host over LAN: preview builds and bugfix
+  verification run there on an isolated port (`:3458`) with isolated
+  state, never against its own `:3457` homelab gateway or its `.env`.
+  Builds there need `docker build --network=host` (module-proxy TLS
+  timeout otherwise).
+- Cancelled remote builds leave orphaned `go compile` processes holding RAM:
+  after any interrupted build, `pkill` them and confirm load drops before
+  retrying. Keep vps-sg disk under 80% (`docker builder prune`, no dev
+  images/tarballs on prod).
 
 ### Reference repo policy (MANDATORY)
 
