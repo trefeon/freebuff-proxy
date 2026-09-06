@@ -81,6 +81,7 @@
   )}
   {loading}
   {error}
+  errorTitle={$tr("Failed to load models")}
   empty={data && data.models.length === 0
     ? {
         title: $tr("No models registered"),
