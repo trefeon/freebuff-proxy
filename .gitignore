@@ -59,6 +59,7 @@ uicheck/
 scripts/token_ref/
 frontend/verify-ui.mjs
 frontend/test-results/
+test-results/
 frontend/playwright-report/
 .worktrees/
 
