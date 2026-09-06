@@ -259,7 +259,7 @@
           title={$tr("Clear cooldown")}
         >
           <Unlock size={13} />
-          <span class="hidden min-[1100px]:inline">{$tr("Clear")}</span>
+          <span class="hidden @min-[840px]:inline">{$tr("Clear")}</span>
         </Button>
       {/if}
       {#if token.locked}
@@ -271,7 +271,7 @@
           title={$tr("Unlock")}
         >
           <Unlock size={13} />
-          <span class="hidden min-[1100px]:inline">{$tr("Unlock")}</span>
+          <span class="hidden @min-[840px]:inline">{$tr("Unlock")}</span>
         </Button>
       {:else}
         <Button
@@ -282,7 +282,7 @@
           title={$tr("Lock")}
         >
           <Lock size={13} />
-          <span class="hidden min-[1100px]:inline">{$tr("Lock")}</span>
+          <span class="hidden @min-[840px]:inline">{$tr("Lock")}</span>
         </Button>
       {/if}
       <Button
@@ -293,7 +293,7 @@
         title={$tr("Remove")}
       >
         <Trash2 size={13} />
-        <span class="hidden min-[1100px]:inline">{$tr("Remove")}</span>
+        <span class="hidden @min-[840px]:inline">{$tr("Remove")}</span>
       </Button>
     </div>
   </td>

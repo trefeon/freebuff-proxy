@@ -19,7 +19,7 @@
   import { tr } from "../i18n.js";
 
   /**
-   * TokenCardMobile — stacked card layout of one pooled token for < md
+   * TokenCardMobile — stacked card layout of one pooled token for < lg
    * viewports. Identity + status + actions are always visible; secondary
    * columns (instance, cooldown) and the detail drawer live behind the
    * expand chevron, so nothing ever scrolls horizontally.

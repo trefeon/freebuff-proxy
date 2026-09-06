@@ -165,11 +165,11 @@
       )}
     />
   {:else}
-    <!-- Desktop: table (md+). Column budget fits ~800px content so the
-      card never sidescrolls at laptop widths; action labels collapse to
-      icons below 1100px (TokenCard) to hold the budget. -->
-    <div class="hidden md:block overflow-x-auto">
-      <table class="fp-table w-full min-w-[800px]">
+    <!-- Desktop: fluid table (lg+). No min-width floor: columns compress
+      via truncate guards and the card-width container query below, so the
+      card never sidescrolls. Below lg the stacked cards take over. -->
+    <div class="hidden lg:block overflow-x-auto @container">
+      <table class="fp-table w-full">
         <thead>
           <tr>
             <th class="w-[84px]"></th>
@@ -212,8 +212,8 @@
         </tbody>
       </table>
     </div>
-    <!-- Mobile: stacked cards (< md) - no horizontal scrolling -->
-    <div class="md:hidden flex flex-col gap-3 p-4">
+    <!-- Narrow: stacked cards (< lg) - no horizontal scrolling -->
+    <div class="lg:hidden flex flex-col gap-3 p-4">
       {#each tokens as token, i (token.index ?? i)}
         {@const idx = token.index ?? i}
         <TokenCardMobile
