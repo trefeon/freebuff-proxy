@@ -105,16 +105,24 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// quietAccessPath reports whether path is a poll/fire-and-forget endpoint
-// whose access lines are rate-limited (T17): /healthz, /metrics, CORS
-// OPTIONS preflights, and the dashboard Logs page's own 1s poll
-// (GET /admin/api/logs — the poll observes the same 200-entry ring it would
-// otherwise fill with one line per second, evicting idle inference history
-// in ~3 minutes). Unknown paths (which 404) are gated the same way by
-// the access wrapper — an arbitrary-path client must not flood the log.
+// silentAccessPath reports whether path never emits an access line: the
+// liveness/metrics probes (health is proven by the container status and by
+// the absence of error lines, not by a per-minute GET) and the dashboard's
+// own GET polls under /admin/api/* (the open SPA polls tokens/quota/logs
+// every few seconds; those lines drown the auth and session events the log
+// viewer is actually read for). Mutations (POSTs, including login/logout),
+// chat traffic, and 404s still log through the normal/quiet paths below.
+func silentAccessPath(method, path string) bool {
+	return path == "/healthz" || path == "/metrics" ||
+		(method == http.MethodGet && strings.HasPrefix(path, "/admin/api/"))
+}
+
+// quietAccessPath reports whether path is a fire-and-forget endpoint whose
+// access lines are rate-limited (T17): CORS OPTIONS preflights. Unknown
+// paths (which 404) are gated the same way by the access wrapper — an
+// arbitrary-path client must not flood the log.
 func quietAccessPath(method, path string) bool {
-	return path == "/healthz" || path == "/metrics" || method == http.MethodOptions ||
-		(method == http.MethodGet && path == "/admin/api/logs")
+	return method == http.MethodOptions
 }
 
 // accessGates are the per-Server access-log and rate-limit dedupe gates

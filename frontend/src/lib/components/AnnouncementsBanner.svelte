@@ -1,14 +1,12 @@
 <script>
   import { onMount } from "svelte";
-  import { SvelteSet } from "svelte/reactivity";
   import {
     Megaphone,
     Clock,
     X,
     ExternalLink,
-    ChevronDown,
-    ChevronUp,
     Sparkles,
+    ChevronDown,
   } from "@lucide/svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
@@ -20,9 +18,8 @@
    */
   let notices = $state([]);
   let peakHours = $state(null);
-  let dismissed = new SvelteSet();
-  let collapsed = $state(false);
   let loaded = $state(false);
+  let folded = $state(new Set());
 
   onMount(async () => {
     try {
@@ -38,20 +35,20 @@
     }
   });
 
-  // Session-scoped dismissal: hides a notice until this page unmounts
-  // (navigating away or reloading brings it back). Deliberately NOT persisted
-  // to localStorage — dismissing on one page must not erase the notice
-  // everywhere, and the banner only lives on the Overview page.
-  function dismissNotice(id) {
-    dismissed.add(id);
+  // Fold state per notice: X folds the item into a slim bar (title +
+  // unfold chevron) instead of removing it, so a dismissed announcement
+  // stays one tap away. Session-scoped; reload restores everything.
+  function toggleFold(id) {
+    const next = new Set(folded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    folded = next;
   }
-
-  let activeNotices = $derived(notices.filter((n) => !dismissed.has(n.id)));
 </script>
 
-{#if loaded && activeNotices.length > 0}
+{#if loaded && notices.length > 0}
   <div
-    class="mb-4 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-surface)] shadow-sm overflow-hidden"
+    class="mb-4 rounded border border-[var(--fp-border)] bg-[var(--fp-surface)] overflow-hidden"
     role="region"
     aria-label={$tr("Upstream Announcements")}
   >
@@ -61,7 +58,7 @@
     >
       <div class="flex items-center gap-2 min-w-0">
         <span
-          class="flex items-center justify-center w-5 h-5 rounded-md bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] shrink-0"
+          class="flex items-center justify-center w-5 h-5 rounded-sm bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] shrink-0"
         >
           <Megaphone size={13} />
         </span>
@@ -73,7 +70,7 @@
         <span
           class="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
         >
-          {activeNotices.length}
+          {notices.length}
         </span>
       </div>
 
@@ -97,28 +94,33 @@
             </span>
           </div>
         {/if}
-
-        <button
-          type="button"
-          class="fp-btn fp-btn-ghost !p-1 text-[var(--fp-muted)] hover:text-[var(--fp-text)]"
-          onclick={() => (collapsed = !collapsed)}
-          aria-label={collapsed ? $tr("Expand") : $tr("Collapse")}
-        >
-          {#if collapsed}
-            <ChevronDown size={14} />
-          {:else}
-            <ChevronUp size={14} />
-          {/if}
-        </button>
       </div>
     </div>
 
-    <!-- Active notice items -->
-    {#if !collapsed}
-      <div class="p-3 flex flex-col gap-2.5">
-        {#each activeNotices as notice (notice.id)}
+    <!-- Notice items: X folds an item into the slim bar above; unfold
+      restores it. Nothing is removed until reload. -->
+    <div class="p-3 flex flex-col gap-2.5">
+      {#each notices as notice (notice.id)}
+        {#if folded.has(notice.id)}
           <div
-            class="p-3 rounded-lg border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 {notice.tone ===
+            class="px-3 py-1.5 rounded border border-[var(--fp-border)] bg-[var(--fp-surface-2)]/50 text-xs flex items-center justify-between gap-2"
+          >
+            <span class="font-medium text-[var(--fp-muted)] truncate">
+              {notice.title}
+            </span>
+            <button
+              type="button"
+              class="fp-btn fp-btn-ghost !p-1 text-[var(--fp-dim)] hover:text-[var(--fp-text)] shrink-0"
+              onclick={() => toggleFold(notice.id)}
+              title={$tr("Show notice")}
+              aria-label={$tr("Show {title}", { title: notice.title })}
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
+        {:else}
+          <div
+            class="p-3 rounded border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 {notice.tone ===
             'accent'
               ? 'bg-[var(--fp-accent)]/10 border-[var(--fp-accent)]/25'
               : notice.tone === 'warning'
@@ -179,16 +181,16 @@
               <button
                 type="button"
                 class="fp-btn fp-btn-ghost !p-1 text-[var(--fp-dim)] hover:text-[var(--fp-text)]"
-                onclick={() => dismissNotice(notice.id)}
-                title={$tr("Dismiss notice")}
-                aria-label={$tr("Dismiss {title}", { title: notice.title })}
+                onclick={() => toggleFold(notice.id)}
+                title={$tr("Fold notice")}
+                aria-label={$tr("Fold {title}", { title: notice.title })}
               >
                 <X size={14} />
               </button>
             </div>
           </div>
-        {/each}
-      </div>
-    {/if}
+        {/if}
+      {/each}
+    </div>
   </div>
 {/if}

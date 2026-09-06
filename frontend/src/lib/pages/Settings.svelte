@@ -4,11 +4,11 @@
   import PageShell from "../components/PageShell.svelte";
   import Button from "../components/Button.svelte";
   import Alert from "../components/Alert.svelte";
-  import ConfigFileGuideCard from "../components/ConfigFileGuideCard.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
   import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
+  import AdvancedSettings from "./settings/AdvancedSettings.svelte";
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
@@ -237,6 +237,7 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / settings.conf"
   title={$tr("Settings")}
   description={$tr(
     "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
@@ -328,8 +329,9 @@
   <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
   <TrafficSettings {formValues} {rawText} onField={setField} />
 
-  <!-- 4. Command Center (Lifecycle, updates & rollback) -->
+  <!-- 4. Advanced (every remaining catalog key with its default) -->
+  <AdvancedSettings {meta} {formValues} {rawText} onField={setField} />
+
+  <!-- 5. Command Center (Lifecycle, updates & rollback) -->
   <CommandCenterCard />
-  <!-- 5. Configuration & Deployment Guide -->
-  <ConfigFileGuideCard />
 </PageShell>

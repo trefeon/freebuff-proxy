@@ -441,15 +441,18 @@ func (s *Server) Handler() http.Handler {
 		if crid := clientRequestID(r); crid != "" {
 			attrs = append(attrs, "client_request_id", crid)
 		}
-		// T17: LOG_ACCESS=false disables access lines entirely. Quiet
-		// endpoints (/healthz, /metrics, OPTIONS preflights) and UNKNOWN
-		// paths (404s) are rate-limited to one access line per path per
-		// accessQuietWindow, and the quiet-class budget caps the total
-		// quiet lines per window — a client minting distinct paths cannot
-		// grow the access log without bound (per-path gating alone would
-		// pass one line per unique path). req_id/client_request_id survive
-		// in both cases.
+		// T17: LOG_ACCESS=false disables access lines entirely. Silent
+		// paths (probes + dashboard GET polls) never log; quiet endpoints
+		// (OPTIONS preflights) and UNKNOWN paths (404s) are rate-limited
+		// to one access line per path per accessQuietWindow, and the
+		// quiet-class budget caps the total quiet lines per window — a
+		// client minting distinct paths cannot grow the access log without
+		// bound (per-path gating alone would pass one line per unique
+		// path). req_id/client_request_id survive in both cases.
 		if !cfg.LogAccess {
+			return
+		}
+		if silentAccessPath(r.Method, r.URL.Path) {
 			return
 		}
 		if quiet := quietAccessPath(r.Method, r.URL.Path) || sw.status == http.StatusNotFound; quiet {

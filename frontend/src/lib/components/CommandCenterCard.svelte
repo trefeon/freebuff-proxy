@@ -213,7 +213,7 @@
     {#snippet extra()}
       {#if versionInfo.has_update}
         <div
-          class="mt-2.5 p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex flex-col gap-2"
+          class="mt-2.5 p-3 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex flex-col gap-2"
         >
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-medium text-[var(--fp-text)]">

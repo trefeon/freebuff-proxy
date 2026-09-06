@@ -140,9 +140,9 @@ test.describe("real-world data", () => {
     await expect(
       page.getByText("daily limit reached — resets 1h"),
     ).toBeVisible();
-    await expect(page.getByText("cap reached").first()).toBeVisible();
+    await expect(page.getByText("Served models").first()).toBeVisible();
     await expect(
-      page.getByText("1 client(s) report premium quota"),
+      page.getByText(/client\(s\) report quota — see the Tokens page/),
     ).toBeVisible();
   });
 
@@ -151,18 +151,16 @@ test.describe("real-world data", () => {
   }) => {
     await mockDashboard(page, loadFixtures(RW));
     await page.goto(admin("models"));
-    await expect(page.getByText("5 premium quota")).toHaveCount(4);
-    await expect(page.getByText("unlimited session")).toHaveCount(8);
-    await expect(
-      page.getByText("meta/muse-spark-1.3-contributor").first(),
-    ).toBeVisible();
-    await expect(page.getByText("referral +1/day")).toHaveCount(2);
+    await expect(page.getByText("Fast & Direct").first()).toBeVisible();
+    await expect(page.getByText("0 Freebucks/hr").first()).toBeVisible();
+    await expect(page.getByText("20 Freebucks/hr").first()).toBeVisible();
+    await expect(page.getByText("Referral grant").first()).toBeVisible();
+    await expect(page.getByText("Referral only").first()).toBeVisible();
     await expect(page.getByText("referral", { exact: true })).toHaveCount(2);
-    await expect(page.getByText("Premium: 4 of 5 used").first()).toBeVisible();
-    await expect(page.getByText("$0.01/hr").first()).toBeVisible();
     await expect(page.getByText("low/high/max").first()).toBeVisible();
+    await expect(page.getByText("Price").first()).toBeVisible();
     await page.goto(admin("logs"));
-    await expect(page.getByText("2 requests")).toBeVisible();
+    await expect(page.getByText("2 model requests")).toBeVisible();
     await expect(page.getByText("502").first()).toBeVisible();
     await page.getByRole("button", { name: "Table" }).click();
     await expect(

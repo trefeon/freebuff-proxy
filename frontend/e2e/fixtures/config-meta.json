@@ -51,7 +51,6 @@
     "restart_only": true,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Persist redacted traffic dumps to ./dump/ (mode 0600, debugging only)."
   },
   {
@@ -62,7 +61,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Show the Dev Tools page (batch chat, session spawner) in the admin dashboard. Default off: it is a manual testing surface that hammers /v1/*."
   },
   {
@@ -103,7 +101,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Log one access line per HTTP request (healthz/metrics/OPTIONS are rate-limited to 1/min regardless)."
   },
   {
@@ -129,7 +126,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Log format: text (key=value, colored) or json (one JSON object per line)."
   },
   {
@@ -157,7 +153,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000)."
   },
   {
@@ -178,7 +173,6 @@
     "restart_only": true,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Adopt the upstream CLI's active session (from freebuff-instance-owner.json) instead of creating a new one; with empty AUTH_TOKENS the token is sourced from the CLI credentials file."
   },
   {
@@ -221,7 +215,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "How long a bridge entry may sit unused before its runs are FINISHed and it is evicted from the cache (sliding TTL; zero or invalid → 72h)."
   },
   {
@@ -232,7 +225,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset)."
   },
   {
@@ -243,8 +235,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Allow the per-token premium-short touch mode (one short premium admission instead of the unmetered touch). Default false: premium touches burn daily quota and stay opt-in per token."
+    "description": "Allow the per-token premium-short touch mode (one short premium admission instead of the Economy touch). Default false: premium touches spend the account's daily Freebucks pool and stay opt-in per token."
   },
   {
     "key": "MATURITY_DRY_RUN",
@@ -254,8 +245,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Maturity touches run only the zero-cost session probe and never claim a session slot (scheduler mechanics validation). Set false after the dry-run log lines prove slots, skips and throttles behave."
+    "description": "Maturity touches run only the zero-cost quota probe and never start a billable touch (scheduler mechanics validation). Set false after the dry-run log lines prove scheduling, skips and throttles behave."
   },
   {
     "key": "MATURITY_ENABLED",
@@ -265,7 +255,7 @@
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Global kill-switch for streak-maturity automation: daily low-cost touches that keep locked tokens' streaks alive until their target. Default true (probes run in dry-run mode); set false to disable all automated touches."
+    "description": "Global kill-switch for streak-maturity automation: daily low-cost Freebucks touches that keep locked tokens' streaks alive until their target. Default true (probes run in dry-run mode); set false to disable all automated touches."
   },
   {
     "key": "MATURITY_TARGET_DAYS",
@@ -275,7 +265,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Default streak target for newly-enabled tokens (1-28 days); a token whose streak reaches its target auto-releases its administrative lock."
   },
   {
@@ -286,8 +275,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Unmetered model the maturity touch admits (must be a served, non-premium, uncapped catalog row — never burns premium quota for farming)."
+    "description": "Model the Economy maturity touch starts (cheapest served metered model — minimal daily Freebucks spend, never a premium model for farming)."
   },
   {
     "key": "MODEL_LOCKS",
@@ -307,7 +295,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "How long a model_unavailable admission refusal is remembered per model (off-window models short-circuit to the fallback within the TTL)."
   },
   {
@@ -318,7 +305,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Burst request capacity per client IP (0 = defaults to 2 × RATE_LIMIT_PER_IP)."
   },
   {
@@ -329,7 +315,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Rotate to another available token when an in-flight request hits a token-level 429 (rate limit / throttle). turn_spend_limited is TERMINAL (upstream per-turn spend breaker — a retry re-trips instantly) and is excluded from failover (default true)."
   },
   {
@@ -427,8 +412,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "End upstream sessions after this idle period, releasing the token's daily admission slot while the proxy sits unused (0 = disabled, opt-in)."
+    "description": "End upstream sessions after this idle period, freeing the account while the proxy sits unused (0 = disabled, opt-in)."
   },
   {
     "key": "SESSION_PERSIST",
@@ -438,7 +422,6 @@
     "restart_only": true,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Persist session state AND active agent runs to disk so a restart resumes them instead of re-creating (default true). Set via container environment."
   },
   {
@@ -449,8 +432,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Reuse the last successful session state (skip redundant session poll GETs) within this window."
+    "description": "Reuse the last successful quota probe (skip redundant upstream status GETs) within this window."
   },
   {
     "key": "SESSION_RE_ADMIT_LEAD",
@@ -510,7 +492,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Global daily chat cap across ALL bridge-mode entries (0 = unlimited)."
   },
   {
@@ -521,7 +502,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Queue-wait threshold (ms) before re-routing to FALLBACK_MODEL; 0 (default) disables fallback. Queue-wait only — never on 429 quota exhaustion."
   },
   {
@@ -532,7 +512,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
   },
   {
@@ -543,7 +522,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement)."
   },
   {
@@ -574,7 +552,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Advisory per-token Pacific-day spend ceiling in ledger units (0 = unlimited). Never enforced — surfacing only, on /healthz."
   },
   {
@@ -585,7 +562,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Map model=fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs). Empty default: no fallback (surfaces honest 429 with guidance to switch model)."
   },
   {
@@ -596,7 +572,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Add {\"type\":\"ephemeral\"} cache_control to the stable context prefix on DeepSeek requests (prompt-cache cost reduction; default on). Set CACHE_CONTROL_INJECTION=false to disable."
   },
   {
@@ -607,7 +582,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Apply optional prompt \u0026 context compression: middle user/assistant turns beyond the trailing budget are dropped and summarized by one marker (default off)."
   },
   {
@@ -653,7 +627,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "/v1/models prunes models marked unavailable (region/tier demotion, quota exhaustion); off by default so a stale signal never hides a working model."
   },
   {
@@ -684,7 +657,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Model catalog refresh interval."
   },
   {
@@ -783,7 +755,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Access-Control-Allow-Origin for /v1/* responses."
   },
   {
@@ -794,7 +765,6 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
     "description": "Enforce password authentication for the admin dashboard. When false, loopback clients access the dashboard without login (open mode). When true, dashboard requires password. Defaults to true."
   },
   {

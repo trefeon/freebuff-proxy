@@ -134,7 +134,7 @@
 
       {#if batchLogs.length > 0}
         <div
-          class="fp-inset rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto font-mono text-xs"
+          class="fp-inset rounded p-3 space-y-1.5 max-h-48 overflow-y-auto font-mono text-xs"
         >
           {#each batchLogs as log (log.id)}
             <div class="flex items-center justify-between gap-2">

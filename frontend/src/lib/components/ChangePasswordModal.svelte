@@ -99,7 +99,7 @@
 >
   {#snippet icon()}
     <div
-      class="w-8 h-8 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)] flex items-center justify-center"
+      class="w-8 h-8 rounded bg-[var(--fp-accent)]/10 text-[var(--fp-accent)] flex items-center justify-center"
     >
       <Lock size={18} />
     </div>
@@ -127,7 +127,7 @@
           bind:value={currentPassword}
           placeholder={$tr("Enter current password (default: 123456)")}
           required
-          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
         />
         <button
           type="button"
@@ -160,7 +160,7 @@
           placeholder={$tr("Enter secure new password")}
           required
           minlength="6"
-          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
         />
         <button
           type="button"
@@ -189,7 +189,7 @@
           placeholder={$tr("Re-enter new password")}
           required
           minlength="6"
-          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded-lg text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
+          class="w-full px-3 py-2 pr-10 bg-[var(--fp-bg)] border border-[var(--fp-border)] rounded text-sm text-[var(--fp-text)] placeholder-[var(--fp-dim)] focus:outline-none focus:border-[var(--fp-accent)] font-mono"
         />
         <button
           type="button"

@@ -144,7 +144,7 @@
       bind:this={modalEl}
       tabindex="-1"
       class="relative w-full {sizeClasses[size] ||
-        sizeClasses.md} bg-[var(--fp-surface)] border border-[var(--fp-border)] rounded-xl shadow-2xl p-6 z-10 space-y-4 page-enter focus:outline-none {className}"
+        sizeClasses.md} bg-[var(--fp-surface)] border border-[var(--fp-border)] rounded-[var(--fp-radius)] p-6 z-10 space-y-4 page-enter focus:outline-none {className}"
       {role}
       aria-modal="true"
       aria-label={title || undefined}
@@ -179,7 +179,7 @@
           {#if closable}
             <button
               type="button"
-              class="text-[var(--fp-muted)] hover:text-[var(--fp-text)] p-1.5 rounded-lg hover:bg-[var(--fp-surface-2)] transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="text-[var(--fp-muted)] hover:text-[var(--fp-text)] p-1.5 rounded-[var(--fp-radius-sm)] hover:bg-[var(--fp-surface-2)] transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               onclick={handleClose}
               disabled={loading}
               aria-label={$tr("Close dialog")}

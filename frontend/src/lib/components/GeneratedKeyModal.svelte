@@ -31,7 +31,7 @@
 >
   {#snippet icon()}
     <div
-      class="p-2 rounded-lg bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
+      class="p-2 rounded bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
     >
       <Key size={18} />
     </div>
@@ -44,7 +44,7 @@
   </p>
 
   <div
-    class="fp-inset rounded-lg p-3.5 flex flex-col gap-2 bg-[var(--fp-surface)] border border-[var(--fp-border)]"
+    class="fp-inset rounded p-3.5 flex flex-col gap-2 bg-[var(--fp-surface)] border border-[var(--fp-border)]"
   >
     <div class="flex items-center justify-between gap-2">
       <span

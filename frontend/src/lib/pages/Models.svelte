@@ -61,18 +61,9 @@
     }
   }
 
-  // Live pool/price join: quota chips (N of M) and Freebucks $/hr come from
-  // the shared tokens snapshot, keyed by model id across pool tokens.
+  // Live price join: Freebucks $/hr comes from the shared tokens snapshot,
+  // keyed by model id across pool tokens.
   let live = $state(null);
-  function poolChip(id) {
-    for (const t of live?.tokens ?? []) {
-      const q = (t.quota ?? []).find((r) => r.model === id);
-      if (q && q.pool && q.pool !== "unlimited" && q.pool_label) {
-        return `${q.pool_label}: ${q.recent ?? "?"} of ${q.limit} used`;
-      }
-    }
-    return "";
-  }
   function priceLabel(id) {
     for (const t of live?.tokens ?? []) {
       const p = t.freebucks?.prices?.[id];
@@ -100,9 +91,10 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / models.conf"
   title={$tr("Models")}
   description={$tr(
-    "Served model catalog with upstream agent bindings and session quotas.",
+    "Served model catalog with upstream agent bindings and Freebucks pricing.",
   )}
   {loading}
   {error}
@@ -138,8 +130,6 @@
               <th scope="col">{$tr("Model ID")}</th>
               <th scope="col">{$tr("Served")}</th>
               <th scope="col">{$tr("Agent")}</th>
-              <th scope="col">{$tr("Premium Quota")}</th>
-              <th scope="col">{$tr("Pool")}</th>
               <th scope="col">{$tr("Price")}</th>
             </tr>
           </thead><tbody>
@@ -147,7 +137,6 @@
               {@const bound = Boolean(m.agent)}
               {@const st = modelState(m)}
               {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
-              {@const effectivePool = poolChip(m.id) || m.pool || "—"}
               <tr>
                 <td>
                   <div class="flex flex-col gap-0.5 min-w-0">
@@ -159,47 +148,45 @@
                       </strong>
                       {#if m.badges?.length}
                         {#each m.badges as badge (badge)}
+                          {#if badge !== "NEW"}
                           <span
-                            class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border {badge ===
-                            'NEW'
-                              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 font-semibold'
-                              : 'text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]'}"
+                            class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]"
                           >
                             {badge}
                           </span>
+                          {/if}
                         {/each}
                       {/if}
                     </div>
-                    <div class="flex items-center gap-1 text-[11px]">
-                      <span
-                        class="fp-num text-[11px] text-[var(--fp-dim)] truncate max-w-[220px]"
-                        title={$tr("Click copy button to copy model ID")}
+                    <div
+                      class="flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--fp-dim)] min-w-0"
+                    >
+                      <code
+                        class="fp-num truncate max-w-[220px] text-[var(--fp-muted)]"
+                        title={m.id}
                       >
                         {m.id}
-                      </span>
+                      </code>
                       <CopyButton
                         text={m.id}
                         label={$tr("Copy model ID")}
                         iconOnly
                       />
+                      {#if m.tagline}
+                        <span class="text-[var(--fp-dim)]">·</span>
+                        <span class="text-[var(--fp-muted)]">{m.tagline}</span>
+                      {/if}
+                      {#if m.notice}
+                        <span class="text-[var(--fp-dim)]">·</span>
+                        <span class="italic">{m.notice}</span>
+                      {/if}
+                      {#if m.efforts?.length}
+                        <span class="text-[var(--fp-dim)]">·</span>
+                        <span
+                          >{$tr("Reasoning")}: {m.efforts.join("/")}</span
+                        >
+                      {/if}
                     </div>
-                    {#if m.tagline || m.notice}
-                      <div
-                        class="text-[11px] text-[var(--fp-muted)] flex items-center gap-1.5 pt-0.5"
-                      >
-                        {#if m.tagline}
-                          <span>{m.tagline}</span>
-                        {/if}
-                        {#if m.tagline && m.notice}
-                          <span class="text-[var(--fp-dim)]">·</span>
-                        {/if}
-                        {#if m.notice}
-                          <span class="italic text-[var(--fp-dim)]"
-                            >{m.notice}</span
-                          >
-                        {/if}
-                      </div>
-                    {/if}
                   </div>
                 </td>
                 <td>
@@ -212,23 +199,6 @@
                   {:else}
                     <span class="text-[var(--fp-dim)]">—</span>
                   {/if}
-                </td>
-                <td
-                  ><span class="fp-num text-xs text-[var(--fp-muted)]"
-                    >{m.quota || "unlimited session"}{#if m.efforts?.length}
-                      <span class="text-[var(--fp-dim)]">
-                        · {$tr("Reasoning")}: {m.efforts.join("/")}</span
-                      >{/if}</span
-                  ></td
-                >
-                <td
-                  ><span
-                    class="fp-num text-xs font-medium {m.pool === 'premium'
-                      ? 'text-[var(--fp-accent)]'
-                      : m.pool === 'referral'
-                        ? 'text-amber-400'
-                        : 'text-[var(--fp-muted)]'}">{effectivePool}</span
-                  >
                 </td>
                 <td>
                   <span
@@ -252,8 +222,7 @@
           {@const bound = Boolean(m.agent)}
           {@const st = modelState(m)}
           {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
-          {@const effectivePool = poolChip(m.id) || m.pool || "—"}
-          <li class="fp-inset rounded-lg p-3 flex flex-col gap-2 min-w-0">
+          <li class="fp-inset rounded p-3 flex flex-col gap-2 min-w-0">
             <div class="flex items-start justify-between gap-2 min-w-0">
               <div class="min-w-0">
                 <strong
@@ -261,11 +230,10 @@
                 >
                   {m.display_name || m.id}
                 </strong>
-                <div class="flex items-center gap-1.5 pt-0.5">
-                  <code
-                    class="fp-num text-xs text-[var(--fp-dim)] truncate max-w-[200px]"
-                    >{m.id}</code
-                  >
+                <div
+                  class="flex items-center gap-1.5 flex-wrap text-xs text-[var(--fp-dim)] pt-0.5 min-w-0"
+                >
+                  <code class="fp-num truncate max-w-[200px]">{m.id}</code>
                   <span class="shrink-0 -mr-1">
                     <CopyButton
                       text={m.id}
@@ -273,34 +241,32 @@
                       iconOnly
                     />
                   </span>
+                  {#if m.tagline}
+                    <span>·</span>
+                    <span class="text-[var(--fp-muted)]">{m.tagline}</span>
+                  {/if}
+                  {#each m.badges ?? [] as badge (badge)}
+                    {#if badge !== "NEW"}
+                      <span>·</span>
+                      <span
+                        class="px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wider border bg-[var(--fp-surface)] border-[var(--fp-border)]"
+                      >
+                        {badge}
+                      </span>
+                    {/if}
+                  {/each}
+                  {#if m.notice}
+                    <span>·</span>
+                    <span class="italic">{m.notice}</span>
+                  {/if}
+                  {#if m.efforts?.length}
+                    <span>·</span>
+                    <span>{$tr("Reasoning")}: {m.efforts.join("/")}</span>
+                  {/if}
                 </div>
               </div>
               <StatusBadge status={$tr(st)} tone={modelTone(st)} />
             </div>
-            {#if m.tagline || m.notice || m.badges?.length}
-              <div
-                class="flex flex-wrap items-center gap-1.5 text-xs text-[var(--fp-muted)]"
-              >
-                {#if m.tagline}
-                  <span>{m.tagline}</span>
-                {/if}
-                {#each m.badges ?? [] as badge (badge)}
-                  <span class="text-[var(--fp-dim)]">·</span>
-                  <span
-                    class="px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wider border {badge ===
-                    'NEW'
-                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 font-semibold'
-                      : 'text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]'}"
-                  >
-                    {badge}
-                  </span>
-                {/each}
-                {#if m.notice}
-                  <span class="text-[var(--fp-dim)]">·</span>
-                  <span class="italic text-[var(--fp-dim)]">{m.notice}</span>
-                {/if}
-              </div>
-            {/if}
             <div
               class="flex items-center justify-between gap-2 text-xs pt-1 border-t border-[var(--fp-border)]/60"
             >
@@ -311,20 +277,6 @@
               >
                 {effectivePrice}
               </span>
-              <span class="text-[var(--fp-dim)]">
-                {effectivePool}
-              </span>
-            </div>
-            <div
-              class="flex items-center justify-between gap-2 border-t border-[var(--fp-border)]/60 pt-1.5 text-xs text-[var(--fp-muted)]"
-            >
-              <span class="text-[var(--fp-dim)] shrink-0">{$tr("Quota")}</span>
-              <span class="fp-num text-xs text-right break-words min-w-0"
-                >{m.quota || "unlimited session"}{#if m.efforts?.length}
-                  <span class="text-[var(--fp-dim)]">
-                    · {m.efforts.join("/")}</span
-                  >{/if}</span
-              >
             </div>
             <div
               class="flex items-center justify-between gap-2 text-xs min-w-0"

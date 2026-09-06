@@ -53,10 +53,11 @@ func TestAccessLogGate(t *testing.T) {
 	}
 }
 
-// TestAccessQuietEndpointsRateLimited verifies end-to-end that two /healthz
-// requests in the same window produce one access line, and a request after
-// the window produces a second (T17).
-func TestAccessQuietEndpointsRateLimited(t *testing.T) {
+// TestAccessSilentEndpointsNeverLog verifies the silent-path policy: probes
+// (/healthz, /metrics) and the dashboard's own GET polls under /admin/api/*
+// emit zero access lines, so the log viewer keeps auth and session events
+// instead of per-minute liveness and per-poll spam.
+func TestAccessSilentEndpointsNeverLog(t *testing.T) {
 	testutil.UnsetConfigEnv(t)
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -64,52 +65,26 @@ func TestAccessQuietEndpointsRateLimited(t *testing.T) {
 	srv.gates = newAccessGates()
 	h := srv.Handler()
 
-	for i := 0; i < 2; i++ {
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/healthz"},
+		{http.MethodGet, "/healthz"},
+		{http.MethodGet, "/metrics"},
+		{http.MethodGet, "/admin/api/logs"},
+		{http.MethodGet, "/admin/api/tokens"},
+	} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
 	}
-	if got := strings.Count(sink.String(), "msg=access"); got != 1 {
-		t.Fatalf("access lines for two same-window /healthz = %d, want 1", got)
-	}
-
-	// Shrink the per-Server window to zero: the next request logs again
-	// (deterministic stand-in for "two requests in different minutes").
-	srv.gates.window = 0
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
-	if got := strings.Count(sink.String(), "msg=access"); got != 2 {
-		t.Fatalf("access lines after window expiry = %d, want 2", got)
-	}
-}
-
-// TestAccessLogsEndpointRateLimited pins the console self-pollution fix: the
-// Logs page polls GET /admin/api/logs every second, and each poll used to
-// emit its own access line into the same 200-entry window the console reads.
-// At one line per second an idle dashboard evicted its own inference history
-// in ~3 minutes ("entries appear then vanish with no new requests"). The
-// endpoint is quiet-gated like /healthz: at most one access line per window.
-func TestAccessLogsEndpointRateLimited(t *testing.T) {
-	testutil.UnsetConfigEnv(t)
-	mock := testutil.NewMock()
-	defer mock.Close()
-	srv, sink := newLoggingServer(t, mock, nil)
-	srv.gates = newAccessGates()
-	h := srv.Handler()
-
-	for range 2 {
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/api/logs", nil))
-	}
-	if got := strings.Count(sink.String(), "msg=access"); got != 1 {
-		t.Fatalf("access lines for two same-window GET /admin/api/logs = %d, want 1", got)
+	if got := strings.Count(sink.String(), "msg=access"); got != 0 {
+		t.Fatalf("access lines for probes + dashboard polls = %d, want 0", got)
 	}
 
-	// A normal /v1 access line must still fire every time (only the
-	// self-observing logs poll is quiet-gated).
+	// A normal /v1 access line still fires every time, and an admin POST
+	// (mutation) is not a poll either.
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
-	if got := strings.Count(sink.String(), "msg=access"); got != 2 {
-		t.Fatalf("access lines after one /v1/models = %d, want 2", got)
+	if got := strings.Count(sink.String(), "msg=access"); got != 1 {
+		t.Fatalf("access lines after one /v1/models = %d, want 1", got)
 	}
 }
 

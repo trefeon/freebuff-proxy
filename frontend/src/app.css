@@ -1,54 +1,54 @@
 @import "tailwindcss";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
-@import "@fontsource/ibm-plex-sans/700.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
-@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource/geist/400.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
+@import "@fontsource/geist/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 
 @theme {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-surface: var(--fp-surface);
   --color-border-subtle: var(--fp-border);
   --color-text-muted: var(--fp-muted);
   --color-primary: var(--fp-accent);
 }
 
-/* ── Design Tokens (see DESIGN.md) ─────────────────────────────── */
+/* ── Design Tokens (see DESIGN.md — Terminal Cyber Ops theme) ────── */
 :root {
   color-scheme: dark;
-  /* Surfaces — layered, defined edges only (no soft shadows) */
-  --fp-bg: #0b0f17;
-  --fp-surface: #141a25;
-  --fp-surface-2: #1a2230;
-  --fp-inset: #080b11;
-  --fp-input-bg: #0c121c;
+  /* Surfaces — obsidian stack, hairline enclosures, no shadows */
+  --fp-bg: #0b0e14;
+  --fp-surface: #131822;
+  --fp-surface-2: #161b26;
+  --fp-inset: #08090c;
+  --fp-input-bg: #08090c;
 
   /* Borders */
-  --fp-border: #232d3d;
-  --fp-border-bright: #303c50;
+  --fp-border: #1f2633;
+  --fp-border-bright: #232b3b;
 
-  /* Text — --fp-dim tuned to 5.0:1 on --fp-surface (#141A25) and 5.3:1 on --fp-surface-2 at 11px (WCAG AA 4.5:1) */
-  --fp-text: #e9edf3;
-  --fp-muted: #96a2b4;
-  --fp-dim: #8296b5;
-  /* Accent — signal gold */
-  --fp-accent: #e3a857;
-  --fp-accent-hover: #f0be7a;
-  --fp-accent-dim: rgba(227, 168, 87, 0.14);
+  /* Text */
+  --fp-text: #f4f6fb;
+  --fp-muted: #94a3b8;
+  --fp-dim: #64748b;
+  /* Accent — terminal signal green */
+  --fp-accent: #28c244;
+  --fp-accent-hover: #00ff66;
+  --fp-accent-dim: rgba(40, 194, 68, 0.12);
 
-  /* Semantic states */
-  --fp-success: #4ade80;
-  --fp-warning: #fbbf24;
-  --fp-error: #f87171;
-  --fp-info: #7dd3fc;
+  /* Semantic states — terminal bracket telemetry */
+  --fp-success: #22c55e;
+  --fp-warning: #f59e0b;
+  --fp-error: #ef4444;
+  --fp-info: #38bdf8;
   --fp-error-deep: #7f1d1d;
 
-  /* Radii — exactly two */
-  --fp-radius-sm: 4px;
-  --fp-radius: 8px;
+  /* Radii — compact terminal geometry */
+  --fp-radius-sm: 3px;
+  --fp-radius: 4px;
 
   /* Transitions */
   --fp-ease: cubic-bezier(0.23, 1, 0.32, 1);
@@ -66,7 +66,7 @@
 body {
   background-color: var(--fp-bg);
   color: var(--fp-text);
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
@@ -87,12 +87,12 @@ code,
 pre,
 .font-mono,
 .fp-mono {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* Numeric data is always mono + tabular (DESIGN.md signature move) */
 .fp-num {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -214,7 +214,7 @@ pre,
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
   font-size: 13px;
   font-weight: 500;
   line-height: 1;
@@ -240,7 +240,7 @@ pre,
 
 .fp-btn-primary {
   background: var(--fp-accent);
-  color: #171006;
+  color: #0b0e14;
   border-color: var(--fp-accent);
   font-weight: 600;
 }
@@ -316,7 +316,7 @@ pre,
   border: 1px solid var(--fp-border-bright);
   border-radius: var(--fp-radius-sm);
   color: var(--fp-text);
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
   padding: 0.45rem 0.75rem;
   transition: border-color var(--fp-duration) var(--fp-ease);
@@ -339,6 +339,18 @@ pre,
 .fp-input:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Native number spinners eat digit space on narrow inputs and duplicate
+   our Stepper controls — hide them on fp-inputs (keyboard entry unaffected). */
+input.fp-input[type="number"]::-webkit-outer-spin-button,
+input.fp-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.fp-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 textarea.fp-input {
@@ -402,7 +414,7 @@ select.fp-input option,
 }
 
 .fp-table thead th {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -441,7 +453,7 @@ select.fp-input option,
 }
 
 .fp-table .num {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }

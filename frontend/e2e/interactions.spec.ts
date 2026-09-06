@@ -575,15 +575,15 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await mockDashboard(page, f);
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view.
-    await expect(page.getByText("/v1 only")).toBeVisible();
+    // Console is the default view: header counts model requests.
+    await expect(page.getByText("model requests").first()).toBeVisible();
 
     // Table view exposes the labelled filter controls.
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
     await page.getByRole("button", { name: "Console" }).click();
-    await expect(page.getByText("/v1 only")).toBeVisible();
+    await expect(page.getByText("model requests").first()).toBeVisible();
 
     // Auto toggle flips label and pauses the 1s poll.
     const auto = page.getByRole("button", { name: /^Auto / });

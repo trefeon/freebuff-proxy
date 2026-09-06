@@ -58,8 +58,8 @@
           step="1"
           aria-label="RATE_LIMIT_PER_IP"
           class="fp-input w-full !text-xs !py-1.5"
-          placeholder="0 (Unlimited)"
-          value={rateLimitPerIp === "0" ? "" : rateLimitPerIp}
+          placeholder="0"
+          value={rateLimitPerIp}
           oninput={(e) => {
             const val = e.currentTarget.value.trim();
             onField("RATE_LIMIT_PER_IP", val === "" ? "0" : val);
@@ -70,6 +70,9 @@
           >req/s</span
         >
       </div>
+      <p class="text-[10px] text-[var(--fp-dim)] mt-1">
+        {$tr("0 = unlimited (recommended for a single-user gateway)")}
+      </p>
     </div>
   </SettingsRow>
 
@@ -101,8 +104,8 @@
           step="1"
           aria-label="MAX_REQUESTS_PER_MINUTE"
           class="fp-input w-full !text-xs !py-1.5"
-          placeholder="30 (default)"
-          value={formValues.MAX_REQUESTS_PER_MINUTE ?? ""}
+          placeholder="30"
+          value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
           oninput={(e) => {
             const val = e.currentTarget.value.trim();
             onField("MAX_REQUESTS_PER_MINUTE", val);
@@ -113,6 +116,9 @@
           >req/min</span
         >
       </div>
+      <p class="text-[10px] text-[var(--fp-dim)] mt-1">
+        {$tr("0 = unlimited · recommended 30")}
+      </p>
     </div>
   </SettingsRow>
 
@@ -144,9 +150,8 @@
           min="0"
           step="1"
           aria-label="MAX_REQUESTS_PER_DAY"
-          class="fp-input w-full !text-xs !py-1.5"
-          placeholder="1500 (default)"
-          value={formValues.MAX_REQUESTS_PER_DAY ?? ""}
+          placeholder="1500"
+          value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
           oninput={(e) => {
             const val = e.currentTarget.value.trim();
             onField("MAX_REQUESTS_PER_DAY", val);
@@ -157,6 +162,9 @@
           >req/day</span
         >
       </div>
+      <p class="text-[10px] text-[var(--fp-dim)] mt-1">
+        {$tr("0 = unlimited · recommended 1500")}
+      </p>
     </div>
   </SettingsRow>
 </SettingsCard>

@@ -11,7 +11,15 @@
 
 <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
   <div class="min-w-0">
-    <h1 class="text-[20px] font-semibold text-[var(--fp-text)]">{title}</h1>
+    <h1
+      class="text-[20px] font-semibold text-[var(--fp-text)] flex items-center gap-2"
+    >
+      <span
+        class="text-[var(--fp-accent)] font-mono select-none"
+        aria-hidden="true">❯</span
+      >
+      <span>{title}</span>
+    </h1>
     {#if description}
       <p class="mt-1 text-sm text-[var(--fp-muted)]">{description}</p>
     {/if}

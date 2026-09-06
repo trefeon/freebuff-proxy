@@ -211,26 +211,23 @@
     </a>
 
     <ul class="mt-8 space-y-0.5">
-      {#each tabs as tab (tab.id)}
+      {#each tabs as tab, ti (tab.id)}
         <li>
           <a
             href={"#" + tab.id}
             onclick={() => switchTab(tab.id)}
             aria-current={activeTab === tab.id ? "page" : undefined}
-            class="relative flex items-center gap-2.5 pl-4 pr-3 py-2 rounded-sm text-xs font-medium transition-colors duration-150
+            class="relative flex items-center gap-2.5 pl-4 pr-3 py-2 rounded-[3px] text-xs font-medium transition-colors duration-150
               {activeTab === tab.id
-              ? 'text-[var(--fp-accent)] bg-[var(--fp-surface)]'
+              ? 'bg-[var(--fp-accent)] text-[#0b0e14] font-semibold'
               : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)]'}"
           >
-            {#if activeTab === tab.id}
-              <span
-                class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] bg-[var(--fp-accent)]"
-                aria-hidden="true"
-              ></span>
-              <span class="led led-accent" aria-hidden="true"></span>
-            {/if}
             <tab.icon size={16} class="shrink-0" />
             <span class="font-mono text-xs">{$tr(tab.label)}</span>
+            <span
+              class="ml-auto font-mono text-[10px] opacity-60"
+              aria-hidden="true">_{String(ti + 1).padStart(2, "0")}</span
+            >
           </a>
         </li>
       {/each}
@@ -299,7 +296,7 @@
   <div class="flex items-center gap-2 h-14 px-4">
     <button
       bind:this={hamburgerEl}
-      class="p-2.5 min-w-11 min-h-11 rounded-lg text-[var(--fp-muted)] hover:text-white hover:bg-[var(--fp-surface)] transition-colors flex items-center justify-center shrink-0"
+      class="p-2.5 min-w-11 min-h-11 rounded text-[var(--fp-muted)] hover:text-white hover:bg-[var(--fp-surface)] transition-colors flex items-center justify-center shrink-0"
       onclick={mobileOpen ? closeDrawer : openDrawer}
       aria-label={mobileOpen ? "Close menu" : "Open menu"}
       aria-expanded={mobileOpen}
@@ -373,31 +370,27 @@
       </a>
 
       <ul class="space-y-0.5">
-        {#each tabs as tab (tab.id)}
+        {#each tabs as tab, ti (tab.id)}
           <li>
             <a
               href={"#" + tab.id}
               onclick={() => switchTab(tab.id)}
               aria-current={activeTab === tab.id ? "page" : undefined}
-              class="relative flex items-center gap-2.5 pl-4 pr-3 py-2.5 min-h-11 rounded-sm text-sm font-medium transition-colors
+              class="relative flex items-center gap-2.5 pl-4 pr-3 py-2.5 min-h-11 rounded-[3px] text-sm font-medium transition-colors
                 {activeTab === tab.id
-                ? 'text-[var(--fp-accent)] bg-[var(--fp-surface)]'
+                ? 'bg-[var(--fp-accent)] text-[#0b0e14] font-semibold'
                 : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)]'}"
             >
-              {#if activeTab === tab.id}
-                <span
-                  class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] bg-[var(--fp-accent)]"
-                  aria-hidden="true"
-                ></span>
-                <span class="led led-accent" aria-hidden="true"></span>
-              {/if}
               <tab.icon size={16} class="shrink-0" />
               <span class="font-mono text-xs">{$tr(tab.label)}</span>
+              <span
+                class="ml-auto font-mono text-[10px] opacity-60"
+                aria-hidden="true">_{String(ti + 1).padStart(2, "0")}</span
+              >
             </a>
           </li>
         {/each}
       </ul>
-
       <div class="mt-auto border-t border-[var(--fp-border)] px-2 pt-3 pb-1">
         {#if versionInfo?.has_update}
           <a

@@ -49,7 +49,7 @@
       aria-pressed={active}
       class="{sizeClasses[size] ||
         sizeClasses.sm} font-mono rounded transition-colors flex items-center gap-1.5 {active
-        ? 'bg-[var(--fp-surface)] text-[var(--fp-accent)] font-semibold shadow-sm'
+        ? 'bg-[var(--fp-accent-dim)] text-[var(--fp-accent)] font-semibold border border-[var(--fp-accent)]/30'
         : 'text-[var(--fp-muted)] hover:text-[var(--fp-text)]'}"
       onclick={() => select(opt.id)}
     >

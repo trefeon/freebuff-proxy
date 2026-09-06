@@ -535,6 +535,7 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / logs.conf"
   title={$tr("Logs")}
   description={$tr(
     "Live proxy and request logs from the in-memory ring buffer (200 max, newest first).",
@@ -577,7 +578,9 @@
             ></span>
             <span class="font-mono text-xs text-[var(--fp-muted)] truncate"
               >{requestGroups.length}
-              {requestGroups.length === 1 ? "request" : "requests"} · /v1 only</span
+              {requestGroups.length === 1
+                ? "model request"
+                : "model requests"}</span
             >
           </div>
           <div

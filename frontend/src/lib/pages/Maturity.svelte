@@ -2,6 +2,9 @@
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import PageShell from "../components/PageShell.svelte";
+  import FieldBox from "../components/FieldBox.svelte";
+  import Stepper from "../components/Stepper.svelte";
+  import Pips from "../components/Pips.svelte";
   import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
   import Button from "../components/Button.svelte";
@@ -199,9 +202,10 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / maturity.conf"
   title={$tr("Account Maturity")}
   description={$tr(
-    "Lock warming accounts out of rotation while a daily low-cost touch keeps their streak alive. Reaching the target auto-releases the token.",
+    "Lock warming accounts out of rotation while a daily low-cost Freebucks touch keeps their streak alive. Reaching the target auto-releases the token.",
   )}
   {loading}
   {error}
@@ -223,7 +227,7 @@
     </Alert>
   {/if}
 
-  <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
     {#each tokens as t (t.index ?? t.email)}
       {@const idx = t.index ?? 0}
       {@const m = t.maturity}
@@ -236,8 +240,9 @@
         title={$tr("Account #{idx}", { idx: idx + 1 })}
         description={t.email || $tr("unknown account")}
       >
-        <div class="flex flex-col gap-3">
-          <div class="flex flex-wrap items-center gap-2">
+        {#snippet actions()}
+          {@const streakTarget = m?.target ?? d.target ?? 7}
+          <span class="flex flex-wrap items-center justify-end gap-1.5">
             {#if m?.badge}
               <StatusBadge tone={badgeTone(m.badge)} status={m.badge} />
             {:else}
@@ -249,78 +254,81 @@
             {#if m?.warn}
               <StatusBadge tone="bad" status={$tr("Touch not advancing")} />
             {/if}
-            {#if m?.enabled}
-              <span class="text-sm text-[var(--fp-muted)]">
-                {progressDots(t.streak ?? 0)}
-                {t.streak ?? 0}/{$tr("{target} day target", {
-                  target: m.target,
-                })}
-              </span>
-            {/if}
-          </div>
-
+            <Pips
+              value={t.streak ?? 0}
+              total={streakTarget}
+              label={$tr("Current streak / target")}
+            />
+          </span>
+        {/snippet}
+        <div class="flex flex-col gap-2">
           {#if m}
-            <dl class="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-              <div class="flex justify-between gap-2">
-                <dt class="text-[var(--fp-muted)]">
-                  {$tr("Today's slot")}
-                </dt>
-                <dd class="font-mono">{fmtTime(m.slot)}</dd>
-              </div>
-              <div class="flex justify-between gap-2">
-                <dt class="text-[var(--fp-muted)]">{$tr("Last touch")}</dt>
-                <dd class="font-mono">
-                  {m.last_action
-                    ? `${m.last_action} → ${m.last_result ?? "?"}`
-                    : "—"}
-                </dd>
-              </div>
-              <div class="flex justify-between gap-2">
-                <dt class="text-[var(--fp-muted)]">{$tr("Touched at")}</dt>
-                <dd class="font-mono">{fmtTime(m.last_touch)}</dd>
-              </div>
-              <div class="flex justify-between gap-2">
-                <dt class="text-[var(--fp-muted)]">{$tr("Advanced")}</dt>
-                <dd class="font-mono">{m.last_advanced || "—"}</dd>
-              </div>
-            </dl>
-          {:else}
-            <p class="text-sm text-[var(--fp-muted)]">
-              {$tr(
-                "Enable maturity to lock this account for warming: it leaves serving rotation and earns its streak back one cheap touch a day.",
-              )}
+            <p class="fp-num text-[11px] leading-relaxed text-[var(--fp-dim)]">
+              {$tr("slot")} {fmtTime(m.slot)} ·
+              {m.last_action
+                ? `${m.last_action} → ${m.last_result ?? "?"}`
+                : $tr("no touch yet")}{m.last_touch
+                ? ` · ${fmtTime(m.last_touch)}`
+                : ""}{m.last_advanced ? ` · ${$tr("advanced")} ${m.last_advanced}` : ""}
             </p>
           {/if}
 
-          <div class="flex flex-wrap items-end gap-3">
-            <label class="flex flex-col gap-1 text-sm">
-              <span class="text-[var(--fp-muted)]">{$tr("Target (days)")}</span>
-              <input
-                type="number"
-                min="1"
-                max="28"
-                class="fp-input fp-num w-24 !h-[38px] !px-2 !py-1"
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+            <FieldBox
+              label={$tr("Target Period")}
+              unit={$tr("days")}
+              class="sm:col-span-5"
+            >
+              <Stepper
                 bind:value={d.target}
+                min={1}
+                max={28}
                 disabled={!!saving[idx]}
-                aria-label={$tr("Streak target for Account #{idx}", {
+                ariaLabel={$tr("Streak target for Account #{idx}", {
+                  idx: idx + 1,
+                })}
+                decreaseLabel={$tr("Decrease target for Account #{idx}", {
+                  idx: idx + 1,
+                })}
+                increaseLabel={$tr("Increase target for Account #{idx}", {
                   idx: idx + 1,
                 })}
               />
-            </label>
-            <label class="flex flex-col gap-1 text-sm">
-              <span class="text-[var(--fp-muted)]">{$tr("Touch mode")}</span>
+            </FieldBox>
+            <FieldBox
+              label={$tr("Touch Tier")}
+              unit={d.mode === "premium-short"
+                ? $tr("daily pool")
+                : $tr("minimal")}
+              class="sm:col-span-7"
+            >
               <select
-                class="fp-select"
+                class="fp-select !h-8 !py-1 !text-xs w-full"
                 bind:value={d.mode}
                 disabled={!!saving[idx]}
                 aria-label={$tr("Touch mode for Account #{idx}", {
                   idx: idx + 1,
                 })}
+                title={d.mode === "premium-short"
+                  ? $tr(
+                      "One short premium admission per day, paid from this account's daily Freebucks pool.",
+                    )
+                  : $tr(
+                      "Cheapest served model, minimal spend from this account's daily Freebucks pool.",
+                    )}
               >
-                <option value="unmetered">{$tr("Unmetered (free)")}</option>
-                <option value="premium-short">{$tr("Premium short")}</option>
+                <option value="unmetered"
+                  >{$tr("Economy (min. Freebucks)")}</option
+                >
+                <option value="premium-short"
+                  >{$tr("Premium short (daily pool)")}</option
+                >
               </select>
-            </label>
+            </FieldBox>
+          </div>
+          <div
+            class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fp-border)]/60 pt-2.5"
+          >
             <ToggleSwitch
               checked={d.enabled}
               disabled={!!saving[idx]}
@@ -331,30 +339,28 @@
                 d.enabled = next;
               }}
             />
+            <span class="flex flex-wrap gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!!touching[idx] || !m?.enabled}
+                loading={!!touching[idx]}
+                onclick={() => touchNow(idx)}
+                title={$tr("Fire one touch now (bypasses slot and throttle)")}
+              >
+                {$tr("Touch now")}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!!saving[idx]}
+                loading={!!saving[idx]}
+                onclick={() => save(idx)}
+              >
+                {$tr("Save")}
+              </Button>
+            </span>
           </div>
-
-          <div class="flex flex-wrap gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!!saving[idx]}
-              loading={!!saving[idx]}
-              onclick={() => save(idx)}
-            >
-              {$tr("Save")}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!!touching[idx] || !m?.enabled}
-              loading={!!touching[idx]}
-              onclick={() => touchNow(idx)}
-              title={$tr("Fire one touch now (bypasses slot and throttle)")}
-            >
-              {$tr("Touch now")}
-            </Button>
-          </div>
-
           {#if (histByIdx[idx] ?? []).length > 0}
             <ul
               class="flex flex-col gap-1.5 border-t border-[var(--fp-border)]/60 pt-2.5"

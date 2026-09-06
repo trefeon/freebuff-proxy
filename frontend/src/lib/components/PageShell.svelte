@@ -21,6 +21,8 @@
    * @prop {() => void} [onRetry]
    * @slot actions — PageHeader right-side actions
    * @slot default — page content (rendered only when loaded, no error, not empty)
+   * @prop {string} [crumb=''] — mono path line above the header
+   *   (decorative, aria-hidden); e.g. "freebuff-proxy / Admin / tokens.conf".
    */
   let {
     title,
@@ -32,6 +34,7 @@
     empty = null,
     onRetry,
     children,
+    crumb = "",
   } = $props();
 </script>
 
@@ -41,9 +44,18 @@
     {$tr("Retry")}
   </Button>
 {/snippet}
-
 <div class="space-y-6 page-enter">
-  <PageHeader {title} {description} {actions} />
+  <div class="flex flex-col gap-1.5">
+    {#if crumb}
+      <p
+        class="font-mono text-[11px] text-[var(--fp-dim)]"
+        aria-hidden="true"
+      >
+        {crumb}
+      </p>
+    {/if}
+    <PageHeader {title} {description} {actions} />
+  </div>
 
   {#if loading && !error}
     <div role="status" aria-label={$tr("Loading")} class="space-y-3">

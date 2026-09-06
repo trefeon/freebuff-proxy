@@ -28,14 +28,14 @@
 </script>
 
 <div
-  class="bg-surface border border-border-subtle rounded-[14px] shadow-[var(--shadow-soft)] p-6 page-enter {className}"
+  class="bg-surface border border-border-subtle rounded-[var(--fp-radius)] p-6 page-enter {className}"
 >
   <!-- Card Header -->
   {#if title || icon || actions}
     <div class="flex items-start justify-between gap-4 mb-5">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         {#if icon}
-          <div class="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+          <div class="p-2 rounded bg-primary/10 text-primary shrink-0">
             {@render icon()}
           </div>
         {/if}

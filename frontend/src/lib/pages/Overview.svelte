@@ -13,7 +13,6 @@
   import Card from "../components/Card.svelte";
   import CopyButton from "../components/CopyButton.svelte";
   import Alert from "../components/Alert.svelte";
-  import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
   import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
@@ -167,14 +166,6 @@
     data?.tokens?.reduce((s, t) => s + (t.requests || 0), 0) ?? 0,
   );
 
-  // Freebucks: per-token daily/weekly/monthly + balance + bindingWindow (issue #232)
-  let hasFreebucks = $derived((data?.tokens ?? []).some((t) => t.freebucks));
-  let freebucksTokens = $derived(
-    (data?.tokens ?? []).filter((t) => t.freebucks),
-  );
-  let hasBridgeFreebucks = $derived(
-    (data?.bridge_token_cards ?? []).some((c) => c.freebucks),
-  );
 
   // Dynamic Base URL follows the browser's current host (VPS IP, domain, VPN reverse proxy)
   // as computed dynamically by the backend from the request headers (Host, X-Forwarded-Host/Proto).
@@ -190,6 +181,7 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / overview.conf"
   title={$tr("Overview")}
   description={$tr("Live proxy status and token pool telemetry")}
   {loading}
@@ -391,36 +383,6 @@
           </ul>
         </Card>
       {/if}
-    {/if}
-
-    {#if hasFreebucks || hasBridgeFreebucks}
-      <Card
-        title={$tr("Freebucks — allowance")}
-        description={$tr(
-          "Daily, weekly and monthly windows with balance and binding window — per token",
-        )}
-      >
-        <div class="grid grid-cols-1 gap-4">
-          {#each freebucksTokens as tok, i (tok.index ?? tok.account_id ?? i)}
-            <PremiumQuotaBar
-              freebucks={tok.freebucks}
-              title={$tr("Account #{index} • Freebucks", {
-                index: (tok.index ?? i) + 1,
-              })}
-              {now}
-            />
-          {/each}
-          {#if hasBridgeFreebucks}
-            {#each (data.bridge_token_cards ?? []).filter((c) => c.freebucks) as bc (bc.key)}
-              <PremiumQuotaBar
-                freebucks={bc.freebucks}
-                title={`${bc.key} • Freebucks`}
-                {now}
-              />
-            {/each}
-          {/if}
-        </div>
-      </Card>
     {/if}
 
     <!-- Universal Client Integration & Endpoints Card (Always Available) -->

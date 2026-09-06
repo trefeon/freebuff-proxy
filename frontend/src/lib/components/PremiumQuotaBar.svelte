@@ -1,17 +1,17 @@
 <script>
   import { tr } from "../i18n.js";
-  import { ChevronDown, ChevronUp } from "@lucide/svelte";
-
   let {
     quota = null,
     freebucks = null,
+    // Legacy upstream windows (issue #319): paid-subscription session
+    // counts and free-tier pool windows. Upstream sends them only to
+    // rollout-audience / paid accounts; rendered only when a window
+    // carries a nonzero limit, so free-tier zeros never clutter the card.
     freeWindows = null,
     subscription = null,
     title = null,
     now = Date.now(),
   } = $props();
-
-  let poolsExpanded = $state(false);
 
   // ----- helpers -----
   function fmtRel(iso, nowMs) {
@@ -111,8 +111,6 @@
       nextBonusAt: w.next_bonus_at ?? w.nextBonusAt ?? w.NextBonusAt ?? null,
     };
   });
-  let fbPrices = $derived(freebucks?.prices ?? freebucks?.Prices ?? null);
-
   let fbWindows = $derived.by(() => {
     const w = [];
     if (fbDaily) w.push({ key: "daily", label: $tr("Daily"), win: fbDaily });
@@ -122,98 +120,49 @@
   });
 
   let fbLabel = $derived(title ?? $tr("Freebucks"));
-
-  // ----- Free session windows (issue #319) -----
-  let fw = $derived(freeWindows ?? (freebucks ? null : null) ?? null);
-  let fwWindows = $derived.by(() => {
-    if (!fw) return [];
-    const w = [];
-    if (fw.day_limit != null)
-      w.push({
-        key: "day",
-        label: $tr("Day"),
-        used: fw.day_used,
-        limit: fw.day_limit,
-        resetAt: fw.day_reset_at,
-      });
-    if (fw.week_limit != null)
-      w.push({
-        key: "week",
-        label: $tr("Week"),
-        used: fw.week_used,
-        limit: fw.week_limit,
-        resetAt: null,
-      });
-    if (fw.month_limit != null)
-      w.push({
-        key: "month",
-        label: $tr("Month"),
-        used: fw.month_used,
-        limit: fw.month_limit,
-        resetAt: fw.month_reset_at,
-      });
-    return w;
+  // Compact legacy chips: only windows with a nonzero limit survive, so
+  // accounts upstream reports nothing (or zeros) for render nothing here.
+  let legacyChips = $derived.by(() => {
+    const chips = [];
+    const push = (label, used, limit) => {
+      if (limit > 0) chips.push({ label, used: used ?? 0, limit });
+    };
+    const fw = freeWindows ?? null;
+    if (fw) {
+      push("Day", fw.day_used ?? fw.dayUsed, fw.day_limit ?? fw.dayLimit);
+      push("Week", fw.week_used ?? fw.weekUsed, fw.week_limit ?? fw.weekLimit);
+      push(
+        "Month",
+        fw.month_used ?? fw.monthUsed,
+        fw.month_limit ?? fw.monthLimit,
+      );
+    }
+    const sub = subscription ?? null;
+    if (sub) {
+      push(
+        "Sub Day",
+        sub.day_used ?? sub.dayUsed,
+        sub.day_limit ?? sub.dayLimit,
+      );
+      push(
+        "Sub 5-day",
+        sub.five_day_used ?? sub.fiveDayUsed,
+        sub.five_day_limit ?? sub.fiveDayLimit,
+      );
+      push(
+        "Sub Month",
+        sub.month_used ?? sub.monthUsed,
+        sub.month_limit ?? sub.monthLimit,
+      );
+      push(
+        "Sub Premium",
+        sub.day_premium_used ?? sub.dayPremiumUsed,
+        sub.day_premium_limit ?? sub.dayPremiumLimit,
+      );
+    }
+    return chips;
   });
-  let fwPct = (used, limit) =>
-    limit > 0 ? Math.min(100, Math.max(0, (used / limit) * 100)) : 0;
 
-  // ----- Subscription windows (issue #319) -----
-  let sub = $derived(subscription ?? null);
-  let subWindows = $derived.by(() => {
-    if (!sub) return [];
-    const w = [];
-    if (sub.day_limit != null)
-      w.push({
-        key: "day",
-        label: $tr("Day"),
-        used: sub.day_used,
-        limit: sub.day_limit,
-        resetAt: sub.day_reset_at,
-      });
-    if (sub.five_day_limit != null)
-      w.push({
-        key: "5d",
-        label: $tr("5-day"),
-        used: sub.five_day_used,
-        limit: sub.five_day_limit,
-        resetAt: null,
-      });
-    if (sub.month_limit != null)
-      w.push({
-        key: "month",
-        label: $tr("Month"),
-        used: sub.month_used,
-        limit: sub.month_limit,
-        resetAt: sub.period_ends_at,
-      });
-    if (sub.day_premium_limit != null)
-      w.push({
-        key: "premium",
-        label: $tr("Premium"),
-        used: sub.day_premium_used,
-        limit: sub.day_premium_limit,
-        resetAt: null,
-      });
-    return w;
-  });
-  let subSpend = $derived(
-    sub && sub.month_spend_limit_usd != null
-      ? {
-          used: sub.month_spend_usd,
-          limit: sub.month_spend_limit_usd,
-          pct:
-            sub.month_spend_limit_usd > 0
-              ? Math.min(
-                  100,
-                  Math.max(
-                    0,
-                    (sub.month_spend_usd / sub.month_spend_limit_usd) * 100,
-                  ),
-                )
-              : 0,
-        }
-      : null,
-  );
   // ----- Legacy quota derived (fallback) -----
   let pct = $derived(
     Math.min(
@@ -344,234 +293,34 @@
       {/each}
     </div>
 
-    {#if fbPrices && typeof fbPrices === "object" && Object.keys(fbPrices).length > 0}
-      <div class="mt-3 fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
-        <span
-          class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
-          >{$tr("Prices")}:
-        </span>
-        {#each Object.entries(fbPrices).slice(0, 4) as [model, price] (model)}
-          <span class="inline-flex items-center gap-1 mr-3">
-            <code class="text-[var(--fp-text)] text-[11px]">{model}</code>
-            <span class="text-[var(--fp-accent)]">{fmtNum(price)}</span>
-          </span>
-        {/each}
-        {#if Object.keys(fbPrices).length > 4}
-          <span class="text-[var(--fp-dim)]"
-            >+{Object.keys(fbPrices).length - 4} {$tr("more")}</span
-          >
-        {/if}
-      </div>
-    {/if}
   </div>
 {/if}
-{#if fwWindows.length > 0 || subWindows.length > 0 || subSpend}
+{#if legacyChips.length > 0}
   <div
     class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
   >
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <button
-        type="button"
-        class="flex items-center gap-2 min-w-0"
-        aria-expanded={poolsExpanded}
-        aria-controls={poolsExpanded ? "free-session-pools-details" : undefined}
-        onclick={() => (poolsExpanded = !poolsExpanded)}
-      >
+    <p
+      class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)] truncate mb-2"
+    >
+      {$tr("Session pools")}
+    </p>
+    <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+      {#each legacyChips as chip (chip.label)}
         <span
-          class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)] truncate"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 tabular-nums"
         >
-          {$tr("Free session pools")}
+          <span class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
+            >{chip.label}</span
+          >
+          <span class="text-[var(--fp-muted)]"
+            >{fmtNum(chip.used)}/{fmtNum(chip.limit)}</span
+          >
         </span>
-        <span class="text-[var(--fp-dim)] shrink-0">
-          {#if poolsExpanded}
-            <ChevronUp size={14} />
-          {:else}
-            <ChevronDown size={14} />
-          {/if}
-        </span>
-      </button>
-      {#if subSpend}
-        <span
-          class="fp-num text-xs font-medium text-[var(--fp-text)] tabular-nums"
-          >{$tr("Spend")}
-          <span class="text-[var(--fp-accent)]">${fmtNum(subSpend.used)}</span>
-          / ${fmtNum(subSpend.limit)}</span
-        >
-      {/if}
+      {/each}
     </div>
-    {#if !poolsExpanded}
-      <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
-        {#each fwWindows as item (item.key)}
-          {@const wp = fwPct(item.used, item.limit)}
-          <span
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 tabular-nums"
-          >
-            <span
-              class="font-semibold uppercase tracking-wider text-[var(--fp-text)]"
-              >{item.label}</span
-            >
-            <span class="text-[var(--fp-muted)]"
-              >{fmtNum(item.used)}/{fmtNum(item.limit)}</span
-            >
-            <span style="color: {pctColor(wp)}"
-              >{Math.round(wp * 100) / 100}%</span
-            >
-          </span>
-        {/each}
-        {#each subWindows as item (item.key)}
-          {@const wp = fwPct(item.used, item.limit)}
-          <span
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 tabular-nums"
-          >
-            <span
-              class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
-              >{$tr("Sub")} {item.label}</span
-            >
-            <span class="text-[var(--fp-muted)]"
-              >{fmtNum(item.used)}/{fmtNum(item.limit)}</span
-            >
-            <span style="color: {pctColor(wp)}"
-              >{Math.round(wp * 100) / 100}%</span
-            >
-          </span>
-        {/each}
-      </div>
-    {:else}
-      <div id="free-session-pools-details" class="space-y-3">
-        {#each fwWindows as item (item.key)}
-          {@const wp = fwPct(item.used, item.limit)}
-          {@const wc = pctColor(wp)}
-          {@const wr = fmtRel(item.resetAt, now)}
-          <div
-            class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
-          >
-            <div
-              class="flex flex-wrap items-center justify-between gap-2 mb-1.5"
-            >
-              <span
-                class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)]"
-                >{item.label}</span
-              >
-              <span
-                class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums"
-              >
-                {$tr("Resets in")}
-                {wr} — {item.resetAt ?? "—"}
-              </span>
-            </div>
-            <div
-              class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
-              role="progressbar"
-              aria-valuenow={Math.round(wp)}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-label="{item.label} {Math.round(wp)}% used"
-            >
-              <div
-                class="h-full rounded-full transition-all duration-300"
-                style="width: {wp}%; background: {wc}"
-              ></div>
-            </div>
-            <div
-              class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
-            >
-              <span class="fp-num text-[var(--fp-muted)] tabular-nums">
-                {$tr("Used")}
-                <span class="text-[var(--fp-text)] font-medium"
-                  >{fmtNum(item.used)}</span
-                >
-                / {fmtNum(item.limit)} • {Math.round(wp * 100) / 100}%
-              </span>
-            </div>
-          </div>
-        {/each}
-        {#each subWindows as item (item.key)}
-          {@const wp = fwPct(item.used, item.limit)}
-          {@const wc = pctColor(wp)}
-          {@const wr = fmtRel(item.resetAt, now)}
-          <div
-            class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
-          >
-            <div
-              class="flex flex-wrap items-center justify-between gap-2 mb-1.5"
-            >
-              <span
-                class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-text)]"
-                >{$tr("Subscription")} {item.label}</span
-              >
-              <span
-                class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums"
-              >
-                {$tr("Resets in")}
-                {wr}
-              </span>
-            </div>
-            <div
-              class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
-              role="progressbar"
-              aria-valuenow={Math.round(wp)}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-label="{item.label} {Math.round(wp)}% used"
-            >
-              <div
-                class="h-full rounded-full transition-all duration-300"
-                style="width: {wp}%; background: {wc}"
-              ></div>
-            </div>
-            <div
-              class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
-            >
-              <span class="fp-num text-[var(--fp-muted)] tabular-nums">
-                {$tr("Used")}
-                <span class="text-[var(--fp-text)] font-medium"
-                  >{fmtNum(item.used)}</span
-                >
-                / {fmtNum(item.limit)} • {Math.round(wp * 100) / 100}%
-              </span>
-            </div>
-          </div>
-        {/each}
-        {#if subSpend}
-          <div
-            class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
-          >
-            <div
-              class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
-              role="progressbar"
-              aria-valuenow={Math.round(subSpend.pct)}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-label="{$tr('Monthly spend')} {Math.round(
-                subSpend.pct,
-              )}% used"
-            >
-              <div
-                class="h-full rounded-full transition-all duration-300"
-                style="width: {subSpend.pct}%; background: {pctColor(
-                  subSpend.pct,
-                )}"
-              ></div>
-            </div>
-            <div
-              class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
-            >
-              <span class="fp-num text-[var(--fp-muted)] tabular-nums">
-                {$tr("Monthly spend")}
-                <span class="text-[var(--fp-text)] font-medium"
-                  >${fmtNum(subSpend.used)}</span
-                >
-                / ${fmtNum(subSpend.limit)} • {Math.round(subSpend.pct * 100) /
-                  100}%
-              </span>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
   </div>
 {/if}
-{#if quota && !hasFreebucks && fwWindows.length === 0 && subWindows.length === 0 && !subSpend}
+{#if quota && !hasFreebucks}
   <div
     class="rounded border border-[var(--fp-border)] bg-[var(--fp-bg)]/60 p-3"
   >

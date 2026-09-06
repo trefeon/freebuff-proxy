@@ -31,7 +31,7 @@
   >
     {#snippet extra()}
       <div
-        class="mt-2.5 p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
+        class="mt-2.5 p-3 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
       >
         <div class="flex items-center gap-2.5 min-w-0">
           <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">
@@ -60,7 +60,7 @@
         class="mt-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs"
       >
         <li
-          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/30"
+          class="flex items-center gap-2 p-2.5 rounded bg-[var(--fp-accent)]/10 border border-[var(--fp-accent)]/30"
         >
           <span class="font-mono font-bold text-[var(--fp-accent)]">1.</span>
           <span class="font-mono font-medium text-[var(--fp-text)]"
@@ -72,19 +72,19 @@
           >
         </li>
         <li
-          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+          class="flex items-center gap-2 p-2.5 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
         >
           <span class="font-mono font-bold text-[var(--fp-muted)]">2.</span>
           <span class="font-mono text-[var(--fp-text)]">-config JSON</span>
         </li>
         <li
-          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+          class="flex items-center gap-2 p-2.5 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
         >
           <span class="font-mono font-bold text-[var(--fp-muted)]">3.</span>
           <span class="font-mono text-[var(--fp-text)]">.env File</span>
         </li>
         <li
-          class="flex items-center gap-2 p-2.5 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
+          class="flex items-center gap-2 p-2.5 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)]"
         >
           <span class="font-mono font-bold text-[var(--fp-dim)]">4.</span>
           <span class="font-mono text-[var(--fp-muted)]">{$tr("Defaults")}</span
@@ -106,7 +106,7 @@
       <div class="mt-2.5 flex flex-col gap-2">
         <!-- Edit file command -->
         <div
-          class="p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
+          class="p-3 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
         >
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">
@@ -123,7 +123,7 @@
 
         <!-- Reload container command -->
         <div
-          class="p-3 rounded-lg bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
+          class="p-3 rounded bg-[var(--fp-surface-2)]/60 border border-[var(--fp-border)] flex items-center justify-between gap-3"
         >
           <div class="flex items-center gap-2.5 min-w-0">
             <span class="text-xs text-[var(--fp-muted)] shrink-0 font-medium">

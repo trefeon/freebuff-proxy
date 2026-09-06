@@ -449,6 +449,7 @@
 </script>
 
 <PageShell
+  crumb="freebuff-proxy / Admin / tokens.conf"
   title={$tr("Tokens")}
   description={$tr(
     "Upstream credentials, device login, client API keys, and per-token session quotas",
@@ -460,6 +461,58 @@
     refreshTokens();
   }}
 >
+  {#snippet actions()}
+    {@const activeLeases = (data?.tokens ?? []).filter(
+      (t) => t.session_status === "active",
+    ).length}
+    <dl
+      class="flex flex-wrap items-stretch gap-px bg-[var(--fp-border)] border border-[var(--fp-border)] rounded-[var(--fp-radius-sm)] overflow-hidden font-mono"
+      aria-label={$tr("Pool summary")}
+    >
+      <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
+          >{$tr("Total")}</dt
+        >
+        <dd class="text-sm font-semibold text-[var(--fp-text)] tabular-nums"
+          >{data?.token_count ?? 0}</dd
+        >
+      </div>
+      <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
+          >{$tr("Active")}</dt
+        >
+        <dd
+          class="text-sm font-semibold text-[var(--fp-accent)] tabular-nums"
+          >{activeLeases}</dd
+        >
+      </div>
+      <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
+          >{$tr("Strategy")}</dt
+        >
+        <dd class="text-sm font-semibold text-[var(--fp-text)]"
+          >{tokenRotation === "drain"
+            ? $tr("Drain")
+            : tokenRotation === "round_robin"
+              ? $tr("Robin")
+              : tokenRotation === "least_used"
+                ? $tr("Least")
+                : $tr("Random")}</dd
+        >
+      </div>
+      <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
+          >{$tr("Failover")}</dt
+        >
+        <dd
+          class="text-sm font-semibold {rateLimitFailover
+            ? 'text-[var(--fp-accent)]'
+            : 'text-[var(--fp-dim)]'}"
+          >{rateLimitFailover ? $tr("On") : $tr("Off")}</dd
+        >
+      </div>
+    </dl>
+  {/snippet}
   {#if actionMessage}
     <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
   {/if}
@@ -645,7 +698,7 @@
       </div>
 
       <div
-        class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2"
+        class="fp-inset p-3 rounded text-xs text-[var(--fp-muted)] flex items-start gap-2"
       >
         {#if tokenRotation === "drain"}
           <p class="leading-relaxed">

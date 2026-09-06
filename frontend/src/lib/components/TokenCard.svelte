@@ -160,13 +160,6 @@
           class="fp-num text-xs font-semibold whitespace-nowrap text-[var(--fp-text)]"
           >Account #{idx + 1}</span
         >
-        {#if idx === 0}
-          <span
-            class="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30"
-          >
-            {$tr("Primary")}
-          </span>
-        {/if}
       </div>
       {#if token.email || token.account_id}
         <span

@@ -748,15 +748,16 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toBeVisible();
     await expect(page.getByText("No tokens in pool")).toHaveCount(0);
 
-    // No quota data yet: the per-token hint renders for every pooled token.
+    // No Freebucks or premium data yet: the per-token hint renders for
+    // every pooled token, and no legacy session-quota section exists.
     await expect(
       page.getByText(
-        "No premium quota data — run a request or -test-token to populate.",
+        "No Freebucks data — run a request or Probe all to populate.",
       ),
     ).toHaveCount(2);
     await expect(
-      page.getByText("No quota data available for this session."),
-    ).toHaveCount(2);
+      page.getByRole("heading", { name: "Session quota by model" }),
+    ).toHaveCount(0);
     // The accounting revamp notice renders once at page level, not per
     // account card (the per-card unmetered models section was removed to
     // keep cards compact — issue #332/#335 section dropped).
@@ -888,33 +889,6 @@ test.describe("operator UX journey (hermetic mocks)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 11. Settings: the raw .env editor inside <details> still validates and
-  //     save posts the edited content
-  // ---------------------------------------------------------------------------
-  // 11. Settings: configuration file and deployment guide renders with host commands
-  // ---------------------------------------------------------------------------
-  test("settings: configuration file and deployment guide renders with host commands", async ({
-    page,
-  }) => {
-    const f = loadFixtures();
-    await mockDashboard(page, f, {}, { loginPage: true });
-
-    await page.goto("http://127.0.0.1:4173/admin/#settings");
-    await expect(
-      page.getByRole("heading", { name: "Configuration File & Deployment" }),
-    ).toBeVisible();
-
-    await expect(
-      page.getByText("/app/state/.env", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("Precedence Order")).toBeVisible();
-    await expect(page.getByText("nano .env")).toBeVisible();
-    await expect(
-      page.getByText("docker compose up -d", { exact: true }),
-    ).toBeVisible();
-  });
-
-  // ---------------------------------------------------------------------------
   // 12. Settings: Command Center displays restart and update controls
   // ---------------------------------------------------------------------------
   test("settings: command center renders restart and update check controls", async ({
@@ -1023,14 +997,20 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     ).toBeVisible();
     await expect(page.getByText("Freebuff Team")).toBeVisible();
 
-    // Dismiss notice
+    // X folds the notice into its slim bar: message hides, title stays
+    // with an unfold control.
     await page
       .getByRole("button", {
-        name: "Dismiss Official Upstream Announcement",
+        name: "Fold Official Upstream Announcement",
       })
       .click();
     await expect(
       page.getByText("Solar Pro 4 is now unmetered at full access."),
     ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", {
+        name: "Show Official Upstream Announcement",
+      }),
+    ).toBeVisible();
   });
 });

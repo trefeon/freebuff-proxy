@@ -8,8 +8,9 @@
   import SessionSpawnPanel from "../components/SessionSpawnPanel.svelte";
   import BatchTestPanel from "../components/BatchTestPanel.svelte";
   import { fetchAPI, postAPI } from "../api/client.js";
-  import { adminApi, adminActions } from "../api/paths.js";
+  import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import { spawnIntent } from "../utils/freebucks.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
   import {
     tokensData as tokensStore,
@@ -34,6 +35,11 @@
     "Hello! Count from 1 to 5 and briefly describe yourself.",
   );
   let reasoningEffort = $state("medium");
+  // "auto" = pure pool rotation; otherwise admit the session on the chosen
+  // pooled account first (same endpoint as the spawner below), then send.
+  let playAccount = $state("auto");
+  // Per-account spawner model picks for the mobile card list.
+  let spawnModelByIdx = $state({});
   let sendingChat = $state(false);
   let chatOutput = $state("");
   let chatStatus = $state(null); // { latencyMs, statusCode, tokens: { prompt, completion, total }, model }
@@ -84,6 +90,23 @@
     chatError = "";
     chatStatus = null;
     const start = performance.now();
+    // Pinned account: admit the session there first via the spawner
+    // endpoint, then send through normal rotation.
+    if (playAccount !== "auto") {
+      try {
+        const adm = await postAPI(
+          tokenActions.session(Number(playAccount)),
+          { model: selectedModel },
+        );
+        if (adm && adm.ok === false)
+          throw new Error(adm.message || "Admit rejected");
+      } catch (e) {
+        chatError = `Admit on account ${Number(playAccount) + 1} failed: ${e.message || e}`;
+        sendingChat = false;
+        await refreshTokens();
+        return;
+      }
+    }
 
     try {
       if (protocol === "openai") {
@@ -314,7 +337,7 @@
       <Card
         title={$tr("Model Chat & Stream Playground")}
         description={$tr(
-          "Send live requests directly to the proxy to test streaming, reasoning, and latency.",
+          "Send live requests directly to the proxy to test streaming, reasoning, and latency. Account Auto follows pool rotation; picking an account admits the session there first.",
         )}
       >
         {#snippet actions()}
@@ -331,7 +354,7 @@
 
         <div class="space-y-4">
           <!-- Controls Bar -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <!-- Model Picker -->
             <div class="flex flex-col gap-1">
               <label for="dev-model" class="text-xs text-[var(--fp-muted)]"
@@ -344,6 +367,26 @@
               >
                 {#each modelsList as m (m.id)}
                   <option value={m.id}>{m.label}</option>
+                {/each}
+              </select>
+            </div>
+            <!-- Account Picker -->
+            <div class="flex flex-col gap-1">
+              <label for="dev-account" class="text-xs text-[var(--fp-muted)]"
+                >{$tr("Account")}</label
+              >
+              <select
+                id="dev-account"
+                bind:value={playAccount}
+                class="fp-input text-xs w-full py-1.5"
+              >
+                <option value="auto">{$tr("Auto (pool rotation)")}</option>
+                {#each tokensData?.tokens ?? [] as t (t.index)}
+                  <option value={String(t.index ?? 0)}>
+                    {$tr("Account #{idx}", { idx: (t.index ?? 0) + 1 })}{t.email
+                      ? ` · ${t.email}`
+                      : ""}
+                  </option>
                 {/each}
               </select>
             </div>
@@ -467,7 +510,7 @@
           <!-- Output Box -->
           {#if chatOutput}
             <div
-              class="fp-inset rounded-lg p-3.5 space-y-2 bg-[var(--fp-surface-2)]"
+              class="fp-inset rounded p-3.5 space-y-2 bg-[var(--fp-surface-2)]"
             >
               <div class="flex items-center justify-between">
                 <span
@@ -498,7 +541,7 @@
             <div class="skeleton skeleton-line"></div>
           </div>
         {:else if tokensData?.tokens?.length}
-          <div class="overflow-x-auto">
+          <div class="hidden md:block overflow-x-auto">
             <table class="fp-table">
               <thead>
                 <tr>
@@ -554,6 +597,112 @@
               </tbody>
             </table>
           </div>
+          <ul class="md:hidden flex flex-col gap-2.5" aria-label="Token sessions">
+            {#each tokensData.tokens as token (token.index)}
+              {@const idx = token.index ?? 0}
+              {@const spawnSel = spawnModelByIdx[idx] ?? selectedModel}
+              {@const spawnOpt = spawnIntent(token, spawnSel)}
+              <li class="fp-inset rounded p-3 flex flex-col gap-2 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="fp-num text-xs font-bold text-[var(--fp-text)]"
+                    >{$tr("Account #{idx}", { idx: idx + 1 })}</span
+                  >
+                  <span class="inline-flex items-center gap-1.5">
+                    <span
+                      class="led {token.session_status === 'active'
+                        ? 'led-good'
+                        : 'led-idle'}"
+                    ></span>
+                    <span
+                      class="font-mono text-[11px] uppercase tracking-wider text-[var(--fp-muted)]"
+                      >{token.session_status || "idle"}</span
+                    >
+                  </span>
+                </div>
+                {#if token.session_model}
+                  <p class="fp-num text-xs text-[var(--fp-accent)] font-semibold truncate">
+                    {token.session_model}{#if token.session_remaining_seconds > 0}
+                      <span class="text-[11px] text-[var(--fp-dim)] font-normal">
+                        · {Math.floor(token.session_remaining_seconds / 60)}m
+                        {$tr("left")}</span
+                      >{/if}
+                  </p>
+                {/if}
+                <select
+                  class="fp-input text-xs w-full py-1.5"
+                  value={spawnSel}
+                  onchange={(e) => {
+                    spawnModelByIdx[idx] = e.currentTarget.value;
+                  }}
+                  aria-label={$tr("Model for Account #{idx}", { idx: idx + 1 })}
+                >
+                  {#each modelsList as m (m.id)}
+                    {@const opt = spawnIntent(token, m.id)}
+                    <option
+                      value={m.id}
+                      disabled={opt.kind === "paywall"}
+                      title={opt.kind === "paywall" ? "Not enough Freebucks" : m.label}
+                      >{m.label}{opt.kind === "paywall"
+                        ? " — paywalled"
+                        : ""}</option
+                    >
+                  {/each}
+                </select>
+                {#if spawnOpt.kind === "paywall"}
+                  <p class="text-[11px] text-[var(--fp-warning)]">
+                    {$tr("Not enough Freebucks (price {price}, balance {balance})", {
+                      price: spawnOpt.price,
+                      balance: token?.freebucks?.balance ?? 0,
+                    })}
+                  </p>
+                {/if}
+                <div class="flex flex-wrap gap-1.5">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={actionPending || spawnOpt.kind === "paywall"}
+                    onclick={() =>
+                      triggerTokenAction(
+                        tokenActions.session(idx),
+                        { model: spawnSel },
+                        $tr("Spawn upstream session on account #{idx} for {model}?", {
+                          idx: idx + 1,
+                          model: spawnSel,
+                        }),
+                      )}
+                  >
+                    {$tr("Make Session")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={actionPending}
+                    onclick={() =>
+                      triggerTokenAction(
+                        tokenActions.test(idx),
+                        {},
+                        $tr("Probe account #{idx}?", { idx: idx + 1 }),
+                      )}
+                  >
+                    {$tr("Probe")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={actionPending}
+                    onclick={() =>
+                      triggerTokenAction(
+                        tokenActions.finish(idx),
+                        {},
+                        $tr("Finish runs on account #{idx}?", { idx: idx + 1 }),
+                      )}
+                  >
+                    {$tr("Finish")}
+                  </Button>
+                </div>
+              </li>
+            {/each}
+          </ul>
         {/if}
       </Card>
     </section>

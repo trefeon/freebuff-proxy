@@ -2,55 +2,56 @@ import { fetchAPI } from "./api/client.js";
 import { adminApi } from "./api/paths.js";
 
 // Static fallback for when the admin API is unreachable (e.g. `npm run dev`
-// before the gateway is up). Kept in sync with the catalog by the CI embed
-// gate — the live /admin/api/models payload supersedes it whenever present.
+// before the gateway is up). Freebucks terms only — no live prices here, so
+// rows read "(metered)" until the live /admin/api/models payload (with
+// per-model Freebucks/hr) supersedes them whenever present.
 export const fallbackModelOptions = [
   {
     id: "openai/gpt-5.6-luna",
-    label: "openai/gpt-5.6-luna (5 premium quota)",
-    tag: "premium",
+    label: "openai/gpt-5.6-luna (metered)",
+    tag: "metered",
   },
   {
     id: "meta/muse-spark-1.3-contributor",
-    label: "meta/muse-spark-1.3-contributor (5 premium quota)",
-    tag: "premium",
+    label: "meta/muse-spark-1.3-contributor (metered)",
+    tag: "metered",
   },
   {
     id: "upstage/solar-pro4",
-    label: "upstage/solar-pro4 (unlimited session)",
-    tag: "unmetered",
+    label: "upstage/solar-pro4 (metered)",
+    tag: "metered",
   },
   {
     id: "mimo/mimo-v2.5",
-    label: "mimo/mimo-v2.5 (unlimited session)",
-    tag: "unmetered",
+    label: "mimo/mimo-v2.5 (metered)",
+    tag: "metered",
   },
   {
     id: "z-ai/glm-5.3-flash",
-    label: "z-ai/glm-5.3-flash (unlimited session)",
-    tag: "unmetered",
+    label: "z-ai/glm-5.3-flash (metered)",
+    tag: "metered",
   },
   {
     id: "deepseek/deepseek-v4-flash",
-    label: "deepseek/deepseek-v4-flash (unlimited session)",
-    tag: "unmetered",
+    label: "deepseek/deepseek-v4-flash (metered)",
+    tag: "metered",
   },
   {
     id: "z-ai/glm-5.2",
-    label: "z-ai/glm-5.2 (referral promo)",
+    label: "z-ai/glm-5.2 (referral grant)",
     tag: "referral",
   },
 ];
 
-// tag derives from the server-side quota label so the chips track the
-// catalog automatically (quotaFor: 5 premium quota / referral / unlimited session).
-function tagFor(quota) {
-  if (!quota) return "";
-  if (quota.includes("premium")) return "premium";
-  if (quota.includes("referral")) return "referral";
-  if (quota.includes("unmetered") || quota.includes("unlimited"))
-    return "unmetered";
-  return "";
+// tag derives from the server-side Freebucks price label so chips track the
+// meter, not legacy session pools: referral grant / free (0 Freebucks/hr) /
+// metered (priced) / "" when the server sent no price.
+function tagFor(m) {
+  const label = m.price_label ?? m.priceLabel ?? "";
+  if (/referral/i.test(label)) return "referral";
+  if (!label) return "";
+  if (/^0\b/.test(label)) return "free";
+  return "metered";
 }
 
 // fetchModelOptions returns {id, label, tag} rows from /admin/api/models
@@ -67,8 +68,8 @@ export async function fetchModelOptions() {
     if (rows.length === 0) return fallbackModelOptions;
     cached = rows.map((m) => ({
       id: m.id,
-      label: m.quota ? `${m.id} (${m.quota})` : m.id,
-      tag: tagFor(m.quota),
+      label: m.price_label ? `${m.id} (${m.price_label})` : m.id,
+      tag: tagFor(m),
     }));
     return cached;
   } catch {

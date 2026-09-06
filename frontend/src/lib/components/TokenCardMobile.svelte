@@ -95,7 +95,7 @@
   ondragleave={(e) => onDragLeave?.(e, idx)}
   ondrop={(e) => onDrop?.(e, idx)}
   ondragend={onDragEnd}
-  class="fp-inset rounded-lg p-3.5 flex flex-col gap-2.5 transition-all {dragging
+  class="fp-inset rounded p-3.5 flex flex-col gap-2.5 transition-all {dragging
     ? 'opacity-30 bg-[var(--fp-surface-2)]/60'
     : dragOver
       ? 'border-[var(--fp-accent)] ring-2 ring-[var(--fp-accent)] bg-[var(--fp-accent)]/5'
@@ -117,13 +117,6 @@
         <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
           >Account #{idx + 1}</span
         >
-        {#if idx === 0}
-          <span
-            class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] border border-[var(--fp-accent)]/30"
-          >
-            {$tr("Primary")}
-          </span>
-        {/if}
         <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
         {#if riskBadge}
           <StatusBadge
@@ -198,16 +191,30 @@
         ></span
       >
       <span
-        >reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span
-        >{#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}
-          <span class="text-[10px] text-[var(--fp-muted)]">
-            ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0}
-              ·
-            {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})
-          </span>
+        >reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
+        {#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}{" "}
+          <span class="text-[10px] text-[var(--fp-muted)]"
+            >({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0} · {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
+          >
         {/if}</span
       >
     </div>
+    {#if token.freebucks}
+      {@const fbBal = Math.max(0, Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0))}
+      {@const fbDaily = token.freebucks.daily ?? token.freebucks.Daily ?? {}}
+      {@const fbRem = Math.max(0, Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0))}
+      {@const fbLim = Math.max(0, Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0))}
+      <div class="fp-inset px-2.5 py-1.5 text-xs">
+        <span class="fp-num text-[var(--fp-accent)] font-semibold"
+          >{fbBal} {$tr("Freebucks")}</span
+        >
+        {#if fbLim > 0}
+          <span class="text-[var(--fp-muted)]">
+            · {fbRem}/{fbLim} {$tr("today")}</span
+          >
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- Details (secondary info + drawer) behind the expand chevron -->

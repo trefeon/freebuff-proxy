@@ -86,7 +86,7 @@
 >
   {#snippet icon()}
     <div
-      class="p-2.5 rounded-lg shrink-0 {resolvedTone === 'danger'
+      class="p-2.5 rounded shrink-0 {resolvedTone === 'danger'
         ? 'bg-red-500/15 text-red-400 border border-red-500/30'
         : resolvedTone === 'warn'
           ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
