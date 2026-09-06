@@ -25,10 +25,13 @@ Everything else, especially `server` and `dashboard` (they consume the ring; the
 - `WithAttrs`/`WithGroup` forward to the wrapped sink with group prefixes folded (`TestRingForwardsToNext`, `TestWithAttrsWithGroupFold`, `TestRingFlattenGroupKeys`) — the dashboard view and the real log stream must agree.
 - Handler errors still retain (`TestHandleErrorStillRetains`); `Recent` with negative bounds is guarded (`TestRecentNegativeGuard`).
 - Concurrency-safe (`TestCountsConcurrent`, `TestRingSubHandlersShareStore`) — writers span all request goroutines.
+- Spill tap fan-out (`TestSpillTapSeesEveryRecord`): `SetSpill` fires after
+  retain, without the lock, and must never block — the consumer enqueues and
+  returns. Clearing the tap never affects retention.
 
 ## Tests that protect it
 
-`TestRingRetainsNewestFirst`, `TestRingSubHandlersShareStore`, `TestRingForwardsToNext`, `TestRingFlattenGroupKeys`, `TestWithAttrsWithGroupFold`, `TestEnabledGating`, `TestCapacityClamp`, `TestFormatAttrKinds`, `TestFormatAttrQuotesControlChars`, `TestRecentNegativeGuard`, `TestHandleErrorStillRetains`, `TestCounts`, `TestCountsConcurrent`, `TestRingEmptyGroupInlined`.
+`TestRingRetainsNewestFirst`, `TestRingSubHandlersShareStore`, `TestRingForwardsToNext`, `TestRingFlattenGroupKeys`, `TestWithAttrsWithGroupFold`, `TestEnabledGating`, `TestCapacityClamp`, `TestFormatAttrKinds`, `TestFormatAttrQuotesControlChars`, `TestRecentNegativeGuard`, `TestHandleErrorStillRetains`, `TestCounts`, `TestCountsConcurrent`, `TestRingEmptyGroupInlined`, `TestSpillTapSeesEveryRecord`.
 
 ## Safe modification patterns
 

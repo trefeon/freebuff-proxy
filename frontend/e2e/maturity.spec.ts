@@ -139,4 +139,43 @@ test.describe("account maturity", () => {
       page.getByText("Maturity automation is globally off"),
     ).toBeVisible();
   });
+  test("maturity card renders the restart-surviving event timeline", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
+    await page.route("**/admin/api/maturity/history*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          enabled: true,
+          token: 0,
+          events: [
+            { ts: 1785900000000, kind: "touch", detail: "admit ok" },
+            { ts: 1785903600000, kind: "config", detail: "enabled target=7" },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    const timeline = page.getByRole("list", {
+      name: "Maturity history for Account #1",
+    });
+    await expect(timeline).toBeVisible();
+    await expect(timeline.getByText("admit ok")).toBeVisible();
+    await expect(timeline.getByText("enabled target=7")).toBeVisible();
+  });
 });

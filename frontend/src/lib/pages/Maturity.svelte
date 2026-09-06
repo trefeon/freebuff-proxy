@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import PageShell from "../components/PageShell.svelte";
   import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
@@ -8,6 +9,7 @@
   import StatusBadge from "../components/StatusBadge.svelte";
   import { fetchAPI, postAPI } from "../api/client.js";
   import { adminApi, tokenActions } from "../api/paths.js";
+  import { fetchMaturityHistory, historyKindTone } from "../utils/history.js";
   import {
     tokensData as tokensStore,
     tokensError as tokensErrorStore,
@@ -34,6 +36,29 @@
   let touching = $state({});
   let actionMessage = $state("");
   let actionOK = $state(true);
+
+  // Restart-surviving event timelines (ADR-0016): loaded once per token
+  // the first time its maturity block appears, never on the 10s poll.
+  let histByIdx = $state({});
+  let histPending = new SvelteSet();
+
+  $effect(() => {
+    for (const t of tokens) {
+      const idx = t.index ?? 0;
+      if (!t.maturity || idx in histByIdx || histPending.has(idx)) continue;
+      histPending.add(idx);
+      fetchMaturityHistory(idx)
+        .then((h) => {
+          histByIdx[idx] = h.events;
+        })
+        .catch(() => {
+          histByIdx[idx] = [];
+        })
+        .finally(() => {
+          histPending.delete(idx);
+        });
+    }
+  });
 
   function applyTokens(v) {
     if (!v) return;
@@ -329,6 +354,32 @@
               {$tr("Touch now")}
             </Button>
           </div>
+
+          {#if (histByIdx[idx] ?? []).length > 0}
+            <ul
+              class="flex flex-col gap-1.5 border-t border-[var(--fp-border)]/60 pt-2.5"
+              aria-label={$tr("Maturity history for Account #{idx}", {
+                idx: idx + 1,
+              })}
+            >
+              {#each histByIdx[idx] as ev (ev.ts + ev.kind + ev.detail)}
+                <li
+                  class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+                >
+                  <StatusBadge
+                    tone={historyKindTone(ev.kind)}
+                    status={ev.kind}
+                  />
+                  <span class="text-[var(--fp-muted)] break-words min-w-0"
+                    >{ev.detail}</span
+                  >
+                  <span class="fp-num text-[var(--fp-dim)] ml-auto shrink-0"
+                    >{fmtTime(new Date(ev.ts).toISOString())}</span
+                  >
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </div>
       </Card>
     {/each}

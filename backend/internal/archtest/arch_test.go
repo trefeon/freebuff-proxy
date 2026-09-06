@@ -61,6 +61,7 @@ var allowed = map[string][]string{
 	"internal/tokenestimate":  {}, // o200k_base BPE, stdlib only
 	"internal/tokenhealth":    {},
 	"internal/updatecheck":    {},
+	"internal/store":          {}, // history backend (ADR-0016); stdlib + sqlite driver only
 
 	// ---- layer 1: small dependents of config/leaves ----
 	"internal/telemetry": {"internal/config"},
@@ -110,6 +111,7 @@ var allowed = map[string][]string{
 		"internal/registry",
 		"internal/updatecheck",
 		"internal/upstream",
+		"internal/store", // history query service (ADR-0016)
 	},
 
 	// ---- layer 5+: top of the stack ----
@@ -130,6 +132,7 @@ var allowed = map[string][]string{
 		"internal/tokenestimate",
 		"internal/updatecheck",
 		"internal/upstream",
+		"internal/store", // lifecycle wiring (open/spill/retention)
 	},
 	"internal/cli": {
 		"internal/cli/port",
@@ -141,6 +144,7 @@ var allowed = map[string][]string{
 		"internal/registry",
 		"internal/server",
 		"internal/session",
+		"internal/store", // history store open (ADR-0016)
 		"internal/telemetry",
 		"internal/updatecheck",
 		"internal/upstream",

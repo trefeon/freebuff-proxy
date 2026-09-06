@@ -117,7 +117,6 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) err
 	}
 	tok := (*toks)[token]
 	tok.maturityMu.Lock()
-	defer tok.maturityMu.Unlock()
 	tok.maturity.enabled = enabled
 	if enabled {
 		tok.maturity.target = target
@@ -131,6 +130,12 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) err
 		if tok.maturity.slot.IsZero() {
 			tok.maturity.slot, tok.maturity.slotDay = p.rollMaturitySlot(tok.maturity.slotDay, time.Now())
 		}
+	}
+	tok.maturityMu.Unlock()
+	if enabled {
+		p.emitMaturity(token, "config", fmt.Sprintf("enabled target=%d mode=%s", target, mode))
+	} else {
+		p.emitMaturity(token, "config", "disabled")
 	}
 	return nil
 }
@@ -225,7 +230,7 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 	// Effectiveness accounting: a touch that moved the streak resets the
 	// no-advance counter; a touch older than 20h with no movement counts
 	// one non-advancing day (once per calendar day).
-	p.maturityAccountAdvance(tok, cached, now)
+	p.maturityAccountAdvance(idx, tok, cached, now)
 
 	// Auto-release: target reached on a healthy account. This is a local
 	// state change (no upstream cost) so it runs in dry-run mode too.
@@ -237,6 +242,7 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 		tok.maturity.lastAdvanced = "yes"
 		tok.maturity.lastStreak = cached.Streak
 		tok.maturityMu.Unlock()
+		p.emitMaturity(idx, "release", fmt.Sprintf("streak=%d target=%d", cached.Streak, target))
 		p.logger.Info("pool: maturity target reached, token auto-released",
 			"token", idx+1, "token_label", label, "streak", cached.Streak, "target", target)
 		return
@@ -298,28 +304,42 @@ func (p *Pool) maturityRefreshStreak(ctx context.Context, tok *tokenEntry) (*ups
 
 // maturityAccountAdvance maintains the anti-blind-running counters against
 // the fresh streak reading.
-func (p *Pool) maturityAccountAdvance(tok *tokenEntry, cached *upstream.StreakInfo, now time.Time) {
+func (p *Pool) maturityAccountAdvance(idx int, tok *tokenEntry, cached *upstream.StreakInfo, now time.Time) {
 	tok.maturityMu.Lock()
-	defer tok.maturityMu.Unlock()
+	advanced := false
+	warned := false
+	noAdvanceDays := 0
 	m := &tok.maturity
 	if m.streakAtTouch > 0 && cached.Streak > m.streakAtTouch {
 		m.noAdvanceDays = 0
 		m.lastAdvanced = "yes"
 		m.streakAtTouch = 0
 		m.lastStreak = cached.Streak
-		return
-	}
-	m.lastStreak = cached.Streak
-	if m.streakAtTouch > 0 && !m.lastTouch.IsZero() && now.Sub(m.lastTouch) > 20*time.Hour && cached.Streak <= m.streakAtTouch {
-		day := now.UTC().Format("2006-01-02")
-		if m.lastNoAdvanceDay != day {
-			m.lastNoAdvanceDay = day
-			m.noAdvanceDays++
-			m.lastAdvanced = "no"
-			if m.noAdvanceDays >= maturityNoAdvanceLimit {
-				m.warn = true
+		advanced = true
+	} else {
+		m.lastStreak = cached.Streak
+		if m.streakAtTouch > 0 && !m.lastTouch.IsZero() && now.Sub(m.lastTouch) > 20*time.Hour && cached.Streak <= m.streakAtTouch {
+			day := now.UTC().Format("2006-01-02")
+			if m.lastNoAdvanceDay != day {
+				m.lastNoAdvanceDay = day
+				m.noAdvanceDays++
+				m.lastAdvanced = "no"
+				if m.noAdvanceDays >= maturityNoAdvanceLimit && !m.warn {
+					m.warn = true
+					warned = true
+				}
+				noAdvanceDays = m.noAdvanceDays
 			}
 		}
+	}
+	tok.maturityMu.Unlock()
+	// History emits happen outside the token mutex: the sink must never run
+	// under pool locks.
+	if advanced {
+		p.emitMaturity(idx, "advance", fmt.Sprintf("streak=%d", cached.Streak))
+	}
+	if warned {
+		p.emitMaturity(idx, "warn", fmt.Sprintf("no_advance_days=%d", noAdvanceDays))
 	}
 }
 
@@ -333,6 +353,7 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 		premium := modelcat.SharedPremiumModels()
 		if len(premium) == 0 {
 			p.maturityRecord(tok, "admit", "skip:no-premium-model", "")
+			p.emitMaturity(idx, "touch", "admit skip:no-premium-model")
 			return
 		}
 		model = premium[0]
@@ -340,6 +361,7 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 		p.logger.Warn("pool: maturity touch misconfigured (not a served unmetered model), skipping",
 			"token", idx+1, "token_label", label, "model", model)
 		p.maturityRecord(tok, "admit", "skip:touch-model", "")
+		p.emitMaturity(idx, "touch", fmt.Sprintf("admit skip:touch-model model=%s", model))
 		return
 	}
 	// Meter-aware lane (issue #350 adaptation): the touch rides the
@@ -353,6 +375,7 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 				p.logger.Warn("pool: maturity touch model is metered on this account, skipping",
 					"token", idx+1, "token_label", label, "model", model, "price", price)
 				p.maturityRecord(tok, "admit", "skip:touch-priced", "")
+				p.emitMaturity(idx, "touch", fmt.Sprintf("admit skip:touch-priced model=%s price=%v", model, price))
 				return
 			}
 		}
@@ -381,6 +404,7 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 		tok.maturity.streakAtTouch = cached.Streak
 	}
 	tok.maturityMu.Unlock()
+	p.emitMaturity(idx, "touch", fmt.Sprintf("%s %s model=%s streak=%d", action, result, model, cached.Streak))
 	if err != nil {
 		p.logger.Warn("pool: maturity touch failed", "token", idx+1, "token_label", label, "action", action, "err", err)
 		return

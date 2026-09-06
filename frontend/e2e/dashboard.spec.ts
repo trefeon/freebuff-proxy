@@ -277,6 +277,39 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(header).toContainText("resets in");
     await expect(header).toContainText("20 in wallet");
   });
+  test("Quota Tracker renders a usage sparkline from quota history", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.route("**/admin/api/quota/history*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          enabled: true,
+          token: 0,
+          model: "deepseek/deepseek-v4-flash",
+          snapshots: [
+            { ts: 1785892800000, limit: 75, recent: 28, reset_at: 0 },
+            { ts: 1785896400000, limit: 75, recent: 30, reset_at: 0 },
+            { ts: 1785900000000, limit: 75, recent: 31, reset_at: 0 },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("img", { name: "Session usage history" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("3 samples · latest 31/75").first(),
+    ).toBeVisible();
+  });
 
   test("Settings renders catalog groups and saves a toggled bool into the .env", async ({
     page,

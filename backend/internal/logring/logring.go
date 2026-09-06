@@ -34,6 +34,18 @@ type Ring struct {
 	// second subscription. Ring entries are bounded; counts are not (a full
 	// ring of distinct messages still counts every record).
 	counts map[string]int64
+	// spill is an optional fan-out tap for the history store spiller. It
+	// runs after the entry is retained, WITHOUT the lock held, and must
+	// never block the log path: the consumer enqueues and returns.
+	spill func(Entry)
+}
+
+// SetSpill installs the fan-out tap (nil clears it). The ring is shared by
+// every handler clone, so one call covers all of them.
+func (r *Ring) SetSpill(fn func(Entry)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.spill = fn
 }
 
 // Handler forwards records to next while retaining the last capacity entries
@@ -56,7 +68,11 @@ func NewHandler(next slog.Handler, capacity int) *Handler {
 	return &Handler{ring: &Ring{buf: make([]Entry, capacity), capacity: capacity, counts: make(map[string]int64)}, next: next}
 }
 
-// Recent returns up to n entries, newest first.
+// SetSpill installs the ring's fan-out tap (nil clears it). Every clone
+// shares the ring, so one call covers the whole handler tree.
+func (h *Handler) SetSpill(fn func(Entry)) {
+	h.ring.SetSpill(fn)
+}
 func (h *Handler) Recent(n int) []Entry {
 	return h.ring.recent(n)
 }
@@ -80,14 +96,19 @@ func (r *Ring) countsSnapshot() map[string]int64 {
 }
 
 func (r *Ring) push(timeStr, level, message string, fields []string) {
+	e := Entry{Time: timeStr, Level: level, Message: message, Fields: fields}
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.buf[r.next] = Entry{Time: timeStr, Level: level, Message: message, Fields: fields}
+	r.buf[r.next] = e
 	r.next = (r.next + 1) % r.capacity
 	if r.filled < r.capacity {
 		r.filled++
 	}
 	r.counts[countKey(level, message)]++
+	spill := r.spill
+	r.mu.Unlock()
+	if spill != nil {
+		spill(e)
+	}
 }
 
 // countKey builds the "level|msg" metric key. slog's level tokens are a

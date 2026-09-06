@@ -7,7 +7,7 @@ Changelog:
 - 2026-09-06: nav truth refresh. Sidebar lists 7 pages (Overview, Tokens,
   Maturity, Quota Tracker, Models, Logs, Settings) + gated Dev Tools;
   Setup/Metrics/Traces stay deep-link-only. New shared components: PageShell,
-  KpiGrid, DataTable, FilterBar. TokenCard desktop +
+  KpiGrid, DataTable, FilterBar (ADR-0016 history views). TokenCard desktop +
   mobile fold into one responsive card; PremiumQuotaBar turns presentational.
 - 2026-08-21: Full remake. Menu curated 9 → 6 sections (dropped Traces, Playground, Metrics).
   New system: "instrument panel" — IBM Plex type, amber-on-navy, mono instrumentation,
@@ -124,13 +124,15 @@ the visual truth):
    token table (short id, status badge, instance, cooldown countdown, actions:
    clear cooldown, remove), per-model quota expand rows. One responsive
    TokenCard; no separate mobile fork.
-3. **Maturity** — per-token streak/standing cards.
+3. **Maturity** — per-token streak/standing cards + maturity event timeline
+   (ADR-0016 `maturity_events`).
 4. **Quota Tracker** — accounting notice + per-model quota table + reset
-   countdowns.
+   countdowns (ADR-0016 `quota_snapshots`).
 5. **Models** — served model catalog table (mono id, served badge, aliases) +
    count summary.
 6. **Logs** — FilterBar (level, message, hide-admin, follow), console/table
-   toggle, mono stream with level dots, pagination over the live tail.
+   toggle, mono stream with level dots, pagination (ADR-0016 `log_entries`,
+   live tail over existing SSE).
 7. **Settings** — grouped SettingsCards bound to `keycatalog.go` deterministically;
    Save/Validate/Reload row. (Replaces the old Config `.env` textarea page.)
 8. **Dev Tools** — gated behind `DEVTOOLS_ENABLED`; never linked publicly.
@@ -179,6 +181,10 @@ Shared library in `src/lib/components/`. Pages import these; do not restyle inli
   `TokenDetailsDrawer.svelte`. Never re-duplicate helpers into the cards.
 - `PremiumQuotaBar.svelte` — presentational only: `{ quota, now }`, no fetch,
   no clock. Parents pass the snapshot and tick.
+- `Sparkline.svelte` — `{ values: number[], width = 120, height = 30, label }`.
+  Min/max-normalized polyline, accent stroke, no fill/grid/axes. Renders
+  nothing for fewer than 2 finite samples. History-backed cards (quota
+  usage, maturity streaks) are the reference usage.
 
 ## Craft rules
 

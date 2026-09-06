@@ -264,6 +264,9 @@ type Pool struct {
 
 	rr     atomic.Uint64 // round-robin start index
 	logger *slog.Logger
+	// histSink is the optional maturity history consumer (ADR-0016); nil
+	// keeps the pool free of persistence. Set once via SetHistorySink.
+	histSink atomic.Pointer[HistorySink]
 
 	// requestsServed counts successful upstream chat calls across BOTH
 	// pooled and bridge leases (bridge entries are ephemeral and excluded

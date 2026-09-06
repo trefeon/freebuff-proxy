@@ -35,6 +35,13 @@ never drives relays.
   temp+rename, mode 0600), never direct writes.
 - Metric histograms live on the `Dashboard` struct, never package globals
   (concurrent-server safety); `cardFromSnapshot` dedupes tokens/overview.
+- Live tokens projection is constructive, never subtractive:
+  `tokensLiveData` builds from pool snapshots (`liveCardFromSnapshot` +
+  `sessionQuotaFor`) and shares the `tokenSessionQuota` block with the full
+  view. Never reintroduce a strip-a-full-snapshot projection or a parallel
+  live struct: static fields cannot leak into the hot poll by construction.
+  New per-token fields go on `tokenCard` (static, once-per-mount) or
+  `tokenLiveCard` (live, every 10s) plus the matching SPA static-key list.
 - Assets are served WITHOUT dashboard auth (the login page must render);
   only the assets subtree is exposed (`fs.Sub`), no directory listings.
 - `admin_manifest.json` + `data/` describe navigation/catalog surfaces the
@@ -55,3 +62,17 @@ tests; server-side `dashboard_test.go` + all `admin_*_test.go`.
   `FP_REGEN_FIXTURE=1`.
 - After editing display-struct literals: `git diff | grep '^-[^-]'` —
   dropped fields compile as zero values and silently hide cards.
+
+## History store (ADR-0016)
+
+The dashboard never reads SQL directly. New `internal/store` owns schema,
+spill, retention, and queries; this package owns a thin query service that
+merges pool live views with store history and serves the SPA.
+- Endpoint shapes stay manifest-stable: history arrives as query params
+  (`since/until/level/token`) on existing rows plus two new rows
+  (`/admin/api/quota/history`, `/admin/api/maturity/history`), each shipped
+  as manifest row + server handler + SPA call site + test in one commit.
+- Secrets never enter history tables; redaction rules from effective-config
+  and token views apply to every new view.
+- Retention deletes run outside request handlers; a corrupt store degrades
+  to live-only views, never a failed boot.

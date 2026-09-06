@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
@@ -17,6 +18,7 @@ import (
 	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/registry"
+	"freebuff-proxy/backend/internal/store"
 	"freebuff-proxy/backend/internal/updatecheck"
 )
 
@@ -29,7 +31,18 @@ type Dashboard struct {
 	logger  *slog.Logger
 	logs    *logring.Handler // dashboard log viewer source (nil = disabled)
 	started time.Time
-
+	// hist is the history store (nil = live-only). Set once via
+	// WithHistory; the spill consumer below drains into it.
+	hist         *store.Store
+	spillCh      chan logring.Entry
+	spillDone    chan struct{}
+	spillWg      sync.WaitGroup
+	spillDropped atomic.Int64
+	// quotaSeen remembers the last persisted quota state per token+model so
+	// the full-view sampler only inserts on genuine change (history holds
+	// change points, not per-poll duplicates).
+	quotaSeenMu sync.Mutex
+	quotaSeen   map[quotaKey]quotaPoint
 	// version is the running release tag ("" / "dev" for dev builds) and
 	// updates is the release-update indicator (issue #50b); the layout
 	// shows a badge when a newer GitHub release exists. Both may be left
@@ -167,6 +180,12 @@ func (d *Dashboard) dataFor(name string, r *http.Request) any {
 		return d.modelsData()
 	case "logs":
 		return d.logsData(r)
+	case "quota/history":
+		return d.quotaHistoryData(r)
+	case "maturity/history":
+		return d.maturityHistoryData(r)
+	case "logs/history":
+		return d.logsHistoryData(r)
 	case "traces":
 		return d.tracesData()
 	case "setup":

@@ -40,6 +40,7 @@ import (
 	"freebuff-proxy/backend/internal/registry"
 	"freebuff-proxy/backend/internal/server"
 	"freebuff-proxy/backend/internal/session"
+	history "freebuff-proxy/backend/internal/store"
 	"freebuff-proxy/backend/internal/telemetry"
 	"freebuff-proxy/backend/internal/updatecheck"
 	"freebuff-proxy/backend/internal/upstream"
@@ -149,6 +150,24 @@ func Serve(configPath string, verbose bool, version string) int {
 			}
 		}
 	}
+	// Dashboard history (ADR-0016): one SQLite file next to the session
+	// state file, opened always (not gated on SESSION_PERSIST — history is
+	// display data, not control state). An unusable file degrades to
+	// live-only views; Open never fails the boot itself.
+	var histStore *history.Store
+	{
+		stateAbs := cfg.SessionStateFile
+		if abs, err := filepath.Abs(stateAbs); err == nil {
+			stateAbs = abs
+		}
+		histPath := filepath.Join(filepath.Dir(stateAbs), "freebuff-history.db")
+		if st, err := history.Open(histPath); err != nil {
+			logger.Warn("history store unavailable; dashboard runs live-only", "file", histPath, "err", err)
+		} else {
+			histStore = st
+			logger.Info("dashboard history enabled", "file", histPath)
+		}
+	}
 	clients := make([]*upstream.Client, 0, len(cfg.AuthTokens))
 	sessions := make([]*session.Manager, 0, len(cfg.AuthTokens))
 	for i, token := range cfg.AuthTokens {
@@ -171,6 +190,9 @@ func Serve(configPath string, verbose bool, version string) int {
 		return 1
 	}
 	p.SetSessionStore(store)
+	// Dashboard history (ADR-0016): pool maturity events persist through a
+	// nil-safe adapter; without a store the pool stays persistence-free.
+	p.SetHistorySink(&poolHistorySink{st: histStore})
 
 	// Issue #48: best-effort webhook alerts (WEBHOOK_URL) for pool
 	// exhaustion / token bans — fire-and-forget, throttled, never blocking.
@@ -214,6 +236,8 @@ func Serve(configPath string, verbose bool, version string) int {
 		slog.Warn("dashboard login client unavailable (login wizard disabled)", "err", err)
 	}
 	serverOpts := []server.Option{server.WithLoginClient(loginClient)}
+	// Dashboard history (ADR-0016): nil-safe, live-only views when unset.
+	serverOpts = append(serverOpts, server.WithHistory(histStore))
 	// Issue #50b: release update indicator — the dashboard badge compares
 	// the running version against the latest GitHub release (6h cache).
 	serverOpts = append(serverOpts, server.WithVersion(version, updatecheck.New(updatecheck.DefaultRepo, nil)))
@@ -334,6 +358,10 @@ func Serve(configPath string, verbose bool, version string) int {
 	poolCtx, poolCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer poolCancel()
 	p.Shutdown(poolCtx)
+	// Flush the history spill consumer and release the SQLite handle.
+	if err := srv.Close(); err != nil {
+		logger.Warn("history store close failed", "err", err)
+	}
 	logger.Info("shutdown complete")
 	return exitCode
 }
@@ -547,3 +575,24 @@ func printPortInUseHint(addr string, err error) {
 
 // isWindows reports whether the process runs on Windows.
 func isWindows() bool { return runtime.GOOS == "windows" }
+
+// poolHistorySink adapts pool maturity events to the history store. It runs
+// on pool goroutines (maintain tick, admin handlers): single-row inserts,
+// never calls back into the pool, and no-ops without a store.
+type poolHistorySink struct {
+	st *history.Store
+}
+
+func (s *poolHistorySink) RecordMaturity(e pool.MaturityHistoryEvent) {
+	if s == nil || s.st == nil {
+		return
+	}
+	if err := s.st.RecordMaturity(history.MaturityEvent{
+		TS:       e.TS,
+		TokenIdx: e.TokenIdx,
+		Kind:     e.Kind,
+		Detail:   e.Detail,
+	}); err != nil {
+		slog.Warn("history maturity record failed", "err", err)
+	}
+}

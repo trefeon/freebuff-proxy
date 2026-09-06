@@ -5,6 +5,9 @@
   import Card from "../components/Card.svelte";
   import Button from "../components/Button.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import Sparkline from "../components/Sparkline.svelte";
+  import { SvelteSet } from "svelte/reactivity";
+  import { fetchQuotaHistory } from "../utils/history.js";
   import {
     tokensData,
     tokensError,
@@ -26,6 +29,38 @@
   // reset cells re-render "resets in" against this clock every second.
   let now = $state(Date.now());
 
+  // Per-token usage sparklines (ADR-0016): one quota/history fetch per
+  // token the first time its card renders, keyed by token index. The model
+  // is the live session model, falling back to the first quota row.
+  let sparkByIdx = $state({});
+  let sparkPending = new SvelteSet();
+
+  function sparkModel(token) {
+    return token.session_model ?? token.quota?.[0]?.model ?? null;
+  }
+
+  $effect(() => {
+    for (const token of data?.tokens ?? []) {
+      const idx = token.index ?? 0;
+      if (idx in sparkByIdx || sparkPending.has(idx)) continue;
+      const model = sparkModel(token);
+      if (!model) {
+        sparkByIdx[idx] = null;
+        continue;
+      }
+      sparkPending.add(idx);
+      fetchQuotaHistory(idx, model)
+        .then((h) => {
+          sparkByIdx[idx] = h.snapshots.length > 1 ? h : null;
+        })
+        .catch(() => {
+          sparkByIdx[idx] = null;
+        })
+        .finally(() => {
+          sparkPending.delete(idx);
+        });
+    }
+  });
   let unsubStore = null;
   let unsubErr = null;
   let tick = null;
@@ -233,6 +268,23 @@
                   "No premium quota data — run a request or -test-token to populate.",
                 )}
               </p>
+            {/if}
+            {#if sparkByIdx[idx]?.snapshots?.length > 1}
+              {@const spark = sparkByIdx[idx]}
+              {@const lastSnap = spark.snapshots[spark.snapshots.length - 1]}
+              <div class="flex items-center gap-3">
+                <Sparkline
+                  values={spark.snapshots.map((s) => s.recent)}
+                  label={$tr("Session usage history")}
+                />
+                <p class="text-[11px] text-[var(--fp-dim)] font-mono">
+                  {$tr("{count} samples · latest {recent}/{limit}", {
+                    count: spark.snapshots.length,
+                    recent: lastSnap.recent,
+                    limit: lastSnap.limit,
+                  })}
+                </p>
+              </div>
             {/if}
             {#if token.freebucks?.prices && Object.keys(token.freebucks.prices).length > 0}
               {@const sortedPricedModels = sortModelsByPrice(

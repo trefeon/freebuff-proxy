@@ -418,3 +418,42 @@ func TestRingEmptyGroupInlined(t *testing.T) {
 		})
 	}
 }
+
+func TestSpillTapSeesEveryRecord(t *testing.T) {
+	h := NewHandler(discarding{}, 2)
+	var mu sync.Mutex
+	var got []Entry
+	h.SetSpill(func(e Entry) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, e)
+	})
+	logger := slog.New(h)
+	logger.Info("one", "n", 1)
+	logger.With("scope", "pool").Warn("two")
+	mu.Lock()
+	n := len(got)
+	first, second := got[0], got[1]
+	mu.Unlock()
+	if n != 2 {
+		t.Fatalf("spill saw %d records, want 2", n)
+	}
+	if first.Message != "one" || second.Message != "two" {
+		t.Fatalf("spill order = %q %q, want one two", first.Message, second.Message)
+	}
+	if first.Level != "INFO" || second.Level != "WARN" {
+		t.Fatalf("spill levels = %q %q", first.Level, second.Level)
+	}
+	// Clearing the tap stops delivery but the ring keeps retaining.
+	h.SetSpill(nil)
+	logger.Info("three")
+	mu.Lock()
+	n = len(got)
+	mu.Unlock()
+	if n != 2 {
+		t.Fatalf("spill saw %d records after clear, want 2", n)
+	}
+	if len(h.Recent(10)) != 2 {
+		t.Fatalf("ring holds %d, want 2 (capacity bound)", len(h.Recent(10)))
+	}
+}

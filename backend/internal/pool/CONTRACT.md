@@ -36,6 +36,9 @@ Multi-token front door for chat requests. Owns token selection order, session ad
 - Quota semantics: RPM = ADMITTED requests (rolling 60s window); RPD = SUCCESSFUL chats in the current Pacific day (bucket rolls at Pacific midnight); `MAX_MESSAGES_PER_DAY` = rolling 24h successful chats. 0 = unlimited. RPM/RPD counters live in the ledger, never in the static cache.
 - Bridge cache: every read AND write of entries/ledgers runs under `bridgeMu`; `rpmCount`/`dayRequestCount` prune/roll in place and MUST be called under the owning lock (data-race fix 2026-09-06). Never call upstream/network while holding `bridgeMu` (evict outside the lock).
 - `roster.Load()` once per call — never cache the pointer across calls.
+- History sink (`history_test.go`): maturity config/touch/release/warn events
+  emit outside token locks; the sink must never block or call back into the
+  pool (nil sink = persistence-free).
 - Maturity (pool/maturity.go): `MATURITY_ENABLED` default ON (global kill-switch), dry-run default (probe-only, zero session slots claimed), unmetered touch models only (premium-short gated by `MATURITY_ALLOW_PREMIUM` + per-token opt-in), jittered daily slot in the account's own timezone, restart-safe 6h throttle, stops firing after 3 consecutive non-advancing days, never touches quarantined/banned/cooling/country-blocked accounts. Touch must fail closed on priced models (`skip:touch-priced`).
 - Spend ledger records events only — the $ ceiling is enforced elsewhere (server-enforced).
 
