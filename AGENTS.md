@@ -132,17 +132,19 @@ are rejected; every change lands as: feature branch (`feat/`, `fix/`,
 
 ### Deployment topology (MANDATORY)
 
-- `main` = production. The ONLY prod box is **vps-sg** (`172.188.64.104`),
+- `main` = production. The ONLY prod box is the small VPS reachable via the
+  `vps-sg` ssh host (addresses live in local ssh config, never in repo),
   serving `:3457` from `~/freebuff-proxy`. It is a small VPS (892MB RAM):
   NEVER build, test, or run extra containers on it. It receives finished
   artifacts only: build the docker image on acerblue-local, transfer it,
   `docker compose up -d` (no `--build`). NEVER touch its `.env`, state dir,
   or restart it during active sessions without being asked.
-- `dev` = testing. The dev box is **acerblue-local** (`192.168.10.3` over
-  LAN, ssh host `acerblue-local`): preview builds and bugfix verification
-  run there on an isolated port (`:3458`) with isolated state, never against
-  its own `:3457` homelab gateway or its `.env`. Builds there need
-  `docker build --network=host` (module-proxy TLS timeout otherwise).
+- `dev` = testing. The dev box is the homelab reachable via the
+  `acerblue-local` ssh host over LAN: preview builds and bugfix
+  verification run there on an isolated port (`:3458`) with isolated
+  state, never against its own `:3457` homelab gateway or its `.env`.
+  Builds there need `docker build --network=host` (module-proxy TLS
+  timeout otherwise).
 - Cancelled remote builds leave orphaned `go compile` processes holding RAM:
   after any interrupted build, `pkill` them and confirm load drops before
   retrying. Keep vps-sg disk under 80% (`docker builder prune`, no dev
