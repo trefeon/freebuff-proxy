@@ -146,25 +146,25 @@ func Open(path string) (*Store, error) {
 		"PRAGMA busy_timeout=5000",
 	} {
 		if _, err := db.Exec(p); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("store: %s: %w", p, err)
 		}
 	}
 	var v int
 	if err := db.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("store: user_version: %w", err)
 	}
 	if v != 0 && v != schemaVersion {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("store: schema v%d unsupported (want v%d)", v, schemaVersion)
 	}
 	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)
 	}
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("store: stamp version: %w", err)
 	}
 	return &Store{db: db}, nil
@@ -192,7 +192,7 @@ func (s *Store) Purge(logsBefore, quotaBefore, maturityBefore, requestsBefore in
 	}
 	for _, c := range cuts {
 		if _, err := tx.Exec("DELETE FROM "+c.table+" WHERE ts < ?", c.ts); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("store: purge %s: %w", c.table, err)
 		}
 	}
