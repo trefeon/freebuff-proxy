@@ -6,16 +6,16 @@
 #     auto-open a PR that runs sync-upstream so the change lands in front of a
 #     human reviewer. Idempotent: reruns reuse the same branch + open PR.
 #  2. **Wire-shape file drift** (freebuff-trust.ts, foreign-client-signals.ts,
-#     prompt-agent-stream.ts, etc.): requires a code change in the Go side
-#     (Phase 1+ of every issue #140 fix used to live here). Auto-open a
-#     "needs port" issue so the change is queued; never auto-merge because
-#     the port needs human judgment.
+#     prompt-agent-stream.ts, etc.): auto-open a "needs port" PR carrying the
+#     refreshed wire baseline plus the classification report, so the Go-side
+#     port lands on the PR branch in front of a human reviewer. Idempotent:
+#     reruns reuse the same branch + open PR. Never auto-merge because the
+#     port needs human judgment.
 #  3. **Dashboard embed refresh**: a separate job always refreshes the JSON
 #     embedded in the dashboard binary so users see up-to-date sync status
 #     without a live network call at boot.
-# NOTE: the PR-opening jobs need Settings -> Actions -> General ->
-# "Allow GitHub Actions to create and approve pull requests". Without it
-# they fail on gh pr create (needs-port issues are unaffected).
+# NOTE: all three PR-opening jobs need Settings -> Actions -> General ->
+# "Allow GitHub Actions to create and approve pull requests".
 name: upstream-drift
 
 on:
@@ -30,7 +30,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 concurrency:
   group: upstream-drift
@@ -211,18 +210,24 @@ jobs:
           Note: PRs created with GITHUB_TOKEN do not trigger CI workflows; run the checks manually before merging." \
             --label "dependencies"
 
-  open-port-issue:
-    name: Open needs-port issue (wire drift)
+  open-port-pr:
+    name: Open port PR (wire drift)
     needs: drift
     if: needs.drift.outputs.has_wire_drift == 'true'
     runs-on: ubuntu-latest
     permissions:
-      issues: write
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure commit identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Clone upstream reference
         env:
@@ -231,6 +236,7 @@ jobs:
           mkdir -p "$FREEBUFF_REFERENCE_DIR"
           git clone --depth 50 https://github.com/CodebuffAI/freebuff.git "$FREEBUFF_REFERENCE_DIR"
           git -C "$FREEBUFF_REFERENCE_DIR" fetch --unshallow || true
+
       - name: Classify wire drift
         id: classify
         env:
@@ -244,37 +250,97 @@ jobs:
           echo "EOF"
           } >>"$GITHUB_OUTPUT"
 
-      - name: Open or update needs-port issue
+      - name: Check out fresh branch
+        env:
+          BRANCH_NAME: chore/upstream-wire-${{ needs.drift.outputs.upstream_sha }}
+        run: |
+          if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+            git checkout -B "$BRANCH_NAME" origin/"$BRANCH_NAME"
+          else
+            git checkout -b "$BRANCH_NAME"
+          fi
+
+      - name: Refresh baseline and write drift report
+        env:
+          FREEBUFF_REFERENCE_DIR: ${{ runner.temp }}/freebuff-ref
+          UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+        run: |
+          bash scripts/check-upstream.sh --update-wire-baseline
+          jq -n --arg sha "$UPSTREAM_SHA" --arg cls "$CLASSIFICATION" \
+            '{upstream_sha: $sha, classification: $cls}' \
+            > scripts/wire-drift-latest.json
+
+      - name: Commit any changes
+        run: |
+          git add scripts/wire-baseline.tsv scripts/wire-drift-latest.json
+          if git diff --cached --quiet; then
+            # No new changes this run. A branch that already carries the
+            # refresh commit (pushed by an earlier run whose PR creation
+            # failed) must still reach the PR step; only a branch identical
+            # to main means there is genuinely nothing to publish.
+            if git diff --quiet origin/main HEAD; then
+              echo "No changes after baseline refresh and branch matches main; skipping PR."
+              exit 0
+            fi
+            echo "Branch already has refresh commits ahead of main; reusing them."
+          else
+            sha="${{ needs.drift.outputs.upstream_sha }}"
+            short="${sha:0:7}"
+            git -c commit.gpgsign=false commit -m "chore(wire): refresh baseline + drift report for vendor ${short}" \
+              -m "Automated refresh triggered by .github/workflows/upstream-drift.yml." \
+              -m "Upstream SHA: ${sha}"
+          fi
+          git push -u origin HEAD
+
+      - name: Close superseded wire PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+        run: |
+          # One rolling wire PR per upstream SHA; an older open PR for a
+          # different SHA is stale the moment a newer SHA exists.
+          gh pr list --state open --json number,title,headRefName \
+            --jq '.[] | select(.title | startswith("chore(wire): upstream drift needs porting")) | {number, title, branch: .headRefName}' \
+          | jq -c . \
+          | while read -r pr; do
+              num=$(echo "$pr" | jq -r .number)
+              branch=$(echo "$pr" | jq -r .branch)
+              case "$branch" in
+                chore/upstream-wire-"${UPSTREAM_SHA:0:7}"|chore/upstream-wire-"${UPSTREAM_SHA}") ;;
+                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7}; a fresh wire-drift PR covers the current pin state." \
+                     && git push origin --delete "$branch" || true ;;
+              esac
+            done
+
+      - name: Open or update PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
           DRIFT_SUMMARY: ${{ needs.drift.outputs.drift_summary }}
           CLASSIFICATION: ${{ steps.classify.outputs.classification }}
         run: |
+          short="${UPSTREAM_SHA:0:7}"
+          existing=$(gh pr list --state open --json number,title \
+            --jq ".[] | select(.title | startswith(\"chore(wire): upstream drift needs porting to vendor ${short}\")) | .number" | head -1)
+          if [ -n "$existing" ]; then
+            echo "Existing wire-drift PR #$existing already open for this upstream SHA; nothing to create."
+            exit 0
+          fi
           body="Upstream SHA: $UPSTREAM_SHA
 
           $DRIFT_SUMMARY
 
           ## Drift classification (scripts/review-wire-drift.sh)
-          COMMENT-ONLY rows need only a baseline refresh (\`check-upstream.sh --update-wire-baseline\`).
-          FUNCTIONAL rows need a Go-side port (e.g. injectEnvelope, classifyError, parseSessionResponse) plus a test.
+          COMMENT-ONLY rows are resolved by the baseline refresh in this PR.
+          Port the FUNCTIONAL rows here (Go-side port plus a test), then merge.
+          Never auto-merge: the port needs human judgment.
 
           \`\`\`
           $CLASSIFICATION
           \`\`\`"
-          existing=$(gh issue list --state open --json number,title \
-            --jq '.[] | select(.title == "Upstream wire drift needs porting") | .number' | head -1)
-          if [ -n "$existing" ]; then
-            if gh issue view "$existing" --json body,comments --jq '.body, (.comments[]?.body)' | grep -qF "$UPSTREAM_SHA"; then
-              echo "Issue #$existing already covers $UPSTREAM_SHA; skipping."
-              exit 0
-            fi
-            gh issue comment "$existing" --body "$body"
-            echo "Appended drift at $UPSTREAM_SHA to existing issue #$existing."
-            exit 0
-          fi
-          gh issue create \
-            --title "Upstream wire drift needs porting" \
+          gh pr create --base main \
+            --title "chore(wire): upstream drift needs porting to vendor ${short}" \
             --body "$body" \
             --label "anti-ban"
 
@@ -318,6 +384,20 @@ jobs:
               esac
             done
 
+      - name: Check out data branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+        run: |
+          # Switch branches BEFORE refreshing drift.json: the refresh dirties
+          # the worktree, and switching after would abort on local changes.
+          BRANCH="chore/upstream-drift-data-${UPSTREAM_SHA:0:7}"
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            git checkout -B "$BRANCH" origin/"$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -342,13 +422,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
         run: |
-          BRANCH="chore/upstream-drift-data-${UPSTREAM_SHA:0:7}"
-          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
-            git checkout -B "$BRANCH" origin/"$BRANCH"
-            git checkout main -- backend/internal/dashboard/data/upstream_drift.json || true
-          else
-            git checkout -b "$BRANCH"
-          fi
           git add backend/internal/dashboard/data/upstream_drift.json
           if git diff --cached --quiet; then
             # Same orphan-branch recovery as the registry sync job: a branch
