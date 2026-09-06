@@ -1,7 +1,7 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
   "upstream_sha": "1310581654df57a5c6cff372dd38d34e7c44c0c5",
-  "checked_at": "2026-09-06T15:29:06Z",
+  "checked_at": "2026-09-06T20:25:35Z",
   "vendor_version": "0.0.171",
   "vendor_version_pinned": "0.0.171",
   "files": [
@@ -12,7 +12,7 @@
     {"group":"registry","file":"common/src/constants/model-config.ts","pinned_sha":"210f9bbfe1ac","vendor_sha":"210f9bbfe1ac","status":"SAME"},
     {"group":"wire","file":"common/src/constants/freebuff-standing.ts","pinned_sha":"","vendor_sha":"555339c61867","status":"SAME"},
     {"group":"wire","file":"common/src/constants/foreign-client-signals.ts","pinned_sha":"","vendor_sha":"3639408ac5d8","status":"SAME"},
-    {"group":"wire","file":"common/src/constants/freebuff-spend-ceilings.ts","pinned_sha":"","vendor_sha":"2358dc352d90","status":"DRIFT"},
+    {"group":"wire","file":"common/src/constants/freebuff-spend-ceilings.ts","pinned_sha":"","vendor_sha":"2358dc352d90","status":"SAME"},
     {"group":"wire","file":"common/src/constants/freebuff-signup-block.ts","pinned_sha":"","vendor_sha":"b42006247502","status":"SAME"},
     {"group":"wire","file":"common/src/constants/freebuff-peak-hours.ts","pinned_sha":"","vendor_sha":"cfdbd3412df7","status":"SAME"},
     {"group":"wire","file":"common/src/util/freebuff-model-availability.ts","pinned_sha":"","vendor_sha":"43971606f941","status":"SAME"},
