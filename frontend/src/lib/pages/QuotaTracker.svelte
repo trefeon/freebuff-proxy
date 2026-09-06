@@ -13,6 +13,7 @@
     tokensError,
     ensureTokensStore,
     refreshTokens,
+    probeAllQuotas,
   } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
   import { formatLocalDate } from "../utils/format.js";
@@ -28,6 +29,28 @@
   // Countdown tick: refetches nothing on its own; PremiumQuotaBar and the
   // reset cells re-render "resets in" against this clock every second.
   let now = $state(Date.now());
+
+  // Probe-all status: the button POSTs /admin/tokens/test-all (zero-cost
+  // upstream GET per token, no session claimed) then refetches the store.
+  let probePending = $state(false);
+  let probeMsg = $state("");
+  let probeOk = $state(true);
+
+  async function handleProbeAll() {
+    if (probePending) return;
+    probePending = true;
+    probeMsg = "";
+    try {
+      await probeAllQuotas();
+      probeOk = true;
+      probeMsg = $tr("Quotas refreshed from upstream.");
+    } catch (e) {
+      probeOk = false;
+      probeMsg = e.message || $tr("Quota refresh failed.");
+    } finally {
+      probePending = false;
+    }
+  }
 
   // Per-token usage sparklines (ADR-0016): one quota/history fetch per
   // token the first time its card renders, keyed by token index. The model
@@ -134,7 +157,33 @@
       <RefreshCw size={15} />
       {$tr("Refresh")}
     </Button>
+    <Button
+      variant="secondary"
+      onclick={handleProbeAll}
+      disabled={probePending}
+      title={$tr(
+        "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
+      )}
+    >
+      {#if probePending}
+        <RefreshCw size={15} class="animate-spin" />
+        <span>{$tr("Probing…")}</span>
+      {:else}
+        <RefreshCw size={15} />
+        <span>{$tr("Probe all")}</span>
+      {/if}
+    </Button>
   {/snippet}
+  {#if probeMsg}
+    <p
+      class="text-xs font-mono {probeOk
+        ? 'text-[var(--fp-muted)]'
+        : 'text-red-400'}"
+      role="status"
+    >
+      {probeMsg}
+    </p>
+  {/if}
 
   <!-- Upstream Accounting Notice (Meet Freebucks — TUI parity) -->
   <div

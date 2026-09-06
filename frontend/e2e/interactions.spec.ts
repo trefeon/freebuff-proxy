@@ -284,6 +284,51 @@ test.describe("operator interactions (hermetic mocks)", () => {
   });
 
   // -------------------------------------------------------------------------
+  // 3b. Quota Tracker probe-all posts test-all then refetches the store.
+  // -------------------------------------------------------------------------
+  test("quota: probe-all posts test-all and refetches tokens", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+    const state = { tokens: [tokenRow(0), tokenRow(1)] };
+    await page.unroute("**/admin/api/tokens*");
+    let gets = 0;
+    await page.route("**/admin/api/tokens*", async (route) => {
+      gets++;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tokensPayload(state.tokens)),
+      });
+    });
+    // The real endpoint answers with one JSON object per token
+    // concatenated; the button drains the body as text, so any shape works.
+    await page.route("**/admin/tokens/test-all", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: `{"token":0,"ok":true,"message":"ok"}{"token":1,"ok":true,"message":"ok"}`,
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await expect(
+      page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    ).toBeVisible();
+    const before = gets;
+    const probe = page.waitForRequest(
+      (r) =>
+        r.method() === "POST" && r.url().includes("/admin/tokens/test-all"),
+    );
+    await page.getByRole("button", { name: "Probe all" }).click();
+    await probe;
+    await expect(
+      page.getByText("Quotas refreshed from upstream."),
+    ).toBeVisible();
+    await expect.poll(() => gets).toBeGreaterThan(before);
+  });
+
+  // -------------------------------------------------------------------------
   // 4. Dismissing the confirm dialog sends no request and keeps the row.
   // -------------------------------------------------------------------------
   test("tokens: dismissing the confirm dialog sends no request", async ({

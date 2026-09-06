@@ -1,5 +1,5 @@
-import { fetchAPI } from "../api/client.js";
-import { adminApi } from "../api/paths.js";
+import { fetchAPI, csrfHeader } from "../api/client.js";
+import { adminApi, adminActions } from "../api/paths.js";
 import { useEventStream } from "../utils/events.js";
 import { createQueryStore } from "./query.js";
 
@@ -142,4 +142,27 @@ export function refreshTokens() {
   // cache so the next poll takes the full shape.
   staticTop = null;
   return store.refresh();
+}
+
+/**
+ * Zero-cost quota refresh for every pooled token (the CLI-landing trick):
+ * POSTs /admin/tokens/test-all, which probes each token with a read-only
+ * upstream GET (no session claim, no slot spent) and writes the fresh
+ * quota into the snapshots via UpdateQuotaFromProbe. The store refetch
+ * below then renders the new numbers. The endpoint answers with one JSON
+ * object per token concatenated, which res.json() cannot parse, so the
+ * body is drained as text and ignored; per-token detail stays on the
+ * Tokens page probe buttons.
+ * @returns {Promise<void>}
+ */
+export function probeAllQuotas() {
+  return fetch(adminActions.tokenTestAll, {
+    method: "POST",
+    headers: csrfHeader("POST"),
+  })
+    .then(async (res) => {
+      await res.text().catch(() => {});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    })
+    .then(() => refreshTokens());
 }
