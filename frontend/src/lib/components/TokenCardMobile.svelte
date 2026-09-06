@@ -252,7 +252,7 @@
       class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
     >
       {#if expanded}
-        <ChevronExpand size={17} />
+        <ChevronExpand size={17} class="rotate-180" />
       {:else}
         <ChevronDown size={17} class="rotate-[-90deg]" />
       {/if}
