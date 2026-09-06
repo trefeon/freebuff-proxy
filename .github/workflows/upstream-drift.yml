@@ -384,6 +384,20 @@ jobs:
               esac
             done
 
+      - name: Check out data branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+        run: |
+          # Switch branches BEFORE refreshing drift.json: the refresh dirties
+          # the worktree, and switching after would abort on local changes.
+          BRANCH="chore/upstream-drift-data-${UPSTREAM_SHA:0:7}"
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            git checkout -B "$BRANCH" origin/"$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -408,13 +422,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
         run: |
-          BRANCH="chore/upstream-drift-data-${UPSTREAM_SHA:0:7}"
-          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
-            git checkout -B "$BRANCH" origin/"$BRANCH"
-            git checkout main -- backend/internal/dashboard/data/upstream_drift.json || true
-          else
-            git checkout -b "$BRANCH"
-          fi
           git add backend/internal/dashboard/data/upstream_drift.json
           if git diff --cached --quiet; then
             # Same orphan-branch recovery as the registry sync job: a branch
