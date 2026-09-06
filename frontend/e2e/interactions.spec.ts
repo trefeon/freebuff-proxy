@@ -368,6 +368,49 @@ test.describe("operator interactions (hermetic mocks)", () => {
   });
 
   // -------------------------------------------------------------------------
+  // 3d. Sidebar log out posts logout and lands on the login view.
+  // -------------------------------------------------------------------------
+  test("sidebar: log out posts logout and lands on login", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+    await page.unroute("**/admin/api/auth/status");
+    await page.route("**/admin/api/auth/status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ require_login: true }),
+      });
+    });
+    const state = { tokens: [tokenRow(0)] };
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tokensPayload(state.tokens)),
+      });
+    });
+    const logout = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().includes("/admin/logout"),
+    );
+    await page.route("**/admin/logout", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await expect(
+      page.getByRole("heading", { name: "Tokens", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Log out" }).click();
+    await logout;
+    await expect.poll(() => page.url()).toContain("#login");
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
+  // -------------------------------------------------------------------------
   // 4. Dismissing the confirm dialog sends no request and keeps the row.
   // -------------------------------------------------------------------------
   test("tokens: dismissing the confirm dialog sends no request", async ({

@@ -1,5 +1,5 @@
 <script>
-  import { Menu, X } from "@lucide/svelte";
+  import { Menu, X, LogOut } from "@lucide/svelte";
 
   /**
    * @prop {string} activeTab
@@ -11,14 +11,34 @@
   import { isDevToolsEnabled } from "./utils/devtools.js";
   import { NAV_ITEMS } from "./nav.js";
   import { onMount } from "svelte";
-  import { fetchAPI } from "./api/client.js";
-  import { adminApi, adminRoot } from "./api/paths.js";
+  import { fetchAPI, csrfHeader } from "./api/client.js";
+  import { adminApi, adminRoot, adminActions } from "./api/paths.js";
+  import { authState } from "./stores/session.js";
 
   let mobileOpen = $state(false);
   let drawerEl = $state(null);
   let hamburgerEl = $state(null);
   // Dev Tools is a manual testing surface (batch chat, session spawn); it is
   // hidden unless the operator explicitly enables DEVTOOLS_ENABLED=true.
+
+  // Manual logout: clears the session cookie server-side, then lands on
+  // the login view with a full reload so polling stores never fire once
+  // more against a dead session.
+  let loggingOut = $state(false);
+  async function handleLogout() {
+    if (loggingOut) return;
+    loggingOut = true;
+    try {
+      await fetch(adminActions.logout, {
+        method: "POST",
+        headers: csrfHeader("POST"),
+      });
+    } catch {
+      // Cookie already dead server-side; the login screen is still correct.
+    }
+    window.location.hash = "login";
+    window.location.reload();
+  }
   let devToolsEnabled = $state(false);
 
   const tabs = $derived(
@@ -217,6 +237,21 @@
     </ul>
 
     <div class="mt-auto border-t border-[var(--fp-border)] px-2 pt-3 pb-1">
+      {#if $authState.requireLogin}
+        <button
+          type="button"
+          onclick={handleLogout}
+          disabled={loggingOut}
+          class="fp-btn fp-btn-ghost fp-btn-sm w-full justify-start gap-2 mb-2 font-mono text-xs"
+        >
+          {#if loggingOut}
+            <span>{$tr("Logging out…")}</span>
+          {:else}
+            <LogOut size={14} class="shrink-0" />
+            <span>{$tr("Log out")}</span>
+          {/if}
+        </button>
+      {/if}
       {#if versionInfo?.has_update}
         <a
           href={versionInfo.update_url}
