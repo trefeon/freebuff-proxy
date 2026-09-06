@@ -7,7 +7,6 @@
   import CopyButton from "../components/CopyButton.svelte";
   import PageShell from "../components/PageShell.svelte";
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
-  import ReferralBanner from "../components/ReferralBanner.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
   import ToggleSwitch from "../components/ToggleSwitch.svelte";
   import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
@@ -712,8 +711,6 @@
       </div>
     </div></Card
   >
-  <ReferralBanner tokens={data?.tokens ?? []} />
-
   <TokenTable
     tokens={data?.tokens ?? []}
     tokenCount={data?.token_count ?? 0}

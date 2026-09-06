@@ -101,8 +101,8 @@
       ? 'border-[var(--fp-accent)] ring-2 ring-[var(--fp-accent)] bg-[var(--fp-accent)]/5'
       : ''}"
 >
-  <!-- Header: identity + status + expand -->
-  <div class="flex items-start justify-between gap-2">
+  <!-- Header: identity + status + one control cluster (reorder + expand) -->
+  <div class="flex items-center justify-between gap-2">
     <div class="min-w-0 flex flex-col gap-1">
       <div class="flex items-center gap-1.5 flex-wrap">
         {#if totalTokens > 1}
@@ -142,21 +142,45 @@
         </span>
       {/if}
     </div>
-    <button
-      type="button"
-      onclick={onToggle}
-      aria-expanded={expanded}
-      aria-label={expanded
-        ? `Collapse details for account ${idx + 1}`
-        : `Expand details for account ${idx + 1}`}
-      class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
-    >
-      {#if expanded}
-        <ChevronExpand size={18} />
-      {:else}
-        <ChevronDown size={18} class="rotate-[-90deg]" />
+    <div class="flex items-center gap-0.5 shrink-0">
+      {#if totalTokens > 1}
+        <button
+          type="button"
+          disabled={actionPending || idx === 0}
+          title={$tr("Move Up / Prioritize")}
+          aria-label={$tr("Move Up")}
+          onclick={() => onSwap?.(idx, idx - 1)}
+          class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronUp size={15} />
+        </button>
+        <button
+          type="button"
+          disabled={actionPending || idx >= totalTokens - 1}
+          title={$tr("Move Down")}
+          aria-label={$tr("Move Down")}
+          onclick={() => onSwap?.(idx, idx + 1)}
+          class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronDown size={15} />
+        </button>
       {/if}
-    </button>
+      <button
+        type="button"
+        onclick={onToggle}
+        aria-expanded={expanded}
+        aria-label={expanded
+          ? `Collapse details for account ${idx + 1}`
+          : `Expand details for account ${idx + 1}`}
+        class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
+      >
+        {#if expanded}
+          <ChevronExpand size={15} />
+        {:else}
+          <ChevronDown size={15} class="rotate-[-90deg]" />
+        {/if}
+      </button>
+    </div>
   </div>
 
   <!-- Risk/usage stats (moved from the standalone At-risk cards): live
@@ -229,36 +253,10 @@
     </div>
   {/if}
 
-  <!-- Actions: full-width wrap, tap-friendly -->
+  <!-- Actions: right-aligned wrap, tap-friendly (reorder lives in header) -->
   <div
-    class="flex items-center justify-between gap-2 pt-0.5 border-t border-[var(--fp-border)]"
+    class="flex items-center justify-end gap-2 pt-0.5 border-t border-[var(--fp-border)]"
   >
-    {#if totalTokens > 1}
-      <div class="flex items-center gap-1">
-        <button
-          type="button"
-          disabled={actionPending || idx === 0}
-          title={$tr("Move Up / Prioritize")}
-          aria-label={$tr("Move Up")}
-          onclick={() => onSwap?.(idx, idx - 1)}
-          class="inline-flex items-center justify-center w-9 h-9 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronUp size={16} />
-        </button>
-        <button
-          type="button"
-          disabled={actionPending || idx >= totalTokens - 1}
-          title={$tr("Move Down")}
-          aria-label={$tr("Move Down")}
-          onclick={() => onSwap?.(idx, idx + 1)}
-          class="inline-flex items-center justify-center w-9 h-9 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronDown size={16} />
-        </button>
-      </div>
-    {:else}
-      <span></span>
-    {/if}
     <div class="flex items-center gap-1.5 flex-wrap justify-end">
       {#if token.cooldown_active}
         <Button
