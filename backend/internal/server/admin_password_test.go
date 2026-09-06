@@ -56,8 +56,8 @@ func TestAdminDefaultPasswordAndChangeFlow(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), "Invalid admin token") {
-		t.Fatalf("wrong password body missing 'Invalid admin token': %s", body)
+	if !strings.Contains(string(body), "Invalid password") {
+		t.Fatalf("wrong password body missing 'Invalid password': %s", body)
 	}
 
 	// 3. Login with default password "123456" succeeds and sets cookie
@@ -226,7 +226,7 @@ func TestAdminDefaultPasswordAndChangeFlow(t *testing.T) {
 	}
 	body, _ = io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	if !strings.Contains(string(body), "Invalid admin token") {
+	if !strings.Contains(string(body), "Invalid password") {
 		t.Fatalf("old default password still accepted after change: %s", body)
 	}
 

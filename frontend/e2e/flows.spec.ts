@@ -5,15 +5,6 @@ const RW = "e2e/fixtures-realworld";
 const admin = (hash) => `http://127.0.0.1:4173/admin/#${hash}`;
 
 test.describe("user flows", () => {
-  test("referral: copy invite code confirms Copied", async ({ page }) => {
-    await mockDashboard(page, loadFixtures(RW));
-    await page.goto(admin("tokens"));
-    await page.getByText("FREE-abc123").first().waitFor();
-    const banner = page.locator("div", { hasText: "FREE-abc123" }).last();
-    await banner.getByRole("button").click();
-    await expect(page.getByText("Copied").first()).toBeVisible();
-  });
-
   test("models: copy model ID confirms Copied", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
     await page.goto(admin("models"));

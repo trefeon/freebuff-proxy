@@ -7,11 +7,11 @@
   let { onChangePassword } = $props();
 </script>
 
-<Alert tone="warning" title={$tr("Default admin token in use")}>
+<Alert tone="warning" title={$tr("Default password in use")}>
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <p class="text-sm text-[var(--fp-muted)]">
       {$tr(
-        "The proxy is using the built-in default admin token. Change it to secure the dashboard.",
+        "The proxy is using the built-in default password. Change it to secure the dashboard.",
       )}
     </p>
     <Button variant="secondary" size="sm" onclick={onChangePassword}>
