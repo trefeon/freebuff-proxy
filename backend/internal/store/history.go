@@ -17,13 +17,13 @@ func (s *Store) AppendLogs(entries []LogEntry) error {
 	}
 	stmt, err := tx.Prepare(`INSERT INTO log_entries(ts, level, msg, fields, req_id) VALUES(?, ?, ?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("store: logs prepare: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	for _, e := range entries {
 		if _, err := stmt.Exec(e.TS, e.Level, e.Msg, e.Fields, e.ReqID); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("store: logs insert: %w", err)
 		}
 	}
@@ -119,7 +119,7 @@ func (s *Store) QueryLogs(f LogFilter) ([]LogEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: query logs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []LogEntry{}
 	for rows.Next() {
 		var e LogEntry
@@ -146,7 +146,7 @@ func (s *Store) QuotaHistory(tokenIdx int, model string, since int64, limit int)
 	if err != nil {
 		return nil, fmt.Errorf("store: quota history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []QuotaSnapshot{}
 	for rows.Next() {
 		var q QuotaSnapshot
@@ -171,7 +171,7 @@ func (s *Store) MaturityHistory(tokenIdx int, since int64, limit int) ([]Maturit
 	if err != nil {
 		return nil, fmt.Errorf("store: maturity history: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []MaturityEvent{}
 	for rows.Next() {
 		var e MaturityEvent

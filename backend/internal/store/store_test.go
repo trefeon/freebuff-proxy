@@ -13,7 +13,7 @@ func openTest(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -37,7 +37,7 @@ func TestOpenRejectsUnknownVersion(t *testing.T) {
 	if _, err := a.db.Exec("PRAGMA user_version=99"); err != nil {
 		t.Fatalf("stamp: %v", err)
 	}
-	a.Close()
+	_ = a.Close()
 	// Reopen via a fresh handle: the file now claims a newer schema.
 	if _, err := Open(path); err == nil {
 		t.Fatal("Open accepted schema v99, want rejection")
