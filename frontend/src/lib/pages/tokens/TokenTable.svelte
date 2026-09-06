@@ -150,7 +150,8 @@
             <th class="w-40">{$tr("Instance")}</th>
             <th class="num w-32">{$tr("Cooldown")}</th>
             <th class="num w-44">{$tr("Usage")}</th>
-            <th class="text-right w-60">{$tr("Actions")}</th>
+            <th class="text-right w-[1%] whitespace-nowrap">{$tr("Actions")}</th
+            >
           </tr>
         </thead>
         <tbody class="[&_td]:align-middle">

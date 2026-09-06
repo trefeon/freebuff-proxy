@@ -1,29 +1,21 @@
-import { writable } from "svelte/store";
-import { fetchAPI, SessionExpiredError } from "../api/client.js";
+import { fetchAPI } from "../api/client.js";
 import { adminApi } from "../api/paths.js";
 import { useEventStream } from "../utils/events.js";
-import { isSessionDead } from "./session.js";
+import { createQueryStore } from "./query.js";
 
 // Shared tokens snapshot (issue #292). Tokens.svelte, QuotaTracker.svelte and
 // DevTools.svelte previously each wired their own /admin/api/tokens poll and
 // /admin/api/events SSE subscription with the same try/catch scaffold. This
-// module-level singleton owns ONE poll + ONE SSE subscription (visibility-aware,
-// mirroring polling.js) and every page renders from the same value, so a
-// mutation on one page is reflected immediately on the others.
+// module-level singleton owns ONE poll + ONE SSE subscription and every page
+// renders from the same value, so a mutation on one page is reflected
+// immediately on the others.
+//
+// The poll loop itself lives in ./query.js (createQueryStore): refcounted,
+// visibility-aware, overlap-guarded. This module only contributes the
+// tokens-specific pieces — the static/live merge below and the SSE push —
+// while keeping the historical exports stable for all consumers.
 
 const INTERVAL_MS = 10000;
-
-/** @type {import('svelte/store').Writable<any>} */
-export const tokensData = writable(null);
-
-/** @type {import('svelte/store').Writable<string>} */
-export const tokensError = writable("");
-
-let started = false;
-let busy = false;
-let timer = null;
-let unsubEvents = null;
-let consumers = 0;
 
 // Issue #322: account-stable fields (email/account_id, daily_limit,
 // standing_*, referral_*) ride a once-per-mount full fetch; the 10s hot poll
@@ -31,8 +23,6 @@ let consumers = 0;
 // every ~5min (plus every mutation and every full-shape SSE push) picks up
 // mid-session changes (trust updates, referral consumption, pool edits).
 const LIVE_QS = "?view=live";
-const FULL_EVERY_POLLS = 30;
-const FULL_EVERY_MS = 5 * 60 * 1000;
 const STATIC_TOP_KEYS = [
   "mode",
   "in_bridge",
@@ -70,8 +60,6 @@ const STATIC_TOKEN_KEYS = [
 ];
 let staticTop = null;
 let staticTokensByIndex = {};
-let polls = 0;
-let lastFullAt = 0;
 
 function pick(obj, keys) {
   const out = {};
@@ -85,7 +73,6 @@ function rememberStatic(full) {
   for (const t of full.tokens ?? []) {
     staticTokensByIndex[t.index ?? -1] = pick(t, STATIC_TOKEN_KEYS);
   }
-  lastFullAt = Date.now();
 }
 
 function mergeLive(live) {
@@ -107,83 +94,33 @@ function mergeLive(live) {
 async function fetchFull() {
   const data = await fetchAPI(adminApi.tokens);
   rememberStatic(data);
-  polls = 0;
   return data;
 }
 
-async function poll() {
-  if (busy || isSessionDead()) return;
-  busy = true;
-  try {
-    polls += 1;
-    let data;
-    if (
-      staticTop === null ||
-      polls % FULL_EVERY_POLLS === 0 ||
-      Date.now() - lastFullAt > FULL_EVERY_MS
-    ) {
-      data = await fetchFull();
-    } else {
-      data = mergeLive(await fetchAPI(adminApi.tokens + LIVE_QS));
-    }
-    tokensData.set(data);
-    tokensError.set("");
-  } catch (e) {
-    // A SessionExpiredError already surfaced the banner via the API client;
-    // do not show a page-level error for that. Everything else surfaces the
-    // message so the page can leave its loading state instead of spinning.
-    if (!(e instanceof SessionExpiredError)) {
-      tokensError.set(e.message || "Failed to fetch tokens");
-      console.warn("tokens store: poll failed", e);
-    }
-  } finally {
-    busy = false;
-  }
+async function fetchLive() {
+  return fetchAPI(adminApi.tokens + LIVE_QS);
 }
 
-function startInterval() {
-  clearInterval(timer);
-  timer = setInterval(poll, INTERVAL_MS);
-}
+const store = createQueryStore({
+  intervalMs: INTERVAL_MS,
+  fetchFull,
+  fetchLive,
+  merge: (_cached, live) => mergeLive(live),
+  subscribe: (next) =>
+    useEventStream({
+      onTokens: (data) => {
+        // SSE pushes the full tokensData shape: refresh the static cache too.
+        if (data && typeof data === "object") rememberStatic(data);
+        next(data);
+      },
+    }),
+});
 
-function stopInterval() {
-  clearInterval(timer);
-  timer = null;
-}
+/** @type {import('svelte/store').Writable<any>} */
+export const tokensData = store.data;
 
-function handleVisibility() {
-  if (document.hidden) {
-    stopInterval();
-  } else {
-    startInterval();
-    poll();
-  }
-}
-
-function startStore() {
-  if (started) return;
-  started = true;
-  poll();
-  startInterval();
-  document.addEventListener("visibilitychange", handleVisibility);
-  unsubEvents = useEventStream({
-    onTokens: (data) => {
-      // SSE pushes the full tokensData shape: refresh the static cache too.
-      if (data && typeof data === "object") rememberStatic(data);
-      tokensData.set(data);
-      tokensError.set("");
-    },
-  });
-}
-
-function stopStore() {
-  if (!started) return;
-  started = false;
-  stopInterval();
-  document.removeEventListener("visibilitychange", handleVisibility);
-  unsubEvents?.();
-  unsubEvents = null;
-}
+/** @type {import('svelte/store').Writable<string>} */
+export const tokensError = store.error;
 
 /**
  * Reference-counted activation: a page calls this in onMount, keeps holding
@@ -192,15 +129,7 @@ function stopStore() {
  * @returns {() => void} Release function for onDestroy.
  */
 export function ensureTokensStore() {
-  consumers += 1;
-  startStore();
-  return function release() {
-    consumers -= 1;
-    if (consumers <= 0) {
-      consumers = 0;
-      stopStore();
-    }
-  };
+  return store.ensure();
 }
 
 /**
@@ -209,9 +138,8 @@ export function ensureTokensStore() {
  * @returns {Promise<void>}
  */
 export function refreshTokens() {
-  if (!started) startStore();
   // Mutations can change pool membership and account state: drop the static
   // cache so the next poll takes the full shape.
   staticTop = null;
-  return poll();
+  return store.refresh();
 }

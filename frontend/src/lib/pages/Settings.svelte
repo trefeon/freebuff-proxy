@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import { RefreshCw, Save, X } from "@lucide/svelte";
-  import PageHeader from "../components/PageHeader.svelte";
+  import PageShell from "../components/PageShell.svelte";
   import Button from "../components/Button.svelte";
   import Alert from "../components/Alert.svelte";
   import ConfigFileGuideCard from "../components/ConfigFileGuideCard.svelte";
@@ -236,116 +236,100 @@
   });
 </script>
 
-<div class="space-y-6 page-enter">
-  <PageHeader
-    title={$tr("Settings")}
-    description={$tr(
-      "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
-    )}
-  >
-    {#snippet actions()}
-      {#if dirty}
-        <Button variant="ghost" onclick={discard} disabled={saving}>
-          <X size={15} />
-          {$tr("Discard")}
-        </Button>
-      {:else}
-        <Button variant="ghost" onclick={fetchData}>
-          <RefreshCw size={15} />
-          {$tr("Refresh")}
-        </Button>
-      {/if}
-      <Button
-        variant="primary"
-        onclick={saveConfig}
-        disabled={saving || !dirty}
-        loading={saving}
-      >
-        <Save size={15} />
-        {$tr("Save Changes")}
-      </Button>
-    {/snippet}
-  </PageHeader>
-
-  {#if loading}
-    <div class="space-y-6">
-      <div class="skeleton skeleton-card"></div>
-      <div class="skeleton skeleton-card"></div>
-    </div>
-  {:else if error}
-    <div class="space-y-4">
-      <Alert tone="error">{error}</Alert>
-      <div>
-        <Button variant="secondary" onclick={fetchData}>
-          <RefreshCw size={15} />
-          {$tr("Retry")}
-        </Button>
-      </div>
-    </div>
-  {:else}
-    {#if result}
-      <Alert
-        tone={result.ok
-          ? result.restart_only.length
-            ? "warning"
-            : "success"
-          : "error"}
-      >
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            {result.message}
-            {#if result.ok && result.restart_only.length}
-              <p class="mt-1 text-xs">
-                {$tr("Applies after restart: {keys}", {
-                  keys: result.restart_only.join(", "),
-                })}
-              </p>
-            {/if}
-          </div>
-          <button
-            type="button"
-            onclick={() => (result = null)}
-            class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] transition-colors shrink-0"
-            aria-label={$tr("Dismiss alert")}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      </Alert>
-    {/if}
-
+<PageShell
+  title={$tr("Settings")}
+  description={$tr(
+    "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
+  )}
+  {loading}
+  {error}
+  onRetry={fetchData}
+>
+  {#snippet actions()}
     {#if dirty}
-      <Alert tone="warning" title={$tr("Unsaved changes")}>
-        <div
-          class="flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-        >
-          <span
-            >{$tr(
-              "{count} setting(s) modified. Click Save Changes to apply them immediately.",
-              { count: changedKeysCount },
-            )}</span
-          >
-          <div class="flex items-center gap-2 shrink-0">
-            <Button variant="secondary" size="sm" onclick={discard}>
-              <X size={14} />
-              {$tr("Discard")}
-            </Button>
-          </div>
-        </div>
-      </Alert>
+      <Button variant="ghost" onclick={discard} disabled={saving}>
+        <X size={15} />
+        {$tr("Discard")}
+      </Button>
+    {:else}
+      <Button variant="ghost" onclick={fetchData}>
+        <RefreshCw size={15} />
+        {$tr("Refresh")}
+      </Button>
     {/if}
+    <Button
+      variant="primary"
+      onclick={saveConfig}
+      disabled={saving || !dirty}
+      loading={saving}
+    >
+      <Save size={15} />
+      {$tr("Save Changes")}
+    </Button>
+  {/snippet}
 
-    <SecurityCard onSuccess={fetchData} />
-
-    <!-- 2. Gateway & Protection (General - live reload) -->
-    <GatewaySettings {formValues} {rawText} onField={setField} />
-
-    <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
-    <TrafficSettings {formValues} {rawText} onField={setField} />
-
-    <!-- 4. Command Center (Lifecycle, updates & rollback) -->
-    <CommandCenterCard />
-    <!-- 5. Configuration & Deployment Guide -->
-    <ConfigFileGuideCard />
+  {#if result}
+    <Alert
+      tone={result.ok
+        ? result.restart_only.length
+          ? "warning"
+          : "success"
+        : "error"}
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          {result.message}
+          {#if result.ok && result.restart_only.length}
+            <p class="mt-1 text-xs">
+              {$tr("Applies after restart: {keys}", {
+                keys: result.restart_only.join(", "),
+              })}
+            </p>
+          {/if}
+        </div>
+        <button
+          type="button"
+          onclick={() => (result = null)}
+          class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] transition-colors shrink-0"
+          aria-label={$tr("Dismiss alert")}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </Alert>
   {/if}
-</div>
+
+  {#if dirty}
+    <Alert tone="warning" title={$tr("Unsaved changes")}>
+      <div
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+      >
+        <span
+          >{$tr(
+            "{count} setting(s) modified. Click Save Changes to apply them immediately.",
+            { count: changedKeysCount },
+          )}</span
+        >
+        <div class="flex items-center gap-2 shrink-0">
+          <Button variant="secondary" size="sm" onclick={discard}>
+            <X size={14} />
+            {$tr("Discard")}
+          </Button>
+        </div>
+      </div>
+    </Alert>
+  {/if}
+
+  <SecurityCard onSuccess={fetchData} />
+
+  <!-- 2. Gateway & Protection (General - live reload) -->
+  <GatewaySettings {formValues} {rawText} onField={setField} />
+
+  <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
+  <TrafficSettings {formValues} {rawText} onField={setField} />
+
+  <!-- 4. Command Center (Lifecycle, updates & rollback) -->
+  <CommandCenterCard />
+  <!-- 5. Configuration & Deployment Guide -->
+  <ConfigFileGuideCard />
+</PageShell>

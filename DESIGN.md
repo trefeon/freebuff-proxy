@@ -4,6 +4,11 @@ Single source of truth for the admin dashboard design system. CSS, components, a
 projections of this file. If they drift, this file wins.
 
 Changelog:
+- 2026-09-06: nav truth refresh. Sidebar lists 7 pages (Overview, Tokens,
+  Maturity, Quota Tracker, Models, Logs, Settings) + gated Dev Tools;
+  Setup/Metrics/Traces stay deep-link-only. New shared components: PageShell,
+  KpiGrid, DataTable, FilterBar. TokenCard desktop +
+  mobile fold into one responsive card; PremiumQuotaBar turns presentational.
 - 2026-08-21: Full remake. Menu curated 9 → 6 sections (dropped Traces, Playground, Metrics).
   New system: "instrument panel" — IBM Plex type, amber-on-navy, mono instrumentation,
   hairline grid, no soft shadows. Replaces Geist-based v1.
@@ -107,24 +112,32 @@ text, never glassmorphism.
 - Focus: 2px solid accent outline offset 2px, always visible (`:focus-visible`).
 - Borders: 1px hairline everywhere (`--fp-border`); hover raises to `--fp-border-bright`.
 
-## Menu (curated, this remake)
+## Menu (7 sidebar + gated + deep-link-only)
 
-6 sections + login:
+Sidebar (`frontend/src/lib/nav.js` NAV_ITEMS is the code truth; this file is
+the visual truth):
 
-1. **Overview** — mode/version/uptime status; 6 KPIs (pool total, busy, cooldown, banned,
-   requests today, models); token risk cards (at-risk tokens from snapshot).
+1. **Overview** — status hero (mode/version/uptime); 6 KPIs (pool total, busy,
+   cooldown, banned, requests today, models); token risk cards.
    No smoke/diag, no sparklines (moved to CLI `-test-token`/`-doctor`).
-2. **Tokens** — add-token form, device-login flow, client API-key management, token table
-   (short id, status badge, instance, cooldown countdown, actions: clear cooldown, remove),
-   per-model quota expand rows.
-3. **Models** — served model catalog table (mono id, served badge, aliases) + count summary.
-4. **Config** — `.env` editor (mono textarea) + Validate/Save/Reload + redacted effective
-   config table.
-5. **Logs** — level filter, message filter, auto-poll, mono log stream with level dots,
-   pagination.
-6. **Setup** — mode-dependent quick-start: base URL, model list, harness/env/curl snippets
-   with copy buttons.
-7. **Login** — centered card, brand mark, token input, error alert.
+2. **Tokens** — add-token form, device-login flow, client API-key management,
+   token table (short id, status badge, instance, cooldown countdown, actions:
+   clear cooldown, remove), per-model quota expand rows. One responsive
+   TokenCard; no separate mobile fork.
+3. **Maturity** — per-token streak/standing cards.
+4. **Quota Tracker** — accounting notice + per-model quota table + reset
+   countdowns.
+5. **Models** — served model catalog table (mono id, served badge, aliases) +
+   count summary.
+6. **Logs** — FilterBar (level, message, hide-admin, follow), console/table
+   toggle, mono stream with level dots, pagination over the live tail.
+7. **Settings** — grouped SettingsCards bound to `keycatalog.go` deterministically;
+   Save/Validate/Reload row. (Replaces the old Config `.env` textarea page.)
+8. **Dev Tools** — gated behind `DEVTOOLS_ENABLED`; never linked publicly.
+9. **Login** — centered card, brand mark, token input, error alert.
+
+Deep-link-only (no sidebar entry): Setup, Metrics, Traces, Playground
+(Playground mounts DevTools).
 
 ## Components (exact API — cross-slice contract)
 
@@ -147,6 +160,25 @@ Shared library in `src/lib/components/`. Pages import these; do not restyle inli
 - `Field.svelte` — `{ label, hint?, error?, id }`, children = control. Label sans sm,
   control mono base, error text red sm.
 - `Spinner.svelte` — `{ size: 'sm'|'md' = 'md' }`. 2px arc in accent.
+- `PageShell.svelte` — `{ title, description?, loading=false, error='', empty=null,
+  onRetry }`, slots `{ actions, default }`. Renders PageHeader, then exactly
+  one state: skeleton, Alert + retry, EmptyState, or content. Every page
+  mounts this; no per-page loading/error scaffold.
+- `KpiGrid.svelte` — `{ items: [{ label, value, hint?, tone? }] }`. Renders Stat
+  cards in a responsive row (2-up on mobile). Tones match Stat.
+- `DataTable.svelte` — `{ columns: [{ key, label, numeric=false }], rows,
+  rowKey, expanded? }`. Hairline rows, right-aligned numerics in mono,
+  optional expand slot per row (token quota details, log fields).
+- `FilterBar.svelte` — `{ fields, values, onChange }`. SegmentedControl +
+  Field controls in one wrapping row; Logs level/message/hide-admin/follow
+  is the reference usage.
+- `TokenCard.svelte` + `TokenCardMobile.svelte` — intentional fork: a `<tr>`
+  cannot responsively become a stacked card, so desktop table rows and mobile
+  cards stay separate. Shared logic (status/risk chips, cooldown labels)
+  lives in `lib/utils/tokenStatus.js`; the expanded drawer is shared via
+  `TokenDetailsDrawer.svelte`. Never re-duplicate helpers into the cards.
+- `PremiumQuotaBar.svelte` — presentational only: `{ quota, now }`, no fetch,
+  no clock. Parents pass the snapshot and tick.
 
 ## Craft rules
 
@@ -172,4 +204,4 @@ Checklist — all must be clean in the final UI:
 - [x] Components have hover/active/focus/disabled/loading/error states
 - [x] No color-only status signals
 - [x] prefers-reduced-motion respected
-- [x] Menu shows 6 sections + login (no Traces/Playground/Metrics)
+- [x] Menu shows 7 sidebar pages + gated Dev Tools; Setup/Metrics/Traces/Playground deep-link-only

@@ -5,20 +5,19 @@
    * All KPIs/cards map to real response fields only.
    */
   import { onMount } from "svelte";
-  import { RefreshCw, ExternalLink } from "@lucide/svelte";
-  import PageHeader from "../components/PageHeader.svelte";
+  import { ExternalLink } from "@lucide/svelte";
+  import PageShell from "../components/PageShell.svelte";
+  import KpiGrid from "../components/KpiGrid.svelte";
   import ApiKeysEditor from "../components/ApiKeysEditor.svelte";
   import StatusBadge from "../components/StatusBadge.svelte";
-  import Stat from "../components/Stat.svelte";
   import Card from "../components/Card.svelte";
   import CopyButton from "../components/CopyButton.svelte";
   import Alert from "../components/Alert.svelte";
-  import Button from "../components/Button.svelte";
   import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
   import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
-  import { usePolling } from "../utils/polling.js";
+  import { createQueryStore } from "../stores/query.js";
   import { tr } from "../i18n.js";
   let data = $state(null);
   let loading = $state(true);
@@ -31,9 +30,6 @@
   // fetch; the 15s hot poll hits ?view=live and merges over the cached static
   // snapshot. A full refresh every ~5min (or when the cache is empty) picks
   // up mid-session changes (mode switches, trust updates, registry syncs).
-  const LIVE_QS = "?view=live";
-  const FULL_EVERY_POLLS = 20;
-  const FULL_EVERY_MS = 5 * 60 * 1000;
   const STATIC_TOP_KEYS = [
     "base_url",
     "mode",
@@ -72,8 +68,6 @@
   ];
   let staticPart = null;
   let staticTokensByIndex = {};
-  let polls = 0;
-  let lastFullAt = 0;
 
   function pick(obj, keys) {
     const out = {};
@@ -87,7 +81,6 @@
     for (const t of full.tokens ?? []) {
       staticTokensByIndex[t.index] = pick(t, STATIC_TOKEN_KEYS);
     }
-    lastFullAt = Date.now();
   }
 
   function mergeLive(live) {
@@ -104,57 +97,62 @@
     };
   }
 
-  async function fetchFull() {
-    const full = await fetchAPI(adminApi.overview);
-    rememberStatic(full);
-    data = full;
-  }
-
-  async function fetchData() {
-    try {
-      polls += 1;
-      if (
-        staticPart === null ||
-        polls % FULL_EVERY_POLLS === 0 ||
-        Date.now() - lastFullAt > FULL_EVERY_MS
-      ) {
-        await fetchFull();
-      } else {
-        data = mergeLive(await fetchAPI(adminApi.overview + LIVE_QS));
-      }
-    } catch (e) {
-      error =
-        e.message ||
-        $tr("Could not reach the proxy API. Check that the server is running.");
-    } finally {
-      loading = false;
-    }
-  }
+  // Shared query store owns the poll loop, visibility gating, overlap guard,
+  // and the full/live cadence (full on first poll, every 30 polls, every 5min,
+  // on refresh). The static merge above stays page-local: full shapes refresh
+  // the static cache in the data subscription below.
+  const LIVE_QS = "?view=live";
+  const overviewQuery = createQueryStore({
+    intervalMs: 15000,
+    fetchFull: () => fetchAPI(adminApi.overview),
+    fetchLive: () => fetchAPI(adminApi.overview + LIVE_QS),
+    merge: (_cached, live) => mergeLive(live),
+  });
 
   let tick = null;
+  let releaseQuery = null;
+  let unsubData = null;
+  let unsubError = null;
   onMount(() => {
-    fetchData();
+    releaseQuery = overviewQuery.ensure();
+    unsubData = overviewQuery.data.subscribe((v) => {
+      if (v) {
+        // Old servers and hermetic mocks answer the live URL with the full
+        // shape: refresh the static cache instead of rendering stale data.
+        if ("mode" in v && "model_count" in v) rememberStatic(v);
+        data = v;
+        loading = false;
+        error = "";
+      }
+    });
+    unsubError = overviewQuery.error.subscribe((e) => {
+      if (e) {
+        error = e;
+        loading = false;
+      }
+    });
     tick = setInterval(() => {
       now = Date.now();
     }, 1000);
     function onConfigSaved() {
       staticPart = null;
-      fetchData();
+      overviewQuery.refresh();
     }
     window.addEventListener("fp-config-saved", onConfigSaved);
     return () => {
       clearInterval(tick);
       window.removeEventListener("fp-config-saved", onConfigSaved);
+      unsubData?.();
+      unsubError?.();
+      releaseQuery?.();
     };
   });
 
   function retry() {
     error = "";
     loading = true;
-    fetchData();
+    overviewQuery.refresh();
   }
-
-  usePolling(fetchData, 15000);
   let poolTotal = $derived(data?.tokens?.length ?? 0);
   let busyTokens = $derived(
     data?.tokens?.filter((t) => t.active_runs > 0).length ?? 0,
@@ -191,48 +189,22 @@
   });
 </script>
 
-<div class="space-y-6 page-enter">
-  <PageHeader
-    title={$tr("Overview")}
-    description={$tr("Live proxy status and token pool telemetry")}
-  >
-    {#snippet actions()}
-      {#if data}
-        <StatusBadge
-          status={data.mode}
-          tone={data.in_bridge ? "good" : "info"}
-        />
-        <span class="fp-num text-xs text-[var(--fp-dim)]">up {data.uptime}</span
-        >
-      {/if}
-    {/snippet}
-  </PageHeader>
+<PageShell
+  title={$tr("Overview")}
+  description={$tr("Live proxy status and token pool telemetry")}
+  {loading}
+  {error}
+  onRetry={retry}
+>
+  {#snippet actions()}
+    {#if data}
+      <StatusBadge status={data.mode} tone={data.in_bridge ? "good" : "info"} />
+      <span class="fp-num text-xs text-[var(--fp-dim)]">up {data.uptime}</span>
+    {/if}
+  {/snippet}
 
   <!-- Upstream announcements and broadcasts -->
   <AnnouncementsBanner />
-
-  <!-- Loading skeleton — live region announces loading without duplicating Alert -->
-  {#if loading}
-    <div aria-live="polite" aria-busy="true">
-      <span class="sr-only">{$tr("Loading overview…")}</span>
-      <div
-        class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4"
-        aria-hidden="true"
-      >
-        {#each [1, 2, 3, 4, 5, 6] as _, i (i)}
-          <div class="skeleton skeleton-card"></div>
-        {/each}
-      </div>
-      <div
-        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-4"
-        aria-hidden="true"
-      >
-        {#each [1, 2, 3] as _, i (i)}
-          <div class="skeleton skeleton-card"></div>
-        {/each}
-      </div>
-    </div>
-  {/if}
 
   <!-- Upstream sync banner: warns operators that the running build is
        behind CodebuffAI/freebuff@main. Data ships compiled into the
@@ -287,47 +259,32 @@
       </Alert>
     {/if}
   {/if}
-
-  <!-- Fetch error with retry -->
-  {#if error}
-    <Alert tone="error" title={$tr("Overview unavailable")}>
-      <p>{error}</p>
-      <div class="mt-3">
-        <Button variant="secondary" size="sm" onclick={retry}>
-          <RefreshCw size={16} />
-          {$tr("Retry")}
-        </Button>
-      </div>
-    </Alert>
-  {/if}
-
-  {#if data && !loading}
+  {#if data}
     {#if data.has_tokens}
       <!-- KPI row (pooled tokens active) -->
-      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Stat label={$tr("Pool total")} value={poolTotal} big />
-        <Stat
-          label={$tr("Busy")}
-          value={busyTokens}
-          hint={$tr("tokens with active runs")}
-          big
-        />
-        <Stat
-          label={$tr("Cooldown")}
-          value={cooldownTokens}
-          tone={cooldownTokens > 0 ? "warn" : "default"}
-          big
-        />
-        <Stat
-          label={$tr("Banned")}
-          value={bannedTokens}
-          hint={$tr("critical risk")}
-          tone={bannedTokens > 0 ? "bad" : "default"}
-          big
-        />
-        <Stat label={$tr("Requests today")} value={requestsToday} big />
-        <Stat label={$tr("Models")} value={data.model_count ?? 0} big />
-      </div>
+      <KpiGrid
+        items={[
+          { label: $tr("Pool total"), value: poolTotal },
+          {
+            label: $tr("Busy"),
+            value: busyTokens,
+            hint: $tr("tokens with active runs"),
+          },
+          {
+            label: $tr("Cooldown"),
+            value: cooldownTokens,
+            tone: cooldownTokens > 0 ? "warn" : "default",
+          },
+          {
+            label: $tr("Banned"),
+            value: bannedTokens,
+            hint: $tr("critical risk"),
+            tone: bannedTokens > 0 ? "bad" : "default",
+          },
+          { label: $tr("Requests today"), value: requestsToday },
+          { label: $tr("Models"), value: data.model_count ?? 0 },
+        ]}
+      />
 
       <!-- Hybrid mode: pool summary above plus a compact bridge-relay card -->
       {#if data.mode === "hybrid"}
@@ -359,28 +316,27 @@
       {/if}
     {:else}
       <!-- Bridge mode / empty pool summary -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Stat
-          label={$tr("Relay Mode")}
-          value={data.in_bridge ? "Bridge" : "Hybrid"}
-          hint={data.in_bridge
-            ? $tr("client-supplied tokens")
-            : $tr("shared pool + bridge")}
-          big
-        />
-        <Stat
-          label={$tr("Active Bridge Clients")}
-          value={data.bridge_tokens ?? 0}
-          hint={$tr("relaying upstream sessions")}
-          big
-        />
-        <Stat
-          label={$tr("Served Models")}
-          value={data.model_count ?? 0}
-          hint={$tr("OpenAI & Anthropic")}
-          big
-        />
-      </div>
+      <KpiGrid
+        items={[
+          {
+            label: $tr("Relay Mode"),
+            value: data.in_bridge ? "Bridge" : "Hybrid",
+            hint: data.in_bridge
+              ? $tr("client-supplied tokens")
+              : $tr("shared pool + bridge"),
+          },
+          {
+            label: $tr("Active Bridge Clients"),
+            value: data.bridge_tokens ?? 0,
+            hint: $tr("relaying upstream sessions"),
+          },
+          {
+            label: $tr("Served Models"),
+            value: data.model_count ?? 0,
+            hint: $tr("OpenAI & Anthropic"),
+          },
+        ]}
+      />
 
       <Card
         title={$tr("Gateway Ready — Bridge & Pooled Relay")}
@@ -551,4 +507,4 @@
       </div>
     </section>
   {/if}
-</div>
+</PageShell>

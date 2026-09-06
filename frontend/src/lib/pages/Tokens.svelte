@@ -5,7 +5,7 @@
   import Card from "../components/Card.svelte";
   import Alert from "../components/Alert.svelte";
   import CopyButton from "../components/CopyButton.svelte";
-  import PageHeader from "../components/PageHeader.svelte";
+  import PageShell from "../components/PageShell.svelte";
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import ReferralBanner from "../components/ReferralBanner.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
@@ -427,327 +427,307 @@
   });
 </script>
 
-<div class="page-enter">
-  <div class="flex flex-col gap-6">
-    <PageHeader
-      title={$tr("Tokens")}
-      description={$tr(
-        "Upstream credentials, device login, client API keys, and per-token session quotas",
-      )}
-    />
+<PageShell
+  title={$tr("Tokens")}
+  description={$tr(
+    "Upstream credentials, device login, client API keys, and per-token session quotas",
+  )}
+  {loading}
+  {error}
+  onRetry={() => {
+    error = "";
+    refreshTokens();
+  }}
+>
+  {#if actionMessage}
+    <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
+  {/if}
 
-    {#if actionMessage}
-      <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
-    {/if}
-    {#if error}
-      <Alert tone="error" title={error}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onclick={() => {
-            error = "";
-            refreshTokens();
-          }}
-        >
-          {$tr("Retry")}
-        </Button>
-      </Alert>
-    {/if}
-
-    {#if oauthStatus}
-      <Alert
-        tone={oauthStatus.type === "success"
-          ? "success"
-          : oauthStatus.type === "error"
-            ? "error"
-            : "info"}
-        title={oauthStatus.message}
-      >
-        {#if oauthStatus.loginUrl}
-          <div class="flex flex-col gap-2 mt-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <code class="fp-num text-xs break-all max-w-full"
-                >{oauthStatus.loginUrl}</code
-              >
-              <CopyButton
-                text={oauthStatus.loginUrl}
-                label={$tr("Copy link")}
-              />
-              <a
-                href={oauthStatus.loginUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 text-xs text-[var(--fp-accent)] hover:underline font-medium"
-              >
-                {$tr("Open in New Tab")}
-                <ExternalLink size={12} />
-              </a>
-            </div>
-            <p class="text-xs text-[var(--fp-dim)]">
-              {$tr(
-                "Tip: To add a different FreeBuff account, open this link in an Incognito / Private window so your browser does not reuse an existing GitHub session.",
-              )}
-            </p>
-          </div>
-        {/if}
-      </Alert>
-    {/if}
-
-    <!-- Add token form -->
-    <Card
-      title={$tr("Add Token to Pool")}
-      description={$tr(
-        "Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.",
-      )}
+  {#if oauthStatus}
+    <Alert
+      tone={oauthStatus.type === "success"
+        ? "success"
+        : oauthStatus.type === "error"
+          ? "error"
+          : "info"}
+      title={oauthStatus.message}
     >
-      {#snippet actions()}
-        <Button
-          variant="secondary"
-          onclick={startOAuthLogin}
-          disabled={oauthStarting}
-        >
-          {#if oauthStarting}
-            <RefreshCw size={15} class="animate-spin" />
-            <span>{$tr("Authorizing…")}</span>
-          {:else}
-            <LogIn size={15} />
-            <span>{$tr("Device Login")}</span>
-          {/if}
-        </Button>
-      {/snippet}
-      <form onsubmit={addToken} class="flex flex-col gap-1.5">
-        <label
-          for="add-token-input"
-          class="text-xs font-medium text-[var(--fp-muted)]"
-          >{$tr("Token")}</label
-        >
-        <div
-          class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
-        >
-          <input
-            id="add-token-input"
-            type="text"
-            bind:value={newToken}
-            placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
-            autocomplete="off"
-            spellcheck="false"
-            class="fp-input fp-num flex-1"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={adding || !newToken.trim() || tokenValid === false}
-            loading={adding}
-            class="shrink-0"
-          >
-            <Plus size={15} />
-            <span>{$tr("Add Token")}</span>
-          </Button>
-        </div>
-        {#if tokenValid === false}
-          <p class="text-[11px] text-[var(--fp-error)]" role="alert">
+      {#if oauthStatus.loginUrl}
+        <div class="flex flex-col gap-2 mt-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <code class="fp-num text-xs break-all max-w-full"
+              >{oauthStatus.loginUrl}</code
+            >
+            <CopyButton text={oauthStatus.loginUrl} label={$tr("Copy link")} />
+            <a
+              href={oauthStatus.loginUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 text-xs text-[var(--fp-accent)] hover:underline font-medium"
+            >
+              {$tr("Open in New Tab")}
+              <ExternalLink size={12} />
+            </a>
+          </div>
+          <p class="text-xs text-[var(--fp-dim)]">
             {$tr(
-              "Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix",
+              "Tip: To add a different FreeBuff account, open this link in an Incognito / Private window so your browser does not reuse an existing GitHub session.",
             )}
           </p>
+        </div>
+      {/if}
+    </Alert>
+  {/if}
+
+  <!-- Add token form -->
+  <Card
+    title={$tr("Add Token to Pool")}
+    description={$tr(
+      "Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.",
+    )}
+  >
+    {#snippet actions()}
+      <Button
+        variant="secondary"
+        onclick={startOAuthLogin}
+        disabled={oauthStarting}
+      >
+        {#if oauthStarting}
+          <RefreshCw size={15} class="animate-spin" />
+          <span>{$tr("Authorizing…")}</span>
         {:else}
-          <p class="text-[11px] text-[var(--fp-dim)]">
-            {tokenValid === true
-              ? $tr("Valid format")
-              : $tr(
-                  "UUID or session token from ~/.config/codebuff/credentials.json",
-                )}
+          <LogIn size={15} />
+          <span>{$tr("Device Login")}</span>
+        {/if}
+      </Button>
+    {/snippet}
+    <form onsubmit={addToken} class="flex flex-col gap-1.5">
+      <label
+        for="add-token-input"
+        class="text-xs font-medium text-[var(--fp-muted)]">{$tr("Token")}</label
+      >
+      <div
+        class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+      >
+        <input
+          id="add-token-input"
+          type="text"
+          bind:value={newToken}
+          placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
+          autocomplete="off"
+          spellcheck="false"
+          class="fp-input fp-num flex-1"
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={adding || !newToken.trim() || tokenValid === false}
+          loading={adding}
+          class="shrink-0"
+        >
+          <Plus size={15} />
+          <span>{$tr("Add Token")}</span>
+        </Button>
+      </div>
+      {#if tokenValid === false}
+        <p class="text-[11px] text-[var(--fp-error)]" role="alert">
+          {$tr(
+            "Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix",
+          )}
+        </p>
+      {:else}
+        <p class="text-[11px] text-[var(--fp-dim)]">
+          {tokenValid === true
+            ? $tr("Valid format")
+            : $tr(
+                "UUID or session token from ~/.config/codebuff/credentials.json",
+              )}
+        </p>
+      {/if}
+    </form>
+  </Card>
+
+  <!-- Token Rotation Scheme & Handling Policy Card -->
+  <Card
+    title={$tr("Token Rotation & Handling Policy")}
+    description={$tr(
+      "Strategy used by the gateway to select upstream accounts for model requests.",
+    )}
+  >
+    {#snippet actions()}
+      <span
+        class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]"
+      >
+        <span class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"
+        ></span>
+        <span
+          class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]"
+          >{tokenRotation}</span
+        >
+      </span>
+    {/snippet}
+
+    <div class="space-y-3">
+      <div
+        class="flex flex-wrap items-center gap-2"
+        role="radiogroup"
+        aria-label={$tr("Token Rotation Policy")}
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={tokenRotation === "drain"}
+          disabled={savingRotation}
+          onclick={() => setTokenRotation("drain")}
+          class="fp-btn {tokenRotation === 'drain'
+            ? 'fp-btn-primary'
+            : 'fp-btn-ghost'} fp-btn-sm text-xs"
+        >
+          {$tr("Drain (Safest)")}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={tokenRotation === "round_robin"}
+          disabled={savingRotation}
+          onclick={() => setTokenRotation("round_robin")}
+          class="fp-btn {tokenRotation === 'round_robin'
+            ? 'fp-btn-primary'
+            : 'fp-btn-ghost'} fp-btn-sm text-xs"
+        >
+          {$tr("Round Robin (1:1)")}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={tokenRotation === "least_used"}
+          disabled={savingRotation}
+          onclick={() => setTokenRotation("least_used")}
+          class="fp-btn {tokenRotation === 'least_used'
+            ? 'fp-btn-primary'
+            : 'fp-btn-ghost'} fp-btn-sm text-xs"
+        >
+          {$tr("Least Used (Max Quota)")}
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={tokenRotation === "random"}
+          disabled={savingRotation}
+          onclick={() => setTokenRotation("random")}
+          class="fp-btn {tokenRotation === 'random'
+            ? 'fp-btn-primary'
+            : 'fp-btn-ghost'} fp-btn-sm text-xs"
+        >
+          {$tr("Random (Stochastic)")}
+        </button>
+      </div>
+
+      <div
+        class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2"
+      >
+        {#if tokenRotation === "drain"}
+          <p class="leading-relaxed">
+            <strong class="text-[var(--fp-text)]"
+              >{$tr("Drain Mode (Default & Recommended):")}</strong
+            >
+            {$tr(
+              "Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
+            )}
+          </p>
+        {:else if tokenRotation === "round_robin"}
+          <p class="leading-relaxed">
+            <strong class="text-[var(--fp-text)]"
+              >{$tr("Round-Robin Mode:")}</strong
+            >
+            {$tr(
+              "Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
+            )}
+          </p>
+        {:else if tokenRotation === "least_used"}
+          <p class="leading-relaxed">
+            <strong class="text-[var(--fp-text)]"
+              >{$tr("Least-Used Mode:")}</strong
+            >
+            {$tr(
+              "Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.",
+            )}
+          </p>
+        {:else if tokenRotation === "random"}
+          <p class="leading-relaxed">
+            <strong class="text-[var(--fp-text)]">{$tr("Random Mode:")}</strong>
+            {$tr(
+              "Selects an available healthy token at random per request. Provides stochastic load balancing.",
+            )}
           </p>
         {/if}
-      </form>
-    </Card>
-
-    <!-- Token Rotation Scheme & Handling Policy Card -->
-    <Card
-      title={$tr("Token Rotation & Handling Policy")}
-      description={$tr(
-        "Strategy used by the gateway to select upstream accounts for model requests.",
-      )}
-    >
-      {#snippet actions()}
-        <span
-          class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]"
-        >
-          <span
-            class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"
-          ></span>
-          <span
-            class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]"
-            >{tokenRotation}</span
-          >
-        </span>
-      {/snippet}
-
-      <div class="space-y-3">
-        <div
-          class="flex flex-wrap items-center gap-2"
-          role="radiogroup"
-          aria-label={$tr("Token Rotation Policy")}
-        >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={tokenRotation === "drain"}
-            disabled={savingRotation}
-            onclick={() => setTokenRotation("drain")}
-            class="fp-btn {tokenRotation === 'drain'
-              ? 'fp-btn-primary'
-              : 'fp-btn-ghost'} fp-btn-sm text-xs"
-          >
-            {$tr("Drain (Safest)")}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={tokenRotation === "round_robin"}
-            disabled={savingRotation}
-            onclick={() => setTokenRotation("round_robin")}
-            class="fp-btn {tokenRotation === 'round_robin'
-              ? 'fp-btn-primary'
-              : 'fp-btn-ghost'} fp-btn-sm text-xs"
-          >
-            {$tr("Round Robin (1:1)")}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={tokenRotation === "least_used"}
-            disabled={savingRotation}
-            onclick={() => setTokenRotation("least_used")}
-            class="fp-btn {tokenRotation === 'least_used'
-              ? 'fp-btn-primary'
-              : 'fp-btn-ghost'} fp-btn-sm text-xs"
-          >
-            {$tr("Least Used (Max Quota)")}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={tokenRotation === "random"}
-            disabled={savingRotation}
-            onclick={() => setTokenRotation("random")}
-            class="fp-btn {tokenRotation === 'random'
-              ? 'fp-btn-primary'
-              : 'fp-btn-ghost'} fp-btn-sm text-xs"
-          >
-            {$tr("Random (Stochastic)")}
-          </button>
-        </div>
-
-        <div
-          class="fp-inset p-3 rounded-lg text-xs text-[var(--fp-muted)] flex items-start gap-2"
-        >
-          {#if tokenRotation === "drain"}
-            <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]"
-                >{$tr("Drain Mode (Default & Recommended):")}</strong
-              >
-              {$tr(
-                "Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
-              )}
-            </p>
-          {:else if tokenRotation === "round_robin"}
-            <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]"
-                >{$tr("Round-Robin Mode:")}</strong
-              >
-              {$tr(
-                "Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
-              )}
-            </p>
-          {:else if tokenRotation === "least_used"}
-            <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]"
-                >{$tr("Least-Used Mode:")}</strong
-              >
-              {$tr(
-                "Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.",
-              )}
-            </p>
-          {:else if tokenRotation === "random"}
-            <p class="leading-relaxed">
-              <strong class="text-[var(--fp-text)]"
-                >{$tr("Random Mode:")}</strong
-              >
-              {$tr(
-                "Selects an available healthy token at random per request. Provides stochastic load balancing.",
-              )}
-            </p>
-          {/if}
-        </div>
-
-        <!-- Rate Limit Auto-Failover Toggle -->
-        <div
-          class="pt-3 border-t border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-        >
-          <div class="space-y-0.5">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-[var(--fp-text)]">
-                {$tr("Auto Failover on Rate Limit (429)")}
-              </span>
-              <span class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
-              ></span>
-            </div>
-            <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
-              {$tr(
-                "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.",
-              )}
-            </p>
-          </div>
-          <ToggleSwitch
-            checked={rateLimitFailover}
-            disabled={savingFailover}
-            saving={savingFailover}
-            ariaLabel="Auto Failover on Rate Limit (429)"
-            onchange={(v) => toggleRateLimitFailover(v)}
-          />
-        </div>
-      </div></Card
-    >
-    <ReferralBanner tokens={data?.tokens ?? []} />
-
-    <TokenTable
-      tokens={data?.tokens ?? []}
-      tokenCount={data?.token_count ?? 0}
-      {loading}
-      {error}
-      {expandedToken}
-      {actionPending}
-      {now}
-      {devToolsEnabled}
-      bind:spawnModels
-      onToggle={toggleExpand}
-      onAction={handleTokenAction}
-      onSpawn={handleSpawn}
-      onRefresh={handleRefresh}
-      onDropSession={handleDropSession}
-      onSwap={handleSwap}
-      onMove={handleMove}
-      onRetry={() => {
-        error = "";
-        refreshTokens();
-      }}
-    />
-    {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
-      <Card
-        title={$tr("Bridge Clients")}
-        description={$tr(
-          "{count} active bridge client(s) relaying their own FreeBuff tokens",
-          { count: data.bridge_token_cards.length },
-        )}
-        pad="none"
+      </div>
+      <!-- Rate Limit Auto-Failover Toggle -->
+      <div
+        class="pt-3 border-t border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
-        <div class="flex flex-col gap-3 p-4">
-          {#each data.bridge_token_cards as bc (bc.key)}
-            <BridgeTokenCard card={bc} {now} />
-          {/each}
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold text-[var(--fp-text)]">
+              {$tr("Auto Failover on Rate Limit (429)")}
+            </span>
+            <span class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
+            ></span>
+          </div>
+          <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
+            {$tr(
+              "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.",
+            )}
+          </p>
         </div>
-      </Card>
-    {/if}
-  </div>
-</div>
+        <ToggleSwitch
+          checked={rateLimitFailover}
+          disabled={savingFailover}
+          saving={savingFailover}
+          ariaLabel="Auto Failover on Rate Limit (429)"
+          onchange={(v) => toggleRateLimitFailover(v)}
+        />
+      </div>
+    </div></Card
+  >
+  <ReferralBanner tokens={data?.tokens ?? []} />
+
+  <TokenTable
+    tokens={data?.tokens ?? []}
+    tokenCount={data?.token_count ?? 0}
+    {loading}
+    {error}
+    {expandedToken}
+    {actionPending}
+    {now}
+    {devToolsEnabled}
+    bind:spawnModels
+    onToggle={toggleExpand}
+    onAction={handleTokenAction}
+    onSpawn={handleSpawn}
+    onRefresh={handleRefresh}
+    onDropSession={handleDropSession}
+    onSwap={handleSwap}
+    onMove={handleMove}
+    onRetry={() => {
+      error = "";
+      refreshTokens();
+    }}
+  />
+  {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
+    <Card
+      title={$tr("Bridge Clients")}
+      description={$tr(
+        "{count} active bridge client(s) relaying their own FreeBuff tokens",
+        { count: data.bridge_token_cards.length },
+      )}
+      pad="none"
+    >
+      <div class="flex flex-col gap-3 p-4">
+        {#each data.bridge_token_cards as bc (bc.key)}
+          <BridgeTokenCard card={bc} {now} />
+        {/each}
+      </div>
+    </Card>
+  {/if}
+</PageShell>

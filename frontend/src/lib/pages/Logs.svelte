@@ -10,11 +10,10 @@
     Copy,
     Check,
   } from "@lucide/svelte";
-  import PageHeader from "../components/PageHeader.svelte";
+  import PageShell from "../components/PageShell.svelte";
   import Card from "../components/Card.svelte";
   import Button from "../components/Button.svelte";
   import StatusBadge from "../components/StatusBadge.svelte";
-  import Alert from "../components/Alert.svelte";
   import EmptyState from "../components/EmptyState.svelte";
   import CopyButton from "../components/CopyButton.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
@@ -535,63 +534,35 @@
   }
 </script>
 
-<div class="space-y-4 page-enter">
-  <PageHeader
-    title={$tr("Logs")}
-    description={$tr(
-      "Live proxy and request logs from the in-memory ring buffer (200 max, newest first).",
-    )}
-  >
-    {#snippet actions()}
-      <SegmentedControl
-        bind:value={viewMode}
-        options={[
-          { id: "console", label: $tr("Console") },
-          { id: "table", label: $tr("Table") },
-        ]}
-        onchange={() => fetchLogs()}
-      />
-    {/snippet}
-  </PageHeader>
-
-  {#if error}
-    <Alert tone="error" title={$tr("Could not load log entries")}>
-      <p class="text-sm">{error}</p>
-      <div class="mt-3">
-        <Button variant="secondary" size="sm" onclick={refresh}
-          >{$tr("Retry")}</Button
-        >
-      </div>
-    </Alert>
-  {/if}
-
-  {#if loading && !data}
-    <div aria-live="polite" aria-busy="true">
-      <span class="sr-only">{$tr("Loading logs…")}</span>
-      <Card pad="none">
-        <div class="p-4 space-y-3" aria-hidden="true">
-          {#each [0, 1, 2, 3, 4, 5, 6] as i (i)}
-            <div class="flex items-center gap-3">
-              <span class="skeleton rounded-full size-2 shrink-0"></span>
-              <span
-                class="skeleton skeleton-line"
-                style="width:{45 + (i % 4) * 12}%"
-              ></span>
-              <span class="skeleton skeleton-line ml-auto" style="width:15%"
-              ></span>
-            </div>
-          {/each}
-        </div>
-      </Card>
-    </div>
-  {:else if data && !data.enabled}
-    <EmptyState
-      title={$tr("Log ring disabled")}
-      description={$tr(
-        "The server was started without an active logring handler, so no log entries are available.",
-      )}
+<PageShell
+  title={$tr("Logs")}
+  description={$tr(
+    "Live proxy and request logs from the in-memory ring buffer (200 max, newest first).",
+  )}
+  loading={loading && !data}
+  {error}
+  empty={data && !data.enabled
+    ? {
+        title: $tr("Log ring disabled"),
+        description: $tr(
+          "The server was started without an active logring handler, so no log entries are available.",
+        ),
+      }
+    : null}
+  onRetry={refresh}
+>
+  {#snippet actions()}
+    <SegmentedControl
+      bind:value={viewMode}
+      options={[
+        { id: "console", label: $tr("Console") },
+        { id: "table", label: $tr("Table") },
+      ]}
+      onchange={() => fetchLogs()}
     />
-  {:else if data}
+  {/snippet}
+
+  {#if data}
     {#if viewMode === "console"}
       <Card pad="none">
         <!-- Console View Top Bar: stacks on mobile so 4 actions never overflow -->
@@ -1022,4 +993,4 @@
       </Card>
     {/if}
   {/if}
-</div>
+</PageShell>
