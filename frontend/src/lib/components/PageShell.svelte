@@ -15,6 +15,8 @@
    * @prop {string} [description]
    * @prop {boolean} [loading=false]
    * @prop {string} [error='']
+   * @prop {string} [errorTitle=''] — page-specific error heading; falls
+   *   back to the generic "Could not load this page".
    * @prop {{ title: string, description?: string } | null} [empty=null]
    * @prop {() => void} [onRetry]
    * @slot actions — PageHeader right-side actions
@@ -26,6 +28,7 @@
     actions,
     loading = false,
     error = "",
+    errorTitle = "",
     empty = null,
     onRetry,
     children,
@@ -49,7 +52,7 @@
       <div class="skeleton skeleton-text w-1/2"></div>
     </div>
   {:else if error}
-    <Alert tone="error" title={$tr("Could not load this page")}>
+    <Alert tone="error" title={errorTitle || $tr("Could not load this page")}>
       {error}
       {#if onRetry}
         <div class="mt-3">
