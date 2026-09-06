@@ -420,6 +420,21 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(
       page.locator("section", { hasText: "Pool Tokens" }).locator("table"),
     ).toBeHidden();
+    // The expand chevron lives in the card footer on mobile: tapping it
+    // reveals the behind-chevron detail (instance row).
+    await page
+      .locator("section", { hasText: "Pool Tokens" })
+      .locator('button[aria-label*="Expand details"]')
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(
+      page
+        .locator("section", { hasText: "Pool Tokens" })
+        .getByText("Instance", { exact: true })
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
     const pageOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

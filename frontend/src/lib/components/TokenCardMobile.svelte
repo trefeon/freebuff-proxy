@@ -165,21 +165,6 @@
           <ChevronDown size={15} />
         </button>
       {/if}
-      <button
-        type="button"
-        onclick={onToggle}
-        aria-expanded={expanded}
-        aria-label={expanded
-          ? `Collapse details for account ${idx + 1}`
-          : `Expand details for account ${idx + 1}`}
-        class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
-      >
-        {#if expanded}
-          <ChevronExpand size={15} />
-        {:else}
-          <ChevronDown size={15} class="rotate-[-90deg]" />
-        {/if}
-      </button>
     </div>
   </div>
 
@@ -253,10 +238,25 @@
     </div>
   {/if}
 
-  <!-- Actions: right-aligned wrap, tap-friendly (reorder lives in header) -->
+  <!-- Footer: expand chevron left, actions right -->
   <div
-    class="flex items-center justify-end gap-2 pt-0.5 border-t border-[var(--fp-border)]"
+    class="flex items-center justify-between gap-2 pt-0.5 border-t border-[var(--fp-border)]"
   >
+    <button
+      type="button"
+      onclick={onToggle}
+      aria-expanded={expanded}
+      aria-label={expanded
+        ? `Collapse details for account ${idx + 1}`
+        : `Expand details for account ${idx + 1}`}
+      class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
+    >
+      {#if expanded}
+        <ChevronExpand size={17} />
+      {:else}
+        <ChevronDown size={17} class="rotate-[-90deg]" />
+      {/if}
+    </button>
     <div class="flex items-center gap-1.5 flex-wrap justify-end">
       {#if token.cooldown_active}
         <Button
