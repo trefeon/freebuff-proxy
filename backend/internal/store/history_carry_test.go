@@ -79,6 +79,63 @@ func TestImportLegacyHistoryDBReadOnlySource(t *testing.T) {
 		t.Errorf("carried %d rows, want 4", n)
 	}
 }
+func TestImportLegacySkipsEmptyCandidate(t *testing.T) {
+	dir := t.TempDir()
+	// First candidate exists but holds no history rows; the scan must
+	// continue to the second file instead of stopping (first-wins bug).
+	emptyPath := filepath.Join(dir, "empty.db")
+	empty, err := Open(emptyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty.Close()
+	fullPath := filepath.Join(dir, "freebuff-history.db")
+	seedLegacyHistory(t, fullPath)
+	st, err := Open(filepath.Join(dir, "freebuff.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), emptyPath); err != nil || n != 0 {
+		t.Fatalf("empty candidate = (%d, %v), want (0, nil)", n, err)
+	}
+	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), fullPath)
+	if err != nil || n != 4 {
+		t.Fatalf("full candidate = (%d, %v), want (4, nil)", n, err)
+	}
+}
+
+func TestImportLegacyStagesWALSidecars(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "freebuff-history.db")
+	// Live-writer simulation: a row sits uncheckpointed in -wal while the
+	// file is read-only for everyone else (direct ATTACH must fail over
+	// to the staged trio copy).
+	writer, err := Open(oldPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	if err := writer.RecordQuota(QuotaSnapshot{TS: 1, TokenIdx: 0, Model: "m", Limit: 30, Recent: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(oldPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(oldPath, 0o644)
+	st, err := Open(filepath.Join(dir, "freebuff.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("carried %d rows, want 1 (uncheckpointed WAL row)", n)
+	}
+}
 
 func TestImportLegacyHistoryDBNoops(t *testing.T) {
 	dir := t.TempDir()

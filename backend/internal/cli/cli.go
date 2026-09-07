@@ -199,17 +199,21 @@ func Serve(configPath string, verbose bool, version string) int {
 			}
 			// One-time display-history carry: every legacy dashboard DB still
 			// on disk folds into the new DB while the new history tables are
-			// empty (old bind mounts, pre-unified files). First non-empty
-			// import wins; ImportLegacyHistoryDB no-ops once the target holds
-			// rows, so later candidates stop. Warn-only, legacy files stay.
+			// empty (old bind mounts, pre-unified files). An empty candidate
+			// (0, nil) does NOT stop the scan — a later file may hold the
+			// rows; only a real import (n > 0) wins. ImportLegacyHistoryDB
+			// no-ops once the target holds rows, so steady-state boots just
+			// walk cheap COUNT(*) no-ops. Warn-only, legacy files stay.
 			for _, legacyHist := range history.LegacyHistoryCandidates(history.DBPathFromEnv(), cfg.SessionStateFile) {
-				if n, err := history.ImportLegacyHistoryDB(st, history.DBPathFromEnv(), legacyHist); err != nil {
+				n, err := history.ImportLegacyHistoryDB(st, history.DBPathFromEnv(), legacyHist)
+				if err != nil {
 					logger.Warn("legacy history carry skipped", "file", legacyHist, "err", err)
 					continue
-				} else if n > 0 {
-					logger.Info("carried legacy history into dashboard store", "file", legacyHist, "rows", n)
 				}
-				break
+				if n > 0 {
+					logger.Info("carried legacy history into dashboard store", "file", legacyHist, "rows", n)
+					break
+				}
 			}
 		}
 	}

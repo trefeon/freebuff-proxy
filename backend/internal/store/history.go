@@ -211,6 +211,12 @@ var historyCarryTables = []string{
 // target, or a legacy file without history tables. A corrupt legacy file
 // returns an error and copies nothing (callers only warn). The legacy
 // file is left in place — history regrows, the old file never deletes.
+//
+// Attach strategy is two-tier: direct ATTACH first (a live read-write
+// legacy file carries with its WAL intact), falling back to a staged temp
+// copy of the main+-wal+-shm trio (read-only mounts and locked files fail
+// direct ATTACH — SQLite needs write access for WAL/shm). The source is
+// never modified by either path.
 func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 	if oldPath == "" {
 		return 0, nil
@@ -241,42 +247,69 @@ func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 			return 0, nil
 		}
 	}
-	// The legacy file may sit on a read-only mount (old bind kept ro for
-	// safety) or be held by a still-running old container: ATTACH needs
-	// write access for WAL/shm, so copy to temp and attach the copy. The
-	// source is never modified.
-	tmp, err := os.CreateTemp("", "freebuff-legacy-*.db")
+	carry := func() (int64, error) {
+		var total int64
+		for _, t := range historyCarryTables {
+			res, err := s.db.Exec("INSERT INTO main." + t + " SELECT * FROM legacy." + t)
+			if err != nil {
+				return total, fmt.Errorf("store: carry %s: %w", t, err)
+			}
+			n, _ := res.RowsAffected()
+			total += n
+		}
+		return total, nil
+	}
+	attach := func(path string) error {
+		_, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(path, "'", "''") + "' AS legacy")
+		return err
+	}
+	if err := attach(oldAbs); err == nil {
+		defer s.db.Exec("DETACH DATABASE legacy")
+		return carry()
+	}
+	staged, cleanup, err := stageLegacyTrio(oldAbs)
 	if err != nil {
-		return 0, fmt.Errorf("store: stage legacy history: %w", err)
+		return 0, err
 	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-	src, err := os.Open(oldAbs)
-	if err != nil {
-		tmp.Close()
-		return 0, fmt.Errorf("store: read legacy history: %w", err)
-	}
-	if _, err := tmp.ReadFrom(src); err != nil {
-		src.Close()
-		tmp.Close()
-		return 0, fmt.Errorf("store: stage legacy history: %w", err)
-	}
-	src.Close()
-	if err := tmp.Close(); err != nil {
-		return 0, fmt.Errorf("store: stage legacy history: %w", err)
-	}
-	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(tmpPath, "'", "''") + "' AS legacy"); err != nil {
+	defer cleanup()
+	if err := attach(staged); err != nil {
 		return 0, fmt.Errorf("store: attach legacy history: %w", err)
 	}
 	defer s.db.Exec("DETACH DATABASE legacy")
-	var total int64
-	for _, t := range historyCarryTables {
-		res, err := s.db.Exec("INSERT INTO main." + t + " SELECT * FROM legacy." + t)
-		if err != nil {
-			return total, fmt.Errorf("store: carry %s: %w", t, err)
-		}
-		n, _ := res.RowsAffected()
-		total += n
+	return carry()
+}
+
+// stageLegacyTrio copies the main DB plus its -wal/-shm sidecars (when
+// present) into a temp dir and returns the staged main path. Copying the
+// trio keeps rows that were never checkpointed out of the main file.
+func stageLegacyTrio(oldAbs string) (staged string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", "freebuff-legacy-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("store: stage legacy history: %w", err)
 	}
-	return total, nil
+	cleanup = func() { os.RemoveAll(dir) }
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		src, err := os.Open(oldAbs + suffix)
+		if err != nil {
+			if suffix != "" && errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			cleanup()
+			return "", nil, fmt.Errorf("store: read legacy history: %w", err)
+		}
+		dst, err := os.OpenFile(filepath.Join(dir, "legacy.db"+suffix), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			src.Close()
+			cleanup()
+			return "", nil, fmt.Errorf("store: stage legacy history: %w", err)
+		}
+		_, cpyErr := dst.ReadFrom(src)
+		src.Close()
+		closeErr := dst.Close()
+		if cpyErr != nil || closeErr != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("store: stage legacy history: %w", err)
+		}
+	}
+	return filepath.Join(dir, "legacy.db"), cleanup, nil
 }
