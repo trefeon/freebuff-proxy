@@ -172,13 +172,12 @@ const Glm53ModelID = "z-ai/glm-5.3-flash"
 const SolarPro4ModelID = "upstage/solar-pro4"
 
 // PremiumSessionLimit mirrors upstream FREEBUFF_PREMIUM_SESSION_LIMIT: the
-// LEVEL-0 premium floor per Pacific day (4). The runtime default
-// entitlement is 5/day: under FREEBUFF_TRUST_LEVELS=observe (the default)
-// the flat base applies, and under FREEBUFF_LEVEL_SESSIONS=off the
-// pre-Levels base (5) is selected. 4 only applies with trust levels
-// enforced at the floor; the ladder raises it back (5 at level 2+, 7
-// ceiling).
-const PremiumSessionLimit = 4
+// base premium sessions per Pacific day (5; back to 5 on 2026-09-07, the day
+// Levels were retired upstream — the 5 → 4 retune existed so a Level could
+// add the difference back, and the pre-Levels revert constants are deleted).
+// Moot for a metered account (Freebucks is the meter); rollback-safety
+// value, not a live limit.
+const PremiumSessionLimit = 5
 
 // GLMSessionLength mirrors upstream FREEBUFF_GLM_V52_SESSION_LENGTH_MS: GLM
 // sessions are exactly one hour of wall-clock time, regardless of the global
