@@ -100,3 +100,55 @@ func TestPageStateWithoutStore(t *testing.T) {
 		t.Errorf("PUT live-only = %d %v, want 503", code, out)
 	}
 }
+
+// TestPageStatePutRejectsNonObject pins the object-only gate: every consumer
+// merges data as an object (loadPageState's spread, the shell restore), so a
+// null/number/string/array snapshot 400s instead of landing verbatim and
+// breaking the next load. A rejected write stores nothing.
+func TestPageStatePutRejectsNonObject(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+	for _, data := range []any{nil, float64(5), "x", []any{float64(1)}} {
+		code, out := settingsDo(t, http.MethodPut, ts.URL+"/admin/api/pages/overview", cookie, csrf,
+			map[string]any{"data": data})
+		if code != http.StatusBadRequest || out["code"] != "bad_request" {
+			t.Errorf("PUT data=%v = %d %v, want 400 bad_request", data, code, out)
+		}
+	}
+	_, out := settingsDo(t, http.MethodGet, ts.URL+"/admin/api/pages/overview", cookie, csrf, nil)
+	if data, ok := out["data"].(map[string]any); !ok || len(data) != 0 {
+		t.Errorf("GET after rejected PUTs data = %v, want {} (nothing stored)", out["data"])
+	}
+}
+
+// TestPageStatePutEnvelopeOverflow413 pins the limiter mapping: a body past
+// the 72KB limiter (64KB data cap + 8KB envelope slack) 413s as
+// page_too_large — the same code as an over-cap data field — so clients key
+// truncation on one code instead of a generic 400.
+func TestPageStatePutEnvelopeOverflow413(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+	big := map[string]any{"data": map[string]any{"blob": strings.Repeat("x", 80<<10)}}
+	code, out := settingsDo(t, http.MethodPut, ts.URL+"/admin/api/pages/logs", cookie, csrf, big)
+	if code != http.StatusRequestEntityTooLarge || out["code"] != "page_too_large" {
+		t.Errorf("PUT envelope overflow = %d %v, want 413 page_too_large", code, out)
+	}
+}
+
+// TestPageStateDeepLinkIDsAllowed pins the allowlist/nav-registry parity:
+// every NAV_ITEMS id (frontend/src/lib/nav.js) — including the four
+// deep-link-only pages (setup/metrics/traces/playground) — plus the shell
+// chrome key round-trips instead of 404ing real visits.
+func TestPageStateDeepLinkIDsAllowed(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+	for _, id := range []string{"setup", "metrics", "traces", "playground", "shell"} {
+		code, out := settingsDo(t, http.MethodPut, ts.URL+"/admin/api/pages/"+id, cookie, csrf,
+			map[string]any{"data": map[string]any{"visitedAt": float64(1)}})
+		if code != http.StatusOK || out["code"] != "page_saved" {
+			t.Errorf("PUT pages/%s = %d %v, want 200 page_saved", id, code, out)
+			continue
+		}
+		code, _ = settingsDo(t, http.MethodGet, ts.URL+"/admin/api/pages/"+id, cookie, csrf, nil)
+		if code != http.StatusOK {
+			t.Errorf("GET pages/%s = %d, want 200", id, code)
+		}
+	}
+}

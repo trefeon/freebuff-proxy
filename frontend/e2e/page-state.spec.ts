@@ -113,4 +113,195 @@ test.describe("per-page persist", () => {
     // Expanded without any click: the snapshot drove expandedToken.
     await expect(table.getByText("Active Session:")).toBeVisible();
   });
+
+  test("tokens out-of-range index drops the drawer instead of opening the wrong row", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    // Five pooled accounts in fixtures; index 99 matches none.
+    await mockPageState(page, { tokens: { expandedToken: 99 } });
+    await page.goto(admin("tokens"));
+    const table = page.locator("table.fp-table");
+    await expect(table.getByText("Account #1")).toBeVisible({
+      timeout: 10_000,
+    });
+    // No drawer opened (and the stale index is dropped, never re-persisted).
+    await expect(table.getByText("Active Session:")).toHaveCount(0);
+  });
+
+  test("logs full filter set round-trips across reload", async ({ page }) => {
+    await mockDashboard(page, loadFixtures());
+    const state = await mockPageState(page);
+    await page.goto(admin("logs"));
+    // Filters live in the Table view (Console is the default).
+    await page.getByRole("button", { name: "Table" }).click();
+    await page.locator("#log-level").selectOption("info");
+    await page.locator("#log-msg").fill("request");
+    // Hide-admin defaults on; flipping it off is part of the persisted set.
+    await page.getByRole("button", { name: "Hide admin" }).click();
+    // 13 info+request fixture entries → page 2 exists at 10 rows/page.
+    await page.getByRole("button", { name: "Next" }).click();
+    // The debounced save (~1s) PUTs the snapshot; poll until the full
+    // filter payload arrives.
+    await expect
+      .poll(
+        () => {
+          const snapshot = state.get("logs");
+          if (snapshot && typeof snapshot === "object") {
+            const s = snapshot as Record<string, unknown>;
+            if (
+              s.filterMsg === "request" &&
+              s.filterLevel === "info" &&
+              s.hideAdmin === false &&
+              s.viewMode === "table" &&
+              s.page === 1
+            )
+              return "ready";
+          }
+          return undefined;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe("ready");
+    await page.reload();
+    // Table view restored without clicking: the stored viewMode drove it.
+    await expect(page.locator("#log-level")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#log-level")).toHaveValue("info");
+    await expect(page.locator("#log-msg")).toHaveValue("request");
+    await expect(
+      page.getByRole("button", { name: "Hide admin" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("Page 2 / 2")).toBeVisible();
+  });
+
+  test("an unknown hash is never persisted to shell.lastHash", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    const state = await mockPageState(page);
+    await page.goto(admin("no-such-page"));
+    // Past the debounce window there must still be no shell snapshot: the
+    // App shell only remembers known page ids.
+    await page.waitForTimeout(1500);
+    expect(state.get("shell")).toBeUndefined();
+  });
+});
+
+test.describe("settings DB overlay", () => {
+  type Posted = Array<Record<string, unknown>>;
+  async function mockSettings(
+    page: Parameters<typeof mockDashboard>[0],
+    posted: Posted,
+    postStatus = 200,
+  ) {
+    await page.route("**/admin/api/settings", async (route) => {
+      if (route.request().method() === "POST") {
+        try {
+          posted.push(JSON.parse(route.request().postData() ?? "{}"));
+        } catch {
+          posted.push({});
+        }
+        if (postStatus !== 200) {
+          await route.fulfill({
+            status: postStatus,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ok: false,
+              message: "Setting rejected: boom",
+              code: "invalid_setting",
+            }),
+          });
+        } else {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              ok: true,
+              message: "X saved to the DB overlay and applied live.",
+              code: "setting_saved",
+              restart_only: [],
+            }),
+          });
+        }
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            settings: [
+              {
+                key: "LOG_LEVEL",
+                value: "info",
+                source: "db",
+                restart_only: false,
+                secret: false,
+              },
+              {
+                key: "MODEL_ALIASES",
+                value: "gpt-4o:openai/gpt-5.6-luna",
+                source: "db",
+                restart_only: false,
+                secret: false,
+              },
+            ],
+          }),
+        });
+      }
+    });
+  }
+
+  test("model routing rows mount with DB badges and per-key save posts the overlay", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    const posted: Posted = [];
+    await mockSettings(page, posted);
+    await mockPageState(page);
+    await page.goto(admin("settings"));
+    await expect(
+      page.getByRole("heading", { name: "Settings", exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
+    // ModelRoutingSettings mounts (it owns these four inputs) and the
+    // seeded db source renders its override badge.
+    await expect(
+      page.locator('input[aria-label="MODEL_ALIASES"]'),
+    ).toBeVisible();
+    await expect(page.getByText("DB override").first()).toBeVisible();
+    // First row-level save (SAFE_MODE) posts just that key to the overlay.
+    await page
+      .getByRole("button", { name: "Save as override" })
+      .first()
+      .click();
+    await expect
+      .poll(() => posted.length, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect(posted[0].key).toBe("SAFE_MODE");
+    expect(typeof posted[0].value).toBe("string");
+    await expect(
+      page.getByText(/saved to the DB overlay/i).first(),
+    ).toBeVisible();
+  });
+
+  test("a rejected overlay value surfaces inline on the row", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    const posted: Posted = [];
+    await mockSettings(page, posted, 400);
+    await mockPageState(page);
+    await page.goto(admin("settings"));
+    await expect(page.locator('input[aria-label="MODEL_ALIASES"]')).toBeVisible(
+      { timeout: 10_000 },
+    );
+    await page
+      .getByRole("button", { name: "Save as override" })
+      .first()
+      .click();
+    await expect
+      .poll(() => posted.length, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await expect(
+      page.locator('span[role="status"]', { hasText: "Setting rejected" }),
+    ).toBeVisible();
+  });
 });

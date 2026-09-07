@@ -284,6 +284,11 @@ var restartOnlyConfigKeys = []string{
 	"RUNS_DRAIN_QUEUE_CAP",
 	"RUNS_DRAIN_TTL",
 	"DASHBOARD_ENABLED",
+	"LISTEN_ADDR",
+	"LOG_LEVEL",
+	"LOG_FORMAT",
+	"LOG_FILE",
+	"LOG_RING_SIZE",
 }
 
 // changedRestartOnlyKeys returns the subset of restartOnlyConfigKeys whose

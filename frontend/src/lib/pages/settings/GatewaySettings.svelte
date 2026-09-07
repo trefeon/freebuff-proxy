@@ -3,6 +3,7 @@
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
   import DbBadge from "../../components/DbOverrideBadge.svelte";
+  import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import { ShieldCheck } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -16,6 +17,8 @@
    * @prop {(key: string, value: string) => void} onField
    * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
    * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
+   * @prop {(() => Promise<void>) | null} [onSaved] - parent refetch after a
+   *   per-key DB-overlay save
    */
   let {
     formValues,
@@ -23,6 +26,7 @@
     onField,
     sources = {},
     onReset = null,
+    onSaved = null,
   } = $props();
 
   let env = $derived(parseEnv(rawText));
@@ -62,7 +66,7 @@
 <SettingsCard
   title={$tr("General")}
   description={$tr(
-    "Gateway runtime behavior and account protection. Changes apply live without restart.",
+    "Gateway runtime behavior and account protection. Most keys apply live without restart; restart-marked keys apply after a container restart.",
   )}
 >
   {#snippet icon()}
@@ -91,6 +95,14 @@
       {#if sources.SAFE_MODE === "db"}
         <DbBadge settingKey="SAFE_MODE" {onReset} />
       {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="SAFE_MODE"
+        value={formValues.SAFE_MODE ?? "true"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="flex items-center gap-2.5">
@@ -123,6 +135,9 @@
       {#if sources.LOG_LEVEL === "db"}
         <DbBadge settingKey="LOG_LEVEL" {onReset} />
       {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave settingKey="LOG_LEVEL" value={logLevel} {onSaved} />
     {/snippet}
 
     <div class="w-full sm:w-48">
@@ -169,6 +184,14 @@
         <DbBadge settingKey="HTTP_READ_TIMEOUT" {onReset} />
       {/if}
     {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="HTTP_READ_TIMEOUT"
+        value={httpReadTimeout}
+        restartOnly
+        {onSaved}
+      />
+    {/snippet}
 
     <div class="w-full sm:w-48">
       <select
@@ -213,6 +236,13 @@
       {#if sources.BRIDGE_ENABLED === "db"}
         <DbBadge settingKey="BRIDGE_ENABLED" {onReset} />
       {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="BRIDGE_ENABLED"
+        value={formValues.BRIDGE_ENABLED ?? "true"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="flex items-center gap-2.5">

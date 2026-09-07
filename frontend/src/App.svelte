@@ -62,7 +62,12 @@
 
   function persistHash() {
     const h = window.location.hash.replace("#", "");
-    if (h) savePageState("shell", { lastHash: h });
+    // Only known pages are remembered: persisting an unknown hash would
+    // reopen a NotFound view on the next boot with no explicit route.
+    // shell.lastHash is last-writer-wins (see lib/stores/pageState.js).
+    const norm = h === "config" ? "settings" : h;
+    if (norm && pageComponentFor(norm))
+      savePageState("shell", { lastHash: norm });
   }
 
   $effect(() => {

@@ -87,11 +87,11 @@
     "group": "general",
     "kind": "text",
     "default": "127.0.0.1:3457",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces). Set via container environment."
+    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces). Set via container environment. The listener socket is bound once at boot and never re-binds on reload."
   },
   {
     "key": "LOG_ACCESS",
@@ -108,11 +108,11 @@
     "group": "general",
     "kind": "text",
     "default": "",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr."
+    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr. Restart-only: the log sink is opened once at boot and a reload never re-opens it."
   },
   {
     "key": "LOG_FORMAT",
@@ -123,10 +123,10 @@
       "json"
     ],
     "default": "text",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
-    "description": "Log format: text (key=value, colored) or json (one JSON object per line)."
+    "description": "Log format: text (key=value, colored) or json (one JSON object per line). Restart-only: the logger is configured once at boot and a reload never reconfigures it."
   },
   {
     "key": "LOG_LEVEL",
@@ -140,20 +140,20 @@
       "trace"
     ],
     "default": "info",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": true,
-    "description": "Log level (trace = wire-level bodies)."
+    "description": "Log level (trace = wire-level bodies). Restart-only: the logger is configured once at boot and a reload never reconfigures it."
   },
   {
     "key": "LOG_RING_SIZE",
     "group": "general",
     "kind": "int",
     "default": "500",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
-    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000)."
+    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000). Restart-only: the ring is allocated once at boot and a reload never resizes it."
   },
   {
     "key": "SAFE_MODE",

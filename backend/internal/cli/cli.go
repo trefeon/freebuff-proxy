@@ -187,13 +187,40 @@ func Serve(configPath string, verbose bool, version string) int {
 			// sessions_persist, then archive each to .bak (never delete).
 			// Gated on SESSION_PERSIST; a failure only warns — the JSON
 			// store above stays authoritative. SaveSession upserts by token
-			// hash, so importing from several split-brain locations is safe.
+			// hash, so importing from several split-brain locations is
+			// last-wins; each overwrite of a previously imported hash with
+			// different content warns (identical re-imports stay silent).
 			if cfg.SessionPersist {
+				onCollision := func(file string) func(string) {
+					return func(hash string) {
+						logger.Warn("legacy session import overwrote a previously imported session with different content; later file wins", "file", file, "token_hash", hash)
+					}
+				}
 				for _, legacy := range history.LegacySessionCandidates(cfg.SessionStateFile) {
-					if n, err := history.ImportLegacySessionFile(st, legacy); err != nil {
+					if n, err := history.ImportLegacySessionFileWithCollisions(st, legacy, onCollision(legacy)); err != nil {
 						logger.Warn("legacy session import skipped; JSON state file stays in use", "file", legacy, "err", err)
 					} else if n > 0 {
 						logger.Info("imported legacy session state into dashboard store", "file", legacy, "sessions", n)
+					}
+				}
+				// .bak re-consult: each import above archives its source to
+				// .bak, so when sessions_persist still holds zero rows AND
+				// the live JSON path is missing, the archive is the only
+				// copy left (fresh DB path over a previous install) —
+				// import it WITHOUT re-archiving (the path already is the
+				// archive). Warn-only like every other carry step.
+				if empty, err := st.SessionsEmpty(); err != nil {
+					logger.Warn("legacy session backup re-consult skipped", "err", err)
+				} else if empty {
+					if _, statErr := os.Stat(cfg.SessionStateFile); errors.Is(statErr, os.ErrNotExist) {
+						bak := cfg.SessionStateFile + ".bak"
+						if fi, bakErr := os.Stat(bak); bakErr == nil && fi.Mode().IsRegular() {
+							if n, err := history.ImportLegacySessionBackup(st, bak, onCollision(bak)); err != nil {
+								logger.Warn("legacy session backup import skipped", "file", bak, "err", err)
+							} else if n > 0 {
+								logger.Info("imported legacy session backup into dashboard store", "file", bak, "sessions", n)
+							}
+						}
 					}
 				}
 			}
@@ -201,9 +228,14 @@ func Serve(configPath string, verbose bool, version string) int {
 			// on disk folds into the new DB while the new history tables are
 			// empty (old bind mounts, pre-unified files). An empty candidate
 			// (0, nil) does NOT stop the scan — a later file may hold the
-			// rows; only a real import (n > 0) wins. ImportLegacyHistoryDB
-			// no-ops once the target holds rows, so steady-state boots just
-			// walk cheap COUNT(*) no-ops. Warn-only, legacy files stay.
+			// rows. ImportLegacyHistoryDB fills from ONE file only (never
+			// merges — INTEGER rowid PKs would collide across files), so
+			// the scan keeps walking after a carry: a later file holding
+			// rows is a skipped era, inspected (staged copy, COUNT(*) per
+			// table, never imported) and reported at WARN with its counts.
+			// Steady-state boots just walk cheap COUNT(*) no-ops. Warn-only,
+			// legacy files stay.
+			carriedFrom := ""
 			for _, legacyHist := range history.LegacyHistoryCandidates(history.DBPathFromEnv(), cfg.SessionStateFile) {
 				n, err := history.ImportLegacyHistoryDB(st, history.DBPathFromEnv(), legacyHist)
 				if err != nil {
@@ -212,7 +244,25 @@ func Serve(configPath string, verbose bool, version string) int {
 				}
 				if n > 0 {
 					logger.Info("carried legacy history into dashboard store", "file", legacyHist, "rows", n)
-					break
+					if carriedFrom == "" {
+						carriedFrom = legacyHist
+					}
+					continue
+				}
+				if carriedFrom == "" {
+					continue
+				}
+				counts, cerr := history.CountLegacyHistoryRows(st, legacyHist)
+				if cerr != nil {
+					logger.Warn("legacy history carry skipped; later era left in place unreadable (no cross-file merge: rowid collisions)", "file", legacyHist, "carried_from", carriedFrom, "err", cerr)
+					continue
+				}
+				var skipped int64
+				for _, c := range counts {
+					skipped += c
+				}
+				if skipped > 0 {
+					logger.Warn("legacy history skipped: store already carries an earlier era; later file left in place (no cross-file merge: rowid collisions)", "file", legacyHist, "carried_from", carriedFrom, "rows", skipped, "log_entries", counts["log_entries"], "quota_snapshots", counts["quota_snapshots"], "maturity_events", counts["maturity_events"], "request_records", counts["request_records"])
 				}
 			}
 		}

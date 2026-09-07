@@ -117,11 +117,25 @@ func TestSettingsOverlayCycle(t *testing.T) {
 	}
 	baseline := entries["LOG_LEVEL"]["value"]
 
-	// Write: a live key hot-applies.
+	// Write: LOG_LEVEL is restart-only (the reload never reconfigures the
+	// logger), so the POST persists but reports setting_restart_only.
 	code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
 		map[string]any{"key": "LOG_LEVEL", "value": "debug"})
 	if code != http.StatusOK || res["ok"] != true {
 		t.Fatalf("POST LOG_LEVEL = %d %v, want 200 ok", code, res)
+	}
+	if res["code"] != "setting_restart_only" {
+		t.Errorf("POST code = %v, want setting_restart_only (logger is reload-proof)", res["code"])
+	}
+	if ro, _ := res["restart_only"].([]any); len(ro) != 1 || ro[0] != "LOG_LEVEL" {
+		t.Errorf("restart_only = %v, want [LOG_LEVEL]", res["restart_only"])
+	}
+
+	// A live key still hot-applies with setting_saved.
+	code, res = settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
+		map[string]any{"key": "LOG_ACCESS", "value": false})
+	if code != http.StatusOK || res["ok"] != true {
+		t.Fatalf("POST LOG_ACCESS = %d %v, want 200 ok", code, res)
 	}
 	if res["code"] != "setting_saved" {
 		t.Errorf("POST code = %v, want setting_saved (live key)", res["code"])
@@ -131,6 +145,9 @@ func TestSettingsOverlayCycle(t *testing.T) {
 	entries = settingsSources(t, ts, cookie)
 	if entries["LOG_LEVEL"]["value"] != "debug" || entries["LOG_LEVEL"]["source"] != "db" {
 		t.Fatalf("LOG_LEVEL entry = %v, want value=debug source=db", entries["LOG_LEVEL"])
+	}
+	if entries["LOG_ACCESS"]["value"] != "false" || entries["LOG_ACCESS"]["source"] != "db" {
+		t.Fatalf("LOG_ACCESS entry = %v, want value=false source=db", entries["LOG_ACCESS"])
 	}
 	resp, data := doJSON(t, http.MethodGet, ts.URL+"/admin/api/config", nil, map[string]string{"Cookie": cookie})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(data), `"key":"LOG_LEVEL"`) {
@@ -175,7 +192,7 @@ func TestSettingsOverlayCycle(t *testing.T) {
 func TestSettingsPostRejects(t *testing.T) {
 	ts, cookie, csrf := settingsTestServer(t)
 
-	for _, key := range []string{"AUTH_TOKENS", "ADMIN_TOKEN", "API_KEYS", "WEBHOOK_URL", "UPSTREAM_BASE_URL", "DB_PATH"} {
+	for _, key := range []string{"AUTH_TOKENS", "ADMIN_TOKEN", "API_KEYS", "WEBHOOK_URL", "UPSTREAM_BASE_URL", "DB_PATH", "AUTO_DISCOVER_TOKEN"} {
 		code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
 			map[string]any{"key": key, "value": "x"})
 		if code != http.StatusBadRequest {
@@ -230,14 +247,110 @@ func TestSettingsWithoutStore(t *testing.T) {
 	}
 	var payload struct {
 		Settings []map[string]any `json:"settings"`
+		Degraded bool             `json:"degraded"`
 	}
 	if err := json.Unmarshal(data, &payload); err != nil || len(payload.Settings) == 0 {
 		t.Fatalf("GET settings payload = %s, want a non-empty settings array", data)
+	}
+	if !payload.Degraded {
+		t.Errorf("GET settings live-only degraded = false, want true (nil store serves file/env/default read-only)")
 	}
 
 	code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, "csrf",
 		map[string]any{"key": "LOG_LEVEL", "value": "debug"})
 	if code != http.StatusServiceUnavailable {
 		t.Errorf("POST live-only = %d %v, want 503", code, res)
+	}
+}
+
+// TestSettingsPostRestartOnlyMatrix pins the logger/listener review finding
+// end to end: every restart-only key persists through POST but reports
+// setting_restart_only (never setting_saved), and GET flags the row
+// restart_only with source=db.
+func TestSettingsPostRestartOnlyMatrix(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+	for key, value := range map[string]string{
+		"LOG_LEVEL":     "debug",
+		"LOG_FORMAT":    "json",
+		"LOG_FILE":      "proxy.log",
+		"LOG_RING_SIZE": "600",
+		"LISTEN_ADDR":   "127.0.0.1:3458",
+	} {
+		code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
+			map[string]any{"key": key, "value": value})
+		if code != http.StatusOK || res["ok"] != true {
+			t.Errorf("POST %s = %d %v, want 200 ok", key, code, res)
+			continue
+		}
+		if res["code"] != "setting_restart_only" {
+			t.Errorf("POST %s code = %v, want setting_restart_only", key, res["code"])
+		}
+		if ro, _ := res["restart_only"].([]any); len(ro) != 1 || ro[0] != key {
+			t.Errorf("POST %s restart_only = %v, want [%s]", key, res["restart_only"], key)
+		}
+	}
+	entries := settingsSources(t, ts, cookie)
+	for _, key := range []string{"LOG_LEVEL", "LOG_FORMAT", "LOG_FILE", "LOG_RING_SIZE", "LISTEN_ADDR"} {
+		if entries[key]["source"] != "db" {
+			t.Errorf("%s source = %v, want db after POST", key, entries[key]["source"])
+		}
+	}
+}
+
+// TestSettingsPostNumericCoercion pins JSON-number handling for int keys:
+// an integral float64 is exactly the int the caller meant (30.0 persists as
+// "30" and hot-applies), while a non-integral float rejects with a message
+// that names the number instead of the generic shape error.
+func TestSettingsPostNumericCoercion(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+
+	code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
+		map[string]any{"key": "MAX_REQUESTS_PER_MINUTE", "value": float64(30)})
+	if code != http.StatusOK || res["ok"] != true || res["code"] != "setting_saved" {
+		t.Fatalf("POST int key with 30.0 = %d %v, want 200 setting_saved", code, res)
+	}
+	entries := settingsSources(t, ts, cookie)
+	if entries["MAX_REQUESTS_PER_MINUTE"]["value"] != "30" || entries["MAX_REQUESTS_PER_MINUTE"]["source"] != "db" {
+		t.Fatalf("MAX_REQUESTS_PER_MINUTE entry = %v, want value=30 source=db", entries["MAX_REQUESTS_PER_MINUTE"])
+	}
+
+	code, res = settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
+		map[string]any{"key": "MAX_REQUESTS_PER_MINUTE", "value": 30.5})
+	if code != http.StatusBadRequest {
+		t.Fatalf("POST int key with 30.5 = %d %v, want 400", code, res)
+	}
+	if msg, _ := res["message"].(string); !strings.Contains(msg, "non-integral") {
+		t.Errorf("POST 30.5 message = %q, want it to name the non-integral number", msg)
+	}
+
+	// The rejected write stores nothing: the effective value is untouched.
+	entries = settingsSources(t, ts, cookie)
+	if entries["MAX_REQUESTS_PER_MINUTE"]["value"] != "30" {
+		t.Errorf("MAX_REQUESTS_PER_MINUTE after rejected POST = %v, want value=30", entries["MAX_REQUESTS_PER_MINUTE"])
+	}
+}
+
+// TestSettingsDegradedFlag pins nil-store honesty on the healthy side too:
+// a store-backed gateway reports degraded:false alongside the full catalog.
+func TestSettingsDegradedFlag(t *testing.T) {
+	ts, cookie, _ := settingsTestServer(t)
+	resp, data := doJSON(t, http.MethodGet, ts.URL+"/admin/api/settings", nil, map[string]string{"Cookie": cookie})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET settings = %d: %s", resp.StatusCode, data)
+	}
+	var payload struct {
+		Settings []map[string]any `json:"settings"`
+		Degraded bool             `json:"degraded"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode settings: %v", err)
+	}
+	if payload.Degraded {
+		t.Error("GET settings store-backed degraded = true, want false")
+	}
+	if len(payload.Settings) == 0 {
+		// The degraded/get split must never shrink the catalog: keep 200 +
+		// the full effective view in both states.
+		t.Error("GET settings store-backed returned an empty catalog")
 	}
 }

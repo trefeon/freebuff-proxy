@@ -55,7 +55,9 @@
 
   let modelsList = $state(fallbackModelOptions);
   onMount(() => {
-    recordPageVisit("devtools");
+    // The visit is recorded only once the DEVTOOLS gate passes: a direct
+    // #devtools hash with the gate off must not plant a lastHash/visit that
+    // reopens this page on the next boot.
     // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
     // #292); this page just renders the cached snapshot.
     const release = ensureTokensStore();
@@ -74,6 +76,7 @@
         const cfgRes = await fetchAPI(adminApi.config);
         const envContent = cfgRes?.env_content || "";
         devToolsEnabled = isDevToolsEnabled(envContent);
+        if (devToolsEnabled) recordPageVisit("devtools");
       } catch {
         devToolsEnabled = false;
       }

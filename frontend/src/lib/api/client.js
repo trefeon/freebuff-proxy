@@ -92,15 +92,23 @@ export async function fetchAPI(path, opts = {}) {
   if (!res.ok) {
     // Admin endpoints emit one envelope ({ok,message[,code]}); surface the
     // human message instead of a raw JSON blob. Fall back to status text.
+    // The HTTP status and envelope code ride along on the error so callers
+    // with size/rate gates (pages_state 413 page_too_large) can branch
+    // without parsing message text.
     const text = await res.text().catch(() => "");
     let msg;
+    let code;
     try {
       const parsed = JSON.parse(text);
       msg = parsed?.message ?? "";
+      code = parsed?.code;
     } catch {
       msg = text;
     }
-    throw new Error(msg || `HTTP ${res.status}`);
+    const err = new Error(msg || `HTTP ${res.status}`);
+    err.status = res.status;
+    if (code) err.code = code;
+    throw err;
   }
 
   return res.json();

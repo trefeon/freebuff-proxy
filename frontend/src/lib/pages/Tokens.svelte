@@ -131,8 +131,20 @@
       const idx = t.index ?? i;
       if (!(idx in spawnModels)) spawnModels[idx] = "";
     });
+    clampExpandedToken();
     error = "";
     loading = false;
+  }
+
+  // A restored expandedToken may point past the live list (the pool shrank
+  // while the snapshot sat in pages_state). Drop out-of-range indexes
+  // instead of opening the wrong drawer — and never re-persist the stale
+  // value back over the snapshot.
+  function clampExpandedToken() {
+    if (expandedToken == null) return;
+    const list = data?.tokens ?? [];
+    const ok = list.some((t, i) => (t?.index ?? i) === expandedToken);
+    if (!ok) expandedToken = null;
   }
 
   async function addToken(e) {

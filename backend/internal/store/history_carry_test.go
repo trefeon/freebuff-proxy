@@ -158,3 +158,80 @@ func TestImportLegacyHistoryDBNoops(t *testing.T) {
 		t.Error("garbage file accepted, want error")
 	}
 }
+
+// TestCountLegacyHistoryRows pins the multi-era inspector: per-table counts
+// from a staged read-only copy, zeroes for missing/empty files, an error
+// for garbage — and the source left importable afterwards (inspecting never
+// modifies or locks the legacy file out of a later carry).
+func TestCountLegacyHistoryRows(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "freebuff-history.db")
+	seedLegacyHistory(t, oldPath)
+	st, err := Open(filepath.Join(dir, "freebuff.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	counts, err := CountLegacyHistoryRows(st, oldPath)
+	if err != nil {
+		t.Fatalf("CountLegacyHistoryRows: %v", err)
+	}
+	for _, table := range []string{"log_entries", "quota_snapshots", "maturity_events", "request_records"} {
+		if counts[table] != 1 {
+			t.Errorf("counts[%s] = %d, want 1", table, counts[table])
+		}
+	}
+	// The inspected file still carries afterwards: counting is read-only.
+	if n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath); err != nil || n != 4 {
+		t.Fatalf("carry after inspect = (%d, %v), want (4, nil)", n, err)
+	}
+}
+
+func TestCountLegacyHistoryRowsNoops(t *testing.T) {
+	st := openTest(t)
+	counts, err := CountLegacyHistoryRows(st, filepath.Join(t.TempDir(), "absent.db"))
+	if err != nil {
+		t.Fatalf("missing file: %v", err)
+	}
+	for table, n := range counts {
+		if n != 0 {
+			t.Errorf("missing file counts[%s] = %d, want 0", table, n)
+		}
+	}
+	counts, err = CountLegacyHistoryRows(st, "")
+	if err != nil {
+		t.Fatalf("empty path: %v", err)
+	}
+	for table, n := range counts {
+		if n != 0 {
+			t.Errorf("empty path counts[%s] = %d, want 0", table, n)
+		}
+	}
+	// A live but row-less legacy file inspects as all-zeroes (an empty
+	// candidate), not an error.
+	dir := t.TempDir()
+	emptyPath := filepath.Join(dir, "empty-legacy.db")
+	empty, err := Open(emptyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := empty.Close(); err != nil {
+		t.Fatal(err)
+	}
+	counts, err = CountLegacyHistoryRows(st, emptyPath)
+	if err != nil {
+		t.Fatalf("empty legacy file: %v", err)
+	}
+	for table, n := range counts {
+		if n != 0 {
+			t.Errorf("empty legacy counts[%s] = %d, want 0", table, n)
+		}
+	}
+	bad := filepath.Join(dir, "garbage.db")
+	if err := os.WriteFile(bad, []byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CountLegacyHistoryRows(st, bad); err == nil {
+		t.Error("garbage file inspected without error, want failure")
+	}
+}

@@ -788,7 +788,16 @@ func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.R
 
 	if newCfg.RequireLogin() != target {
 		restoreEnvFile(oldBytes, oldErr)
-		a.logfunc().Warn("admin require login shadowed by environment; restored .env")
+		a.logfunc().Warn("admin require login shadowed; restored .env")
+		// Name the true blocker like the mode switch does: a DB overlay row
+		// beats the file just written (ADR-0019), so the environment/JSON
+		// message would send the operator to the wrong place.
+		if a.overlayShadows("DASHBOARD_REQUIRE_LOGIN") {
+			a.dash.RenderResult(w, http.StatusConflict, false,
+				"DASHBOARD_REQUIRE_LOGIN is still set by the DB settings overlay, which overrides .env (DELETE /admin/api/settings/DASHBOARD_REQUIRE_LOGIN to reset) — the .env write was rolled back and the running configuration is unchanged",
+				"require_login_overridden")
+			return
+		}
 		a.dash.RenderResult(w, http.StatusConflict, false,
 			"DASHBOARD_REQUIRE_LOGIN is overridden by the process environment or -config JSON — the .env write was rolled back and the running credential is unchanged",
 			"require_login_overridden")

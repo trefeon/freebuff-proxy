@@ -21,16 +21,20 @@ import (
 )
 
 // SettingsBlockedKeys are never stored as a DB overlay: credentials and
-// loopback-sensitive material stay env/.env-only. POST rejects them; Load
-// filters them defensively (a tampered row must not flip the instance into
-// pooled mode or repoint the upstream).
+// loopback-sensitive material stay env/.env-only, as does AUTO_DISCOVER_TOKEN
+// (env-only: it controls whether the .env file is read at all, so an overlay
+// row could never take effect — and the effective view hardcodes its display
+// to "true", so storing "false" would be a silent no-op). POST rejects them;
+// Load filters them defensively (a tampered row must not flip the instance
+// into pooled mode or repoint the upstream).
 var SettingsBlockedKeys = map[string]bool{
-	"AUTH_TOKENS":       true,
-	"ADMIN_TOKEN":       true,
-	"API_KEYS":          true,
-	"WEBHOOK_URL":       true,
-	"UPSTREAM_BASE_URL": true,
-	"DB_PATH":           true,
+	"AUTH_TOKENS":         true,
+	"ADMIN_TOKEN":         true,
+	"API_KEYS":            true,
+	"WEBHOOK_URL":         true,
+	"UPSTREAM_BASE_URL":   true,
+	"DB_PATH":             true,
+	"AUTO_DISCOVER_TOKEN": true,
 }
 
 // OverlayRowPrefix namespaces config overlays inside the generic settings
@@ -65,7 +69,9 @@ func OverlayRowKey(key string) string {
 
 // OverlayFromRows extracts the DB overlay (canonical key -> raw value) from
 // a full settings-table dump. Unknown, blocked, or malformed rows are
-// skipped: the overlay only ever addresses writable catalog keys.
+// skipped: the overlay only ever addresses writable catalog keys, and a value
+// that fails ValidateSettingValue could never take effect (it would fail the
+// POST gate), so a tampered or stale row must not poison the load.
 func OverlayFromRows(rows map[string]string) map[string]string {
 	out := map[string]string{}
 	for rowKey, value := range rows {
@@ -78,6 +84,9 @@ func OverlayFromRows(rows map[string]string) map[string]string {
 			continue
 		}
 		if _, known := LookupSetting(n); !known {
+			continue
+		}
+		if err := ValidateSettingValue(n, value); err != nil {
 			continue
 		}
 		out[n] = value
@@ -164,7 +173,13 @@ func applySettingsOverlay(raw *rawConfig, overlay map[string]string) {
 // "file" (.env or JSON -config), or "default". It mirrors LoadOpts
 // precedence without loading: env presence (AUTH_TOKENS counts even when
 // empty, matching the loader) > overlay membership > file membership.
-// overlay must use canonical keys (see OverlayFromRows).
+// overlay must use canonical keys (see OverlayFromRows). Membership is
+// value-aware on the file tier like the loader is: an empty .env value
+// leaves the default in force (except AUTH_TOKENS presence), and an empty
+// JSON value (null or ""/whitespace) likewise reports "default", never
+// "file". The legacy USER_ID alias attributes to ACTING_USER_ID on every
+// tier that resolves it (env, .env, JSON), matching overrideStringAlias and
+// the JSON LegacyActingUserID merge.
 func SettingSources(configPath string, overlay map[string]string) map[string]string {
 	out := make(map[string]string, len(keyCatalog))
 	dotenv := readDotenvFile()
@@ -198,17 +213,26 @@ func SettingSources(configPath string, overlay map[string]string) map[string]str
 				out[k] = "file"
 				continue
 			}
+		} else if k == "ACTING_USER_ID" {
+			if v, ok := dotenv[k]; ok && strings.TrimSpace(v) != "" {
+				out[k] = "file"
+				continue
+			}
+			if v, ok := dotenv["USER_ID"]; ok && strings.TrimSpace(v) != "" {
+				out[k] = "file"
+				continue
+			}
 		} else if v, ok := dotenv[k]; ok && strings.TrimSpace(v) != "" {
 			out[k] = "file"
 			continue
 		}
 		if jsonKeys != nil {
-			if _, ok := jsonKeys[k]; ok {
+			if raw, ok := jsonKeys[k]; ok && !jsonRawIsEmpty(raw) {
 				out[k] = "file"
 				continue
 			}
 			if k == "ACTING_USER_ID" {
-				if _, ok := jsonKeys["USER_ID"]; ok {
+				if raw, ok := jsonKeys["USER_ID"]; ok && !jsonRawIsEmpty(raw) {
 					out[k] = "file"
 					continue
 				}
@@ -217,6 +241,23 @@ func SettingSources(configPath string, overlay map[string]string) map[string]str
 		out[k] = "default"
 	}
 	return out
+}
+
+// jsonRawIsEmpty reports whether a JSON -config value carries no effective
+// setting: null, or a string that is empty or whitespace-only. Numbers,
+// booleans, arrays, and objects always count as set (even 0/false/[] — the
+// loader unmarshals those into explicit values, just as a "0" .env line
+// counts as set on the dotenv tier).
+func jsonRawIsEmpty(raw json.RawMessage) bool {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || s == "null" {
+		return true
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		return strings.TrimSpace(str) == ""
+	}
+	return false
 }
 
 // readDotenvFile returns the resolved .env pairs (nil when absent or

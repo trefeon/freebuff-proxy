@@ -279,6 +279,59 @@ func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 	return carry()
 }
 
+// CountLegacyHistoryRows inspects a legacy history file WITHOUT importing
+// it: the main+-wal+-shm trio stages into a temp dir (read-only mounts and
+// locked files stage fine; the source is never modified), the staged copy
+// ATTACHes, and every historyCarryTables entry gets a COUNT(*). Tables the
+// file predates count as zero; a missing file is all-zeroes with nil error;
+// an unreadable or corrupt file errors. Boot uses it to log multi-era
+// skips: ImportLegacyHistoryDB fills empty targets from ONE file only
+// (never merges — INTEGER rowid PKs would collide across files), so a later
+// era left behind is reported with its counts, never silently covered.
+func CountLegacyHistoryRows(s *Store, oldPath string) (map[string]int64, error) {
+	counts := make(map[string]int64, len(historyCarryTables))
+	for _, t := range historyCarryTables {
+		counts[t] = 0
+	}
+	if oldPath == "" {
+		return counts, nil
+	}
+	oldAbs, err := filepath.Abs(oldPath)
+	if err != nil {
+		return nil, fmt.Errorf("store: resolve legacy history path: %w", err)
+	}
+	if _, err := os.Stat(oldAbs); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return counts, nil
+		}
+		return nil, fmt.Errorf("store: stat legacy history: %w", err)
+	}
+	staged, cleanup, err := stageLegacyTrio(oldAbs)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(staged, "'", "''") + "' AS legacy_count"); err != nil {
+		return nil, fmt.Errorf("store: attach legacy history: %w", err)
+	}
+	defer s.db.Exec("DETACH DATABASE legacy_count")
+	for _, t := range historyCarryTables {
+		var exists int64
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM legacy_count.sqlite_master WHERE type='table' AND name=?", t).Scan(&exists); err != nil {
+			return nil, fmt.Errorf("store: inspect legacy history: %w", err)
+		}
+		if exists == 0 {
+			continue
+		}
+		var n int64
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM legacy_count." + t).Scan(&n); err != nil {
+			return nil, fmt.Errorf("store: count legacy %s: %w", t, err)
+		}
+		counts[t] = n
+	}
+	return counts, nil
+}
+
 // stageLegacyTrio copies the main DB plus its -wal/-shm sidecars (when
 // present) into a temp dir and returns the staged main path. Copying the
 // trio keeps rows that were never checkpointed out of the main file.

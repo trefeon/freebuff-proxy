@@ -2,6 +2,8 @@
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
+  import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import { Cpu } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -9,12 +11,24 @@
   /**
    * Model Routing & Aliases settings card (Upstream group).
    * Built using the SettingsCard and SettingsRow template components.
+   * All four keys apply live on reload (none is restart-only).
    *
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
+   * @prop {(() => Promise<void>) | null} [onSaved] - parent refetch after a
+   *   per-key DB-overlay save
    */
-  let { formValues, rawText = "", onField } = $props();
+  let {
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+    onSaved = null,
+  } = $props();
 
   let env = $derived(parseEnv(rawText));
   let modelAliases = $derived(formValues.MODEL_ALIASES ?? "");
@@ -59,6 +73,17 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MODEL_ALIASES === "db"}
+        <DbBadge settingKey="MODEL_ALIASES" {onReset} />
+      {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="MODEL_ALIASES"
+        value={modelAliases}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="w-full md:w-80">
@@ -92,6 +117,13 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MODELS_ALLOW === "db"}
+        <DbBadge settingKey="MODELS_ALLOW" {onReset} />
+      {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave settingKey="MODELS_ALLOW" value={modelsAllow} {onSaved} />
     {/snippet}
 
     <div class="w-full md:w-80">
@@ -126,6 +158,17 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.REASONING_IN_CONTENT === "db"}
+        <DbBadge settingKey="REASONING_IN_CONTENT" {onReset} />
+      {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="REASONING_IN_CONTENT"
+        value={formValues.REASONING_IN_CONTENT ?? ""}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="flex items-center gap-2.5">
@@ -157,6 +200,13 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MODEL_LOCKS === "db"}
+        <DbBadge settingKey="MODEL_LOCKS" {onReset} />
+      {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave settingKey="MODEL_LOCKS" value={modelLocks} {onSaved} />
     {/snippet}
 
     <div class="w-full md:w-80">

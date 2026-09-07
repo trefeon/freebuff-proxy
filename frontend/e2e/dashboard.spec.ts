@@ -384,7 +384,9 @@ test.describe("dashboard hermetic mocks", () => {
     await safeMode.click();
     await expect(safeMode).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Unsaved changes")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Save Changes", exact: true }),
+    ).toBeEnabled();
 
     // Save posts the built .env: the toggled line plus untouched lines.
     let savedBody = "";
@@ -406,7 +408,9 @@ test.describe("dashboard hermetic mocks", () => {
       }
     });
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     await expect(page.getByText(/apply after restart only/)).toBeVisible();
     await expect(
       page.getByText("Applies after restart: LOG_LEVEL"),
@@ -452,7 +456,9 @@ test.describe("dashboard hermetic mocks", () => {
     });
     page.once("dialog", (d) => d.accept());
     await failover.click();
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     await expect.poll(() => savedBody).toContain("RATE_LIMIT_FAILOVER=");
   });
 
@@ -503,7 +509,9 @@ test.describe("dashboard hermetic mocks", () => {
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
     );
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     const postReq = await postReqPromise;
     expect(decodeURIComponent(postReq.postData() ?? "")).toContain(
       "LOG_LEVEL=warn",
@@ -562,12 +570,16 @@ test.describe("dashboard hermetic mocks", () => {
     // Toggle the bool, accept the confirm dialog, and save.
     await safeMode.click();
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
 
     // Failure alert shown and the control restored to the server state.
     await expect(safeMode).toHaveAttribute("aria-checked", "true");
     // Dirty reverted — Save button disabled again.
-    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Save Changes", exact: true }),
+    ).toBeDisabled();
   });
 
   test("Logs filters by ?msg= and paginates with Next/Prev", async ({

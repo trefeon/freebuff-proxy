@@ -9,6 +9,7 @@
   import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
+  import ModelRoutingSettings from "./settings/ModelRoutingSettings.svelte";
   import AdvancedSettings from "./settings/AdvancedSettings.svelte";
   import { fetchAPI, postForm, deleteAPI } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
@@ -160,7 +161,8 @@
         for (const e of setRes.settings ?? []) next[e.key] = e.source;
         settingSources = next;
       } catch {
-        settingSources = {};
+        // Keep the last-known sources: a failed background refresh must not
+        // wipe the DB badges (first load simply keeps the empty default).
       }
     } catch (e) {
       if (firstLoad) error = e.message || $tr("Failed to fetch configuration");
@@ -189,6 +191,14 @@
         restart_only: [],
       };
     }
+  }
+  // Per-key DB-overlay save (row-level save buttons): refetch so badges,
+  // effective values, and the .env document agree again — the same teardown
+  // as resetSetting, minus its result alert (the row shows its own inline
+  // status, including the restart note for restart-only keys).
+  async function overlaySaved() {
+    await fetchData();
+    refreshTokens();
   }
 
   async function saveConfig(e, opts = {}) {
@@ -277,7 +287,7 @@
   crumb="freebuff-proxy / Admin / settings.conf"
   title={$tr("Settings")}
   description={$tr(
-    "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
+    "Gateway runtime behavior, protection, and model routing. Live-applying keys take effect on save without restart; restart-marked keys need a container restart.",
   )}
   {loading}
   {error}
@@ -376,6 +386,7 @@
     onField={setField}
     sources={settingSources}
     onReset={resetSetting}
+    onSaved={overlaySaved}
   />
 
   <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
@@ -385,9 +396,20 @@
     onField={setField}
     sources={settingSources}
     onReset={resetSetting}
+    onSaved={overlaySaved}
   />
 
-  <!-- 4. Advanced (every remaining catalog key with its default) -->
+  <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
+  <ModelRoutingSettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+    onSaved={overlaySaved}
+  />
+
+  <!-- 5. Advanced (every remaining catalog key with its default) -->
   <AdvancedSettings
     {meta}
     {formValues}
@@ -395,8 +417,9 @@
     onField={setField}
     sources={settingSources}
     onReset={resetSetting}
+    onSaved={overlaySaved}
   />
 
-  <!-- 5. Command Center (Lifecycle, updates & rollback) -->
+  <!-- 6. Command Center (Lifecycle, updates & rollback) -->
   <CommandCenterCard />
 </PageShell>

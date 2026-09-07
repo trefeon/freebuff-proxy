@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -75,6 +76,18 @@ func (s *Store) DeleteSession(tokenHash string) error {
 	return nil
 }
 
+// SessionsEmpty reports whether sessions_persist holds zero rows. Boot uses
+// it as the .bak re-consult gate: an empty store with no live JSON session
+// file falls back to the already-archived .bak copy (see
+// ImportLegacySessionBackup).
+func (s *Store) SessionsEmpty() (bool, error) {
+	var n int64
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions_persist`).Scan(&n); err != nil {
+		return false, fmt.Errorf("store: count sessions: %w", err)
+	}
+	return n == 0, nil
+}
+
 // legacySessionFile is the on-disk shape of .freebuff-session-state.json
 // (see session.storeFile). Entries stay raw: the store never interprets
 // them, so a newer session schema still imports byte-identically.
@@ -89,6 +102,33 @@ type legacySessionFile struct {
 // leaves the file in place. Callers gate on SESSION_PERSIST and only warn on
 // error — the JSON path keeps working when the DB is unavailable.
 func ImportLegacySessionFile(s *Store, path string) (int, error) {
+	return importSessionsReader(s, path, true, nil)
+}
+
+// ImportLegacySessionFileWithCollisions imports like ImportLegacySessionFile
+// (archiving the source to .bak) and additionally fires onCollision once per
+// token hash whose stored blobs already exist with different content — a
+// later candidate overwriting an earlier-imported row (the incoming row
+// wins; identical re-imports stay silent). Boot logs each collision at WARN
+// so split-brain session files are visible instead of silently last-wins.
+func ImportLegacySessionFileWithCollisions(s *Store, path string, onCollision func(tokenHash string)) (int, error) {
+	return importSessionsReader(s, path, true, onCollision)
+}
+
+// ImportLegacySessionBackup imports an already-archived ".bak" session file
+// WITHOUT re-archiving it: the path is the archive, so renaming it again
+// would orphan the only copy as ".bak.bak". Boot uses it for the .bak
+// re-consult (SessionsEmpty and the live JSON path missing); onCollision
+// reports exactly like ImportLegacySessionFileWithCollisions.
+func ImportLegacySessionBackup(s *Store, path string, onCollision func(tokenHash string)) (int, error) {
+	return importSessionsReader(s, path, false, onCollision)
+}
+
+// importSessionsReader is the shared legacy-session reader behind the three
+// Import entry points. When archive is true the source renames to
+// path+".bak" (never deleted); a path already ending in .bak never renames
+// even then, so the archive cannot orphan itself as .bak.bak.
+func importSessionsReader(s *Store, path string, archive bool, onCollision func(tokenHash string)) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -109,6 +149,15 @@ func ImportLegacySessionFile(s *Store, path string) (int, error) {
 		if agents, ok := file.Runs[hash]; ok && len(agents) > 0 {
 			if r, err := json.Marshal(agents); err == nil {
 				runs = r
+			}
+		}
+		if onCollision != nil {
+			prevSess, prevRuns, found, err := s.LoadSession(hash)
+			if err != nil {
+				return imported, err
+			}
+			if found && (prevSess != string(sess) || prevRuns != string(runs)) {
+				onCollision(hash)
 			}
 		}
 		if err := s.SaveSession(hash, string(sess), string(runs)); err != nil {
@@ -135,12 +184,14 @@ func ImportLegacySessionFile(s *Store, path string) (int, error) {
 			return imported, fmt.Errorf("store: import runs: %w", err)
 		}
 	}
-	bak := path + ".bak"
-	// Windows rename fails over an existing target: clear a stale .bak
-	// first (the archive is replaced, the legacy source never deleted).
-	_ = os.Remove(bak)
-	if err := os.Rename(path, bak); err != nil {
-		return imported, fmt.Errorf("store: archive legacy session file: %w", err)
+	if archive && !strings.HasSuffix(path, ".bak") {
+		bak := path + ".bak"
+		// Windows rename fails over an existing target: clear a stale .bak
+		// first (the archive is replaced, the legacy source never deleted).
+		_ = os.Remove(bak)
+		if err := os.Rename(path, bak); err != nil {
+			return imported, fmt.Errorf("store: archive legacy session file: %w", err)
+		}
 	}
 	return imported, nil
 }

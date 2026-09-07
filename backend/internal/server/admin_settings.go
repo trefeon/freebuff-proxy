@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -56,8 +58,12 @@ func (a *adminHandlers) settingsOverlay() map[string]string {
 func (a *adminHandlers) loadConfig() (config.Config, error) {
 	return config.LoadOpts(a.configPath, config.LoadOptions{Overlay: a.settingsOverlay()})
 }
-
 func (a *adminHandlers) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
+	// A nil store keeps the gateway live on file/env/default only (mutations
+	// 503): say so with degraded:true so the UI can banner the read-only
+	// state honestly. Status stays 200 with the full catalog — every row
+	// still reports its effective value and tier.
+	degraded := a.settings == nil
 	overlay := a.settingsOverlay()
 	cfg := a.cfgLoad()
 	sources := config.SettingSources(a.configPath, overlay)
@@ -80,7 +86,7 @@ func (a *adminHandlers) handleSettingsGet(w http.ResponseWriter, r *http.Request
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"settings": entries})
+	_ = json.NewEncoder(w).Encode(map[string]any{"settings": entries, "degraded": degraded})
 }
 
 func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +109,27 @@ func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		a.dash.RenderResult(w, http.StatusBadRequest, false, "Value must be a string, number, or boolean.", "bad_value")
 		return
+	}
+	// Numeric coercion for int keys: JSON numbers decode as float64. An
+	// integral float is exactly the int the caller meant (3.0 -> "3"); a
+	// non-integral float can never parse as an int, so reject it here with
+	// a message that names the number instead of falling through to the
+	// generic "must be an integer" shape error below.
+	if f, isNum := req.Value.(float64); isNum {
+		if def, known := config.LookupSetting(key); known && def.Kind == "int" {
+			if math.IsNaN(f) || math.IsInf(f, 0) || math.Trunc(f) != f {
+				a.dash.RenderResult(w, http.StatusBadRequest, false,
+					fmt.Sprintf("%s must be an integer, got non-integral number %s", key,
+						strconv.FormatFloat(f, 'f', -1, 64)), "invalid_setting")
+				return
+			}
+			// Within the exact-integer float64 range the conversion is
+			// lossless; beyond it keep the decimal expansion so the int
+			// gate below still rejects what cannot be an int.
+			if f >= -9007199254740992 && f <= 9007199254740992 {
+				val = strconv.FormatInt(int64(f), 10)
+			}
+		}
 	}
 	if err := config.ValidateSettingValue(key, val); err != nil {
 		a.dash.RenderResult(w, http.StatusBadRequest, false, err.Error(), "invalid_setting")
@@ -236,4 +263,19 @@ func (a *adminHandlers) settingsOverlayNote() string {
 	sort.Strings(keys)
 	return " DB overrides still win for: " + strings.Join(keys, ", ") +
 		" (DELETE /admin/api/settings/:key to reset)."
+}
+
+// overlayShadows reports whether key's effective value currently comes from
+// the DB overlay (ADR-0019): the overlay beats the .env file, so a .env write
+// for that key cannot take effect until the row is deleted. The .env-backed
+// writers whose knobs are also overlay-addressable (the mode switch for
+// BRIDGE_ENABLED, require-login for DASHBOARD_REQUIRE_LOGIN) use it on their
+// shadow-error paths to name the true blocker: SettingSources resolves the
+// actual winning tier, so an env-pinned key still blames the environment and
+// only a db-pinned key names the overlay.
+func (a *adminHandlers) overlayShadows(key string) bool {
+	if a.settings == nil {
+		return false
+	}
+	return config.SettingSources(a.configPath, a.settingsOverlay())[key] == "db"
 }
