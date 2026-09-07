@@ -1,22 +1,8 @@
-// Package pool is the multi-token front door: it picks the token that will
-// serve a model request, then leases a run from that token's RunManager and
-// an instance from its session manager. Port of freebuff2api-quorinex
-// run_manager.go (Acquire half) with the upstream/session/runs split of this
-// project.
-//
-// Failover semantics (PRD §6 error matrix):
-//   - 401 (ErrAuthRejected) from a token's run START → 30-min cooldown for
-//     that token, try the next.
-//   - session waiting room → remember the best position, try the next token;
-//     when every token fails, the pool surfaces the highest-precedence
-//     non-empty error bucket (ban > country-blocked > model-IP-limited >
-//     rate-limit > waiting-room > daily cap) instead of a generic 502 — a
-//     queued token surfaces 503 + Retry-After as soon as no higher bucket
-//     is populated.
-//   - run-invalid / session-invalid recoveries are NOT handled here: the
-//     caller (server) retries once via a fresh Acquire after invalidating.
-//   - anything else → next token; all failed → combined error (only when no
-//     error-bucket matched any token).
+// acquire_route.go - pooled acquire route: Acquire (round-robin start,
+// leader-election gate, hot-first order via acquireOrder) plus the
+// leaseFromOrder failover loop (per-token skip gates, session and run
+// admission, lease grant, bucket precedence). Pure move from acquire.go;
+// no behavior change.
 package pool
 
 import (
