@@ -1,0 +1,13 @@
+// THROWAWAY SPIKE: Bun+TS backend probe. Not for merge to main.
+// Branch: spike/ts-binary-probe. Delete after recommendation lands.
+// No credentials, no upstream traffic. All measurements hermetic local.
+{
+  "name": "spike-ts-probe",
+  "private": true,
+  "version": "0.0.0-spike",
+  "type": "module",
+  "scripts": {
+    "start": "bun run server.ts",
+    "build": "bun run build.ts"
+  }
+}
