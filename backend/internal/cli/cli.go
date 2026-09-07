@@ -300,6 +300,11 @@ func Serve(configPath string, verbose bool, version string) int {
 	if histStore != nil {
 		seedQuotaFromStore(logger, histStore, p, len(cfg.AuthTokens))
 	}
+	// Maturity persistence (ADR-0026): automation state survives restarts
+	// through a nil-safe adapter; the restore is warn-only so a store
+	// failure keeps the boot green on the in-memory path.
+	p.SetMaturityStore(&poolMaturityStore{st: histStore})
+	restoreMaturityFromStore(logger, p)
 	// Issue #48: best-effort webhook alerts (WEBHOOK_URL) for pool
 	// exhaustion / token bans — fire-and-forget, throttled, never blocking.
 	if cfg.WebhookURL != "" {
