@@ -175,6 +175,14 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.Itoa(c.MaturityTargetDays), false
 	case "QUOTA_AUTO_PROBE":
 		return strconv.FormatBool(c.QuotaAutoProbe), false
+	case "BURST_BALANCE_ENABLED":
+		return strconv.FormatBool(c.BurstBalanceEnabled), false
+	case "BURST_WINDOW":
+		return c.BurstWindow.String(), false
+	case "BURST_THRESHOLD":
+		return strconv.Itoa(c.BurstThreshold), false
+	case "BURST_MAX_TOKENS":
+		return strconv.Itoa(c.BurstMaxTokens), false
 	default:
 		// A catalog key with no Config field (new upstream knob not yet
 		// wired into Config): fall back to the catalog default so the

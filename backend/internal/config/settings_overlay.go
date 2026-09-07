@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // SettingsBlockedKeys are never stored as a DB overlay: credentials and
@@ -136,6 +137,21 @@ func ValidateSettingValue(key, value string) error {
 	if n == "RATE_LIMIT_PER_IP" {
 		if _, ok := parseFloatPtr(v); !ok {
 			return fmt.Errorf("%s must be a number (requests/second, 0 disables), got %q", n, value)
+		}
+	}
+	// BURST_MAX_TOKENS=1 would pass the int gate but fail the Load
+	// range-check (minimum 2): reject it here with the actionable message
+	// instead of the generic Load error. BURST_WINDOW is a text knob like
+	// RATE_LIMIT_PER_IP — an unparseable duration would otherwise fall
+	// through to the POST-time Load rejection with less context.
+	if n == "BURST_MAX_TOKENS" {
+		if parsed, ok := parseIntPtr(v); !ok || *parsed < 2 {
+			return fmt.Errorf("%s must be an integer of at least 2 (burst spreading needs two or more accounts), got %q", n, value)
+		}
+	}
+	if n == "BURST_WINDOW" {
+		if _, err := time.ParseDuration(v); err != nil {
+			return fmt.Errorf("%s must be a Go duration (e.g. 30s, 1m, 5m), got %q", n, value)
 		}
 	}
 	return nil

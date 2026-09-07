@@ -9,6 +9,9 @@
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
   import ToggleSwitch from "../components/ToggleSwitch.svelte";
+  import Stepper from "../components/Stepper.svelte";
+  import FieldBox from "../components/FieldBox.svelte";
+  import DbOverrideSave from "../components/DbOverrideSave.svelte";
   import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
@@ -48,6 +51,56 @@
   // Auto failover to another token on rate limit (RATE_LIMIT_FAILOVER in .env)
   let rateLimitFailover = $state(true);
   let savingFailover = $state(false);
+  // Burst balance (ADR-0023, opt-in): enable + window/threshold/max-tokens.
+  // Persisted per key through the DB settings overlay (DbOverrideSave),
+  // never through the whole-file .env save above. Effective values load
+  // from GET /admin/api/settings so overlay rows win like everywhere else.
+  let burstEnabled = $state(false);
+  let burstWindowMin = $state(1);
+  let burstThreshold = $state(20);
+  let burstMaxTokens = $state(2);
+
+  function parseWindowMinutes(v) {
+    if (v == null) return null;
+    const m = String(v)
+      .trim()
+      .toLowerCase()
+      .match(/^(\d+(?:\.\d+)?)\s*(ns|us|µs|ms|s|m|h)$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const perMin = {
+      ns: 1 / 6e10,
+      us: 1 / 6e7,
+      µs: 1 / 6e7,
+      ms: 1 / 6e4,
+      s: 1 / 60,
+      m: 1,
+      h: 60,
+    }[m[2]];
+    return Math.max(1, Math.round(n * perMin));
+  }
+
+  async function refetchBurst() {
+    try {
+      const res = await fetchAPI(adminApi.settings);
+      const byKey = {};
+      for (const e of res?.settings ?? []) byKey[e.key] = e.value;
+      if (byKey.BURST_BALANCE_ENABLED !== undefined) {
+        burstEnabled =
+          String(byKey.BURST_BALANCE_ENABLED).toLowerCase() === "true";
+      }
+      const w = parseWindowMinutes(byKey.BURST_WINDOW);
+      if (w != null) burstWindowMin = w;
+      const th = Number.parseInt(byKey.BURST_THRESHOLD, 10);
+      if (Number.isFinite(th) && th >= 1) burstThreshold = th;
+      const mt = Number.parseInt(byKey.BURST_MAX_TOKENS, 10);
+      if (Number.isFinite(mt) && mt >= 2) burstMaxTokens = mt;
+    } catch {
+      // Keep last-known values: a failed background refresh must not wipe
+      // the burst controls (first load simply keeps the defaults).
+    }
+  }
   async function setTokenRotation(newMode) {
     if (savingRotation || tokenRotation === newMode) return;
     savingRotation = true;
@@ -443,6 +496,7 @@
         tokenRotation = "drain";
         rateLimitFailover = true;
       }
+      refetchBurst();
     })();
     return () => {
       release();
@@ -769,6 +823,90 @@
           onchange={(v) => toggleRateLimitFailover(v)}
         />
       </div>
+      <!-- Burst Balance (opt-in, ADR-0023): per-key DB-overlay saves -->
+      <section
+        aria-label={$tr("Burst Balance")}
+        class="pt-3 border-t border-[var(--fp-border)] space-y-3"
+      >
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-[var(--fp-text)]">
+                {$tr("Burst Balance (opt-in)")}
+              </span>
+              <span class="led {burstEnabled ? 'led-good' : 'led-dim'}"></span>
+            </div>
+            <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
+              {$tr(
+                "When one model is hammered, spread its burst across up to the max-token accounts once threshold admissions land inside the window — other models keep the strategy above. Caution: spreading looks less like single-user traffic than drain; keep off unless one model's bursts throttle a single account while siblings sit idle.",
+              )}
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={burstEnabled}
+            ariaLabel="Burst Balance"
+            onchange={(v) => (burstEnabled = v)}
+          />
+        </div>
+        <DbOverrideSave
+          settingKey="BURST_BALANCE_ENABLED"
+          value={String(burstEnabled)}
+        />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <FieldBox label={$tr("Window")} unit={$tr("minutes")} class="min-w-0">
+            <Stepper
+              bind:value={burstWindowMin}
+              min={1}
+              max={60}
+              ariaLabel={$tr("Burst window (minutes)")}
+              decreaseLabel={$tr("Decrease burst window")}
+              increaseLabel={$tr("Increase burst window")}
+            />
+            <DbOverrideSave
+              settingKey="BURST_WINDOW"
+              value={`${burstWindowMin}m`}
+            />
+          </FieldBox>
+          <FieldBox
+            label={$tr("Threshold")}
+            unit={$tr("requests")}
+            class="min-w-0"
+          >
+            <Stepper
+              bind:value={burstThreshold}
+              min={1}
+              max={1000}
+              ariaLabel={$tr("Burst threshold (requests)")}
+              decreaseLabel={$tr("Decrease burst threshold")}
+              increaseLabel={$tr("Increase burst threshold")}
+            />
+            <DbOverrideSave
+              settingKey="BURST_THRESHOLD"
+              value={String(burstThreshold)}
+            />
+          </FieldBox>
+          <FieldBox
+            label={$tr("Max tokens")}
+            unit={$tr("accounts")}
+            class="min-w-0"
+          >
+            <Stepper
+              bind:value={burstMaxTokens}
+              min={2}
+              max={Math.max(2, data?.token_count || 8)}
+              ariaLabel={$tr("Burst max tokens")}
+              decreaseLabel={$tr("Decrease burst max tokens")}
+              increaseLabel={$tr("Increase burst max tokens")}
+            />
+            <DbOverrideSave
+              settingKey="BURST_MAX_TOKENS"
+              value={String(burstMaxTokens)}
+            />
+          </FieldBox>
+        </div>
+      </section>
     </div></Card
   >
   <TokenTable

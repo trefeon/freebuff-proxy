@@ -218,6 +218,46 @@
     "description": "How long a bridge entry may sit unused before its runs are FINISHed and it is evicted from the cache (sliding TTL; zero or invalid → 72h)."
   },
   {
+    "key": "BURST_BALANCE_ENABLED",
+    "group": "pool",
+    "kind": "bool",
+    "default": "false",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Spread one model's request burst across up to BURST_MAX_TOKENS accounts once BURST_THRESHOLD same-model admissions land inside BURST_WINDOW (ADR-0023, opt-in). Applies live on reload; false restores drain-only selection. ANTI-BAN TRADEOFF: spreading looks less like single-user traffic than drain — keep off unless one model's bursts throttle a single account while siblings with the same model sit idle."
+  },
+  {
+    "key": "BURST_MAX_TOKENS",
+    "group": "pool",
+    "kind": "int",
+    "default": "2",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Cap on the distinct accounts one model's burst spreads across (minimum 2). Applies live on reload. Keep small: every extra account in the burst widens the multi-account fingerprint."
+  },
+  {
+    "key": "BURST_THRESHOLD",
+    "group": "pool",
+    "kind": "int",
+    "default": "20",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Same-model admissions inside BURST_WINDOW that trip burst spreading for that model (other models keep the configured strategy). Applies live on reload. Lower values spread sooner — and look less single-user sooner."
+  },
+  {
+    "key": "BURST_WINDOW",
+    "group": "pool",
+    "kind": "text",
+    "default": "1m",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Sliding window for counting same-model admissions toward BURST_THRESHOLD (Go duration, e.g. 30s, 1m, 5m). Applies live on reload. Shorter windows trip on sharper spikes; longer windows ride sustained load."
+  },
+  {
     "key": "IDLE_ROTATION_TIMEOUT",
     "group": "pool",
     "kind": "text",

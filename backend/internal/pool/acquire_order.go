@@ -169,26 +169,7 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 
 	case "least_used":
 		// Least-used mode: rank tokens with the LARGEST remaining quota first (preserve balance)
-		var eligibleTokens []int
-		for idx := range *toks {
-			if eligible(idx) {
-				eligibleTokens = append(eligibleTokens, idx)
-			}
-		}
-		sort.SliceStable(eligibleTokens, func(i, j int) bool {
-			a, b := eligibleTokens[i], eligibleTokens[j]
-			tokA, tokB := (*toks)[a], (*toks)[b]
-			aKnown, aRem, _ := quotaRemaining(tokA, model)
-			bKnown, bRem, _ := quotaRemaining(tokB, model)
-			if aKnown != bKnown {
-				return aKnown
-			}
-			if aKnown && aRem != bRem {
-				return aRem > bRem // largest remaining quota first
-			}
-			return a < b
-		})
-		order = eligibleTokens
+		order = leastUsedOrder(toks, model, eligible)
 
 	case "random":
 		// Random mode: stochastic shuffle among eligible tokens
@@ -215,6 +196,17 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		order = append(order, matchingHot...)
 		order = append(order, coldTokens...)
 		order = append(order, mismatchedHot...)
+	}
+	// Burst balance (ADR-0023, opt-in): while this model's sliding-window
+	// admission count exceeds its threshold, THAT model's order switches to
+	// least_used among healthy tokens, capped at BURST_MAX_TOKENS distinct
+	// accounts. Disabled or below-threshold: order untouched (the default
+	// path is byte-identical). The availability sort below still applies,
+	// so demoted over-cap tokens are reached when the spread set fails.
+	if cfg := p.cfg.Load(); cfg != nil && cfg.BurstBalanceEnabled {
+		if plan := p.burstPlanForModel(cfg, model, time.Now()); plan.active {
+			order = plan.apply(leastUsedOrder(toks, model, eligible))
+		}
 	}
 
 	// Smart availability (rate-limit handling): demote tokens that are
@@ -272,6 +264,32 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 	}
 	return order, quotaLimited
+}
+
+// leastUsedOrder ranks eligible token indexes with the LARGEST remaining
+// quota first (preserve balance). Shared by the "least_used" strategy and
+// the burst-balance override (ADR-0023) so the two rankings cannot drift.
+func leastUsedOrder(toks *[]*tokenEntry, model string, eligible func(int) bool) []int {
+	var eligibleTokens []int
+	for idx := range *toks {
+		if eligible(idx) {
+			eligibleTokens = append(eligibleTokens, idx)
+		}
+	}
+	sort.SliceStable(eligibleTokens, func(i, j int) bool {
+		a, b := eligibleTokens[i], eligibleTokens[j]
+		tokA, tokB := (*toks)[a], (*toks)[b]
+		aKnown, aRem, _ := quotaRemaining(tokA, model)
+		bKnown, bRem, _ := quotaRemaining(tokB, model)
+		if aKnown != bKnown {
+			return aKnown
+		}
+		if aKnown && aRem != bRem {
+			return aRem > bRem // largest remaining quota first
+		}
+		return a < b
+	})
+	return eligibleTokens
 }
 
 // tokenAvailable reports whether tok can serve model right now, for ordering

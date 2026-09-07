@@ -136,6 +136,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideString(&raw.MaturityTouchModel, "MATURITY_TOUCH_MODEL")
 	overrideInt(&raw.MaturityTargetDays, "MATURITY_TARGET_DAYS")
 	overrideBool(&raw.QuotaAutoProbe, "QUOTA_AUTO_PROBE")
+	overrideBool(&raw.BurstBalanceEnabled, "BURST_BALANCE_ENABLED")
+	overrideString(&raw.BurstWindow, "BURST_WINDOW")
+	overrideInt(&raw.BurstThreshold, "BURST_THRESHOLD")
+	overrideInt(&raw.BurstMaxTokens, "BURST_MAX_TOKENS")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
@@ -459,6 +463,29 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if maturityTouchModel == "" {
 		maturityTouchModel = "deepseek/deepseek-v4-flash"
 	}
+	// BURST_WINDOW is zero-tolerant: "" falls back to the 1m default (a zero
+	// window would trip on every admission past the threshold count of zero
+	// history); an explicit non-positive value falls back the same way.
+	burstWindow := time.Minute
+	if v := strings.TrimSpace(raw.BurstWindow); v != "" {
+		burstWindow, err = parseDuration(v, "BURST_WINDOW")
+		if err != nil {
+			return Config{}, err
+		}
+		if burstWindow <= 0 {
+			burstWindow = time.Minute
+		}
+	}
+	// BURST_THRESHOLD defaults to 20; BURST_MAX_TOKENS defaults to 2 (an
+	// explicit value below 2 is range-checked in Validate).
+	burstThreshold := 20
+	if raw.BurstThreshold != nil {
+		burstThreshold = *raw.BurstThreshold
+	}
+	burstMaxTokens := 2
+	if raw.BurstMaxTokens != nil {
+		burstMaxTokens = *raw.BurstMaxTokens
+	}
 
 	cfg := Config{
 		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
@@ -522,6 +549,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		MaturityTouchModel:               maturityTouchModel,
 		MaturityTargetDays:               maturityTargetDays,
 		QuotaAutoProbe:                   raw.QuotaAutoProbe,
+		BurstBalanceEnabled:              raw.BurstBalanceEnabled,
+		BurstWindow:                      burstWindow,
+		BurstThreshold:                   burstThreshold,
+		BurstMaxTokens:                   burstMaxTokens,
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -714,6 +745,10 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideStringFrom(&raw.MaturityTouchModel, get, "MATURITY_TOUCH_MODEL")
 	overrideIntFrom(&raw.MaturityTargetDays, get, "MATURITY_TARGET_DAYS")
 	overrideBoolFrom(&raw.QuotaAutoProbe, get, "QUOTA_AUTO_PROBE")
+	overrideBoolFrom(&raw.BurstBalanceEnabled, get, "BURST_BALANCE_ENABLED")
+	overrideStringFrom(&raw.BurstWindow, get, "BURST_WINDOW")
+	overrideIntFrom(&raw.BurstThreshold, get, "BURST_THRESHOLD")
+	overrideIntFrom(&raw.BurstMaxTokens, get, "BURST_MAX_TOKENS")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")

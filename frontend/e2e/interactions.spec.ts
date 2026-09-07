@@ -546,11 +546,124 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(rr).toHaveAttribute("aria-checked", "true");
     expect(bodies[bodies.length - 1]).toContain("TOKEN_ROTATION=round_robin");
 
-    const failover = page.getByRole("switch");
+    const failover = page.getByRole("switch", {
+      name: "Auto Failover on Rate Limit (429)",
+    });
     await expect(failover).toHaveAttribute("aria-checked", "true");
     await failover.click();
     await expect(failover).toHaveAttribute("aria-checked", "false");
     expect(bodies[bodies.length - 1]).toContain("RATE_LIMIT_FAILOVER=false");
+  });
+  // -------------------------------------------------------------------------
+  // 5b. Burst Balance toggle and steppers persist via the settings overlay.
+  // -------------------------------------------------------------------------
+  test("tokens: burst balance toggle and steppers persist via settings overlay", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {}, { loginPage: true });
+
+    const posted: Array<Record<string, unknown>> = [];
+    // Stateful overlay mock (mirrors the real endpoint): POSTs persist and
+    // later GETs reflect them, so each per-key save's refetch converges
+    // instead of resetting the next control mid-test.
+    const overlay: Record<string, string> = {
+      BURST_BALANCE_ENABLED: "false",
+      BURST_WINDOW: "1m",
+      BURST_THRESHOLD: "20",
+      BURST_MAX_TOKENS: "2",
+    };
+    await page.route("**/admin/api/settings", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            settings: Object.entries(overlay).map(([key, value]) => ({
+              key,
+              value,
+              source: "default",
+              restart_only: false,
+              secret: false,
+            })),
+            degraded: false,
+          }),
+        });
+        return;
+      }
+      if (route.request().method() === "POST") {
+        const body = JSON.parse(route.request().postData() ?? "{}");
+        posted.push(body);
+        if (typeof body.key === "string" && body.key in overlay) {
+          overlay[body.key] = String(body.value);
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: true,
+            message: "BURST saved to the DB overlay and applied live.",
+            code: "setting_saved",
+            restart_only: [],
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    const burst = page.getByRole("region", { name: "Burst Balance" });
+
+    // Toggle flips locally, then its own overlay save persists the key.
+    const toggle = burst.getByRole("switch", { name: "Burst Balance" });
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await burst
+      .getByRole("button", { name: "Save as override" })
+      .nth(0)
+      .click();
+    await expect
+      .poll(() => posted[posted.length - 1]?.key)
+      .toBe("BURST_BALANCE_ENABLED");
+    expect(posted[posted.length - 1]).toMatchObject({
+      key: "BURST_BALANCE_ENABLED",
+      value: "true",
+    });
+
+    // Each stepper persists its own key independently.
+    const threshold = burst.getByRole("spinbutton", {
+      name: "Burst threshold (requests)",
+    });
+    await threshold.fill("25");
+    await burst
+      .getByRole("button", { name: "Save as override" })
+      .nth(2)
+      .click();
+    await expect
+      .poll(() => posted[posted.length - 1]?.key)
+      .toBe("BURST_THRESHOLD");
+    expect(posted[posted.length - 1]).toMatchObject({
+      key: "BURST_THRESHOLD",
+      value: "25",
+    });
+
+    const maxTokens = burst.getByRole("spinbutton", {
+      name: "Burst max tokens",
+    });
+    await maxTokens.fill("3");
+    await burst
+      .getByRole("button", { name: "Save as override" })
+      .nth(3)
+      .click();
+    await expect
+      .poll(() => posted[posted.length - 1]?.key)
+      .toBe("BURST_MAX_TOKENS");
+    expect(posted[posted.length - 1]).toMatchObject({
+      key: "BURST_MAX_TOKENS",
+      value: "3",
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -325,6 +325,10 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// Session-less ProbeToken, warn-only, one GET per token per Pacific
 	// day; QUOTA_AUTO_PROBE=false skips the pass entirely.
 	p.quotaAutoProbeTick(ctx)
+	// Burst balance (ADR-0023): prune out-of-window admission hits and fire
+	// exit edges for recovered episodes. Pure memory + WARN logging (no
+	// upstream traffic); rides every pass like maturity/autoprobe.
+	p.burstPruneAt(time.Now())
 	// Idle handling — tryIdleFinish atomically checks the threshold and
 	// marks idleFinished in one lastActiveMu critical section (TOCTOU fix).
 	// The first idle pass FINISHes all runs so rotation/refresh stops

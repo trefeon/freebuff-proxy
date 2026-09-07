@@ -607,6 +607,9 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.lastTokenByModel[effectiveModel] = idx
 		p.lastTokenMu.Unlock()
+		// Burst accounting (ADR-0023): one same-model admission lands in
+		// the window. No-op unless the kill-switch is on.
+		p.burstRecord(model, idx)
 		return lease, nil
 	}
 
