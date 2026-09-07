@@ -188,8 +188,15 @@ type snapshotState struct {
 	// savedQuotaStale marks quota restored from the on-disk entry after a
 	// restart (no live admission yet this process); savedQuotaAt is when
 	// that entry was last polled. Cleared by the first live quota commit.
-	savedQuotaStale    bool
-	savedQuotaAt       time.Time
+	savedQuotaStale bool
+	savedQuotaAt    time.Time
+	// savedQuotaSrcAt records, per model, the source time (Unix millis) of
+	// the savedQuota entry: poll time for disk-restored rows, write time
+	// for live probe/admission commits, probe TS for ADR-0024 boot-seed
+	// rows. The seed path (SeedQuota) only overwrites a model when its row
+	// is newer, so a stale seed never downgrades fresher live data.
+	// Rebuilt wholesale alongside savedQuota; seed upserts stamp one key.
+	savedQuotaSrcAt    map[string]int64
 	savedRemainingMs   int64
 	savedReferral      *upstream.SessionReferral
 	savedGlmPromo      string
@@ -309,8 +316,10 @@ func (m *Manager) commit(cs *cachedState) {
 		oldInstance = m.state.instanceID
 		// Stash the quota map before dropping state so it survives
 		// invalidation (commit(nil)) and later re-admission (issue #146).
+		// Re-stamp: the stash is live data, newer than any persisted row.
 		if m.state.quotaByModel != nil {
 			m.snap.savedQuota = m.state.quotaByModel
+			m.stampQuotaSourceLocked(m.now())
 		}
 		// Stash the glmPromo block the same way (issue #178): it survives
 		// invalidation so the GLM promo row stays on the dashboard between
@@ -623,6 +632,8 @@ func (m *Manager) restorePersistedQuotaLocked() {
 	if m.snap.savedQuotaAt.IsZero() {
 		m.snap.savedQuotaAt = time.Now()
 	}
+	// Baseline for seed ts-compare: the restore is as old as its poll.
+	m.stampQuotaSourceLocked(m.snap.savedQuotaAt)
 }
 
 // Snapshot returns a best-effort view of the cached session state. All
@@ -780,8 +791,11 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 	}
 	if len(st.RateLimitsByModel) > 0 {
 		m.snap.savedQuota = st.RateLimitsByModel
-		// Live probe contact clears the restart-restored stale mark.
+		// Live probe contact clears the restart-restored stale mark and
+		// re-stamps the source times, so a later boot seed compares
+		// against this write (never downgrades it with an older row).
 		m.snap.savedQuotaStale = false
+		m.stampQuotaSourceLocked(m.now())
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel
 		}

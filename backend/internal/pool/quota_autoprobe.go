@@ -11,9 +11,11 @@
 // double-probe once, and the jitter spreads restarts so the herd never moves
 // together. The probe path is the session-less ProbeToken (warn-only
 // failures, results flow through the existing UpdateQuotaFromProbe
-// snapshots). Tokens with unknown reset (never probed) are skipped — the
-// first probe stays manual (per-token Probe button, Quota Tracker
-// probe-all). QUOTA_AUTO_PROBE=false restores exact pre-scheduler behavior.
+// snapshots). Tokens with unknown reset that the ADR-0024 boot seed never
+// filled (truly never probed) get one staggered boot probe instead of
+// waiting for a manual one (see quota_bootseed.go); seeded tokens follow
+// the slots below once their reset is known. QUOTA_AUTO_PROBE=false
+// restores exact pre-scheduler behavior (no auto-probe, no boot probe).
 package pool
 
 import (
@@ -95,6 +97,19 @@ func (p *Pool) quotaAutoProbeTickAt(ctx context.Context, now time.Time) {
 	for i, tok := range *toks {
 		reset, ok := quotaAutoProbeReset(tok.session.Snapshot(), now)
 		if !ok {
+			// ADR-0024 first-probe recovery: unknown reset AND never
+			// seeded means truly never probed — one staggered boot probe
+			// (session-less, warn-only, once per process). Seeded tokens
+			// follow the normal slots below once their reset is known.
+			if tok.quotaSeeded || !quotaBootProbeDue(i, tok.quotaBootProbed, p.quotaBootAt, now) {
+				continue
+			}
+			// Mark both the boot flag and the day on attempt, so the
+			// recovery fires once per process and never doubles with a
+			// same-day scheduler slot when the probe teaches a reset.
+			tok.quotaBootProbed = true
+			tok.quotaProbeDay = today
+			p.quotaFireProbe(ctx, i, tok, "boot probe")
 			continue
 		}
 		if !quotaAutoProbeDue(true, i, tok.quotaProbeDay, now, reset) {
@@ -105,14 +120,6 @@ func (p *Pool) quotaAutoProbeTickAt(ctx context.Context, now time.Time) {
 		// surface to one session-less GET (the bulk button this replaces
 		// fired them all at once).
 		tok.quotaProbeDay = today
-		label := tokenEntryLabel(tok)
-		fire, cancel := context.WithTimeout(ctx, 10*time.Second)
-		_, err := p.ProbeToken(fire, i)
-		cancel()
-		if err != nil {
-			p.logger.Warn("pool: quota auto-probe failed", "token", i+1, "token_label", label, "err", err)
-			continue
-		}
-		p.logger.Debug("pool: quota auto-probe refreshed", "token", i+1, "token_label", label)
+		p.quotaFireProbe(ctx, i, tok, "auto-probe")
 	}
 }

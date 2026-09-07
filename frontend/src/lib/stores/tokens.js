@@ -153,10 +153,18 @@ export function refreshTokens() {
  * object per token concatenated, which res.json() cannot parse, so the
  * body is drained as text and ignored; per-token detail stays on the
  * Tokens page probe buttons.
+ * With `{ auto: true }` (ADR-0025 visit probe) the request carries
+ * `?auto=1`: the server probes only when its pool-scoped last-bulk-probe
+ * timestamp is older than an hour, otherwise it returns the current view
+ * untouched. Either way the body shape stays drain-as-text.
+ * @param {{ auto?: boolean }} [opts]
  * @returns {Promise<void>}
  */
-export function probeAllQuotas() {
-  return fetch(adminActions.tokenTestAll, {
+export function probeAllQuotas(opts = {}) {
+  const url = opts.auto
+    ? `${adminActions.tokenTestAll}?auto=1`
+    : adminActions.tokenTestAll;
+  return fetch(url, {
     method: "POST",
     headers: csrfHeader("POST"),
   })

@@ -121,6 +121,9 @@ func pollSession(ctx context.Context, sess *session.Manager, cfg *config.Config,
 // nothing else.
 func (p *Pool) Start(ctx context.Context) {
 	p.once.Do(func() {
+		// ADR-0024: anchor the staggered boot-probe slots before the
+		// maintain loop launches (spawn happens-before the first tick).
+		p.quotaBootAt = time.Now()
 		runCtx, cancel := context.WithCancel(ctx)
 		p.cancel = cancel
 		p.wg.Add(1)

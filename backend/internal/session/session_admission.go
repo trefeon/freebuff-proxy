@@ -182,6 +182,7 @@ func (m *Manager) createSessionForModel(ctx context.Context, model string) (*ups
 					}
 					if len(probeState.RateLimitsByModel) > 0 {
 						m.snap.savedQuota = probeState.RateLimitsByModel
+						m.stampQuotaSourceLocked(m.now())
 						if m.state != nil {
 							m.state.quotaByModel = probeState.RateLimitsByModel
 						}
