@@ -23,17 +23,6 @@ export async function fetchQuotaHistory(tokenIdx, model, limit = 60) {
   return { enabled: true, snapshots: res.snapshots ?? [] };
 }
 
-// Restart-surviving log query (the live ring covers the last 200 only).
-export async function fetchLogsHistory(params = {}) {
-  const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
-  }
-  const res = await fetchAPI(`${adminApi.logsHistory}?${q.toString()}`);
-  if (!res?.enabled) return { enabled: false, entries: [] };
-  return { enabled: true, entries: res.entries ?? [] };
-}
-
 // Event-kind chip tones for maturity timelines.
 export function historyKindTone(kind) {
   switch (kind) {

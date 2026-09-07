@@ -46,26 +46,8 @@ export function isSessionDead() {
   return sessionDead;
 }
 
-export function dismissSessionExpired() {
-  sessionExpired.set(false);
-}
-
 /** Reset the session latch after a successful login. */
 export function resetSessionState() {
   sessionDead = false;
   sessionExpired.set(false);
-}
-/**
- * Reload-loop guard for any remaining automatic (non-user-initiated)
- * navigation to the login page: at most ONE attempt per 30s window; afterwards
- * callers must fall back to the banner instead of navigating. Returns true
- * exactly when the caller may navigate (and records that attempt).
- */
-const AUTO_REDIRECT_COOLDOWN_MS = 30_000;
-let lastAutoRedirectAt = -Infinity;
-
-export function autoRedirectAllowed(now = Date.now()) {
-  if (now - lastAutoRedirectAt < AUTO_REDIRECT_COOLDOWN_MS) return false;
-  lastAutoRedirectAt = now;
-  return true;
 }

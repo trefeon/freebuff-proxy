@@ -145,9 +145,6 @@ export function freebucksHeaderLine(fb, nowMs, t = (s) => s) {
   }
   return parts.join(" · ");
 }
-export function freebucksPriceLabel(price) {
-  return `${formatFreebucks(price)} Freebucks/hr`;
-}
 
 export function modelDisplayInfo(modelId, freebucks) {
   const meta = MODEL_METADATA[modelId] || {

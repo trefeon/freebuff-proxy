@@ -68,16 +68,3 @@ export function generateRandomApiKey() {
   );
   return `sk-fb-${hex}`;
 }
-
-/**
- * Generate a random admin token with fb-adm- prefix.
- * @returns {string}
- */
-export function generateRandomAdminToken() {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-  return `fb-adm-${hex}`;
-}
