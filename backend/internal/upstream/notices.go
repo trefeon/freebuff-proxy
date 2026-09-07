@@ -26,8 +26,8 @@ const (
 	BudgetNotice = "You have used all of today’s free usage on this account."
 
 	// FreebucksCeilingNotice is FREEBUFF_FREEBUCKS_CEILING_NOTICE
-	// (common/src/constants/freebuff-spend-ceilings.ts:244-245).
-	FreebucksCeilingNotice = "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at three times what its Freebucks are worth, to protect the service from runaway usage."
+	// (common/src/constants/freebuff-spend-ceilings.ts:244-245, vendor 8897a90).
+	FreebucksCeilingNotice = "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at four times what its Freebucks are worth, to protect the service from runaway usage."
 )
 
 // DeepSeekPeakHoursWindow holds the live evaluation of DeepSeek pricing windows
