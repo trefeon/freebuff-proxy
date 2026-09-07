@@ -178,15 +178,18 @@ func TestQuotaBootProbeSeededSkips(t *testing.T) {
 	defer mock.Close()
 	p := seededPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	// Seed with a reset whose slot stays future (offset >= 0 puts the slot
-	// at/after reset-2h = now+1h): known reset, nothing due.
+	// Seed with a reset whose normal slot stays future of the tick below.
+	// The slot trails the reset by <5m, so anchor the reset to the tick
+	// (not wall-now): wall-now+3h sits before LA noon on mornings and the
+	// boot tick would wrongly fire. Known reset, nothing due, at any hour.
+	tick := laNoon(time.Now())
 	p.SeedQuotaSnapshot([]QuotaSeedRow{{
 		Token: 0, Model: modelA, Limit: 5, Recent: 1,
-		ResetAt: time.Now().Add(3 * time.Hour), ProbedAt: time.Now(),
+		ResetAt: tick.Add(3 * time.Hour), ProbedAt: time.Now(),
 	}})
 	p.quotaBootAt = time.Now().Add(-time.Hour)
 
-	p.quotaAutoProbeTickAt(context.Background(), laNoon(time.Now()))
+	p.quotaAutoProbeTickAt(context.Background(), tick)
 	if got := mock.SessionProbesSnapshot(); got != 0 {
 		t.Errorf("SessionProbes = %d for seeded token, want 0 (normal slots own it)", got)
 	}

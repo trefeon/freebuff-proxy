@@ -766,7 +766,7 @@
     </section>
 
     <!-- Section 3: Batch Traffic & Rotation Simulator -->
-    <BatchTestPanel clientKey={clientKey} />
+    <BatchTestPanel {clientKey} />
   </div>
 {:else}
   <div class="space-y-6 page-enter">
