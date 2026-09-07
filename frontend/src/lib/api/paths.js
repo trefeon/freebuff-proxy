@@ -68,4 +68,5 @@ export const tokenActions = {
   session: (idx) => `/admin/tokens/${idx}/session`,
   maturity: (idx) => `/admin/tokens/${idx}/maturity`,
   maturityTouch: (idx) => `/admin/tokens/${idx}/maturity/touch`,
+  maturityWarnReset: (idx) => `/admin/tokens/${idx}/maturity/warn-reset`,
 };

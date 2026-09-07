@@ -57,7 +57,7 @@ The page set has one source of truth: `NAV_ITEMS` in `frontend/src/lib/nav.js`. 
 
 ### 3. Maturity
 
-Per-account maturity tracking with stacked model and mode selects, per-token touch-model override plus global fallback, and persisted card expansion. Touch runs ride the live request poll path. The touch model defaults to the unmetered flash model so touches never burn premium quota.
+Per-account maturity tracking with stacked model and mode selects, per-token touch-model override plus global fallback, and persisted card expansion. Touch runs ride the live request poll path. The touch model defaults to the unmetered flash model so touches never burn premium quota. Automation state (config, slot, warning and relock counters) persists across restarts in the dashboard DB; a token that hits its streak target auto-releases, and one whose streak lapses for 2 straight days re-locks for warming. Endpoints: `POST /admin/tokens/{id}/maturity` (enable/disable), `POST /admin/tokens/{id}/maturity/touch` (manual touch, bypasses slot/throttle), `POST /admin/tokens/{id}/maturity/warn-reset` (clears only the non-advance warning and re-arms the loop — config untouched).
 
 ### 4. Quota Tracker
 

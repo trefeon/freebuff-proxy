@@ -305,8 +305,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Model the Economy maturity touch starts (cheapest served metered model — minimal daily Freebucks spend, never a premium model for farming)."
+    "description": "Model the unmetered maturity touch admits (a served, non-premium model — the reservation rides an infinite limit, free, and never burns premium quota for farming)."
   },
   {
     "key": "MODEL_LOCKS",

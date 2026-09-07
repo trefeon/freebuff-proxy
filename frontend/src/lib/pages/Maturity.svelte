@@ -46,6 +46,7 @@
   let drafts = $state({});
   let saving = $state({});
   let touching = $state({});
+  let resetting = $state({});
   let actionMessage = $state("");
   let actionOK = $state(true);
 
@@ -196,6 +197,26 @@
     }
   }
 
+  async function resetWarn(idx) {
+    if (resetting[idx]) return;
+    resetting[idx] = true;
+    actionMessage = "";
+    try {
+      const res = await postAPI(tokenActions.maturityWarnReset(idx), {});
+      if (res && res.ok === false)
+        throw new Error(res.message || "Reset rejected");
+      actionOK = true;
+      actionMessage = $tr("Warning cleared for Account #{idx}", {
+        idx: idx + 1,
+      });
+      await refreshTokens();
+    } catch (e) {
+      actionOK = false;
+      actionMessage = e?.message || String(e);
+    } finally {
+      resetting[idx] = false;
+    }
+  }
   onMount(() => {
     recordPageVisit("maturity");
     const release = ensureTokensStore();
@@ -400,6 +421,18 @@
               >
                 {$tr("Touch now")}
               </Button>
+              {#if m?.warn}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!!resetting[idx]}
+                  loading={!!resetting[idx]}
+                  onclick={() => resetWarn(idx)}
+                  title={$tr("Clear the non-advance warning and re-arm the daily loop (config unchanged)")}
+                >
+                  {$tr("Reset warning")}
+                </Button>
+              {/if}
               <Button
                 variant="primary"
                 size="sm"
