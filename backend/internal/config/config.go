@@ -208,10 +208,6 @@ type Config struct {
 	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose
 	// streak reaches its target auto-releases its administrative lock.
 	MaturityTargetDays int
-	// MaturityAllowPremium gates the per-token premium-short touch mode
-	// (MATURITY_ALLOW_PREMIUM; default false). When false, mode
-	// "premium-short" is rejected and only unmetered touches run.
-	MaturityAllowPremium bool
 	// WaitingRoomChain, when enabled (WAITING_ROOM_CHAIN=false default),
 	// fires the reference ad-chain + streak requests before the next
 	// session create after an upstream 428 waiting_room_required (issue
@@ -364,7 +360,6 @@ type rawConfig struct {
 	MaturityDryRun                   bool                    `json:"MATURITY_DRY_RUN"`
 	MaturityTouchModel               string                  `json:"MATURITY_TOUCH_MODEL"`
 	MaturityTargetDays               *int                    `json:"MATURITY_TARGET_DAYS"`
-	MaturityAllowPremium             bool                    `json:"MATURITY_ALLOW_PREMIUM"`
 	WaitingRoomChain                 bool                    `json:"WAITING_ROOM_CHAIN"`
 	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`

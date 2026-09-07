@@ -228,16 +228,6 @@
     "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset)."
   },
   {
-    "key": "MATURITY_ALLOW_PREMIUM",
-    "group": "pool",
-    "kind": "bool",
-    "default": "false",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Allow the per-token premium-short touch mode (one short premium admission instead of the Economy touch). Default false: premium touches spend the account's daily Freebucks pool and stay opt-in per token."
-  },
-  {
     "key": "MATURITY_DRY_RUN",
     "group": "pool",
     "kind": "bool",

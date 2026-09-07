@@ -33,8 +33,8 @@ const (
 	// plus a live session real traffic can reuse.
 	MaturityModeUnmetered = "unmetered"
 	// MaturityModePremiumShort admits one short premium-pool session
-	// instead. It burns daily premium quota and stays gated behind
-	// MATURITY_ALLOW_PREMIUM plus an explicit per-token opt-in.
+	// instead. It spends from the account's metered pool and stays
+	// opt-in per token.
 	MaturityModePremiumShort = "premium-short"
 )
 
@@ -93,21 +93,18 @@ type maturityState struct {
 // leaves serving rotation until its streak reaches target and auto-releases;
 // disabling never unlocks (the operator decides when a token serves again).
 // target <= 0 falls back to the configured MATURITY_TARGET_DAYS default;
-// mode "" means unmetered. mode premium-short requires MATURITY_ALLOW_PREMIUM.
+// mode "" means unmetered. mode premium-short spends from the account's
+// metered pool and stays opt-in per token.
 func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) error {
 	toks := p.roster.Load()
 	if toks == nil || token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
 	}
-	cfg := p.cfg.Load()
 	if mode == "" {
 		mode = MaturityModeUnmetered
 	}
 	if mode != MaturityModeUnmetered && mode != MaturityModePremiumShort {
 		return fmt.Errorf("pool: unknown maturity mode %q (want %q or %q)", mode, MaturityModeUnmetered, MaturityModePremiumShort)
-	}
-	if mode == MaturityModePremiumShort && (cfg == nil || !cfg.MaturityAllowPremium) {
-		return fmt.Errorf("pool: maturity mode %q requires MATURITY_ALLOW_PREMIUM=1", MaturityModePremiumShort)
 	}
 	if enabled && target <= 0 {
 		target = p.maturityDefaultTarget()

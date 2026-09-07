@@ -303,8 +303,9 @@ func TestMaturityNoAdvanceWarnStops(t *testing.T) {
 	}
 }
 
-// SetMaturity rejects bad targets, unknown modes, gated premium mode, and
-// out-of-range tokens.
+// SetMaturity rejects bad targets, unknown modes, and out-of-range
+// tokens. premium-short is opt-in per token with no global gate: spend
+// is bounded by the account's metered pool.
 func TestSetMaturityValidation(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -315,15 +316,11 @@ func TestSetMaturityValidation(t *testing.T) {
 	if err := p.SetMaturity(0, true, 7, "turbo"); err == nil {
 		t.Error("mode turbo accepted, want unknown-mode error")
 	}
-	if err := p.SetMaturity(0, true, 7, MaturityModePremiumShort); err == nil {
-		t.Error("premium-short accepted without MATURITY_ALLOW_PREMIUM, want gate error")
-	}
 	if err := p.SetMaturity(9, true, 7, ""); err == nil {
 		t.Error("token 9 accepted, want out-of-range error")
 	}
-	p.cfg.Load().MaturityAllowPremium = true
 	if err := p.SetMaturity(0, true, 7, MaturityModePremiumShort); err != nil {
-		t.Errorf("premium-short with allow flag: %v", err)
+		t.Errorf("premium-short rejected without a global gate: %v", err)
 	}
 }
 

@@ -125,7 +125,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.MaturityDryRun, "MATURITY_DRY_RUN")
 	overrideString(&raw.MaturityTouchModel, "MATURITY_TOUCH_MODEL")
 	overrideInt(&raw.MaturityTargetDays, "MATURITY_TARGET_DAYS")
-	overrideBool(&raw.MaturityAllowPremium, "MATURITY_ALLOW_PREMIUM")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
@@ -511,7 +510,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		MaturityDryRun:                   raw.MaturityDryRun,
 		MaturityTouchModel:               maturityTouchModel,
 		MaturityTargetDays:               maturityTargetDays,
-		MaturityAllowPremium:             raw.MaturityAllowPremium,
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -691,7 +689,6 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideBoolFrom(&raw.MaturityDryRun, get, "MATURITY_DRY_RUN")
 	overrideStringFrom(&raw.MaturityTouchModel, get, "MATURITY_TOUCH_MODEL")
 	overrideIntFrom(&raw.MaturityTargetDays, get, "MATURITY_TARGET_DAYS")
-	overrideBoolFrom(&raw.MaturityAllowPremium, get, "MATURITY_ALLOW_PREMIUM")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
