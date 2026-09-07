@@ -16,7 +16,7 @@ var validCatalogKinds = map[string]bool{
 }
 
 // dotenvKeys is the set of keys applyDotenv mirrors from a .env file onto
-// rawConfig (config_env.go). It must stay in lock-step with the catalog:
+// rawConfig (config_load.go). It must stay in lock-step with the catalog:
 // a key the loader parses but the catalog does not describe would be lost
 // from the settings form, and a catalog key the loader cannot apply would
 // be a phantom row.
