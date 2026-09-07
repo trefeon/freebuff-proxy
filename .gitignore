@@ -18,8 +18,9 @@ config.*.json
 *.pem
 *.key
 
-# ── runtime artifacts ──
 dump/
+# ── SQLite history (DB_PATH default ./data/freebuff.db; ADR-0016) ──
+/data/
 *.log
 dist/
 !backend/internal/dashboard/dist/

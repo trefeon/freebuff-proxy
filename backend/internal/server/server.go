@@ -211,6 +211,7 @@ func New(cfg *config.Config, p *pool.Pool, reg *registry.Registry, logger *slog.
 		cfgLoad:        s.cfg.Load,
 		cfgStore:       s.cfg.Store,
 		configPath:     configPath,
+		settings:       s.hist,
 		adminAuth:      s.adminAuth,
 		loginFlows:     s.loginFlows,
 		authClientFunc: func() *upstream.Client { return s.authClient },
@@ -232,13 +233,17 @@ func (s *Server) Close() error {
 
 // registerAdminRoutes mounts every dashboard.AdminRoutes row on the mux.
 // Each row's Auth level selects the wrapping middleware stack it has always
-// carried (see dashboard.AdminRoute for the level semantics); POST rows are
-// additionally wired through the CSRF gate. A row whose Path has no handler
-// mapping panics — the table and the mapper ship as one commit.
+// carried (see dashboard.AdminRoute for the level semantics); POST and
+// DELETE rows are additionally wired through the CSRF gate. A row whose
+// Path has no handler mapping panics — the table and the mapper ship as
+// one commit.
 func (s *Server) registerAdminRoutes(mux *http.ServeMux) {
 	for _, r := range dashboard.AdminRoutes {
 		h := s.adminHandler(r)
-		if r.Method == http.MethodPost {
+		// POST, PUT, and DELETE rows mutate state through the session cookie,
+		// so all three carry the CSRF gate (GET rows are reads; the gate
+		// itself skips GET/HEAD anyway).
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete {
 			h = s.admin.adminCSRF(h)
 		}
 		switch r.Auth {
@@ -290,6 +295,16 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return s.dash.APIHandler("config")
 	case "GET /admin/api/config/meta":
 		return http.HandlerFunc(s.dash.APIConfigMeta)
+	case "GET /admin/api/settings":
+		return http.HandlerFunc(s.admin.handleSettingsGet)
+	case "POST /admin/api/settings":
+		return http.HandlerFunc(s.admin.handleSettingsPost)
+	case "DELETE /admin/api/settings/{key}":
+		return http.HandlerFunc(s.admin.handleSettingsDelete)
+	case "GET /admin/api/pages/{id}":
+		return http.HandlerFunc(s.admin.handlePageStateGet)
+	case "PUT /admin/api/pages/{id}":
+		return http.HandlerFunc(s.admin.handlePageStatePut)
 	case "GET /admin/api/logs":
 		return s.dash.APIHandler("logs")
 	case "GET /admin/api/quota/history":
@@ -369,6 +384,17 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 	}
 }
 
+// handleRoot answers GET /: 302 to /admin when the dashboard is enabled, 404
+// otherwise. The exact-root pattern leaves every other path on the ServeMux
+// default (/v1/*, /healthz, /metrics, /admin/* contracts untouched).
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.Load().DashboardEnabled {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/admin", http.StatusFound)
+}
+
 // Handler returns the route table wrapped in an access-log middleware. Method
 // mismatches and unknown paths get the ServeMux's automatic 405/404.
 func (s *Server) Handler() http.Handler {
@@ -377,6 +403,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerAnthropicRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
+	mux.HandleFunc("GET /{$}", s.handleRoot)
 	if s.cfg.Load().DashboardEnabled {
 		s.registerAdminRoutes(mux)
 	}

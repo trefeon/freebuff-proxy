@@ -21,6 +21,10 @@ services:
       # env beats the mounted .env file: guarantees the container listens on
       # the mapped port even when the host .env carries a loopback LISTEN_ADDR.
       - LISTEN_ADDR=:3457
+      # SQLite history file (ADR-0016): lives on the db_data named volume so
+      # dashboard history survives container rebuilds. Mirrors the DB_PATH
+      # default layout (./data/freebuff.db) used outside Docker.
+      - DB_PATH=/app/data/freebuff.db
       - ADMIN_FORCE_SECURE_COOKIES=${ADMIN_FORCE_SECURE_COOKIES:-false}
       - ADMIN_INSECURE_HTTP=${ADMIN_INSECURE_HTTP:-}
     # The process cwd IS the mount, so every cwd-relative path the dashboard
@@ -40,6 +44,9 @@ services:
     working_dir: /app/state
     volumes:
       - .:/app/state
+      # SQLite history (DB_PATH above): named volume so freebuff.db survives
+      # `compose down` and image rebuilds. The state bind mount stays untouched.
+      - db_data:/app/data
     ports:
       # ⚠️ 0.0.0.0 default: /healthz and /metrics are ALWAYS unauthenticated by
       # design (monitoring). Exposing this port beyond localhost publishes them
@@ -83,5 +90,6 @@ services:
       - freebuff-proxy
 
 volumes:
+  db_data:
   caddy_data:
   caddy_config:

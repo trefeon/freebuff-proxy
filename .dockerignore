@@ -26,6 +26,8 @@ API_Keys*
 
 # ── runtime artifacts ──
 dump/
+# Local SQLite history must never bake into image layers.
+/data/
 *.log
 
 # ── build outputs / dev binaries ──
