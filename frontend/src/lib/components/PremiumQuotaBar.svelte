@@ -292,7 +292,6 @@
         </div>
       {/each}
     </div>
-
   </div>
 {/if}
 {#if legacyChips.length > 0}
@@ -309,7 +308,8 @@
         <span
           class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 tabular-nums"
         >
-          <span class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
+          <span
+            class="font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
             >{chip.label}</span
           >
           <span class="text-[var(--fp-muted)]"

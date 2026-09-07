@@ -113,9 +113,7 @@
     fetchAPI(adminApi.models)
       .then((res) => {
         const rows = res?.models ?? [];
-        usableIds = new Set(
-          rows.filter((m) => m.agent).map((m) => m.id),
-        );
+        usableIds = new Set(rows.filter((m) => m.agent).map((m) => m.id));
       })
       .catch(() => {
         usableIds = null;
@@ -406,7 +404,8 @@
                               ? 'text-emerald-400'
                               : 'text-[var(--fp-accent)]'}"
                           >
-                            {m.price} {$tr("Freebucks/hr")}
+                            {m.price}
+                            {$tr("Freebucks/hr")}
                           </span>
                         </span>
                         <span class="flex items-center gap-2 min-w-0">

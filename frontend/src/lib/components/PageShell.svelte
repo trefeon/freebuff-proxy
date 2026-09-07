@@ -47,10 +47,7 @@
 <div class="space-y-6 page-enter">
   <div class="flex flex-col gap-1.5">
     {#if crumb}
-      <p
-        class="font-mono text-[11px] text-[var(--fp-dim)]"
-        aria-hidden="true"
-      >
+      <p class="font-mono text-[11px] text-[var(--fp-dim)]" aria-hidden="true">
         {crumb}
       </p>
     {/if}

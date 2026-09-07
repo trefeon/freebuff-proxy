@@ -255,12 +255,15 @@
         <div class="flex flex-col gap-2">
           {#if m}
             <p class="fp-num text-[11px] leading-relaxed text-[var(--fp-dim)]">
-              {$tr("slot")} {fmtTime(m.slot)} ·
+              {$tr("slot")}
+              {fmtTime(m.slot)} ·
               {m.last_action
                 ? `${m.last_action} → ${m.last_result ?? "?"}`
                 : $tr("no touch yet")}{m.last_touch
                 ? ` · ${fmtTime(m.last_touch)}`
-                : ""}{m.last_advanced ? ` · ${$tr("advanced")} ${m.last_advanced}` : ""}
+                : ""}{m.last_advanced
+                ? ` · ${$tr("advanced")} ${m.last_advanced}`
+                : ""}
             </p>
           {/if}
 

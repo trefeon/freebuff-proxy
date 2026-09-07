@@ -44,9 +44,9 @@
 </script>
 
 <span
-  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] border font-mono text-[11px] uppercase tracking-wider {toneClasses[resolvedTone]} {pulse
-    ? 'led-pulse'
-    : ''}"
+  class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] border font-mono text-[11px] uppercase tracking-wider {toneClasses[
+    resolvedTone
+  ]} {pulse ? 'led-pulse' : ''}"
 >
   <span aria-hidden="true">[{glyphs[resolvedTone]}]</span>
   <span>{status}</span>

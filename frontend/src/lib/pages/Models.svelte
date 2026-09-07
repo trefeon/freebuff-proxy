@@ -149,11 +149,11 @@
                       {#if m.badges?.length}
                         {#each m.badges as badge (badge)}
                           {#if badge !== "NEW"}
-                          <span
-                            class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]"
-                          >
-                            {badge}
-                          </span>
+                            <span
+                              class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]"
+                            >
+                              {badge}
+                            </span>
                           {/if}
                         {/each}
                       {/if}
@@ -182,9 +182,7 @@
                       {/if}
                       {#if m.efforts?.length}
                         <span class="text-[var(--fp-dim)]">·</span>
-                        <span
-                          >{$tr("Reasoning")}: {m.efforts.join("/")}</span
-                        >
+                        <span>{$tr("Reasoning")}: {m.efforts.join("/")}</span>
                       {/if}
                     </div>
                   </div>

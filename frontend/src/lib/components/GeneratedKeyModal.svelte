@@ -30,9 +30,7 @@
   size="md"
 >
   {#snippet icon()}
-    <div
-      class="p-2 rounded bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
-    >
+    <div class="p-2 rounded bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]">
       <Key size={18} />
     </div>
   {/snippet}

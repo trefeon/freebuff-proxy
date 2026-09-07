@@ -160,7 +160,6 @@
     data?.tokens?.reduce((s, t) => s + (t.requests || 0), 0) ?? 0,
   );
 
-
   // Dynamic Base URL follows the browser's current host (VPS IP, domain, VPN reverse proxy)
   // as computed dynamically by the backend from the request headers (Host, X-Forwarded-Host/Proto).
   let dynamicBaseURL = $derived.by(() => {

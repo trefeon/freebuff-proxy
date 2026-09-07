@@ -470,46 +470,46 @@
       aria-label={$tr("Pool summary")}
     >
       <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
-        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
-          >{$tr("Total")}</dt
-        >
-        <dd class="text-sm font-semibold text-[var(--fp-text)] tabular-nums"
-          >{data?.token_count ?? 0}</dd
-        >
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]">
+          {$tr("Total")}
+        </dt>
+        <dd class="text-sm font-semibold text-[var(--fp-text)] tabular-nums">
+          {data?.token_count ?? 0}
+        </dd>
       </div>
       <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
-        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
-          >{$tr("Active")}</dt
-        >
-        <dd
-          class="text-sm font-semibold text-[var(--fp-accent)] tabular-nums"
-          >{activeLeases}</dd
-        >
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]">
+          {$tr("Active")}
+        </dt>
+        <dd class="text-sm font-semibold text-[var(--fp-accent)] tabular-nums">
+          {activeLeases}
+        </dd>
       </div>
       <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
-        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
-          >{$tr("Strategy")}</dt
-        >
-        <dd class="text-sm font-semibold text-[var(--fp-text)]"
-          >{tokenRotation === "drain"
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]">
+          {$tr("Strategy")}
+        </dt>
+        <dd class="text-sm font-semibold text-[var(--fp-text)]">
+          {tokenRotation === "drain"
             ? $tr("Drain")
             : tokenRotation === "round_robin"
               ? $tr("Robin")
               : tokenRotation === "least_used"
                 ? $tr("Least")
-                : $tr("Random")}</dd
-        >
+                : $tr("Random")}
+        </dd>
       </div>
       <div class="flex flex-col px-2.5 py-1.5 bg-[var(--fp-surface)]">
-        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]"
-          >{$tr("Failover")}</dt
-        >
+        <dt class="text-[10px] uppercase tracking-wider text-[var(--fp-dim)]">
+          {$tr("Failover")}
+        </dt>
         <dd
           class="text-sm font-semibold {rateLimitFailover
             ? 'text-[var(--fp-accent)]'
             : 'text-[var(--fp-dim)]'}"
-          >{rateLimitFailover ? $tr("On") : $tr("Off")}</dd
         >
+          {rateLimitFailover ? $tr("On") : $tr("Off")}
+        </dd>
       </div>
     </dl>
   {/snippet}

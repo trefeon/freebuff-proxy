@@ -194,16 +194,27 @@
         reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
         {#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}
           <span class="text-[10px] text-[var(--fp-muted)]">
-            ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0} · {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
+            ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0}
+              ·
+            {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
           >
         {/if}</span
       >
     </div>
     {#if token.freebucks}
-      {@const fbBal = Math.max(0, Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0))}
+      {@const fbBal = Math.max(
+        0,
+        Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0),
+      )}
       {@const fbDaily = token.freebucks.daily ?? token.freebucks.Daily ?? {}}
-      {@const fbRem = Math.max(0, Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0))}
-      {@const fbLim = Math.max(0, Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0))}
+      {@const fbRem = Math.max(
+        0,
+        Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0),
+      )}
+      {@const fbLim = Math.max(
+        0,
+        Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0),
+      )}
       <div class="fp-inset px-2.5 py-1.5 text-xs">
         <span class="fp-num text-[var(--fp-accent)] font-semibold"
           >{fbBal} {$tr("Freebucks")}</span

@@ -94,10 +94,9 @@
     // endpoint, then send through normal rotation.
     if (playAccount !== "auto") {
       try {
-        const adm = await postAPI(
-          tokenActions.session(Number(playAccount)),
-          { model: selectedModel },
-        );
+        const adm = await postAPI(tokenActions.session(Number(playAccount)), {
+          model: selectedModel,
+        });
         if (adm && adm.ok === false)
           throw new Error(adm.message || "Admit rejected");
       } catch (e) {
@@ -597,7 +596,10 @@
               </tbody>
             </table>
           </div>
-          <ul class="md:hidden flex flex-col gap-2.5" aria-label="Token sessions">
+          <ul
+            class="md:hidden flex flex-col gap-2.5"
+            aria-label="Token sessions"
+          >
             {#each tokensData.tokens as token (token.index)}
               {@const idx = token.index ?? 0}
               {@const spawnSel = spawnModelByIdx[idx] ?? selectedModel}
@@ -620,9 +622,13 @@
                   </span>
                 </div>
                 {#if token.session_model}
-                  <p class="fp-num text-xs text-[var(--fp-accent)] font-semibold truncate">
+                  <p
+                    class="fp-num text-xs text-[var(--fp-accent)] font-semibold truncate"
+                  >
                     {token.session_model}{#if token.session_remaining_seconds > 0}
-                      <span class="text-[11px] text-[var(--fp-dim)] font-normal">
+                      <span
+                        class="text-[11px] text-[var(--fp-dim)] font-normal"
+                      >
                         · {Math.floor(token.session_remaining_seconds / 60)}m
                         {$tr("left")}</span
                       >{/if}
@@ -641,7 +647,9 @@
                     <option
                       value={m.id}
                       disabled={opt.kind === "paywall"}
-                      title={opt.kind === "paywall" ? "Not enough Freebucks" : m.label}
+                      title={opt.kind === "paywall"
+                        ? "Not enough Freebucks"
+                        : m.label}
                       >{m.label}{opt.kind === "paywall"
                         ? " — paywalled"
                         : ""}</option
@@ -650,10 +658,13 @@
                 </select>
                 {#if spawnOpt.kind === "paywall"}
                   <p class="text-[11px] text-[var(--fp-warning)]">
-                    {$tr("Not enough Freebucks (price {price}, balance {balance})", {
-                      price: spawnOpt.price,
-                      balance: token?.freebucks?.balance ?? 0,
-                    })}
+                    {$tr(
+                      "Not enough Freebucks (price {price}, balance {balance})",
+                      {
+                        price: spawnOpt.price,
+                        balance: token?.freebucks?.balance ?? 0,
+                      },
+                    )}
                   </p>
                 {/if}
                 <div class="flex flex-wrap gap-1.5">
@@ -665,10 +676,13 @@
                       triggerTokenAction(
                         tokenActions.session(idx),
                         { model: spawnSel },
-                        $tr("Spawn upstream session on account #{idx} for {model}?", {
-                          idx: idx + 1,
-                          model: spawnSel,
-                        }),
+                        $tr(
+                          "Spawn upstream session on account #{idx} for {model}?",
+                          {
+                            idx: idx + 1,
+                            model: spawnSel,
+                          },
+                        ),
                       )}
                   >
                     {$tr("Make Session")}

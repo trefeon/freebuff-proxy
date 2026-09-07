@@ -16,8 +16,7 @@
 
 <div class="fp-inset rounded p-2.5 flex flex-col gap-1.5 {className}">
   <div class="flex items-center justify-between gap-2">
-    <span class="text-[11px] font-semibold text-[var(--fp-muted)]"
-      >{label}</span
+    <span class="text-[11px] font-semibold text-[var(--fp-muted)]">{label}</span
     >
     {#if unit}
       <span class="text-[10px] uppercase font-mono text-[var(--fp-dim)]"
