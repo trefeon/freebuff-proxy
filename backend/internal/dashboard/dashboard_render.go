@@ -49,15 +49,27 @@ func (d *Dashboard) RenderConfigResult(w http.ResponseWriter, r *http.Request, o
 	d.RenderResult(w, status, ok, message, "")
 }
 
-// RenderTestResult appends one per-token outcome.
-func (d *Dashboard) RenderTestResult(w http.ResponseWriter, r *http.Request, token int, ok bool, message, instanceID string) {
+// TokenTestOutcome is one per-token probe outcome in a test-all response.
+type TokenTestOutcome struct {
+	Token      int    `json:"token"`
+	OK         bool   `json:"ok"`
+	Message    string `json:"message"`
+	InstanceID string `json:"instance_id"`
+}
+
+// RenderTestResults writes the whole test-all outcome as ONE JSON array.
+// The previous per-write loop emitted one concatenated JSON object per
+// token, which no standard JSON client (notably the dashboard's res.json())
+// can parse once two or more tokens exist.
+func (d *Dashboard) RenderTestResults(w http.ResponseWriter, r *http.Request, outcomes []TokenTestOutcome) {
+	if outcomes == nil {
+		outcomes = []TokenTestOutcome{}
+	}
+	for i := range outcomes {
+		outcomes[i].InstanceID = shortID(outcomes[i].InstanceID)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"token":       token,
-		"ok":          ok,
-		"message":     message,
-		"instance_id": shortID(instanceID),
-	})
+	_ = json.NewEncoder(w).Encode(outcomes)
 }
 
 // PhaseKV is one rendered latency phase.

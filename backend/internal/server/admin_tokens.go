@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/dashboard"
 	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/upstream"
@@ -243,7 +244,7 @@ func (a *adminHandlers) handleTokenTestAll(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	results := a.pool.ProbeAll(r.Context())
-	count := 0
+	outcomes := make([]dashboard.TokenTestOutcome, 0, len(results))
 	for _, res := range results {
 		i := res.Index
 		state, err := res.State, res.Err
@@ -259,12 +260,13 @@ func (a *adminHandlers) handleTokenTestAll(w http.ResponseWriter, r *http.Reques
 				msg = "ok (" + q + ")"
 			}
 		}
-		a.dash.RenderTestResult(w, r, i, ok, msg, "")
-		count++
+		outcomes = append(outcomes, dashboard.TokenTestOutcome{Token: i, OK: ok, Message: msg})
 	}
-	if count == 0 {
+	if len(outcomes) == 0 {
 		a.dash.RenderConfigResult(w, r, false, "No tokens to test (bridge mode has no fixed AUTH_TOKENS).")
+		return
 	}
+	a.dash.RenderTestResults(w, r, outcomes)
 }
 
 func (a *adminHandlers) addTokenPersist(ctx context.Context, token string) (int, error) {

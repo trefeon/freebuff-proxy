@@ -88,6 +88,16 @@ func TestDashboardTokenTestAllTwoTokens(t *testing.T) {
 	if !strings.Contains(body, `"ok":true`) {
 		t.Errorf("test-all missing ok:true: %s", body)
 	}
+	// Wire contract for the DevTools probe-all button (postAPI → res.json()):
+	// the body must be ONE JSON array with one outcome per token, not one
+	// concatenated JSON object per token (unparseable past one token).
+	var outcomes []map[string]any
+	if err := json.Unmarshal([]byte(body), &outcomes); err != nil {
+		t.Fatalf("test-all body is not a single JSON array: %v\n%s", err, body)
+	}
+	if len(outcomes) != 2 {
+		t.Fatalf("test-all outcomes = %d, want 2", len(outcomes))
+	}
 	// Probe-only, no admission: each token saw exactly one zero-cost GET
 	// probe and zero session creates.
 	for i, mock := range []*testutil.MockUpstream{mock0, mock1} {

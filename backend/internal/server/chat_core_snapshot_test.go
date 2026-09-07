@@ -213,3 +213,44 @@ func TestAuthorizedUsesPassedSnapshot(t *testing.T) {
 		}
 	}
 }
+
+// TestChatCorePaddedAPIKeyStaysPooled: clientToken trims surrounding
+// whitespace before routing, so a padded API key ("  sk-reviewfix  ", as
+// produced by sloppy env interpolation) must still count as pooled access in
+// hybrid mode. Pre-fix, authorized compared the UNtrimmed header value, so a
+// padded x-api-key/anthropic-api-key missed the pool and was relayed upstream
+// as a bridge token — the same credential routed two different ways by two
+// copies of the same extraction logic.
+func TestChatCorePaddedAPIKeyStaysPooled(t *testing.T) {
+	for _, tc := range []struct{ name, header, value string }{
+		{"bearer", "Authorization", "Bearer   " + reviewFixAPIKey + "  "},
+		{"x-api-key", "x-api-key", "  " + reviewFixAPIKey + "  "},
+		{"anthropic-api-key", "anthropic-api-key", "  " + reviewFixAPIKey + "  "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, mock, _ := newReviewFixCore(t)
+			mock.ChatBody = testutil.SSEEvent(`{"id":"chatcmpl-rf3","object":"chat.completion.chunk","created":3,"model":"` + reviewFixModel + `","choices":[{"index":0,"delta":{"content":"pooled"},"finish_reason":null}]}`)
+
+			r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			r.Header.Set(tc.header, tc.value)
+			var stamped *http.Request
+			s.requireAuth(func(w http.ResponseWriter, req *http.Request) { stamped = req })(httptest.NewRecorder(), r)
+			if stamped == nil {
+				t.Fatal("requireAuth did not pass the request through")
+			}
+
+			w := httptest.NewRecorder()
+			s.chatCore(w, stamped, reviewFixModel, true, reviewFixChatBody(), "", "chat completions", reviewFixDrainRelay)
+
+			if len(mock.RecordedChatHeaders) != 1 {
+				t.Fatalf("upstream chat calls = %d, want 1 (recorder body: %s)", len(mock.RecordedChatHeaders), w.Body.String())
+			}
+			if got := mock.RecordedChatHeaders[0].Get("Authorization"); got != "Bearer tok-0" {
+				t.Errorf("upstream Authorization = %q, want %q — a padded API key must stay pooled, never relayed as a bridge token", got, "Bearer tok-0")
+			}
+			if got := s.pool.BridgeCount(); got != 0 {
+				t.Errorf("BridgeCount = %d, want 0 (no bridge entry for a padded pooled key)", got)
+			}
+		})
+	}
+}

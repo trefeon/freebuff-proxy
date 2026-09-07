@@ -36,6 +36,13 @@
     "Hello! Count from 1 to 5 and briefly describe yourself.",
   );
   let reasoningEffort = $state("medium");
+  // Client API key for the /v1 playground + burst fetches below. Those hit
+  // the public protocol surface (requireAuth), not the session-cookie admin
+  // API, so a gateway with API_KEYS set answers 401 without one. Kept in
+  // memory only — never persisted.
+  let clientKey = $state("");
+  const authHeaders = () =>
+    clientKey.trim() ? { Authorization: `Bearer ${clientKey.trim()}` } : {};
   // "auto" = pure pool rotation; otherwise admit the session on the chosen
   // pooled account first (same endpoint as the spawner below), then send.
   let playAccount = $state("auto");
@@ -125,7 +132,7 @@
 
         const res = await fetch("/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify(payload),
         });
 
@@ -198,6 +205,7 @@
           headers: {
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
+            ...authHeaders(),
           },
           body: JSON.stringify(payload),
         });
@@ -286,10 +294,24 @@
     actionMessage = "";
     try {
       const res = await postAPI(url, body);
-      actionOK = res.ok;
-      actionMessage =
-        res.message ||
-        (res.ok ? $tr("Action completed") : $tr("Action failed"));
+      if (Array.isArray(res)) {
+        // Probe-all answers one JSON array with a per-token outcome each
+        // (backend/internal/server/admin_tokens.go): summarize it into the
+        // single alert line instead of showing raw JSON.
+        const okCount = res.filter((r) => r && r.ok).length;
+        actionOK = res.length > 0 && okCount === res.length;
+        const firstBad = res.find((r) => r && !r.ok);
+        actionMessage =
+          $tr("Probe complete: {ok}/{n} tokens OK", {
+            ok: okCount,
+            n: res.length,
+          }) + (firstBad?.message ? ` — ${firstBad.message}` : "");
+      } else {
+        actionOK = res.ok;
+        actionMessage =
+          res.message ||
+          (res.ok ? $tr("Action completed") : $tr("Action failed"));
+      }
       await refreshTokens();
     } catch (e) {
       actionOK = false;
@@ -445,6 +467,23 @@
                 <option value="xhigh">xhigh (max)</option>
               </select>
             </div>
+          </div>
+          <!-- Client key: the sends below hit /v1 (requireAuth), not the
+            session-cookie admin API, so a gateway with API_KEYS set answers
+            401 without one. Memory-only; never persisted. -->
+          <div class="flex flex-col gap-1.5">
+            <label for="dev-client-key" class="text-xs text-[var(--fp-muted)]"
+              >{$tr("Client API key")}</label
+            >
+            <input
+              id="dev-client-key"
+              type="password"
+              bind:value={clientKey}
+              autocomplete="off"
+              spellcheck="false"
+              class="fp-input fp-mono text-xs w-full p-2.5"
+              placeholder="Bearer key for /v1 sends — leave empty when the gateway sets no API_KEYS"
+            />
           </div>
 
           <!-- Prompt Textarea -->
@@ -727,7 +766,7 @@
     </section>
 
     <!-- Section 3: Batch Traffic & Rotation Simulator -->
-    <BatchTestPanel />
+    <BatchTestPanel clientKey={clientKey} />
   </div>
 {:else}
   <div class="space-y-6 page-enter">

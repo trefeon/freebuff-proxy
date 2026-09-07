@@ -7,7 +7,10 @@
   import { adminApi } from "../api/paths.js";
   import { tr } from "../i18n.js";
 
-  let { onLog } = $props();
+  // Optional client API key (memory-only, from the DevTools playground):
+  // burst sends hit /v1 (requireAuth), so a gateway with API_KEYS set
+  // answers 401 without one.
+  let { onLog, clientKey = "" } = $props();
 
   let batchCount = $state(5);
   let batchRunning = $state(false);
@@ -29,7 +32,12 @@
         try {
           const res = await fetch("/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(clientKey.trim()
+                ? { Authorization: `Bearer ${clientKey.trim()}` }
+                : {}),
+            },
             body: JSON.stringify({
               model,
               messages: [{ role: "user", content: `Ping test #${i}` }],

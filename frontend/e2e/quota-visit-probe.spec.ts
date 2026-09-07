@@ -159,9 +159,9 @@ test("quota visit: failed auto probe surfaces the error path", async ({
   await expect(
     page.getByRole("heading", { name: "Quota Tracker", exact: true }),
   ).toBeVisible();
-  // Failure sets the existing probeMsg error path (HTTP status), with no
-  // success banner.
-  await expect(page.getByText("HTTP 500")).toBeVisible();
+  // Failure surfaces the server envelope message on the probeMsg error path
+  // (not a bare HTTP status), with no success banner.
+  await expect(page.getByText("boom")).toBeVisible();
   await expect(page.getByText("Quotas refreshed from upstream.")).toHaveCount(
     0,
   );

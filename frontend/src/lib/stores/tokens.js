@@ -149,9 +149,9 @@ export function refreshTokens() {
  * POSTs /admin/tokens/test-all, which probes each token with a read-only
  * upstream GET (no session claim, no slot spent) and writes the fresh
  * quota into the snapshots via UpdateQuotaFromProbe. The store refetch
- * below then renders the new numbers. The endpoint answers with one JSON
- * object per token concatenated, which res.json() cannot parse, so the
- * body is drained as text and ignored; per-token detail stays on the
+ * below then renders the new numbers. The manual endpoint answers with
+ * one JSON array; the body is drained as text and ignored either way —
+ * only res.ok matters here. Per-token detail stays on the
  * Tokens page probe buttons.
  * With `{ auto: true }` (ADR-0025 visit probe) the request carries
  * `?auto=1`: the server probes only when its pool-scoped last-bulk-probe
@@ -169,8 +169,21 @@ export function probeAllQuotas(opts = {}) {
     headers: csrfHeader("POST"),
   })
     .then(async (res) => {
-      await res.text().catch(() => {});
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text().catch(() => "");
+      if (!res.ok) {
+        // Admin endpoints emit one envelope ({ok,message[,code]}); surface
+        // the human message (e.g. "No tokens to test…") instead of a bare
+        // HTTP status. The manual test-all body shape (array vs objects)
+        // is irrelevant here — only the failure message is parsed.
+        let msg = "";
+        try {
+          const parsed = JSON.parse(text);
+          msg = parsed?.message ?? "";
+        } catch {
+          msg = text;
+        }
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
     })
     .then(() => refreshTokens());
 }

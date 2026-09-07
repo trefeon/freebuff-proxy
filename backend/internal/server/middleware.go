@@ -330,9 +330,9 @@ func (s *Server) authorized(cfg *config.Config, r *http.Request) bool {
 	provided := ""
 	if tok, ok := extractBearerToken(r.Header.Get("Authorization")); ok {
 		provided = tok
-	} else if h := r.Header.Get("x-api-key"); h != "" {
+	} else if h := strings.TrimSpace(r.Header.Get("x-api-key")); h != "" {
 		provided = h
-	} else if h := r.Header.Get("anthropic-api-key"); h != "" {
+	} else if h := strings.TrimSpace(r.Header.Get("anthropic-api-key")); h != "" {
 		provided = h
 	}
 	if provided == "" {
