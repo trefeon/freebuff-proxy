@@ -11,7 +11,7 @@ Single source of truth for per-model facts: served/paused/premium, caps and cap 
 - Facts: `ModelInfo`, `IsServed`, `IsPaused`, `PausedReplacement`, `WithdrawnModelMessage`, `IsPremium`, `SharedPremiumModels`, `PerModelCap(id) (limit, pool)`, `ContextWindow`, `Efforts`, `IsMediumlessLadderModel`, `IsStrictReasoningModel`, `IsLimitedTierAllowed`.
 - Sets: `PausedMap`, `ServedMap`, `ServedIDs`, `ServedHelpText`.
 - Display: `DisplayName`, `Tagline`, `Notice`, `Badges`.
-- Defaults: `DefaultModelID` (z-ai/glm-5.3-flash), `FallbackModelID` (mimo/mimo-v2.5), `LimitedModelID`, `PremiumSessionLimit` (4), `GLMSessionLength` (1h).
+- Defaults: `DefaultModelID` (z-ai/glm-5.3-flash), `FallbackModelID` (mimo/mimo-v2.5), `LimitedModelID`, `PremiumSessionLimit` (5), `GLMSessionLength` (1h).
 
 ## Allowed dependencies
 

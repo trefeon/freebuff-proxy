@@ -79,11 +79,11 @@ type aliasRow struct {
 // pool models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
 // (rateLimitsByModel mirrored per token — server-computed, moves with trust/
 // streak/referral bonuses) rendered as "<limit> premium quota", falling back
-// to the static "5 premium quota" when no live data exists (5 = default
-// entitlement: modelcat.PremiumSessionLimit is the floor 4, but the runtime
-// default entitlement is 5/day — floor 4 only with trust levels enforced;
-// see modelcat.PremiumSessionLimit comment). Referral GLM 5.2 keeps
-// "referral +1/day", and all other served rows are "unlimited session".
+// to the static "6 premium quota" when no live data exists (6 = floor 5 + 1:
+// modelcat.PremiumSessionLimit is the base 5 since the Levels retirement;
+// see modelcat.PremiumSessionLimit comment).
+// Referral GLM 5.2 keeps "referral +1/day", and all other served rows are
+// "unlimited session".
 // The old live copy "1 of 5 used" was per-single-token usage, which confused
 // the catalog view (the table should show the model-level quota, not one
 // token's used count); "unmetered" is now "unlimited session" per UX request.

@@ -71,7 +71,7 @@ func getMockState(token string) *mockTokenState {
 }
 
 // mockQuotaLimit mirrors the real tier caps for the served models (derived
-// from modelcat: shared premium pool 4/day (luna, solar-pro4; glm-5.3-flash
+// from modelcat: shared premium pool 5/day (luna, solar-pro4; glm-5.3-flash
 // left it 2026-08-28 and is unmetered; solar's 1/day per-model cap closed
 // 2026-09-01, upstream 051fd4d9), glm-5.2 promo 1/day, everything else
 // unmetered). Paused models
