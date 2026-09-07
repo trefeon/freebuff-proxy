@@ -21,6 +21,8 @@ package pool
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -390,6 +392,12 @@ type Pool struct {
 	notify   *notify.Sender
 	notifyMu sync.Mutex // guards notify reads/writes (data race)
 
+	// maturityStore persists per-token maturity automation blobs across
+	// restarts (Account Maturity rev 2). Interface, not a concrete store:
+	// the pool must never import the store package (archtest leaf rule).
+	// nil disables persistence (in-memory only, pre-rev-2 behavior).
+	maturityStoreMu sync.Mutex
+	maturityStore   MaturityStore
 	// storeSessionPersist and storeStateFile record the persistence config
 	// the store was created with (captured by SetSessionStore), so SetConfig
 	// can detect a reload that changes the persistence semantics — the live
@@ -917,6 +925,130 @@ func (p *Pool) SetNotifier(n *notify.Sender) {
 	p.notifyMu.Lock()
 	defer p.notifyMu.Unlock()
 	p.notify = n
+}
+
+// MaturityStore persists per-token maturity automation blobs across
+// restarts. Keyed by the SHA-256 hex of the token value: raw tokens never
+// cross this boundary. stateJSON is the opaque automation blob
+// (marshalMaturity), streakJSON the opaque upstream streak JSON; both may
+// be empty. The store package implements this implicitly (no import here).
+type MaturityStore interface {
+	SaveMaturity(tokenHash string, stateJSON string, streakJSON []byte) error
+	LoadMaturity(tokenHash string) (stateJSON string, streakJSON []byte, ok bool, err error)
+}
+
+// SetMaturityStore wires the maturity persistence backend (nil disables).
+// Safe to call at runtime (nil-friendly); call RestoreMaturity once at boot
+// after wiring so automation state survives restarts.
+func (p *Pool) SetMaturityStore(s MaturityStore) {
+	p.maturityStoreMu.Lock()
+	defer p.maturityStoreMu.Unlock()
+	p.maturityStore = s
+}
+
+// maturityTokenHash keys maturity rows without ever persisting the raw
+// token (mirrors the 8-hex log labels, but full-length for store keys).
+func maturityTokenHash(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return fmt.Sprintf("%x", sum)
+}
+
+// saveMaturity persists one token's automation state best-effort (nil store
+// or never-enrolled token = no-op; errors only warn, never fail the tick).
+func (p *Pool) saveMaturity(idx int, tok *tokenEntry) {
+	p.maturityStoreMu.Lock()
+	st := p.maturityStore
+	p.maturityStoreMu.Unlock()
+	if st == nil {
+		return
+	}
+	ms := p.maturityCopy(tok)
+	if !ms.enabled && ms.lastAction == "" && ms.lastResult == "" && ms.releasedTarget <= 0 {
+		return
+	}
+	stateJSON, err := ms.marshalMaturity()
+	if err != nil {
+		p.logger.Warn("pool: maturity persist marshal failed", "token", idx+1, "err", err)
+		return
+	}
+	var streakJSON []byte
+	if cached := tok.Streak(); cached != nil {
+		streakJSON, err = json.Marshal(cached)
+		if err != nil {
+			p.logger.Warn("pool: maturity persist streak marshal failed", "token", idx+1, "err", err)
+			return
+		}
+	}
+	if err := st.SaveMaturity(maturityTokenHash(tok.token), stateJSON, streakJSON); err != nil {
+		p.logger.Warn("pool: maturity persist save failed", "token", idx+1, "err", err)
+	}
+}
+
+// RestoreMaturity loads persisted automation state into the roster (boot
+// path; the owner calls it once after SetMaturityStore). Tokens with no row
+// stay never-enrolled; corrupt rows warn and stay never-enrolled (never
+// fatal: automation must not block boot). Re-enabled warming tokens
+// re-lock out of rotation, mirroring SetMaturity.
+func (p *Pool) RestoreMaturity() error {
+	p.maturityStoreMu.Lock()
+	st := p.maturityStore
+	p.maturityStoreMu.Unlock()
+	if st == nil {
+		return nil
+	}
+	toks := p.roster.Load()
+	if toks == nil {
+		return nil
+	}
+	for i, tok := range *toks {
+		stateJSON, streakJSON, ok, err := st.LoadMaturity(maturityTokenHash(tok.token))
+		if err != nil {
+			return fmt.Errorf("pool: restore maturity token %d: %w", i, err)
+		}
+		if !ok || stateJSON == "" {
+			continue
+		}
+		ms, err := unmarshalMaturity(stateJSON)
+		if err != nil {
+			p.logger.Warn("pool: maturity restore skips corrupt row", "token", i+1, "err", err)
+			continue
+		}
+		tok.maturityMu.Lock()
+		tok.maturity = ms
+		tok.maturityMu.Unlock()
+		if len(streakJSON) > 0 {
+			var si upstream.StreakInfo
+			if err := json.Unmarshal(streakJSON, &si); err != nil {
+				p.logger.Warn("pool: maturity restore skips corrupt streak", "token", i+1, "err", err)
+			} else {
+				tok.SetStreak(&si)
+			}
+		}
+		if ms.enabled {
+			tok.locked.Store(true)
+		}
+	}
+	return nil
+}
+
+// ClearMaturityWarn resets one token's non-advance warning (dashboard Reset
+// warning lever): warn + day counters drop and the daily loop re-arms, while
+// config (enabled/target/mode/touch model) and streak evidence stay
+// untouched. Idempotent: clearing a token with no warning succeeds.
+func (p *Pool) ClearMaturityWarn(token int) error {
+	toks := p.roster.Load()
+	if toks == nil || token < 0 || token >= len(*toks) {
+		return fmt.Errorf("pool: token %d out of range", token)
+	}
+	tok := (*toks)[token]
+	tok.maturityMu.Lock()
+	tok.maturity.warn = false
+	tok.maturity.noAdvanceDays = 0
+	tok.maturity.lastNoAdvanceDay = ""
+	tok.maturityMu.Unlock()
+	p.saveMaturity(token, tok)
+	p.emitMaturity(token, "warn-reset", "warning cleared by operator")
+	return nil
 }
 
 // Chat sends a chat-completion request through the leased token's upstream

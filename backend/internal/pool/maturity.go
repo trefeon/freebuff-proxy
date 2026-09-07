@@ -18,6 +18,7 @@ package pool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -49,6 +50,10 @@ const (
 	// maturityNoAdvanceLimit stops firing after this many consecutive
 	// touches with no observed streak advance (anti-blind-running loop).
 	maturityNoAdvanceLimit = 3
+	// maturityRelockDays re-locks a released token after this many
+	// consecutive post-release days with the streak below its release
+	// target (one bad day is noise; two is a lapsed streak).
+	maturityRelockDays = 2
 )
 
 // MaturitySnapshot is the dashboard-ready per-token maturity view. Nil on
@@ -93,6 +98,96 @@ type maturityState struct {
 	noAdvanceDays    int
 	lastNoAdvanceDay string
 	warn             bool
+	// releasedTarget is the streak target at the last auto-release (0 =
+	// never released). A released token whose streak later drops below
+	// this target re-locks after belowTargetDays consecutive days.
+	releasedTarget int
+	// belowTargetDays counts consecutive post-release days with the
+	// streak below releasedTarget (once per calendar day, like
+	// noAdvanceDays); lastBelowDay is the last counted day.
+	belowTargetDays int
+	lastBelowDay    string
+}
+
+// maturityPersisted is the JSON-stable mirror of maturityState for the
+// maturity_json blob (DB column, not wire: field names stay snake_case and
+// additive — old rows must still unmarshal after new counters land).
+type maturityPersisted struct {
+	Enabled          bool      `json:"enabled"`
+	Target           int       `json:"target"`
+	Mode             string    `json:"mode"`
+	TouchModel       string    `json:"touch_model,omitempty"`
+	Slot             time.Time `json:"slot,omitempty"`
+	SlotDay          string    `json:"slot_day,omitempty"`
+	LastTouch        time.Time `json:"last_touch,omitempty"`
+	LastAction       string    `json:"last_action,omitempty"`
+	LastResult       string    `json:"last_result,omitempty"`
+	LastAdvanced     string    `json:"last_advanced,omitempty"`
+	LastStreak       int       `json:"last_streak,omitempty"`
+	StreakAtTouch    int       `json:"streak_at_touch,omitempty"`
+	TouchDay         string    `json:"touch_day,omitempty"`
+	NoAdvanceDays    int       `json:"no_advance_days,omitempty"`
+	LastNoAdvanceDay string    `json:"last_no_advance_day,omitempty"`
+	Warn             bool      `json:"warn,omitempty"`
+	ReleasedTarget   int       `json:"released_target,omitempty"`
+	BelowTargetDays  int       `json:"below_target_days,omitempty"`
+	LastBelowDay     string    `json:"last_below_day,omitempty"`
+}
+
+func (m maturityState) marshalMaturity() (string, error) {
+	raw, err := json.Marshal(maturityPersisted{
+		Enabled:          m.enabled,
+		Target:           m.target,
+		Mode:             m.mode,
+		TouchModel:       m.touchModel,
+		Slot:             m.slot,
+		SlotDay:          m.slotDay,
+		LastTouch:        m.lastTouch,
+		LastAction:       m.lastAction,
+		LastResult:       m.lastResult,
+		LastAdvanced:     m.lastAdvanced,
+		LastStreak:       m.lastStreak,
+		StreakAtTouch:    m.streakAtTouch,
+		TouchDay:         m.touchDay,
+		NoAdvanceDays:    m.noAdvanceDays,
+		LastNoAdvanceDay: m.lastNoAdvanceDay,
+		Warn:             m.warn,
+		ReleasedTarget:   m.releasedTarget,
+		BelowTargetDays:  m.belowTargetDays,
+		LastBelowDay:     m.lastBelowDay,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func unmarshalMaturity(raw string) (maturityState, error) {
+	var stored maturityPersisted
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return maturityState{}, err
+	}
+	return maturityState{
+		enabled:          stored.Enabled,
+		target:           stored.Target,
+		mode:             stored.Mode,
+		touchModel:       stored.TouchModel,
+		slot:             stored.Slot,
+		slotDay:          stored.SlotDay,
+		lastTouch:        stored.LastTouch,
+		lastAction:       stored.LastAction,
+		lastResult:       stored.LastResult,
+		lastAdvanced:     stored.LastAdvanced,
+		lastStreak:       stored.LastStreak,
+		streakAtTouch:    stored.StreakAtTouch,
+		touchDay:         stored.TouchDay,
+		noAdvanceDays:    stored.NoAdvanceDays,
+		lastNoAdvanceDay: stored.LastNoAdvanceDay,
+		warn:             stored.Warn,
+		releasedTarget:   stored.ReleasedTarget,
+		belowTargetDays:  stored.BelowTargetDays,
+		lastBelowDay:     stored.LastBelowDay,
+	}, nil
 }
 
 // SetMaturity enables or disables streak-maturity automation for token.
@@ -138,14 +233,28 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, tou
 		tok.maturity.warn = false
 		tok.maturity.noAdvanceDays = 0
 		tok.maturity.lastNoAdvanceDay = ""
+		tok.maturity.releasedTarget = 0
+		tok.maturity.belowTargetDays = 0
+		tok.maturity.lastBelowDay = ""
 		// Warming accounts leave rotation immediately; the streak target
 		// auto-releases the lock later.
 		tok.locked.Store(true)
 		if tok.maturity.slot.IsZero() {
-			tok.maturity.slot, tok.maturity.slotDay = p.rollMaturitySlot(tok.maturity.slotDay, time.Now())
+			var tz string
+			if cached := tok.Streak(); cached != nil {
+				tz = cached.TimeZone
+			}
+			tok.maturity.slot, tok.maturity.slotDay = seedMaturitySlot(tok.maturity.slotDay, time.Now(), tz)
 		}
+	} else {
+		// Disabling drops the release watch too: a manually disabled
+		// token must never re-lock behind the operator's back.
+		tok.maturity.releasedTarget = 0
+		tok.maturity.belowTargetDays = 0
+		tok.maturity.lastBelowDay = ""
 	}
 	tok.maturityMu.Unlock()
+	p.saveMaturity(token, tok)
 	if enabled {
 		detail := fmt.Sprintf("enabled target=%d mode=%s", target, mode)
 		if touchModel != "" {
@@ -209,8 +318,18 @@ func (p *Pool) maturityTickAt(ctx context.Context, now time.Time) {
 
 // maturityTickOne evaluates and possibly fires one token's daily touch.
 func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel string, idx int, tok *tokenEntry, now time.Time) {
+	// Persist-on-exit: every mutation below (skips, touches, release,
+	// warning, relock watch) lands in the maturity_json blob on the way
+	// out. Never-enrolled tokens no-op inside saveMaturity.
+	defer p.saveMaturity(idx, tok)
 	st := p.maturityCopy(tok)
-	if !st.enabled || st.warn {
+	if !st.enabled {
+		// Released-token watch: a Mature account whose streak later
+		// drops re-locks after maturityRelockDays consecutive below days.
+		p.maturityRelockWatch(ctx, idx, tok, now)
+		return
+	}
+	if st.warn {
 		return
 	}
 	label := tokenEntryLabel(tok)
@@ -270,6 +389,9 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 		tok.maturity.lastResult = "released:mature"
 		tok.maturity.lastAdvanced = "yes"
 		tok.maturity.lastStreak = cached.Streak
+		tok.maturity.releasedTarget = target
+		tok.maturity.belowTargetDays = 0
+		tok.maturity.lastBelowDay = ""
 		tok.maturityMu.Unlock()
 		p.emitMaturity(idx, "release", fmt.Sprintf("streak=%d target=%d", cached.Streak, target))
 		p.logger.Info("pool: maturity target reached, token auto-released",
@@ -374,6 +496,74 @@ func (p *Pool) maturityAccountAdvance(idx int, tok *tokenEntry, cached *upstream
 	}
 }
 
+// maturityRelockWatch tracks released tokens: a Mature account whose streak
+// later drops below its release target re-locks for warming after
+// maturityRelockDays consecutive below days (the counter lives in the
+// persisted blob, so restarts never reset the episode). Recovery at or above
+// target resets the counter. Flagged accounts (quarantine/ban/cooling/
+// country-block) are left alone, and a manual disable clears the watch in
+// SetMaturity, so this never re-locks behind the operator.
+func (p *Pool) maturityRelockWatch(ctx context.Context, idx int, tok *tokenEntry, now time.Time) {
+	tok.maturityMu.Lock()
+	target := tok.maturity.releasedTarget
+	tok.maturityMu.Unlock()
+	if target <= 0 {
+		return
+	}
+	label := tokenEntryLabel(tok)
+	p.clearLiftedQuarantine(tok)
+	if q := tok.quarantine.Load(); q != nil {
+		return
+	}
+	rs := tok.runs.Snapshot()
+	if rs.BanError != nil && (rs.BannedUntil.IsZero() || now.Before(rs.BannedUntil)) {
+		return
+	}
+	if !rs.CooldownUntil.IsZero() && now.Before(rs.CooldownUntil) {
+		return
+	}
+	if tok.runs.CountryBlockedError() != nil {
+		return
+	}
+	cached := tok.Streak()
+	if cached == nil || now.Sub(cached.UpdatedAt) > maturityStreakFresh {
+		var err error
+		cached, err = p.maturityRefreshStreak(ctx, tok)
+		if err != nil || cached == nil {
+			return
+		}
+	}
+	tok.maturityMu.Lock()
+	m := &tok.maturity
+	relock := false
+	if cached.Streak >= m.releasedTarget && m.releasedTarget > 0 {
+		m.belowTargetDays = 0
+		m.lastBelowDay = ""
+		m.lastStreak = cached.Streak
+	} else {
+		m.lastStreak = cached.Streak
+		day := now.UTC().Format("2006-01-02")
+		if m.lastBelowDay != day {
+			m.lastBelowDay = day
+			m.belowTargetDays++
+			if m.belowTargetDays >= maturityRelockDays {
+				m.enabled = true
+				m.belowTargetDays = 0
+				m.lastBelowDay = ""
+				relock = true
+			}
+		}
+	}
+	tok.maturityMu.Unlock()
+	if !relock {
+		return
+	}
+	tok.locked.Store(true)
+	p.emitMaturity(idx, "relock", fmt.Sprintf("streak=%d target=%d", cached.Streak, target))
+	p.logger.Info("pool: maturity streak lapsed, token re-locked for warming",
+		"token", idx+1, "token_label", label, "streak", cached.Streak, "target", target)
+}
+
 // maturityFire performs one touch: dry-run probes (zero-cost, never claims
 // a slot); live mode admits the touch model through the token's own session
 // manager — wire-identical to a user opening the CLI.
@@ -388,11 +578,11 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 			return
 		}
 		model = premium[0]
-	} else if !modelcat.IsServed(model) || modelcat.IsPremium(model) {
+	} else if reason := maturityGuardTouchModel(model); reason != "" {
 		p.logger.Warn("pool: maturity touch misconfigured (not a served unmetered model), skipping",
 			"token", idx+1, "token_label", label, "model", model)
-		p.maturityRecord(tok, "admit", "skip:touch-model", "")
-		p.emitMaturity(idx, "touch", fmt.Sprintf("admit skip:touch-model model=%s", model))
+		p.maturityRecord(tok, "admit", reason, "")
+		p.emitMaturity(idx, "touch", fmt.Sprintf("admit %s model=%s", reason, model))
 		return
 	}
 	// Meter-aware lane (issue #350 adaptation): the touch rides the
@@ -448,6 +638,17 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 	}
 }
 
+// maturityGuardTouchModel fails a misconfigured unmetered touch model
+// closed: the model must be a served, non-premium catalog row, else the
+// tick (and the manual touch, which funnels through the same fire path)
+// records skip:touch-model before any upstream admission. Empty means go.
+func maturityGuardTouchModel(model string) string {
+	if !modelcat.IsServed(model) || modelcat.IsPremium(model) {
+		return "skip:touch-model"
+	}
+	return ""
+}
+
 // MaturityTouchNow fires one manual maturity touch outside the daily slot
 // (dashboard validation lever for the §3 ladder experiment). Slot wait and
 // 6h throttle are bypassed; health gates, streak freshness, and todayUsed
@@ -500,6 +701,7 @@ func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string,
 	}
 	loc := maturityLocation(cached.TimeZone)
 	p.maturityFire(ctx, cfg.MaturityDryRun, maturityEffectiveModel(st, cfg.MaturityTouchModel), token, tok, tokenEntryLabel(tok), cached, now.In(loc).Format("2006-01-02"), now)
+	p.saveMaturity(token, tok)
 	fin := p.maturityCopy(tok)
 	return fin.lastAction, fin.lastResult, nil
 }
@@ -578,10 +780,12 @@ func (p *Pool) maturitySnapshot(tok *tokenEntry, streak int) *MaturitySnapshot {
 	}
 }
 
-// rollMaturitySlot draws today's uniform slot for a token whose stored day
-// is stale: midnight in the account timezone plus uniform [0, 24h).
-func (p *Pool) rollMaturitySlot(staleDay string, now time.Time) (time.Time, string) {
-	return rollMaturitySlotFor(staleDay, now, time.UTC)
+// seedMaturitySlot draws the enable-time slot in the account's own timezone
+// (midnight plus uniform [0, 24h)): the cached streak's IANA zone when known,
+// else the shared maturityLocation fallback chain. Seeding in UTC would pin
+// the wrong calendar day for accounts east/west of UTC.
+func seedMaturitySlot(staleDay string, now time.Time, tz string) (time.Time, string) {
+	return rollMaturitySlotFor(staleDay, now, maturityLocation(tz))
 }
 
 func rollMaturitySlotFor(staleDay string, now time.Time, loc *time.Location) (time.Time, string) {

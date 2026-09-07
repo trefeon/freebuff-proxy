@@ -463,3 +463,97 @@ func TestSetMaturityTouchModel(t *testing.T) {
 		t.Errorf("disabled touch_model = %q, want kept %q", got, modelB)
 	}
 }
+
+// The enable-time slot seed follows the account timezone, never UTC: a UTC
+// instant whose calendar day disagrees with the account day must seed the
+// account day. Non-Pacific zones prove no Pacific hardcode; the DST cases
+// prove the slot stays inside the (23h/25h) account day.
+func TestMaturitySeedSlotFollowsAccountTZ(t *testing.T) {
+	// 2026-09-08 02:30 UTC == 2026-09-07 22:30 EDT.
+	now := time.Date(2026, 9, 8, 2, 30, 0, 0, time.UTC)
+	slot, day := seedMaturitySlot("", now, "America/New_York")
+	if day != "2026-09-07" {
+		t.Errorf("seed day = %q, want 2026-09-07 (account day, not UTC)", day)
+	}
+	ny := maturityLocation("America/New_York")
+	mid := time.Date(2026, 9, 7, 0, 0, 0, 0, ny)
+	if slot.Before(mid) || !slot.Before(mid.Add(24*time.Hour)) {
+		t.Errorf("slot = %v, want within the NY day", slot)
+	}
+	// Tokyo (UTC+9, no DST): 2026-09-07 20:00 UTC == 2026-09-08 05:00 JST.
+	tokyoNow := time.Date(2026, 9, 7, 20, 0, 0, 0, time.UTC)
+	if _, tokyoDay := seedMaturitySlot("", tokyoNow, "Asia/Tokyo"); tokyoDay != "2026-09-08" {
+		t.Errorf("tokyo seed day = %q, want 2026-09-08", tokyoDay)
+	}
+}
+
+func TestMaturitySeedSlotDSTBounds(t *testing.T) {
+	// Spring forward (23h day): 2026-03-08 07:30 UTC == 03:30 EDT.
+	ny := maturityLocation("America/New_York")
+	spring := time.Date(2026, 3, 8, 7, 30, 0, 0, time.UTC)
+	slot, day := seedMaturitySlot("", spring, "America/New_York")
+	if day != "2026-03-08" {
+		t.Errorf("spring-forward seed day = %q, want 2026-03-08", day)
+	}
+	mid := time.Date(2026, 3, 8, 0, 0, 0, 0, ny)
+	if slot.Before(mid) || !slot.Before(mid.Add(24*time.Hour)) {
+		t.Errorf("spring-forward slot = %v, want within [midnight, midnight+24h)", slot)
+	}
+	// Fall back (25h day): 2026-11-01 05:30 UTC == 01:30 EDT (first pass).
+	fall := time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC)
+	fslot, fday := seedMaturitySlot("", fall, "America/New_York")
+	if fday != "2026-11-01" {
+		t.Errorf("fall-back seed day = %q, want 2026-11-01", fday)
+	}
+	fmid := time.Date(2026, 11, 1, 0, 0, 0, 0, ny)
+	if fslot.Before(fmid) || !fslot.Before(fmid.Add(24*time.Hour)) {
+		t.Errorf("fall-back slot = %v, want within [midnight, midnight+24h)", fslot)
+	}
+	// Empty/unknown zone keeps the existing fallback chain (never panics,
+	// never UTC-seeds blindly): day falls back to the resolved location.
+	if _, fday := seedMaturitySlot("", fall, ""); fday == "" {
+		t.Error("empty-tz seed day is empty, want fallback day")
+	}
+}
+
+// The daily tick fails a misconfigured touch model closed before any
+// upstream admission: zero session creates and zero probes on both a served
+// premium global and an unserved global (no per-token override set).
+func TestMaturityTickGuardsTouchModel(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.StreakBody = streakBody(2, false)
+	p := newMaturityPool(t, mock, false)
+	now := time.Now()
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	premium := modelcat.SharedPremiumModels()
+	if len(premium) == 0 {
+		t.Fatal("no shared premium models, want at least one")
+	}
+	p.cfg.Load().MaturityTouchModel = premium[0]
+	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
+
+	p.maturityTickAt(context.Background(), now)
+
+	if _, result := maturityResult(p, 0); result != "skip:touch-model" {
+		t.Errorf("premium-global tick result = %q, want skip:touch-model", result)
+	}
+	if got := mock.SessionCreatesSnapshot(); got != 0 {
+		t.Errorf("SessionCreates = %d, want 0 (no premium admission)", got)
+	}
+	if got := mock.SessionProbesSnapshot(); got != 0 {
+		t.Errorf("SessionProbes = %d, want 0 (guarded before probe)", got)
+	}
+	// Unserved globals fail closed the same way (skips never arm the 6h
+	// throttle, so the second tick evaluates fresh).
+	p.cfg.Load().MaturityTouchModel = "nope/nothing"
+	p.maturityTickAt(context.Background(), now)
+	if _, result := maturityResult(p, 0); result != "skip:touch-model" {
+		t.Errorf("unserved-global tick result = %q, want skip:touch-model", result)
+	}
+	if got := mock.SessionCreatesSnapshot(); got != 0 {
+		t.Errorf("SessionCreates = %d, want still 0", got)
+	}
+}
