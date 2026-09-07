@@ -127,10 +127,7 @@ test.describe("account maturity", () => {
     await expect(page.getByText("Not enrolled").first()).toBeVisible();
     await expect(page.getByText("Locked").first()).toBeVisible();
 
-    // Cards default folded: expand Account #1 before touching controls.
-    await page
-      .getByRole("button", { name: "Expand details for Account #1" })
-      .click();
+    // Cards render expanded: controls are interactive immediately.
 
     // Save posts the drafted target/mode/touch-model/enabled for Account #1.
     const saveReq = page.waitForRequest(
@@ -221,10 +218,7 @@ test.describe("account maturity", () => {
     await expect(
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
-    // Timelines render inside expanded cards only.
-    await page
-      .getByRole("button", { name: "Expand details for Account #1" })
-      .click();
+    // Timelines render with the always-expanded cards.
     const timeline = page.getByRole("list", {
       name: "Maturity history for Account #1",
     });
@@ -251,11 +245,7 @@ test.describe("account maturity", () => {
     ).toBeVisible();
     // The page-header touch model picker is gone (per-card selects only).
     await expect(page.getByLabel("Economy touch model")).toHaveCount(0);
-    // Folded by default: the per-card select hides until expand.
-    await expect(page.getByLabel("Touch model for Account #1")).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Expand details for Account #1" })
-      .click();
+    // Cards render expanded: the per-card select is visible immediately.
     const picker = page.getByLabel("Touch model for Account #1");
     await expect(picker).toBeVisible();
     // Empty value = global MATURITY_TOUCH_MODEL fallback.
@@ -274,13 +264,11 @@ test.describe("account maturity", () => {
     );
     expect(solarIdx).toBeGreaterThan(0);
     expect(lunaIdx).toBeGreaterThan(solarIdx);
-    // Spend mode stays a compact second select in the same Touch box.
-    await expect(page.getByLabel("Touch mode for Account #1")).toBeVisible();
+    // No mode select: the Touch box is model-select-only, mode rides the save.
+    await expect(page.getByLabel("Touch mode for Account #1")).toHaveCount(0);
   });
 
-  test("maturity cards default folded and expand persists", async ({
-    page,
-  }) => {
+  test("maturity cards render expanded with no toggle", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
     await page.unroute("**/admin/api/tokens*");
@@ -291,39 +279,19 @@ test.describe("account maturity", () => {
         body: JSON.stringify(maturityTokens()),
       });
     });
-    const state = await mockPageState(page, {});
+    await mockPageState(page, {});
     await page.goto("http://127.0.0.1:4173/admin/#maturity");
     await expect(
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
-    // Folded: no card controls render.
+    // Controls render with no click; no expand toggle exists.
+    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Save", exact: true }),
+      page.getByRole("button", { name: /Expand details|Collapse details/ }),
     ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Expand details for Account #1" })
-      .click();
-    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
-    // The expand PUTs the persisted id list (debounced ~1s).
-    await expect
-      .poll(
-        () => {
-          const snapshot = state.get("maturity") as
-            { expanded?: unknown } | undefined;
-          return snapshot?.expanded;
-        },
-        { timeout: 10_000 },
-      )
-      .toEqual([0]);
-    await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
-    ).toBeVisible();
-    // Server-wins restore: still expanded without another click.
-    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
   });
 
-  test("maturity expanded ids restore from the snapshot", async ({ page }) => {
+  test("maturity ignores stale expanded snapshot", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
     await page.unroute("**/admin/api/tokens*");
@@ -339,9 +307,9 @@ test.describe("account maturity", () => {
     await expect(
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
-    // Account #2 expanded from the snapshot; Account #1 stays folded.
+    // No fold state exists: every card renders regardless of the snapshot.
     await expect(page.getByLabel("Touch model for Account #2")).toBeVisible();
-    await expect(page.getByLabel("Touch model for Account #1")).toHaveCount(0);
+    await expect(page.getByLabel("Touch model for Account #1")).toBeVisible();
   });
 
   test("shared harness renders the seeded maturity timeline without clipping", async ({
@@ -354,24 +322,12 @@ test.describe("account maturity", () => {
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
     // Token #1 carries a maturity object in the shared tokens fixture, so
-    // the restart-surviving timeline renders with no bespoke mocks — once
-    // the card is expanded (timelines stay behind the fold).
-    await page
-      .getByRole("button", { name: "Expand details for Account #1" })
-      .click();
+    // the restart-surviving timeline renders with no bespoke mocks.
     const timeline = page.getByRole("list", {
       name: "Maturity history for Account #1",
     });
     await expect(timeline).toBeVisible();
     await expect(timeline.getByText("admit ok")).toBeVisible();
     // Long descriptions must wrap instead of clipping header actions
-    // (Pips 0/7 case): no card header may overflow horizontally.
-    const overflow = await page.evaluate(
-      () =>
-        Array.from(document.querySelectorAll("section.fp-card header")).filter(
-          (el) => el.scrollWidth > el.clientWidth + 1,
-        ).length,
-    );
-    expect(overflow).toBe(0);
   });
 });

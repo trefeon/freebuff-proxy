@@ -1,12 +1,7 @@
 <script>
   import { onMount } from "svelte";
-  import {
-    loadPageState,
-    recordPageVisit,
-    savePageState,
-  } from "../stores/pageState.js";
+  import { recordPageVisit } from "../stores/pageState.js";
   import { SvelteSet } from "svelte/reactivity";
-  import { ChevronDown, ChevronRight } from "@lucide/svelte";
   import PageShell from "../components/PageShell.svelte";
   import FieldBox from "../components/FieldBox.svelte";
   import Stepper from "../components/Stepper.svelte";
@@ -47,11 +42,6 @@
   // (price_label/quota/pool) — never an invented price.
   let modelRows = $state([]);
 
-  // Folded cards by default: only expanded cards render controls +
-  // history. Expanded ids persist in pages_state (maturity scope,
-  // server-wins: the snapshot restores, local toggles merge back).
-  let expandedIds = new SvelteSet();
-
   // Per-token draft controls + busy flags, keyed by token index.
   let drafts = $state({});
   let saving = $state({});
@@ -60,21 +50,15 @@
   let actionOK = $state(true);
 
   // Restart-surviving event timelines (ADR-0016): loaded once per token
-  // the first time its EXPANDED maturity block appears, never on the 10s
-  // poll. Folded cards fetch nothing.
+  // when its card renders (cards are always expanded), never on the
+  // 10s poll.
   let histByIdx = $state({});
   let histPending = new SvelteSet();
 
   $effect(() => {
     for (const t of tokens) {
       const idx = t.index ?? 0;
-      if (
-        !t.maturity ||
-        !expandedIds.has(idx) ||
-        idx in histByIdx ||
-        histPending.has(idx)
-      )
-        continue;
+      if (!t.maturity || idx in histByIdx || histPending.has(idx)) continue;
       histPending.add(idx);
       fetchMaturityHistory(idx)
         .then((h) => {
@@ -101,12 +85,13 @@
         drafts[idx] = {
           enabled: !!t.maturity?.enabled,
           target: t.maturity?.target ?? 7,
+          // No UI: the Touch box is model-select-only, the server value rides
+          // along on save so an enabled token never resets to unmetered.
           mode: t.maturity?.mode ?? "unmetered",
           touchModel: t.maturity?.touch_model ?? "",
         };
       }
     }
-    clampExpanded();
     error = "";
     loading = false;
   }
@@ -165,23 +150,6 @@
     return [];
   }
 
-  function toggleExpand(idx) {
-    if (expandedIds.has(idx)) expandedIds.delete(idx);
-    else expandedIds.add(idx);
-    savePageState("maturity", { expanded: [...expandedIds] });
-  }
-
-  // A restored expanded id may point past the live list (the pool shrank
-  // while the snapshot sat in pages_state). Drop out-of-range ids
-  // instead of tracking ghosts — and never re-persist the stale value
-  // back over the snapshot.
-  function clampExpanded() {
-    const live = new Set((data?.tokens ?? []).map((t, i) => t?.index ?? i));
-    for (const id of [...expandedIds]) {
-      if (!live.has(id)) expandedIds.delete(id);
-    }
-  }
-
   async function save(idx) {
     if (saving[idx]) return;
     saving[idx] = true;
@@ -230,16 +198,6 @@
 
   onMount(() => {
     recordPageVisit("maturity");
-    // Server-wins restore: folded by default, the snapshot re-opens what
-    // the operator left expanded (stale ids clamp on first tokens push).
-    loadPageState("maturity").then((d) => {
-      const arr = d?.expanded;
-      if (Array.isArray(arr)) {
-        for (const i of arr) {
-          if (Number.isInteger(i) && i >= 0) expandedIds.add(i);
-        }
-      }
-    });
     const release = ensureTokensStore();
     unsubStore = tokensStore.subscribe(applyTokens);
     unsubErr = tokensErrorStore.subscribe((err) => {
@@ -334,7 +292,6 @@
         mode: "unmetered",
         touchModel: "",
       }}
-      {@const expanded = expandedIds.has(idx)}
       <Card
         title={$tr("Account #{idx}", { idx: idx + 1 })}
         description={t.email || $tr("unknown account")}
@@ -358,25 +315,6 @@
               total={streakTarget}
               label={$tr("Current streak / target")}
             />
-            <button
-              type="button"
-              onclick={() => toggleExpand(idx)}
-              aria-expanded={expanded}
-              aria-label={expanded
-                ? $tr("Collapse details for Account #{idx}", {
-                    idx: idx + 1,
-                  })
-                : $tr("Expand details for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-              class="inline-flex items-center justify-center w-8 h-8 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface-2)] transition-colors"
-            >
-              {#if expanded}
-                <ChevronDown size={16} />
-              {:else}
-                <ChevronRight size={16} />
-              {/if}
-            </button>
           </span>
         {/snippet}
         <div class="flex flex-col gap-2">
@@ -394,116 +332,86 @@
             </p>
           {/if}
 
-          {#if expanded}
-            {@const opts = touchOptions(d)}
-            {@const selClass = d.touchModel
-              ? touchCostClass(opts.find((o) => o.id === d.touchModel))
-              : ""}
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <FieldBox
-                label={$tr("Target Period")}
-                unit={$tr("days")}
-                class="sm:col-span-6 min-w-0 h-full"
-              >
-                <Stepper
-                  bind:value={d.target}
-                  min={1}
-                  max={28}
-                  disabled={!!saving[idx]}
-                  ariaLabel={$tr("Streak target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                  decreaseLabel={$tr("Decrease target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                  increaseLabel={$tr("Increase target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                />
-              </FieldBox>
-              <FieldBox
-                label={$tr("Touch Model")}
-                unit={d.touchModel
-                  ? selClass || $tr("custom")
-                  : $tr("global default")}
-                class="sm:col-span-6 min-w-0 h-full"
-              >
-                <div class="flex flex-col gap-2">
-                  <select
-                    class="fp-select !h-8 !py-1 !text-xs font-mono flex-1 min-w-0"
-                    bind:value={d.touchModel}
-                    disabled={!!saving[idx]}
-                    aria-label={$tr("Touch model for Account #{idx}", {
-                      idx: idx + 1,
-                    })}
-                    title={$tr(
-                      "Per-token touch model (cheapest first, premium pool last). Empty uses the global MATURITY_TOUCH_MODEL fallback.",
-                    )}
-                  >
-                    <option value="">{$tr("Global default")}</option>
-                    {#each opts as o (o.id)}
-                      <option value={o.id}>{touchLabel(o)}</option>
-                    {/each}
-                  </select>
-                  <select
-                    class="fp-select !h-8 !py-1 !text-xs w-full"
-                    bind:value={d.mode}
-                    disabled={!!saving[idx]}
-                    aria-label={$tr("Touch mode for Account #{idx}", {
-                      idx: idx + 1,
-                    })}
-                    title={d.mode === "premium-short"
-                      ? $tr(
-                          "One short premium admission per day, paid from this account's daily Freebucks pool.",
-                        )
-                      : $tr(
-                          "Cheapest served model, minimal spend from this account's daily Freebucks pool.",
-                        )}
-                  >
-                    <option value="unmetered">{$tr("Economy")}</option>
-                    <option value="premium-short">{$tr("Premium short")}</option
-                    >
-                  </select>
-                </div>
-              </FieldBox>
-            </div>
-            <div
-              class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fp-border)]/60 pt-2.5"
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+            <FieldBox
+              label={$tr("Target Period")}
+              unit={$tr("days")}
+              class="sm:col-span-6 min-w-0 h-full"
             >
-              <ToggleSwitch
-                checked={d.enabled}
+              <Stepper
+                bind:value={d.target}
+                min={1}
+                max={28}
                 disabled={!!saving[idx]}
-                ariaLabel={$tr("Maturity for Account #{idx}", {
+                ariaLabel={$tr("Streak target for Account #{idx}", {
                   idx: idx + 1,
                 })}
-                onchange={(next) => {
-                  d.enabled = next;
-                }}
+                decreaseLabel={$tr("Decrease target for Account #{idx}", {
+                  idx: idx + 1,
+                })}
+                increaseLabel={$tr("Increase target for Account #{idx}", {
+                  idx: idx + 1,
+                })}
               />
-              <span class="flex flex-wrap gap-1.5">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!!touching[idx] || !m?.enabled}
-                  loading={!!touching[idx]}
-                  onclick={() => touchNow(idx)}
-                  title={$tr("Fire one touch now (bypasses slot and throttle)")}
-                >
-                  {$tr("Touch now")}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={!!saving[idx]}
-                  loading={!!saving[idx]}
-                  onclick={() => save(idx)}
-                >
-                  {$tr("Save")}
-                </Button>
-              </span>
-            </div>
-          {/if}
-          {#if expanded && (histByIdx[idx] ?? []).length > 0}
+            </FieldBox>
+            <FieldBox
+              label={$tr("Touch Model")}
+              class="sm:col-span-6 min-w-0 h-full"
+            >
+              <select
+                class="fp-select !h-8 !py-1 !text-xs font-mono w-full min-w-0"
+                bind:value={d.touchModel}
+                disabled={!!saving[idx]}
+                aria-label={$tr("Touch model for Account #{idx}", {
+                  idx: idx + 1,
+                })}
+                title={$tr(
+                  "Per-token touch model (cheapest first, premium pool last). Empty uses the global MATURITY_TOUCH_MODEL fallback.",
+                )}
+              >
+                <option value="">{$tr("Global default")}</option>
+                {#each touchOptions(d) as o (o.id)}
+                  <option value={o.id}>{touchLabel(o)}</option>
+                {/each}
+              </select>
+            </FieldBox>
+          </div>
+          <div
+            class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fp-border)]/60 pt-2.5"
+          >
+            <ToggleSwitch
+              checked={d.enabled}
+              disabled={!!saving[idx]}
+              ariaLabel={$tr("Maturity for Account #{idx}", {
+                idx: idx + 1,
+              })}
+              onchange={(next) => {
+                d.enabled = next;
+              }}
+            />
+            <span class="flex flex-wrap gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!!touching[idx] || !m?.enabled}
+                loading={!!touching[idx]}
+                onclick={() => touchNow(idx)}
+                title={$tr("Fire one touch now (bypasses slot and throttle)")}
+              >
+                {$tr("Touch now")}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!!saving[idx]}
+                loading={!!saving[idx]}
+                onclick={() => save(idx)}
+              >
+                {$tr("Save")}
+              </Button>
+            </span>
+          </div>
+          {#if (histByIdx[idx] ?? []).length > 0}
             <ul
               class="flex flex-col gap-1.5 border-t border-[var(--fp-border)]/60 pt-2.5"
               aria-label={$tr("Maturity history for Account #{idx}", {
