@@ -38,7 +38,7 @@ func (s *Store) GetSetting(key string) (value string, ok bool, err error) {
 }
 
 // DeleteSetting drops one setting row. A missing row is a no-op (nil
-// error), mirroring DeleteTokenMeta; callers needing 404 semantics check
+// error), mirroring DeleteSession; callers needing 404 semantics check
 // GetSetting first.
 func (s *Store) DeleteSetting(key string) error {
 	if key == "" {
