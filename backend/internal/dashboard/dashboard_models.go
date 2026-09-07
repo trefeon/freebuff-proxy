@@ -79,8 +79,8 @@ type aliasRow struct {
 // pool models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
 // (rateLimitsByModel mirrored per token — server-computed, moves with trust/
 // streak/referral bonuses) rendered as "<limit> premium quota", falling back
-// to the static "6 premium quota" when no live data exists (6 = floor 5 + 1:
-// modelcat.PremiumSessionLimit is the base 5 since the Levels retirement;
+// to the static "5 premium quota" when no live data exists (5 = base
+// modelcat.PremiumSessionLimit since the Levels retirement;
 // see modelcat.PremiumSessionLimit comment).
 // Referral GLM 5.2 keeps "referral +1/day", and all other served rows are
 // "unlimited session".
@@ -92,7 +92,7 @@ func (d *Dashboard) quotaFor(id string) string {
 		if live := d.livePremiumQuotaLabel(id); live != "" {
 			return live
 		}
-		return fmt.Sprintf("%s premium quota", formatSessionUnits(float64(modelcat.PremiumSessionLimit+1)))
+		return fmt.Sprintf("%s premium quota", formatSessionUnits(float64(modelcat.PremiumSessionLimit)))
 	}
 	if d.pool != nil {
 		if live := d.liveQuotaLabel(id); live != "" {
