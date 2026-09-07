@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,13 +40,13 @@ func TestEvaluateDeepSeekPeak(t *testing.T) {
 
 func TestNoticeConstants(t *testing.T) {
 	// Exact copy parity with upstream
-	// common/src/constants/freebuff-spend-ceilings.ts (vendor 13105816):
+	// common/src/constants/freebuff-spend-ceilings.ts (vendor 8897a90):
 	// a silent reword here desyncs refusal UX from the official CLI.
 	want := map[string]string{
 		"CapacityNotice":         "Capacity is now limited per account — sustained automated abuse forced us to cap how much any one account can use.",
 		"RestrictedNotice":       "This account has reduced capacity: it was flagged for VPN or proxy usage, a restricted location, or an email domain commonly used by bot farms. If you are on a VPN, connecting directly restores normal limits.",
 		"BudgetNotice":           "You have used all of today’s free usage on this account.",
-		"FreebucksCeilingNotice": "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at three times what its Freebucks are worth, to protect the service from runaway usage.",
+		"FreebucksCeilingNotice": "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at four times what its Freebucks are worth, to protect the service from runaway usage.",
 	}
 	got := map[string]string{
 		"CapacityNotice":         CapacityNotice,
@@ -60,5 +61,22 @@ func TestNoticeConstants(t *testing.T) {
 	}
 	if TierChangeNotice == "" {
 		t.Errorf("TierChangeNotice is empty")
+	}
+}
+
+func TestFreebucksCeilingNoticeFourTimes(t *testing.T) {
+	// Upstream vendor 8897a90 reworded FREEBUFF_FREEBUCKS_CEILING_NOTICE
+	// from three-times to four-times (baseline anchor 4972f1e7a).
+	// Fails on the stale three-times copy, passes on the four-times port.
+	if FreebucksCeilingNotice == "" {
+		t.Fatal("FreebucksCeilingNotice is empty")
+	}
+	const want = "capped at four times what its Freebucks are worth"
+	const stale = "capped at three times what its Freebucks are worth"
+	if !strings.Contains(FreebucksCeilingNotice, want) {
+		t.Errorf("FreebucksCeilingNotice = %q, want substring %q", FreebucksCeilingNotice, want)
+	}
+	if strings.Contains(FreebucksCeilingNotice, stale) {
+		t.Errorf("FreebucksCeilingNotice = %q, still carries stale three-times copy", FreebucksCeilingNotice)
 	}
 }
