@@ -12,7 +12,7 @@
 <header class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
   <div class="min-w-0">
     <h1
-      class="text-[20px] font-semibold text-[var(--fp-text)] flex items-center gap-2"
+      class="text-[20px] leading-[1.3] font-semibold text-[var(--fp-text)] flex items-center gap-2"
     >
       <span
         class="text-[var(--fp-accent)] font-mono select-none"

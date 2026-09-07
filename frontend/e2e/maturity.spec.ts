@@ -178,4 +178,18 @@ test.describe("account maturity", () => {
     await expect(timeline.getByText("admit ok")).toBeVisible();
     await expect(timeline.getByText("enabled target=7")).toBeVisible();
   });
+
+  test("maturity page offers the touch model picker with served options", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    const picker = page.getByLabel("Economy touch model");
+    await expect(picker).toBeVisible();
+    await expect(picker).toHaveValue("deepseek/deepseek-v4-flash");
+    const options = await picker.locator("option").allTextContents();
+    expect(options).toContain("deepseek/deepseek-v4-flash");
+    expect(options.length).toBeGreaterThan(1);
+  });
 });

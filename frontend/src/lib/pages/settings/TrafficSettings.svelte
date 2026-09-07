@@ -57,7 +57,7 @@
           min="0"
           step="1"
           aria-label="RATE_LIMIT_PER_IP"
-          class="fp-input w-full !text-xs !py-1.5"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="0"
           value={rateLimitPerIp}
           oninput={(e) => {
@@ -103,7 +103,7 @@
           min="0"
           step="1"
           aria-label="MAX_REQUESTS_PER_MINUTE"
-          class="fp-input w-full !text-xs !py-1.5"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="30"
           value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
           oninput={(e) => {
@@ -150,6 +150,7 @@
           min="0"
           step="1"
           aria-label="MAX_REQUESTS_PER_DAY"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="1500"
           value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
           oninput={(e) => {

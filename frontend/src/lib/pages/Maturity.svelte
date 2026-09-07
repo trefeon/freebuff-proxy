@@ -10,8 +10,8 @@
   import Button from "../components/Button.svelte";
   import ToggleSwitch from "../components/ToggleSwitch.svelte";
   import StatusBadge from "../components/StatusBadge.svelte";
-  import { fetchAPI, postAPI } from "../api/client.js";
-  import { adminApi, tokenActions } from "../api/paths.js";
+  import { fetchAPI, postAPI, postForm } from "../api/client.js";
+  import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { fetchMaturityHistory, historyKindTone } from "../utils/history.js";
   import {
     tokensData as tokensStore,
@@ -19,7 +19,8 @@
     ensureTokensStore,
     refreshTokens,
   } from "../stores/tokens.js";
-  import { getEnvValue } from "../utils/env.js";
+  import { getEnvValue, setEnvValue } from "../utils/env.js";
+  import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
 
   let data = $state(null);
@@ -32,6 +33,17 @@
   // header notice. Settings renders the toggle itself (catalog Essential).
   let globalEnabled = $state(true);
   let globalLoaded = $state(false);
+
+  // Global Economy touch model (MATURITY_TOUCH_MODEL): picked here on the
+  // Maturity page instead of Settings. Options are the served models the
+  // gateway can admit (same usable filter as Quota Tracker); fail-open to
+  // the current value alone when the catalog fetch fails.
+  const TOUCH_MODEL_KEY = "MATURITY_TOUCH_MODEL";
+  const TOUCH_MODEL_DEFAULT = "deepseek/deepseek-v4-flash";
+  let envContent = $state("");
+  let touchModel = $state(TOUCH_MODEL_DEFAULT);
+  let touchModelOptions = $state([]);
+  let touchModelSaving = $state(false);
 
   // Per-token draft controls + busy flags, keyed by token index.
   let drafts = $state({});
@@ -141,6 +153,42 @@
     }
   }
 
+  async function saveTouchModel(next) {
+    if (touchModelSaving || !next || next === touchModel) return;
+    const ok = await confirmAction({
+      title: $tr("Change Economy Touch Model"),
+      message: $tr(
+        "Save the .env file and reload the proxy with {model} as the maturity touch model?",
+        { model: next },
+      ),
+      confirmText: $tr("Save & Reload"),
+      tone: "warn",
+    });
+    if (!ok) return;
+    touchModelSaving = true;
+    actionMessage = "";
+    try {
+      const cfgRes = await fetchAPI(adminApi.config);
+      const base = cfgRes?.env_content ?? envContent;
+      const res = await postForm(adminActions.configSave, {
+        content: setEnvValue(base, TOUCH_MODEL_KEY, next),
+      });
+      const json = await res.json();
+      if (!res.ok || json.ok === false)
+        throw new Error(json.message || "Save failed");
+      touchModel = next;
+      envContent = setEnvValue(base, TOUCH_MODEL_KEY, next);
+      actionOK = true;
+      actionMessage = $tr("Touch model saved: {model}", { model: next });
+      window.dispatchEvent(new CustomEvent("fp-config-saved"));
+    } catch (e) {
+      actionOK = false;
+      actionMessage = e?.message || String(e);
+    } finally {
+      touchModelSaving = false;
+    }
+  }
+
   onMount(() => {
     const release = ensureTokensStore();
     unsubStore = tokensStore.subscribe(applyTokens);
@@ -157,7 +205,9 @@
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);
-        const envContent = cfgRes?.env_content || "";
+        envContent = cfgRes?.env_content || "";
+        touchModel =
+          getEnvValue(envContent, TOUCH_MODEL_KEY) || TOUCH_MODEL_DEFAULT;
         const eff = (cfgRes?.effective || []).find(
           (e) => e.key === "MATURITY_ENABLED",
         );
@@ -179,6 +229,16 @@
         globalEnabled = false;
       } finally {
         globalLoaded = true;
+      }
+    })();
+    (async () => {
+      try {
+        const res = await fetchAPI(adminApi.models);
+        const rows = res?.models ?? [];
+        const ids = rows.filter((m) => m.agent).map((m) => m.id);
+        touchModelOptions = ids.length > 0 ? ids : [touchModel];
+      } catch {
+        touchModelOptions = [touchModel];
       }
     })();
     return () => {
@@ -206,6 +266,28 @@
     refreshTokens();
   }}
 >
+  {#snippet actions()}
+    <label
+      class="flex items-center gap-2 font-mono text-[11px] text-[var(--fp-dim)]"
+    >
+      {$tr("Touch model")}
+      <select
+        class="fp-select !h-8 !py-1 !text-xs font-mono w-56 max-w-[60vw]"
+        value={touchModel}
+        disabled={touchModelSaving}
+        aria-label={$tr("Economy touch model")}
+        onchange={(e) => {
+          const next = e.currentTarget.value;
+          e.currentTarget.value = touchModel;
+          saveTouchModel(next);
+        }}
+      >
+        {#each touchModelOptions.length > 0 ? touchModelOptions : [touchModel] as id (id)}
+          <option value={id} selected={id === touchModel}>{id}</option>
+        {/each}
+      </select>
+    </label>
+  {/snippet}
   {#if actionMessage}
     <Alert tone={actionOK ? "success" : "error"} title={actionMessage} />
   {/if}

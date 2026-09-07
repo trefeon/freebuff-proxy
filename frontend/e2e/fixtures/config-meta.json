@@ -275,6 +275,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Model the Economy maturity touch starts (cheapest served metered model — minimal daily Freebucks spend, never a premium model for farming)."
   },
   {
@@ -512,6 +513,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
   },
   {
@@ -562,6 +564,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Map model=fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs). Empty default: no fallback (surfaces honest 429 with guidance to switch model)."
   },
   {
