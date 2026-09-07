@@ -1,6 +1,45 @@
 import { test, expect } from "@playwright/test";
 import { loadFixtures, mockDashboard } from "./mocks.js";
 
+/**
+ * In-memory pages_state backend (mirrors page-state.spec.ts): GET returns
+ * the seeded snapshot ({} when absent); PUT stores {data} verbatim. The
+ * returned map lets tests assert what the SPA persisted.
+ */
+async function mockPageState(
+  page: Parameters<typeof mockDashboard>[0],
+  seed: Record<string, unknown> = {},
+) {
+  const state = new Map<string, unknown>(Object.entries(seed));
+  await page.route("**/admin/api/pages/*", async (route) => {
+    const id = new URL(route.request().url()).pathname.split("/").pop() ?? "";
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: state.get(id) ?? {} }),
+      });
+    } else {
+      let data: unknown = {};
+      try {
+        data = JSON.parse(route.request().postData() ?? "{}").data ?? {};
+      } catch {
+        data = {};
+      }
+      state.set(id, data);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          message: "Page state saved.",
+          code: "page_saved",
+        }),
+      });
+    }
+  });
+  return state;
+}
 function maturityTokens() {
   return {
     mode: "pooled",
@@ -88,18 +127,27 @@ test.describe("account maturity", () => {
     await expect(page.getByText("Not enrolled").first()).toBeVisible();
     await expect(page.getByText("Locked").first()).toBeVisible();
 
-    // Save posts the drafted target/mode/enabled for Account #1.
+    // Cards default folded: expand Account #1 before touching controls.
+    await page
+      .getByRole("button", { name: "Expand details for Account #1" })
+      .click();
+
+    // Save posts the drafted target/mode/touch-model/enabled for Account #1.
     const saveReq = page.waitForRequest(
       (r) =>
         r.method() === "POST" && r.url().includes("/admin/tokens/0/maturity"),
     );
     await page.getByLabel("Streak target for Account #1").fill("14");
     await page
+      .getByLabel("Touch model for Account #1")
+      .selectOption("mimo/mimo-v2.5");
+    await page
       .getByRole("button", { name: "Save", exact: true })
       .first()
       .click();
     await saveReq;
     expect(posts[0].body).toContain("14");
+    expect(posts[0].body).toContain('"touch_model":"mimo/mimo-v2.5"');
 
     // Touch now bypasses slot/throttle via the manual endpoint.
     const touchReq = page.waitForRequest(
@@ -169,11 +217,14 @@ test.describe("account maturity", () => {
         }),
       });
     });
-
     await page.goto("http://127.0.0.1:4173/admin/#maturity");
     await expect(
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
+    // Timelines render inside expanded cards only.
+    await page
+      .getByRole("button", { name: "Expand details for Account #1" })
+      .click();
     const timeline = page.getByRole("list", {
       name: "Maturity history for Account #1",
     });
@@ -181,19 +232,116 @@ test.describe("account maturity", () => {
     await expect(timeline.getByText("admit ok")).toBeVisible();
     await expect(timeline.getByText("enabled target=7")).toBeVisible();
   });
-
-  test("maturity page offers the touch model picker with served options", async ({
+  test("maturity card offers the per-token touch model select", async ({
     page,
   }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
     await page.goto("http://127.0.0.1:4173/admin/#maturity");
-    const picker = page.getByLabel("Economy touch model");
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    // The page-header touch model picker is gone (per-card selects only).
+    await expect(page.getByLabel("Economy touch model")).toHaveCount(0);
+    // Folded by default: the per-card select hides until expand.
+    await expect(page.getByLabel("Touch model for Account #1")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Expand details for Account #1" })
+      .click();
+    const picker = page.getByLabel("Touch model for Account #1");
     await expect(picker).toBeVisible();
-    await expect(picker).toHaveValue("deepseek/deepseek-v4-flash");
+    // Empty value = global MATURITY_TOUCH_MODEL fallback.
+    await expect(picker).toHaveValue("");
+    await expect(picker.locator("option").first()).toHaveText("Global default");
     const options = await picker.locator("option").allTextContents();
-    expect(options).toContain("deepseek/deepseek-v4-flash");
-    expect(options.length).toBeGreaterThan(1);
+    // Served models labeled with their server-reported cost class.
+    expect(options).toContain("upstage/solar-pro4 (0 Freebucks/hr)");
+    expect(options).toContain("openai/gpt-5.6-luna (premium pool)");
+    // Cheapest-Freebucks-cost first, premium pool last.
+    const solarIdx = options.findIndex((o) =>
+      o.startsWith("upstage/solar-pro4"),
+    );
+    const lunaIdx = options.findIndex((o) =>
+      o.startsWith("openai/gpt-5.6-luna"),
+    );
+    expect(solarIdx).toBeGreaterThan(0);
+    expect(lunaIdx).toBeGreaterThan(solarIdx);
+    // Spend mode stays a compact second select in the same Touch box.
+    await expect(page.getByLabel("Touch mode for Account #1")).toBeVisible();
+  });
+
+  test("maturity cards default folded and expand persists", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
+    const state = await mockPageState(page, {});
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    // Folded: no card controls render.
+    await expect(
+      page.getByRole("button", { name: "Save", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Expand details for Account #1" })
+      .click();
+    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
+    // The expand PUTs the persisted id list (debounced ~1s).
+    await expect
+      .poll(
+        () => {
+          const snapshot = state.get("maturity") as
+            { expanded?: unknown } | undefined;
+          return snapshot?.expanded;
+        },
+        { timeout: 10_000 },
+      )
+      .toEqual([0]);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    // Server-wins restore: still expanded without another click.
+    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
+  });
+
+  test("maturity expanded ids restore from the snapshot", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
+    await mockPageState(page, { maturity: { expanded: [1] } });
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    // Account #2 expanded from the snapshot; Account #1 stays folded.
+    await expect(page.getByLabel("Touch model for Account #2")).toBeVisible();
+    await expect(page.getByLabel("Touch model for Account #1")).toHaveCount(0);
   });
 
   test("shared harness renders the seeded maturity timeline without clipping", async ({
@@ -206,7 +354,11 @@ test.describe("account maturity", () => {
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
     // Token #1 carries a maturity object in the shared tokens fixture, so
-    // the restart-surviving timeline renders with no bespoke mocks.
+    // the restart-surviving timeline renders with no bespoke mocks — once
+    // the card is expanded (timelines stay behind the fold).
+    await page
+      .getByRole("button", { name: "Expand details for Account #1" })
+      .click();
     const timeline = page.getByRole("list", {
       name: "Maturity history for Account #1",
     });

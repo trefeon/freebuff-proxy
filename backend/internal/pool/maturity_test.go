@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/testutil"
 	"freebuff-proxy/backend/internal/upstream"
 )
@@ -64,7 +65,7 @@ func TestMaturityDryRunProbeOnly(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
@@ -91,7 +92,7 @@ func TestMaturityLiveAdmitsWhileLocked(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, false)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if !p.Snapshot()[0].Locked {
@@ -121,7 +122,7 @@ func TestMaturitySkipsTodayUsed(t *testing.T) {
 	mock.StreakBody = streakBody(3, true)
 	p := newMaturityPool(t, mock, false)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
@@ -146,7 +147,7 @@ func TestMaturitySkipsFutureSlot(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(2*time.Hour), laDay(now))
@@ -169,7 +170,7 @@ func TestMaturityThrottleIdempotent(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
@@ -195,7 +196,7 @@ func TestMaturityGlobalKillSwitch(t *testing.T) {
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
 	p.cfg.Load().MaturityEnabled = false
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
@@ -217,7 +218,7 @@ func TestMaturityAutoReleaseAtTarget(t *testing.T) {
 	mock.StreakBody = streakBody(7, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if !p.Snapshot()[0].Locked {
@@ -249,7 +250,7 @@ func TestMaturitySkipsCooling(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
@@ -272,7 +273,7 @@ func TestMaturityNoAdvanceWarnStops(t *testing.T) {
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	now := time.Now()
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	day := now
@@ -310,16 +311,16 @@ func TestSetMaturityValidation(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	p := newMaturityPool(t, mock, true)
-	if err := p.SetMaturity(0, true, 29, ""); err == nil {
+	if err := p.SetMaturity(0, true, 29, "", ""); err == nil {
 		t.Error("target 29 accepted, want range error")
 	}
-	if err := p.SetMaturity(0, true, 7, "turbo"); err == nil {
+	if err := p.SetMaturity(0, true, 7, "turbo", ""); err == nil {
 		t.Error("mode turbo accepted, want unknown-mode error")
 	}
-	if err := p.SetMaturity(9, true, 7, ""); err == nil {
+	if err := p.SetMaturity(9, true, 7, "", ""); err == nil {
 		t.Error("token 9 accepted, want out-of-range error")
 	}
-	if err := p.SetMaturity(0, true, 7, MaturityModePremiumShort); err != nil {
+	if err := p.SetMaturity(0, true, 7, MaturityModePremiumShort, ""); err != nil {
 		t.Errorf("premium-short rejected without a global gate: %v", err)
 	}
 }
@@ -332,7 +333,7 @@ func TestMaturityLiveSkipsPricedTouch(t *testing.T) {
 	defer mock.Close()
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, false)
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	// First touch admits (snapshot has no freebucks yet).
@@ -367,7 +368,7 @@ func TestMaturityLiveAdmitsWhenExempt(t *testing.T) {
 	defer mock.Close()
 	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, false)
-	if err := p.SetMaturity(0, true, 7, ""); err != nil {
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	toks := p.roster.Load()
@@ -380,5 +381,85 @@ func TestMaturityLiveAdmitsWhenExempt(t *testing.T) {
 	}
 	if action != "admit" || result != "ok" {
 		t.Errorf("exempt touch = %q/%q, want admit/ok", action, result)
+	}
+}
+
+// Per-token touch-model override: bad shapes reject at save, the override
+// rides the snapshot, and the fire path prefers it over the global
+// MATURITY_TOUCH_MODEL fallback (empty = fallback). premium-short mode is
+// unaffected: it always admits the shared premium pool head.
+func TestSetMaturityTouchModel(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.StreakBody = streakBody(2, false)
+	p := newMaturityPool(t, mock, false)
+	premium := modelcat.SharedPremiumModels()
+	if len(premium) == 0 {
+		t.Fatal("no shared premium models, want at least one")
+	}
+	// Shape-only validation at save.
+	if err := p.SetMaturity(0, true, 7, "", "not-a-model"); err == nil {
+		t.Error("touch model without provider/ accepted, want shape error")
+	}
+	// Whitespace-only trims to the fallback.
+	if err := p.SetMaturity(0, true, 7, "", "  "); err != nil {
+		t.Fatalf("blank touch model: %v", err)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != "" {
+		t.Errorf("snapshot touch_model = %q, want fallback empty", got)
+	}
+	// Override stored + visible on the snapshot.
+	if err := p.SetMaturity(0, true, 7, "", modelB); err != nil {
+		t.Fatalf("override save: %v", err)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != modelB {
+		t.Errorf("snapshot touch_model = %q, want %q", got, modelB)
+	}
+	// Override wins over a hostile global: the global points at a served
+	// premium model (the unmetered lane fails it closed) while the
+	// per-token unmetered override still admits.
+	p.cfg.Load().MaturityTouchModel = premium[0]
+	action, result, err := p.MaturityTouchNow(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("override touch: %v", err)
+	}
+	if action != "admit" || result != "ok" {
+		t.Errorf("override touch = %q/%q, want admit/ok", action, result)
+	}
+	if got := mock.SessionCreatesSnapshot(); got != 1 {
+		t.Fatalf("SessionCreates = %d, want 1", got)
+	}
+	// Reversed: a premium override fails closed even with a healthy global.
+	p.cfg.Load().MaturityTouchModel = modelB
+	if err := p.SetMaturity(0, true, 7, "", premium[0]); err != nil {
+		t.Fatalf("premium override save: %v", err)
+	}
+	action, result, _ = p.MaturityTouchNow(context.Background(), 0)
+	if result != "skip:touch-model" {
+		t.Errorf("premium override touch = %q/%q, want skip:touch-model", action, result)
+	}
+	if got := mock.SessionCreatesSnapshot(); got != 1 {
+		t.Errorf("SessionCreates = %d, want still 1 (no premium admission)", got)
+	}
+	// Empty clears back to the fallback (and admits again off the global).
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
+		t.Fatalf("override clear: %v", err)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != "" {
+		t.Errorf("cleared touch_model = %q, want fallback empty", got)
+	}
+	action, result, err = p.MaturityTouchNow(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("fallback touch: %v", err)
+	}
+	if action != "admit" || result != "ok" {
+		t.Errorf("fallback touch = %q/%q, want admit/ok", action, result)
+	}
+	// Disabling with an override keeps it for the next enable.
+	if err := p.SetMaturity(0, false, 0, "", modelB); err != nil {
+		t.Fatalf("disable with override: %v", err)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != modelB {
+		t.Errorf("disabled touch_model = %q, want kept %q", got, modelB)
 	}
 }

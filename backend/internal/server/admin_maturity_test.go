@@ -76,3 +76,42 @@ func TestTokenMaturityLifecycle(t *testing.T) {
 		t.Error("maturity disable unlocked the token, want lock unchanged")
 	}
 }
+
+// touch_model round-trips through the maturity endpoint: stored on the
+// snapshot, bad shapes 400, empty clears back to the global fallback.
+func TestTokenMaturityTouchModel(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.StreakBody = map[string]any{"streak": 2, "todayUsed": false, "timeZone": "America/Los_Angeles"}
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.AdminToken = "secret"
+		c.MaturityEnabled = true
+		c.MaturityDryRun = true
+		c.MaturityTouchModel = "deepseek/deepseek-v4-flash"
+	}, mock)
+	cookie := loginCookie(t, ts, "secret")
+	post := func(path, body string) (int, string) {
+		resp, data := doJSON(t, http.MethodPost, ts.URL+path, []byte(body),
+			map[string]string{"Cookie": cookie, "Content-Type": "application/json"})
+		return resp.StatusCode, string(data)
+	}
+
+	// Bad shape rejects.
+	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":true,"touch_model":"not-a-model"}`); code != http.StatusBadRequest {
+		t.Errorf("touch_model without provider/ status = %d, want 400", code)
+	}
+	// Override stores + surfaces on the snapshot.
+	if code, body := post("/admin/tokens/0/maturity", `{"enabled":true,"target":7,"mode":"unmetered","touch_model":"mimo/mimo-v2.5"}`); code != http.StatusOK {
+		t.Fatalf("override enable status = %d, want 200: %s", code, body)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != "mimo/mimo-v2.5" {
+		t.Errorf("snapshot touch_model = %q, want mimo/mimo-v2.5", got)
+	}
+	// Empty clears back to the global fallback.
+	if code, body := post("/admin/tokens/0/maturity", `{"enabled":true,"target":7,"touch_model":""}`); code != http.StatusOK {
+		t.Fatalf("override clear status = %d, want 200: %s", code, body)
+	}
+	if got := p.Snapshot()[0].Maturity.TouchModel; got != "" {
+		t.Errorf("cleared touch_model = %q, want fallback empty", got)
+	}
+}

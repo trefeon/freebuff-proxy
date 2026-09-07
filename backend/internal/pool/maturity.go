@@ -55,9 +55,13 @@ const (
 // TokenSnapshot until maturity is first enabled for the token, so tokens
 // that never opt in carry no new payload.
 type MaturitySnapshot struct {
-	Enabled       bool      `json:"enabled"`
-	Target        int       `json:"target"`
-	Mode          string    `json:"mode"`
+	Enabled bool   `json:"enabled"`
+	Target  int    `json:"target"`
+	Mode    string `json:"mode"`
+	// TouchModel is the per-token touch-model override ("" = the global
+	// MATURITY_TOUCH_MODEL fallback). Omitted on the wire when unset so
+	// never-enrolled tokens keep their existing payload shape.
+	TouchModel    string    `json:"touch_model,omitempty"`
 	Badge         string    `json:"badge"`
 	Slot          time.Time `json:"slot,omitempty"`
 	LastTouch     time.Time `json:"last_touch,omitempty"`
@@ -71,9 +75,12 @@ type MaturitySnapshot struct {
 // maturityState is the mutable per-token automation state, guarded by
 // tokenEntry.maturityMu. Zero value = disabled.
 type maturityState struct {
-	enabled          bool
-	target           int
-	mode             string
+	enabled bool
+	target  int
+	mode    string
+	// touchModel overrides the global MATURITY_TOUCH_MODEL for this
+	// token only. Empty means "use the global fallback".
+	touchModel       string
 	slot             time.Time
 	slotDay          string
 	lastTouch        time.Time
@@ -95,7 +102,12 @@ type maturityState struct {
 // target <= 0 falls back to the configured MATURITY_TARGET_DAYS default;
 // mode "" means unmetered. mode premium-short spends from the account's
 // metered pool and stays opt-in per token.
-func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) error {
+// touchModel is the per-token touch-model override; "" keeps the global
+// MATURITY_TOUCH_MODEL fallback. A non-empty value must be a provider/model
+// id (shape only — served/unmetered semantics stay in the fire path, which
+// fails closed on misconfigured models). The override is stored on disable
+// too, so re-enabling restores it.
+func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, touchModel string) error {
 	toks := p.roster.Load()
 	if toks == nil || token < 0 || token >= len(*toks) {
 		return fmt.Errorf("pool: token %d out of range", token)
@@ -106,6 +118,10 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) err
 	if mode != MaturityModeUnmetered && mode != MaturityModePremiumShort {
 		return fmt.Errorf("pool: unknown maturity mode %q (want %q or %q)", mode, MaturityModeUnmetered, MaturityModePremiumShort)
 	}
+	touchModel = strings.TrimSpace(touchModel)
+	if touchModel != "" && !strings.Contains(touchModel, "/") {
+		return fmt.Errorf("pool: maturity touch model %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash)", touchModel)
+	}
 	if enabled && target <= 0 {
 		target = p.maturityDefaultTarget()
 	}
@@ -115,6 +131,7 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) err
 	tok := (*toks)[token]
 	tok.maturityMu.Lock()
 	tok.maturity.enabled = enabled
+	tok.maturity.touchModel = touchModel
 	if enabled {
 		tok.maturity.target = target
 		tok.maturity.mode = mode
@@ -130,11 +147,26 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string) err
 	}
 	tok.maturityMu.Unlock()
 	if enabled {
-		p.emitMaturity(token, "config", fmt.Sprintf("enabled target=%d mode=%s", target, mode))
+		detail := fmt.Sprintf("enabled target=%d mode=%s", target, mode)
+		if touchModel != "" {
+			detail += " touch=" + touchModel
+		}
+		p.emitMaturity(token, "config", detail)
 	} else {
 		p.emitMaturity(token, "config", "disabled")
 	}
 	return nil
+}
+
+// maturityEffectiveModel resolves the touch model for one token: the
+// per-token override when set, else the global MATURITY_TOUCH_MODEL
+// fallback. An empty result means "no configured model", which the fire
+// path fails closed on (skip:touch-model).
+func maturityEffectiveModel(st maturityState, global string) string {
+	if st.touchModel != "" {
+		return st.touchModel
+	}
+	return global
 }
 
 // maturityDefaultTarget resolves the fallback streak target: the configured
@@ -279,7 +311,9 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 		return
 	}
 
-	p.maturityFire(ctx, dryRun, touchModel, idx, tok, label, cached, today, now)
+	// Per-token override wins; empty falls back to the global
+	// MATURITY_TOUCH_MODEL passed in from the tick.
+	p.maturityFire(ctx, dryRun, maturityEffectiveModel(st, touchModel), idx, tok, label, cached, today, now)
 }
 
 // maturityRefreshStreak fetches one token's streak synchronously (bounded)
@@ -465,7 +499,7 @@ func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string,
 		return "", "skip:today-used", fmt.Errorf("pool: token %d already used today", token)
 	}
 	loc := maturityLocation(cached.TimeZone)
-	p.maturityFire(ctx, cfg.MaturityDryRun, cfg.MaturityTouchModel, token, tok, tokenEntryLabel(tok), cached, now.In(loc).Format("2006-01-02"), now)
+	p.maturityFire(ctx, cfg.MaturityDryRun, maturityEffectiveModel(st, cfg.MaturityTouchModel), token, tok, tokenEntryLabel(tok), cached, now.In(loc).Format("2006-01-02"), now)
 	fin := p.maturityCopy(tok)
 	return fin.lastAction, fin.lastResult, nil
 }
@@ -532,6 +566,7 @@ func (p *Pool) maturitySnapshot(tok *tokenEntry, streak int) *MaturitySnapshot {
 		Enabled:       m.enabled,
 		Target:        target,
 		Mode:          mode,
+		TouchModel:    m.touchModel,
 		Badge:         badge,
 		Slot:          m.slot,
 		LastTouch:     m.lastTouch,

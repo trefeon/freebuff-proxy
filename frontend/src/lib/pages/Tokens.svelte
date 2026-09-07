@@ -17,7 +17,6 @@
     tokensError as tokensErrorStore,
     ensureTokensStore,
     refreshTokens,
-    probeAllQuotas,
   } from "../stores/tokens.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
@@ -105,7 +104,6 @@
   let expandedToken = $state(null);
   let spawnModels = $state({});
   let actionPending = $state(false);
-  let probingAll = $state(false);
   let now = $state(Date.now());
 
   const tokenValid = $derived(
@@ -291,25 +289,6 @@
     );
   }
 
-  // Probe-all: same zero-cost upstream GET per token as the per-row probe
-  // buttons (no session claimed), fanned out via test-all. No confirm: the
-  // effect is cache freshness only, nothing is spent or ended. Uses the
-  // shared store helper (not triggerAction/postAPI: test-all answers with
-  // concatenated per-token JSON objects that res.json() cannot parse).
-  async function handleProbeAll() {
-    if (probingAll) return;
-    probingAll = true;
-    try {
-      await probeAllQuotas();
-      actionOK = true;
-      actionMessage = $tr("Quotas refreshed from upstream.");
-    } catch (e) {
-      actionOK = false;
-      actionMessage = e.message || $tr("Quota refresh failed");
-    } finally {
-      probingAll = false;
-    }
-  }
   function handleDropSession(idx) {
     return triggerAction(
       tokenActions.dropSession(idx),
@@ -809,8 +788,6 @@
     onDropSession={handleDropSession}
     onSwap={handleSwap}
     onMove={handleMove}
-    onProbeAll={handleProbeAll}
-    probeAllPending={probingAll}
     onRetry={() => {
       error = "";
       refreshTokens();

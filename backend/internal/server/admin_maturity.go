@@ -10,14 +10,13 @@ import (
 	"strings"
 )
 
-// maturityParams carries the per-token maturity settings from a dashboard
-// form post or a JSON API call.
 type maturityParams struct {
-	enabled bool
-	hasOn   bool
-	target  int
-	hasGoal bool
-	mode    string
+	enabled    bool
+	hasOn      bool
+	target     int
+	hasGoal    bool
+	mode       string
+	touchModel string
 }
 
 // maturityParamsFromRequest reads enabled/target/mode from form fields first,
@@ -38,7 +37,10 @@ func maturityParamsFromRequest(w http.ResponseWriter, r *http.Request) maturityP
 	if v := strings.TrimSpace(r.FormValue("mode")); v != "" {
 		p.mode = v
 	}
-	if p.hasOn && p.hasGoal && p.mode != "" {
+	if v := strings.TrimSpace(r.FormValue("touch_model")); v != "" {
+		p.touchModel = v
+	}
+	if p.hasOn && p.hasGoal && p.mode != "" && p.touchModel != "" {
 		return p
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 8<<10))
@@ -85,6 +87,14 @@ func maturityParamsFromRequest(w http.ResponseWriter, r *http.Request) maturityP
 			}
 		}
 	}
+	if p.touchModel == "" {
+		if raw, ok := jreq["touch_model"]; ok {
+			var s string
+			if serr := json.Unmarshal(raw, &s); serr == nil {
+				p.touchModel = strings.TrimSpace(s)
+			}
+		}
+	}
 	return p
 }
 
@@ -115,15 +125,18 @@ func (a *adminHandlers) handleTokenMaturity(w http.ResponseWriter, r *http.Reque
 	if err == nil && params.mode != "" && params.mode != "unmetered" && params.mode != "premium-short" {
 		err = errors.New("mode must be unmetered or premium-short")
 	}
+	if err == nil && params.touchModel != "" && !strings.Contains(params.touchModel, "/") {
+		err = errors.New("touch_model must be a provider/model id (e.g. deepseek/deepseek-v4-flash)")
+	}
 	if err == nil {
-		err = a.pool.SetMaturity(id, params.enabled, params.target, params.mode)
+		err = a.pool.SetMaturity(id, params.enabled, params.target, params.mode, params.touchModel)
 	}
 	if err != nil {
 		a.dash.RenderConfigResult(w, r, false, "Maturity update failed: "+err.Error())
 		return
 	}
 	if params.enabled {
-		a.logfunc().Info("dashboard token maturity enabled", "token", id, "target", params.target, "mode", params.mode)
+		a.logfunc().Info("dashboard token maturity enabled", "token", id, "target", params.target, "mode", params.mode, "touch_model", params.touchModel)
 		a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" maturity on — locked for warming; auto-releases at its streak target.")
 		return
 	}

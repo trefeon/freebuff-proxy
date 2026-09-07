@@ -39,7 +39,7 @@ Multi-token front door for chat requests. Owns token selection order, session ad
 - History sink (`history_test.go`): maturity config/touch/release/warn events
   emit outside token locks; the sink must never block or call back into the
   pool (nil sink = persistence-free).
-- Maturity (pool/maturity.go): `MATURITY_ENABLED` default ON (global kill-switch), dry-run default (probe-only, zero session slots claimed), touch mode opt-in per token (premium-short spends from the account's metered pool, no global gate), jittered daily slot in the account's own timezone, restart-safe 6h throttle, stops firing after 3 consecutive non-advancing days, never touches quarantined/banned/cooling/country-blocked accounts. Touch must fail closed on priced models (`skip:touch-priced`).
+- Maturity (pool/maturity.go): `MATURITY_ENABLED` default ON (global kill-switch), dry-run default (probe-only, zero session slots claimed), touch mode opt-in per token (premium-short spends from the account's metered pool, no global gate), per-token `touch_model` override via `SetMaturity` (empty = global `MATURITY_TOUCH_MODEL` fallback; shape-only check at save, served/unmetered semantics fail closed in the fire path), jittered daily slot in the account's own timezone, restart-safe 6h throttle, stops firing after 3 consecutive non-advancing days, never touches quarantined/banned/cooling/country-blocked accounts. Touch must fail closed on priced models (`skip:touch-priced`). Touch-model candidates come from the served catalog ordered by Freebucks cost class (unmetered-capable first, premium-pool last) — the registry carries no price data, so never invent prices.
 - Spend ledger records events only — the $ ceiling is enforced elsewhere (server-enforced).
 
 ## Tests that protect it
