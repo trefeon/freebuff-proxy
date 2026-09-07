@@ -327,11 +327,12 @@ test.describe("operator interactions (hermetic mocks)", () => {
     ).toBeVisible();
     await expect.poll(() => gets).toBeGreaterThan(before);
   });
-
+  // Probe-all lives on the Quota Tracker page only: the Tokens page header
+  // button was removed (per-token probe buttons remain on each row).
   // -------------------------------------------------------------------------
-  // 3c. Tokens page probe-all shares the same store helper + endpoint.
+  // 3c. Tokens page has no Probe-all header button.
   // -------------------------------------------------------------------------
-  test("tokens: probe-all posts test-all and shows confirmation", async ({
+  test("tokens: no probe-all header button, per-row probe stays", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -345,30 +346,17 @@ test.describe("operator interactions (hermetic mocks)", () => {
         body: JSON.stringify(tokensPayload(state.tokens)),
       });
     });
-    await page.route("**/admin/tokens/test-all", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: `{"token":0,"ok":true,"message":"ok"}{"token":1,"ok":true,"message":"ok"}`,
-      });
-    });
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
     await expect(
       page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
-    const probe = page.waitForRequest(
-      (r) =>
-        r.method() === "POST" && r.url().includes("/admin/tokens/test-all"),
+    await expect(page.getByRole("button", { name: "Probe all" })).toHaveCount(
+      0,
     );
-    await page.getByRole("button", { name: "Probe all" }).click();
-    await probe;
-    await expect(
-      page.getByText("Quotas refreshed from upstream."),
-    ).toBeVisible();
   });
 
   // -------------------------------------------------------------------------
-  // 3c2. Pool Tokens never scrolls horizontally (desktop table + narrow cards).
+  // 3d. Pool Tokens never scrolls horizontally (desktop table + narrow cards).
   // -------------------------------------------------------------------------
   test("tokens: pool table fits its card without horizontal scroll", async ({
     page,
@@ -575,15 +563,19 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await mockDashboard(page, f);
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view: header counts model requests.
-    await expect(page.getByText("model requests").first()).toBeVisible();
+    // Console is the default view: the seeded chat request/done pair renders
+    // one request-group card (singular header + POST line).
+    await expect(page.getByText("1 model request").first()).toBeVisible();
+    await expect(
+      page.getByText("POST openai/gpt-5.6-luna").first(),
+    ).toBeVisible();
 
     // Table view exposes the labelled filter controls.
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
     await page.getByRole("button", { name: "Console" }).click();
-    await expect(page.getByText("model requests").first()).toBeVisible();
+    await expect(page.getByText("1 model request").first()).toBeVisible();
 
     // Auto toggle flips label and pauses the 1s poll.
     const auto = page.getByRole("button", { name: /^Auto / });

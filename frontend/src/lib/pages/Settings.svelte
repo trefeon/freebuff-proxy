@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import { recordPageVisit } from "../stores/pageState.js";
   import { RefreshCw, Save, X } from "@lucide/svelte";
   import PageShell from "../components/PageShell.svelte";
   import Button from "../components/Button.svelte";
@@ -8,8 +9,9 @@
   import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
+  import ModelRoutingSettings from "./settings/ModelRoutingSettings.svelte";
   import AdvancedSettings from "./settings/AdvancedSettings.svelte";
-  import { fetchAPI, postForm } from "../api/client.js";
+  import { fetchAPI, postForm, deleteAPI } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
@@ -30,7 +32,11 @@
   // eslint-disable svelte/prefer-svelte-reactivity -- codebase idiom: $state.raw + full reassignment (changedKeys = next etc.), never in-place mutation of the wrapped collection
   let changedKeys = $state.raw(new Set()); // form-touched keys — only these are serialized into the document
   let effectiveMap = $state.raw(new Map()); // key → { value, secret }
-
+  let settingSources = $state({}); // key → env|db|file|default (ADR-0019)
+  // Live-only read-only flag from GET /admin/api/settings (ADR-0019): when
+  // the store is nil the gateway serves file/env/default with degraded:true
+  // and overlay writes 503 — banner it, keep the .env form usable.
+  let settingsDegraded = $state(false);
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
   // ---------------------------------------------------------------------------
@@ -117,6 +123,11 @@
     return n;
   });
 
+  // How many keys the DB overlay currently wins (ADR-0019 badge count).
+  let dbCount = $derived(
+    Object.values(settingSources).filter((s) => s === "db").length,
+  );
+
   // ---------------------------------------------------------------------------
   // Data
   // ---------------------------------------------------------------------------
@@ -143,16 +154,58 @@
       }
       // Keys absent from the effective config keep an informational "not set" badge;
       // the controls stay editable so the operator can set them from the form.
-      // When `effective` is missing entirely (old/mock payloads) nothing is
-      // marked unset — the form stays fully editable.
       rawText = baseContent;
       formValues = deriveValues(baseContent);
       changedKeys = new Set();
+      // Source tiers (env|db|file|default) hydrate fetch-only from the new
+      // settings endpoint; a failure hides the DB badges, never the form.
+      // degraded:true means live-only (nil store): overlay writes 503, so
+      // banner the read-only state while the .env form stays usable.
+      try {
+        const setRes = await fetchAPI(adminApi.settings);
+        const next = {};
+        for (const e of setRes.settings ?? []) next[e.key] = e.source;
+        settingSources = next;
+        settingsDegraded = setRes.degraded === true;
+      } catch {
+        // Keep the last-known sources: a failed background refresh must not
+        // wipe the DB badges (first load simply keeps the empty default).
+      }
     } catch (e) {
       if (firstLoad) error = e.message || $tr("Failed to fetch configuration");
     } finally {
       if (firstLoad) loading = false;
     }
+  }
+
+  // Drop one DB overlay row (ADR-0019): the key falls back to file/env and
+  // the whole form refetches, so badges, values, and the .env document
+  // agree again. Failures surface in the save-result alert, never silent.
+  async function resetSetting(key) {
+    try {
+      const res = await deleteAPI(adminApi.settingsDelete(key));
+      result = {
+        ok: true,
+        message: res?.message || $tr("DB override removed."),
+        restart_only: [],
+      };
+      await fetchData();
+      refreshTokens();
+    } catch (e) {
+      result = {
+        ok: false,
+        message: e.message || $tr("Failed to reset override"),
+        restart_only: [],
+      };
+    }
+  }
+  // Per-key DB-overlay save (row-level save buttons): refetch so badges,
+  // effective values, and the .env document agree again — the same teardown
+  // as resetSetting, minus its result alert (the row shows its own inline
+  // status, including the restart note for restart-only keys).
+  async function overlaySaved() {
+    await fetchData();
+    refreshTokens();
   }
 
   async function saveConfig(e, opts = {}) {
@@ -225,6 +278,7 @@
   }
 
   onMount(() => {
+    recordPageVisit("settings");
     fetchData();
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleKeyDown);
@@ -240,7 +294,7 @@
   crumb="freebuff-proxy / Admin / settings.conf"
   title={$tr("Settings")}
   description={$tr(
-    "Gateway runtime behavior, protection, and model routing. Changes apply live without restart.",
+    "Gateway runtime behavior, protection, and model routing. Live-applying keys take effect on save without restart; restart-marked keys need a container restart.",
   )}
   {loading}
   {error}
@@ -321,17 +375,72 @@
     </Alert>
   {/if}
 
+  {#if settingsDegraded}
+    <Alert tone="warning" title={$tr("DB overlay unavailable")}>
+      {$tr(
+        "The settings store is offline — the dashboard runs live-only. Overlay saves and resets will fail; .env saves below still apply.",
+      )}
+    </Alert>
+  {/if}
+
+  {#if dbCount > 0}
+    <Alert tone="info" title={$tr("DB overrides active")}>
+      {#if dbCount === 1}
+        {$tr(
+          "1 setting comes from the DB overlay and wins over the .env file below until reset per row.",
+        )}
+      {:else}
+        {$tr(
+          "{count} settings come from the DB overlay and win over the .env file below until reset per row.",
+          { count: dbCount },
+        )}
+      {/if}
+    </Alert>
+  {/if}
+
   <SecurityCard onSuccess={fetchData} />
 
   <!-- 2. Gateway & Protection (General - live reload) -->
-  <GatewaySettings {formValues} {rawText} onField={setField} />
+  <GatewaySettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+    onSaved={overlaySaved}
+  />
 
   <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
-  <TrafficSettings {formValues} {rawText} onField={setField} />
+  <TrafficSettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+    onSaved={overlaySaved}
+  />
 
-  <!-- 4. Advanced (every remaining catalog key with its default) -->
-  <AdvancedSettings {meta} {formValues} {rawText} onField={setField} />
+  <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
+  <ModelRoutingSettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+    onSaved={overlaySaved}
+  />
 
-  <!-- 5. Command Center (Lifecycle, updates & rollback) -->
+  <!-- 5. Advanced (every remaining catalog key with its default) -->
+  <AdvancedSettings
+    {meta}
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+    onSaved={overlaySaved}
+  />
+
+  <!-- 6. Command Center (Lifecycle, updates & rollback) -->
   <CommandCenterCard />
 </PageShell>

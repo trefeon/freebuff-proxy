@@ -24,9 +24,6 @@ func TestMaturityDefaults(t *testing.T) {
 	if cfg.MaturityTargetDays != 7 {
 		t.Errorf("MaturityTargetDays = %d, want 7", cfg.MaturityTargetDays)
 	}
-	if cfg.MaturityAllowPremium {
-		t.Error("MaturityAllowPremium = true, want false")
-	}
 }
 
 func TestMaturityEnvOverrides(t *testing.T) {
@@ -35,13 +32,12 @@ func TestMaturityEnvOverrides(t *testing.T) {
 	t.Setenv("MATURITY_DRY_RUN", "0")
 	t.Setenv("MATURITY_TOUCH_MODEL", "mimo/mimo-v2.5")
 	t.Setenv("MATURITY_TARGET_DAYS", "14")
-	t.Setenv("MATURITY_ALLOW_PREMIUM", "true")
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.MaturityEnabled || cfg.MaturityDryRun || cfg.MaturityTouchModel != "mimo/mimo-v2.5" ||
-		cfg.MaturityTargetDays != 14 || !cfg.MaturityAllowPremium {
+		cfg.MaturityTargetDays != 14 {
 		t.Errorf("maturity overrides not applied: %+v", cfg)
 	}
 }

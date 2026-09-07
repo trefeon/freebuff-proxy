@@ -2,6 +2,8 @@
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
+  import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import { ShieldCheck } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -13,8 +15,19 @@
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
+   * @prop {(() => Promise<void>) | null} [onSaved] - parent refetch after a
+   *   per-key DB-overlay save
    */
-  let { formValues, rawText = "", onField } = $props();
+  let {
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+    onSaved = null,
+  } = $props();
 
   let env = $derived(parseEnv(rawText));
   let safeMode = $derived(formValues.SAFE_MODE !== "false");
@@ -53,7 +66,7 @@
 <SettingsCard
   title={$tr("General")}
   description={$tr(
-    "Gateway runtime behavior and account protection. Changes apply live without restart.",
+    "Gateway runtime behavior and account protection. Most keys apply live without restart; restart-marked keys apply after a container restart.",
   )}
 >
   {#snippet icon()}
@@ -79,6 +92,17 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.SAFE_MODE === "db"}
+        <DbBadge settingKey="SAFE_MODE" {onReset} />
+      {/if}
+    {/snippet}
+
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="SAFE_MODE"
+        value={formValues.SAFE_MODE ?? "true"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="flex items-center gap-2.5">
@@ -108,6 +132,12 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.LOG_LEVEL === "db"}
+        <DbBadge settingKey="LOG_LEVEL" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave settingKey="LOG_LEVEL" value={logLevel} {onSaved} />
     {/snippet}
 
     <div class="w-full sm:w-48">
@@ -150,6 +180,17 @@
         class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/50 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
         >{$tr("restart")}</span
       >
+      {#if sources.HTTP_READ_TIMEOUT === "db"}
+        <DbBadge settingKey="HTTP_READ_TIMEOUT" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="HTTP_READ_TIMEOUT"
+        value={httpReadTimeout}
+        restartOnly
+        {onSaved}
+      />
     {/snippet}
 
     <div class="w-full sm:w-48">
@@ -192,6 +233,16 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.BRIDGE_ENABLED === "db"}
+        <DbBadge settingKey="BRIDGE_ENABLED" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="BRIDGE_ENABLED"
+        value={formValues.BRIDGE_ENABLED ?? "true"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="flex items-center gap-2.5">

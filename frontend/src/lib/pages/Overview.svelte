@@ -18,6 +18,7 @@
   import { adminApi } from "../api/paths.js";
   import { createQueryStore } from "../stores/query.js";
   import { tr } from "../i18n.js";
+  import { recordPageVisit } from "../stores/pageState.js";
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -111,6 +112,7 @@
   let unsubData = null;
   let unsubError = null;
   onMount(() => {
+    recordPageVisit("overview");
     releaseQuery = overviewQuery.ensure();
     unsubData = overviewQuery.data.subscribe((v) => {
       if (v) {

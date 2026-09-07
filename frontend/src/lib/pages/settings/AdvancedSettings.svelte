@@ -2,6 +2,8 @@
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
+  import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import { SlidersHorizontal } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -17,8 +19,20 @@
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
+   * @prop {(() => Promise<void>) | null} [onSaved] - parent refetch after a
+   *   per-key DB-overlay save
    */
-  let { meta = [], formValues, rawText = "", onField } = $props();
+  let {
+    meta = [],
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+    onSaved = null,
+  } = $props();
 
   // Keys owned by the curated section components above; Advanced shows
   // everything else the catalog exposes.
@@ -124,6 +138,17 @@
                 >{$tr("restart")}</span
               >
             {/if}
+            {#if sources[entry.key] === "db"}
+              <DbBadge settingKey={entry.key} {onReset} />
+            {/if}
+          {/snippet}
+          {#snippet extra()}
+            <DbOverrideSave
+              settingKey={entry.key}
+              value={val(entry.key, entry)}
+              restartOnly={entry.restart_only}
+              {onSaved}
+            />
           {/snippet}
           {#if entry.kind === "bool"}
             <ToggleSwitch

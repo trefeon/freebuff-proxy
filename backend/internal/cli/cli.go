@@ -52,7 +52,29 @@ import (
 // drain gracefully on a shutdown signal. It returns the process exit code
 // (0 normal, 1 server failure); the caller maps it to os.Exit.
 func Serve(configPath string, verbose bool, version string) int {
-	cfg, err := config.LoadOpts(configPath, config.LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken})
+	// DB settings overlay (ADR-0019): the store opens BEFORE the first Load
+	// so UI-persisted knobs apply from boot (env > db > file > default).
+	// DB_PATH resolves from the process environment alone, so no config is
+	// needed to open it; a failure only warns (live-only), and the same
+	// handle feeds the history wiring below (never opened twice).
+	var histStore *history.Store
+	var bootOverlay map[string]string
+	{
+		dbPath := history.DBPathFromEnv()
+		if st, err := history.Open(dbPath); err != nil {
+			fmt.Fprintln(os.Stderr, "freebuff-proxy: settings store unavailable; running live-only:", err)
+		} else {
+			histStore = st
+			if rows, err := st.ListSettings(); err != nil {
+				fmt.Fprintln(os.Stderr, "freebuff-proxy: settings overlay unreadable; running on file/env:", err)
+			} else if ov := config.OverlayFromRows(rows); len(ov) > 0 {
+				bootOverlay = ov
+				fmt.Fprintln(os.Stderr, "freebuff-proxy: applying", len(ov), "DB setting override(s)")
+			}
+		}
+	}
+
+	cfg, err := config.LoadOpts(configPath, config.LoadOptions{DiscoverCLIToken: clicreds.DiscoverToken, Overlay: bootOverlay})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "freebuff-proxy: invalid config:", err)
 		holdForExitIfConsole()
@@ -150,22 +172,99 @@ func Serve(configPath string, verbose bool, version string) int {
 			}
 		}
 	}
-	// Dashboard history (ADR-0016): one SQLite file next to the session
-	// state file, opened always (not gated on SESSION_PERSIST — history is
-	// display data, not control state). An unusable file degrades to
-	// live-only views; Open never fails the boot itself.
-	var histStore *history.Store
-	{
-		stateAbs := cfg.SessionStateFile
-		if abs, err := filepath.Abs(stateAbs); err == nil {
-			stateAbs = abs
-		}
-		histPath := filepath.Join(filepath.Dir(stateAbs), "freebuff-history.db")
-		if st, err := history.Open(histPath); err != nil {
-			logger.Warn("history store unavailable; dashboard runs live-only", "file", histPath, "err", err)
-		} else {
-			histStore = st
-			logger.Info("dashboard history enabled", "file", histPath)
+	// Dashboard persistence (ADR-0016, overlay ADR-0019): the store opened
+	// before Load (boot overlay) — the legacy imports and history carry run
+	// against the same handle below. DB_PATH wins, default
+	// ./data/freebuff.db (the compose db_data volume mirrors it at
+	// /app/data/freebuff.db). A nil store is the live-only degrade path; the
+	// JSON session path below keeps working.
+	if histStore != nil {
+		st := histStore
+		{
+			dbPath := history.DBPathFromEnv()
+			logger.Info("dashboard history enabled", "file", dbPath)
+			// One-time migration: fold every legacy JSON session file into
+			// sessions_persist, then archive each to .bak (never delete).
+			// Gated on SESSION_PERSIST; a failure only warns — the JSON
+			// store above stays authoritative. SaveSession upserts by token
+			// hash, so importing from several split-brain locations is
+			// last-wins; each overwrite of a previously imported hash with
+			// different content warns (identical re-imports stay silent).
+			if cfg.SessionPersist {
+				onCollision := func(file string) func(string) {
+					return func(hash string) {
+						logger.Warn("legacy session import overwrote a previously imported session with different content; later file wins", "file", file, "token_hash", hash)
+					}
+				}
+				for _, legacy := range history.LegacySessionCandidates(cfg.SessionStateFile) {
+					if n, err := history.ImportLegacySessionFileWithCollisions(st, legacy, onCollision(legacy)); err != nil {
+						logger.Warn("legacy session import skipped; JSON state file stays in use", "file", legacy, "err", err)
+					} else if n > 0 {
+						logger.Info("imported legacy session state into dashboard store", "file", legacy, "sessions", n)
+					}
+				}
+				// .bak re-consult: each import above archives its source to
+				// .bak, so when sessions_persist still holds zero rows AND
+				// the live JSON path is missing, the archive is the only
+				// copy left (fresh DB path over a previous install) —
+				// import it WITHOUT re-archiving (the path already is the
+				// archive). Warn-only like every other carry step.
+				if empty, err := st.SessionsEmpty(); err != nil {
+					logger.Warn("legacy session backup re-consult skipped", "err", err)
+				} else if empty {
+					if _, statErr := os.Stat(cfg.SessionStateFile); errors.Is(statErr, os.ErrNotExist) {
+						bak := cfg.SessionStateFile + ".bak"
+						if fi, bakErr := os.Stat(bak); bakErr == nil && fi.Mode().IsRegular() {
+							if n, err := history.ImportLegacySessionBackup(st, bak, onCollision(bak)); err != nil {
+								logger.Warn("legacy session backup import skipped", "file", bak, "err", err)
+							} else if n > 0 {
+								logger.Info("imported legacy session backup into dashboard store", "file", bak, "sessions", n)
+							}
+						}
+					}
+				}
+			}
+			// One-time display-history carry: every legacy dashboard DB still
+			// on disk folds into the new DB while the new history tables are
+			// empty (old bind mounts, pre-unified files). An empty candidate
+			// (0, nil) does NOT stop the scan — a later file may hold the
+			// rows. ImportLegacyHistoryDB fills from ONE file only (never
+			// merges — INTEGER rowid PKs would collide across files), so
+			// the scan keeps walking after a carry: a later file holding
+			// rows is a skipped era, inspected (staged copy, COUNT(*) per
+			// table, never imported) and reported at WARN with its counts.
+			// Steady-state boots just walk cheap COUNT(*) no-ops. Warn-only,
+			// legacy files stay.
+			carriedFrom := ""
+			for _, legacyHist := range history.LegacyHistoryCandidates(history.DBPathFromEnv(), cfg.SessionStateFile) {
+				n, err := history.ImportLegacyHistoryDB(st, history.DBPathFromEnv(), legacyHist)
+				if err != nil {
+					logger.Warn("legacy history carry skipped", "file", legacyHist, "err", err)
+					continue
+				}
+				if n > 0 {
+					logger.Info("carried legacy history into dashboard store", "file", legacyHist, "rows", n)
+					if carriedFrom == "" {
+						carriedFrom = legacyHist
+					}
+					continue
+				}
+				if carriedFrom == "" {
+					continue
+				}
+				counts, cerr := history.CountLegacyHistoryRows(st, legacyHist)
+				if cerr != nil {
+					logger.Warn("legacy history carry skipped; later era left in place unreadable (no cross-file merge: rowid collisions)", "file", legacyHist, "carried_from", carriedFrom, "err", cerr)
+					continue
+				}
+				var skipped int64
+				for _, c := range counts {
+					skipped += c
+				}
+				if skipped > 0 {
+					logger.Warn("legacy history skipped: store already carries an earlier era; later file left in place (no cross-file merge: rowid collisions)", "file", legacyHist, "carried_from", carriedFrom, "rows", skipped, "log_entries", counts["log_entries"], "quota_snapshots", counts["quota_snapshots"], "maturity_events", counts["maturity_events"], "request_records", counts["request_records"])
+				}
+			}
 		}
 	}
 	clients := make([]*upstream.Client, 0, len(cfg.AuthTokens))

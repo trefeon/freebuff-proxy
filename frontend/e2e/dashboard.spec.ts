@@ -195,6 +195,11 @@ test.describe("dashboard hermetic mocks", () => {
     // Account 1 fixture carries premium_quota → Premium pool bar renders
     await expect(page.getByText("Premium pool").first()).toBeVisible();
     await expect(page.getByText("4/day pacific_day")).toBeVisible();
+    // The 2026-08-30 reset window has passed: the bar reads "Reset <local
+    // date>" (formatLocalDate), never raw ISO or "Resets in now".
+    await expect(page.getByText(/Reset Aug 30/).first()).toBeVisible();
+    await expect(page.getByText("Resets in now")).toHaveCount(0);
+    await expect(page.getByText("2026-08-30T07:00:00Z")).toHaveCount(0);
     // Tokens without Freebucks or premium data show the empty-state hint
     await expect(
       page
@@ -384,7 +389,9 @@ test.describe("dashboard hermetic mocks", () => {
     await safeMode.click();
     await expect(safeMode).toHaveAttribute("aria-checked", "false");
     await expect(page.getByText("Unsaved changes")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "Save Changes", exact: true }),
+    ).toBeEnabled();
 
     // Save posts the built .env: the toggled line plus untouched lines.
     let savedBody = "";
@@ -406,7 +413,9 @@ test.describe("dashboard hermetic mocks", () => {
       }
     });
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     await expect(page.getByText(/apply after restart only/)).toBeVisible();
     await expect(
       page.getByText("Applies after restart: LOG_LEVEL"),
@@ -452,7 +461,9 @@ test.describe("dashboard hermetic mocks", () => {
     });
     page.once("dialog", (d) => d.accept());
     await failover.click();
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     await expect.poll(() => savedBody).toContain("RATE_LIMIT_FAILOVER=");
   });
 
@@ -503,7 +514,9 @@ test.describe("dashboard hermetic mocks", () => {
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
     );
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     const postReq = await postReqPromise;
     expect(decodeURIComponent(postReq.postData() ?? "")).toContain(
       "LOG_LEVEL=warn",
@@ -562,12 +575,16 @@ test.describe("dashboard hermetic mocks", () => {
     // Toggle the bool, accept the confirm dialog, and save.
     await safeMode.click();
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
 
     // Failure alert shown and the control restored to the server state.
     await expect(safeMode).toHaveAttribute("aria-checked", "true");
     // Dirty reverted — Save button disabled again.
-    await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Save Changes", exact: true }),
+    ).toBeDisabled();
   });
 
   test("Logs filters by ?msg= and paginates with Next/Prev", async ({
@@ -965,6 +982,40 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("acquire_ms")).toBeVisible();
     // The error row surfaces the error text
     await expect(page.getByText("upstream timeout")).toBeVisible();
+  });
+
+  test("Traces error shows a titled alert with retry", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/traces");
+    await page.route("**/admin/api/traces", async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: false,
+          message: "boom",
+          code: "traces_failed",
+        }),
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#traces");
+    await expect(
+      page.getByRole("heading", { name: "Traces", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Could not load this page")).toBeVisible();
+    await expect(page.getByText("boom")).toBeVisible();
+    // Retry refetches: restore success and click through to the table.
+    await page.unroute("**/admin/api/traces");
+    await page.route("**/admin/api/traces", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(f.traces),
+      });
+    });
+    await page.getByRole("button", { name: "Retry" }).click();
+    await expect(page.locator("table tbody tr")).toHaveCount(2);
   });
 
   test("Direct /admin/setup and /admin/playground URLs render; unknown tab shows NotFound", async ({

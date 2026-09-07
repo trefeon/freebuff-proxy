@@ -1,4 +1,5 @@
 <script>
+  import { formatLocalDate } from "../utils/format.js";
   import { tr } from "../i18n.js";
   let {
     quota = null,
@@ -186,6 +187,17 @@
   let badge = $derived(
     `${quota?.limit ?? "—"}/day ${quota?.period ?? ""}`.trim(),
   );
+  // Absolute reset instant in local short form (QuotaTracker convention);
+  // a passed window reads "Reset <date>", never "Resets in now — <ISO>".
+  let resetRaw = $derived(
+    quota?.reset_at ??
+      quota?.resetAt ??
+      quota?.reset_at_utc ??
+      quota?.resetAtUtc ??
+      null,
+  );
+  let resetLabel = $derived(formatLocalDate(resetRaw) || resetRaw || "—");
+  let resetPassed = $derived(rel === "now");
   let label = $derived(title ?? $tr("Premium pool"));
 </script>
 
@@ -243,6 +255,7 @@
         {@const wPct = w.pct}
         {@const wColor = pctColor(wPct)}
         {@const wRel = fmtRel(w.resetAt, now)}
+        {@const wReset = formatLocalDate(w.resetAt) || w.resetAt || "—"}
         <div
           class="rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/40 p-2.5"
         >
@@ -254,8 +267,12 @@
               >
             </div>
             <span class="fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
-              {$tr("Resets in")}
-              {wRel} — {w.resetAt ?? "—"}
+              {#if wRel === "now"}
+                {$tr("Reset")} {wReset}
+              {:else}
+                {$tr("Resets in")}
+                {wRel} — {wReset}
+              {/if}
             </span>
           </div>
 
@@ -374,8 +391,12 @@
     </div>
 
     <div class="mt-1 fp-num text-[11px] text-[var(--fp-dim)] tabular-nums">
-      {$tr("Resets in")}
-      {rel} — {quota?.reset_at ?? quota?.resetAt ?? "—"}
+      {#if resetPassed}
+        {$tr("Reset")} {resetLabel}
+      {:else}
+        {$tr("Resets in")}
+        {rel} — {resetLabel}
+      {/if}
     </div>
   </div>
 {/if}

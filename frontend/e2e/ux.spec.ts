@@ -584,7 +584,9 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       (r) => r.method() === "POST" && r.url().includes("/admin/config"),
     );
     page.once("dialog", (d) => d.accept());
-    await page.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
     await configReq;
 
     // Every recorded admin POST carried the matching X-CSRF-Token.

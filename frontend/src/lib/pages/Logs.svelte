@@ -1,5 +1,5 @@
 <script>
-  import { tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import {
     RefreshCw,
     ChevronLeft,
@@ -17,6 +17,7 @@
   import EmptyState from "../components/EmptyState.svelte";
   import CopyButton from "../components/CopyButton.svelte";
   import SegmentedControl from "../components/SegmentedControl.svelte";
+  import Alert from "../components/Alert.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi, adminRoot } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
@@ -25,6 +26,12 @@
   import { copyToClipboard } from "../utils/clipboard.js";
   import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
+  import {
+    loadPageState,
+    savePageState,
+    recordPageVisit,
+    pageStateNotice,
+  } from "../stores/pageState.js";
   /** @type {any} */
   let data = $state(null);
   let loading = $state(true);
@@ -40,6 +47,22 @@
   let autoPoll = $state(true);
   let page = $state(0);
   let pageSize = $state(10);
+  // The first poll (and the restore below) wait for the stored filters:
+  // fetching early would flash an unfiltered paint and could land after the
+  // restore, clobbering it out of order.
+  let filtersReady = $state(false);
+  // Mount-time filter values. The restore only fills keys the operator has
+  // not touched since mount, so in-flight keystrokes are never overwritten.
+  const mountFilters = untrack(() => ({
+    filterMsg,
+    filterLevel,
+    hideAdmin,
+    viewMode,
+    page,
+  }));
+  // Oversized-snapshot hint from the pageState store (PUT 413 eviction).
+  let stateNotice = $state(null);
+  let unsubNotice = null;
   // Follow mode: stick the console to the newest entry at the bottom.
   // Any manual scroll-up pauses it so reading history never gets yanked;
   // scrolling back to the bottom (or the Follow toggle) resumes it.
@@ -469,7 +492,6 @@
       manualRefresh = false;
     }
   }
-
   async function refresh() {
     manualRefresh = true;
     await fetchLogs();
@@ -477,9 +499,10 @@
 
   function handleFilterChange() {
     page = 0;
+    // The persist effect below saves the full filter set (debounced,
+    // warn-only); fetch with the new filters right away.
     fetchLogs();
   }
-
   function clearFilters() {
     filterLevel = "";
     filterMsg = "";
@@ -487,9 +510,70 @@
     handleFilterChange();
   }
 
-  // Auto-poll every 1s while enabled; manual refresh / filter changes always fetch.
+  // Deep page state: the full filter set (level, message, admin toggle,
+  // view, page) survives restarts via pages_state. Guarded by filtersReady
+  // so mount defaults never persist over the stored snapshot before the
+  // restore below resolves.
+  $effect(() => {
+    if (!filtersReady) return;
+    savePageState("logs", {
+      filterMsg,
+      filterLevel,
+      hideAdmin,
+      viewMode,
+      page,
+    });
+  });
+
+  onMount(() => {
+    recordPageVisit("logs");
+    unsubNotice = pageStateNotice.subscribe((v) => (stateNotice = v));
+    loadPageState("logs").then(async (d) => {
+      if (d && typeof d === "object") {
+        if (
+          typeof d.filterMsg === "string" &&
+          filterMsg === mountFilters.filterMsg
+        )
+          filterMsg = d.filterMsg;
+        if (
+          typeof d.filterLevel === "string" &&
+          filterLevel === mountFilters.filterLevel
+        )
+          filterLevel = d.filterLevel;
+        if (
+          typeof d.hideAdmin === "boolean" &&
+          hideAdmin === mountFilters.hideAdmin
+        )
+          hideAdmin = d.hideAdmin;
+        if (
+          (d.viewMode === "console" || d.viewMode === "table") &&
+          viewMode === mountFilters.viewMode
+        )
+          viewMode = d.viewMode;
+      }
+      filtersReady = true;
+      await fetchLogs();
+      // Page restores after the first fetch lands: applying it earlier lets
+      // the pager clamp (empty entries → 1 page) reset it to 0 before the
+      // restored filters ever load.
+      if (
+        d &&
+        typeof d === "object" &&
+        Number.isInteger(d.page) &&
+        d.page >= 0 &&
+        page === mountFilters.page
+      )
+        page = d.page;
+    });
+    return () => {
+      unsubNotice?.();
+    };
+  });
+
+  // Auto-poll every 1s while enabled; the first tick waits for the filter
+  // restore above. Manual refresh / filter changes always fetch.
   usePolling(async () => {
-    if (autoPoll) await fetchLogs();
+    if (autoPoll && filtersReady) await fetchLogs();
   }, 1000);
 
   function isNearBottom() {
@@ -562,6 +646,23 @@
       onchange={() => fetchLogs()}
     />
   {/snippet}
+  {#if stateNotice}
+    <Alert tone="warning" title={$tr("Page state discarded")}>
+      <div class="flex items-start justify-between gap-3">
+        <span>{stateNotice.text}</span>
+        <button
+          type="button"
+          onclick={() => {
+            pageStateNotice.set(null);
+          }}
+          class="text-[var(--fp-dim)] hover:text-[var(--fp-text)] transition-colors shrink-0"
+          aria-label={$tr("Dismiss alert")}
+        >
+          ×
+        </button>
+      </div>
+    </Alert>
+  {/if}
 
   {#if data}
     {#if viewMode === "console"}

@@ -327,7 +327,7 @@ func (a *adminHandlers) handleReload(w http.ResponseWriter, r *http.Request) {
 	// over a just-saved one (disk NEW, memory OLD).
 	a.adminSaveMu.Lock()
 	defer a.adminSaveMu.Unlock()
-	newCfg, err := config.Load(a.configPath)
+	newCfg, err := a.loadConfig()
 	if err != nil {
 		a.logfunc().Warn("admin reload failed", "remote", remoteHost(r), "path", r.URL.Path, "err", err)
 		a.dash.RenderResult(w, http.StatusInternalServerError, false, "failed to reload config: "+err.Error(), "reload_failed")

@@ -87,11 +87,11 @@
     "group": "general",
     "kind": "text",
     "default": "127.0.0.1:3457",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces). Set via container environment."
+    "description": "Host and port to bind (loopback by default; containers set :3457 for all interfaces). Set via container environment. The listener socket is bound once at boot and never re-binds on reload."
   },
   {
     "key": "LOG_ACCESS",
@@ -108,11 +108,11 @@
     "group": "general",
     "kind": "text",
     "default": "",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
     "hidden": true,
-    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr."
+    "description": "Append log lines to a file (e.g. ./logs/proxy.log); empty = stderr. Restart-only: the log sink is opened once at boot and a reload never re-opens it."
   },
   {
     "key": "LOG_FORMAT",
@@ -123,10 +123,10 @@
       "json"
     ],
     "default": "text",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
-    "description": "Log format: text (key=value, colored) or json (one JSON object per line)."
+    "description": "Log format: text (key=value, colored) or json (one JSON object per line). Restart-only: the logger is configured once at boot and a reload never reconfigures it."
   },
   {
     "key": "LOG_LEVEL",
@@ -140,20 +140,20 @@
       "trace"
     ],
     "default": "info",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": true,
-    "description": "Log level (trace = wire-level bodies)."
+    "description": "Log level (trace = wire-level bodies). Restart-only: the logger is configured once at boot and a reload never reconfigures it."
   },
   {
     "key": "LOG_RING_SIZE",
     "group": "general",
     "kind": "int",
     "default": "500",
-    "restart_only": false,
+    "restart_only": true,
     "secret": false,
     "essential": false,
-    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000)."
+    "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000). Restart-only: the ring is allocated once at boot and a reload never resizes it."
   },
   {
     "key": "SAFE_MODE",
@@ -228,16 +228,6 @@
     "description": "Finish runs after this idle period (0 = disabled; SAFE_MODE sets 30m when unset)."
   },
   {
-    "key": "MATURITY_ALLOW_PREMIUM",
-    "group": "pool",
-    "kind": "bool",
-    "default": "false",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Allow the per-token premium-short touch mode (one short premium admission instead of the Economy touch). Default false: premium touches spend the account's daily Freebucks pool and stay opt-in per token."
-  },
-  {
     "key": "MATURITY_DRY_RUN",
     "group": "pool",
     "kind": "bool",
@@ -275,6 +265,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Model the Economy maturity touch starts (cheapest served metered model — minimal daily Freebucks spend, never a premium model for farming)."
   },
   {
@@ -512,6 +503,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
   },
   {
@@ -562,6 +554,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
+    "hidden": true,
     "description": "Map model=fallback when its session quota is exhausted or unentitled (comma-separated k=v pairs). Empty default: no fallback (surfaces honest 429 with guidance to switch model)."
   },
   {

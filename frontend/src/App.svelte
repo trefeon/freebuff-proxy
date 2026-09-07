@@ -17,6 +17,7 @@
     updateAuthState,
   } from "./lib/stores/session.js";
   import { tr } from "./lib/i18n.js";
+  import { loadPageState, savePageState } from "./lib/stores/pageState.js";
   function getInitialTab() {
     if (typeof window === "undefined") return "overview";
     const path = window.location.pathname;
@@ -45,7 +46,32 @@
     activeTab = getInitialTab();
   }
 
+  // Shell chrome state (pages_state "shell" key): the last-visited hash,
+  // restored on boot when the URL carries no explicit route. Decided
+  // synchronously at init (not in onMount): the tab-sync effect below can
+  // run before onMount and would otherwise stamp #overview over the
+  // in-flight restore.
+  let restoringHash = !hasExplicitRoute();
+
+  function hasExplicitRoute() {
+    if (typeof window === "undefined") return true;
+    if (window.location.hash.replace("#", "")) return true;
+    const segments = window.location.pathname.split("/").filter(Boolean);
+    return segments.length >= 2 && segments[0] === "admin" && !!segments[1];
+  }
+
+  function persistHash() {
+    const h = window.location.hash.replace("#", "");
+    // Only known pages are remembered: persisting an unknown hash would
+    // reopen a NotFound view on the next boot with no explicit route.
+    // shell.lastHash is last-writer-wins (see lib/stores/pageState.js).
+    const norm = h === "config" ? "settings" : h;
+    if (norm && pageComponentFor(norm))
+      savePageState("shell", { lastHash: norm });
+  }
+
   $effect(() => {
+    if (restoringHash) return;
     if (
       activeTab !== "login" &&
       window.location.hash.replace("#", "") !== activeTab
@@ -66,6 +92,26 @@
   onMount(() => {
     syncTabFromURL();
     window.addEventListener("hashchange", syncTabFromURL);
+    window.addEventListener("hashchange", persistHash);
+
+    // Boot restore: no explicit hash/path route reopens the last-visited
+    // page (shell.lastHash in pages_state). An explicit route always wins
+    // and is persisted as the newest visit.
+    if (restoringHash) {
+      loadPageState("shell")
+        .then((d) => {
+          const raw = d && typeof d.lastHash === "string" ? d.lastHash : "";
+          const h = raw === "config" ? "settings" : raw.replace("#", "");
+          if (h && pageComponentFor(h)) window.location.hash = h;
+        })
+        .finally(() => {
+          restoringHash = false;
+          if (!window.location.hash.replace("#", ""))
+            window.location.hash = activeTab;
+        });
+    } else {
+      persistHash();
+    }
 
     // Fetch version / update check. fetchAPI (not raw fetch): it routes the
     // admin base and surfaces the session-expired 401/redirect so the
@@ -94,6 +140,7 @@
 
     return () => {
       window.removeEventListener("hashchange", syncTabFromURL);
+      window.removeEventListener("hashchange", persistHash);
     };
   });
 </script>

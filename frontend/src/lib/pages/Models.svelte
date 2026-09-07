@@ -10,6 +10,7 @@
   import { tokensData, ensureTokensStore } from "../stores/tokens.js";
   import { sortModelsByPrice } from "../utils/freebucks.js";
   import { tr } from "../i18n.js";
+  import { recordPageVisit } from "../stores/pageState.js";
   // Cheapest-first order on the meter (upstream picker revamp): merge the
   // live per-token price maps first-win, and sort only when at least one
   // price exists — unmetered accounts keep the deliberate catalog order.
@@ -74,6 +75,7 @@
     return "";
   }
   onMount(() => {
+    recordPageVisit("models");
     const release = ensureTokensStore();
     const unsub = tokensData.subscribe((v) => {
       if (v) live = v;

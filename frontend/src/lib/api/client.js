@@ -92,15 +92,23 @@ export async function fetchAPI(path, opts = {}) {
   if (!res.ok) {
     // Admin endpoints emit one envelope ({ok,message[,code]}); surface the
     // human message instead of a raw JSON blob. Fall back to status text.
+    // The HTTP status and envelope code ride along on the error so callers
+    // with size/rate gates (pages_state 413 page_too_large) can branch
+    // without parsing message text.
     const text = await res.text().catch(() => "");
     let msg;
+    let code;
     try {
       const parsed = JSON.parse(text);
       msg = parsed?.message ?? "";
+      code = parsed?.code;
     } catch {
       msg = text;
     }
-    throw new Error(msg || `HTTP ${res.status}`);
+    const err = new Error(msg || `HTTP ${res.status}`);
+    err.status = res.status;
+    if (code) err.code = code;
+    throw err;
   }
 
   return res.json();
@@ -118,6 +126,31 @@ export async function postAPI(path, body) {
     headers: { "Content-Type": "application/json" },
     body: body != null ? JSON.stringify(body) : undefined,
   });
+}
+
+/**
+ * PUT JSON to an admin API endpoint (per-page state upserts).
+ * Carries the CSRF double-submit header like POST.
+ * @param {string} path
+ * @param {any} body
+ * @returns {Promise<any>} Parsed JSON response
+ */
+export async function putAPI(path, body) {
+  return fetchAPI(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
+ * DELETE to an admin API endpoint (keyed resource resets).
+ * Carries the CSRF double-submit header like POST.
+ * @param {string} path
+ * @returns {Promise<any>} Parsed JSON response
+ */
+export async function deleteAPI(path) {
+  return fetchAPI(path, { method: "DELETE" });
 }
 
 /**

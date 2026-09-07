@@ -13,7 +13,7 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 1000 app \
     && adduser -S -u 1000 -G app app \
-    && mkdir -p /app/dump /app/logs \
+    && mkdir -p /app/data /app/dump /app/logs \
     && chown -R app:app /app
 WORKDIR /app
 COPY --from=build /out/freebuff-proxy /usr/local/bin/freebuff-proxy

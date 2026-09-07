@@ -17,12 +17,16 @@
     tokensError as tokensErrorStore,
     ensureTokensStore,
     refreshTokens,
-    probeAllQuotas,
   } from "../stores/tokens.js";
   import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
   import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
   import { confirmAction } from "../stores/confirm.js";
+  import {
+    loadPageState,
+    savePageState,
+    recordPageVisit,
+  } from "../stores/pageState.js";
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -100,7 +104,6 @@
   let expandedToken = $state(null);
   let spawnModels = $state({});
   let actionPending = $state(false);
-  let probingAll = $state(false);
   let now = $state(Date.now());
 
   const tokenValid = $derived(
@@ -126,8 +129,20 @@
       const idx = t.index ?? i;
       if (!(idx in spawnModels)) spawnModels[idx] = "";
     });
+    clampExpandedToken();
     error = "";
     loading = false;
+  }
+
+  // A restored expandedToken may point past the live list (the pool shrank
+  // while the snapshot sat in pages_state). Drop out-of-range indexes
+  // instead of opening the wrong drawer — and never re-persist the stale
+  // value back over the snapshot.
+  function clampExpandedToken() {
+    if (expandedToken == null) return;
+    const list = data?.tokens ?? [];
+    const ok = list.some((t, i) => (t?.index ?? i) === expandedToken);
+    if (!ok) expandedToken = null;
   }
 
   async function addToken(e) {
@@ -274,25 +289,6 @@
     );
   }
 
-  // Probe-all: same zero-cost upstream GET per token as the per-row probe
-  // buttons (no session claimed), fanned out via test-all. No confirm: the
-  // effect is cache freshness only, nothing is spent or ended. Uses the
-  // shared store helper (not triggerAction/postAPI: test-all answers with
-  // concatenated per-token JSON objects that res.json() cannot parse).
-  async function handleProbeAll() {
-    if (probingAll) return;
-    probingAll = true;
-    try {
-      await probeAllQuotas();
-      actionOK = true;
-      actionMessage = $tr("Quotas refreshed from upstream.");
-    } catch (e) {
-      actionOK = false;
-      actionMessage = e.message || $tr("Quota refresh failed");
-    } finally {
-      probingAll = false;
-    }
-  }
   function handleDropSession(idx) {
     return triggerAction(
       tokenActions.dropSession(idx),
@@ -385,12 +381,23 @@
       oauthStarting = false;
     }
   }
-
   function toggleExpand(idx) {
     expandedToken = expandedToken === idx ? null : idx;
+    savePageState("tokens", { expandedToken });
+  }
+
+  // Deep page state: the expanded token row survives restarts via
+  // pages_state (warn-only; an out-of-range index is dropped).
+  function restoreExpandedToken() {
+    loadPageState("tokens").then((d) => {
+      if (Number.isInteger(d?.expandedToken) && d.expandedToken >= 0)
+        expandedToken = d.expandedToken;
+    });
   }
 
   onMount(() => {
+    recordPageVisit("tokens");
+    restoreExpandedToken();
     // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
     // #292); this page renders from the cached snapshot and refreshes the
     // store after every mutation.
@@ -781,8 +788,6 @@
     onDropSession={handleDropSession}
     onSwap={handleSwap}
     onMove={handleMove}
-    onProbeAll={handleProbeAll}
-    probeAllPending={probingAll}
     onRetry={() => {
       error = "";
       refreshTokens();

@@ -202,7 +202,7 @@ func (a *adminHandlers) handleConfigSave(w http.ResponseWriter, r *http.Request)
 		a.dash.RenderConfigResult(w, r, false, "Failed to write .env: "+err.Error())
 		return
 	}
-	newCfg, err := config.Load(a.configPath)
+	newCfg, err := a.loadConfig()
 	if err != nil {
 		switch {
 		case oldErr == nil:
@@ -247,13 +247,15 @@ func (a *adminHandlers) handleConfigSave(w http.ResponseWriter, r *http.Request)
 	// constructed at boot). Report them explicitly so the save response
 	// cannot read as a full live update.
 	if restartOnly := changedRestartOnlyKeys(oldCfg, &newCfg); len(restartOnly) > 0 {
-		message := fmt.Sprintf("Saved and reloaded. These keys apply after restart only: %s",
+		message := fmt.Sprintf("Saved and reloaded. These keys apply after restart only: %s."+a.settingsOverlayNote(),
 			strings.Join(restartOnly, ", "))
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": message, "restart_only": restartOnly})
 		return
 	}
-	a.dash.RenderConfigResult(w, r, true, "Saved and reloaded — effective configuration updated.")
+	// A DB overlay (ADR-0019) still beats the just-saved file until its row
+	// is deleted: say so, or the operator will believe the file won.
+	a.dash.RenderConfigResult(w, r, true, "Saved and reloaded — effective configuration updated."+a.settingsOverlayNote())
 }
 
 // restartOnlyConfigKeys lists knobs that are snapshotted when the upstream
@@ -282,6 +284,11 @@ var restartOnlyConfigKeys = []string{
 	"RUNS_DRAIN_QUEUE_CAP",
 	"RUNS_DRAIN_TTL",
 	"DASHBOARD_ENABLED",
+	"LISTEN_ADDR",
+	"LOG_LEVEL",
+	"LOG_FORMAT",
+	"LOG_FILE",
+	"LOG_RING_SIZE",
 }
 
 // changedRestartOnlyKeys returns the subset of restartOnlyConfigKeys whose

@@ -1,6 +1,8 @@
 <script>
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
+  import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import { Activity } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -8,12 +10,24 @@
   /**
    * Traffic & Rate Limiting settings card (Pool group).
    * Built using the SettingsCard and SettingsRow template components.
+   * All three keys apply live on reload (none is restart-only).
    *
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
+   * @prop {(() => Promise<void>) | null} [onSaved] - parent refetch after a
+   *   per-key DB-overlay save
    */
-  let { formValues, rawText = "", onField } = $props();
+  let {
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+    onSaved = null,
+  } = $props();
 
   let env = $derived(parseEnv(rawText));
   let rateLimitPerIp = $derived(formValues.RATE_LIMIT_PER_IP ?? "0");
@@ -48,6 +62,16 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.RATE_LIMIT_PER_IP === "db"}
+        <DbBadge settingKey="RATE_LIMIT_PER_IP" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="RATE_LIMIT_PER_IP"
+        value={rateLimitPerIp}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="w-full sm:w-44">
@@ -57,7 +81,7 @@
           min="0"
           step="1"
           aria-label="RATE_LIMIT_PER_IP"
-          class="fp-input w-full !text-xs !py-1.5"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="0"
           value={rateLimitPerIp}
           oninput={(e) => {
@@ -94,6 +118,16 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MAX_REQUESTS_PER_MINUTE === "db"}
+        <DbBadge settingKey="MAX_REQUESTS_PER_MINUTE" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="MAX_REQUESTS_PER_MINUTE"
+        value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="w-full sm:w-44">
@@ -103,7 +137,7 @@
           min="0"
           step="1"
           aria-label="MAX_REQUESTS_PER_MINUTE"
-          class="fp-input w-full !text-xs !py-1.5"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="30"
           value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
           oninput={(e) => {
@@ -141,6 +175,16 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MAX_REQUESTS_PER_DAY === "db"}
+        <DbBadge settingKey="MAX_REQUESTS_PER_DAY" {onReset} />
+      {/if}
+    {/snippet}
+    {#snippet extra()}
+      <DbOverrideSave
+        settingKey="MAX_REQUESTS_PER_DAY"
+        value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
+        {onSaved}
+      />
     {/snippet}
 
     <div class="w-full sm:w-44">
@@ -150,6 +194,7 @@
           min="0"
           step="1"
           aria-label="MAX_REQUESTS_PER_DAY"
+          class="fp-input w-full !text-xs !py-1.5 !pr-14"
           placeholder="1500"
           value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
           oninput={(e) => {

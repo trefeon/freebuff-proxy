@@ -48,13 +48,15 @@
       <span class="sr-only">{$tr("Loading traces")}</span>
     </div>
   {:else if error}
-    <div class="space-y-4">
-      <Alert tone="error">{error}</Alert>
-      <Button variant="secondary" onclick={fetchData}>
-        <RefreshCw size={15} />
-        {$tr("Retry")}
-      </Button>
-    </div>
+    <Alert tone="error" title={$tr("Could not load this page")}>
+      {error}
+      <div class="mt-3">
+        <Button variant="secondary" onclick={fetchData}>
+          <RefreshCw size={15} />
+          {$tr("Retry")}
+        </Button>
+      </div>
+    </Alert>
   {:else if data?.enabled}
     <Card
       title={$tr("Trace log")}

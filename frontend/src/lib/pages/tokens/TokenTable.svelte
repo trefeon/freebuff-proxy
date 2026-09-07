@@ -4,7 +4,6 @@
   import EmptyState from "../../components/EmptyState.svelte";
   import TokenCard from "../../components/TokenCard.svelte";
   import TokenCardMobile from "../../components/TokenCardMobile.svelte";
-  import { RefreshCw } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
 
   /**
@@ -30,8 +29,6 @@
    * @prop {(from: number, to: number) => void} [onSwap]
    * @prop {(from: number, to: number) => void} [onMove]
    * @prop {() => void} onRetry
-   * @prop {() => void} [onProbeAll] - refresh-all quotas handler (card header)
-   * @prop {boolean} [probeAllPending=false]
    */
   let {
     tokens = [],
@@ -51,8 +48,6 @@
     onSwap,
     onMove,
     onRetry,
-    onProbeAll = null,
-    probeAllPending = false,
   } = $props();
 
   let draggingIndex = $state(null);
@@ -120,27 +115,6 @@
       )
     : $tr("Tap a card to see session & quota details")}
 >
-  {#snippet actions()}
-    {#if onProbeAll}
-      <Button
-        variant="secondary"
-        size="sm"
-        onclick={onProbeAll}
-        disabled={probeAllPending || actionPending}
-        title={$tr(
-          "Probe every pooled token against upstream (no session claimed) and reload the quotas.",
-        )}
-      >
-        {#if probeAllPending}
-          <RefreshCw size={14} class="animate-spin" />
-          <span>{$tr("Probing…")}</span>
-        {:else}
-          <RefreshCw size={14} />
-          <span>{$tr("Probe all")}</span>
-        {/if}
-      </Button>
-    {/if}
-  {/snippet}
   {#if loading}
     <div class="flex flex-col gap-3">
       <div class="skeleton skeleton-text w-1/3"></div>

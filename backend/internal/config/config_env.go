@@ -28,6 +28,13 @@ const (
 // credential files.
 type LoadOptions struct {
 	DiscoverCLIToken func() (token, email, path string, ok bool)
+	// Overlay is the DB settings overlay (ADR-0019): canonical KEY -> raw
+	// VALUE pairs applied after the .env file and before the process
+	// environment, so UI-persisted knobs beat the file without rewriting
+	// it while explicit process env keeps winning. Blocked keys (secrets,
+	// UPSTREAM_BASE_URL, DB_PATH) are filtered, never applied. Nil or empty
+	// behaves like Load.
+	Overlay map[string]string
 }
 
 // Load resolves configuration from the optional JSON file at configPath
@@ -52,6 +59,9 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if err := applyDotenv(&raw, envFileUsed); err != nil {
 		return Config{}, err
 	}
+	// DB settings overlay (ADR-0019): beats the file, loses to explicit
+	// process env (applied below).
+	applySettingsOverlay(&raw, opts.Overlay)
 
 	overrideString(&raw.ListenAddr, "LISTEN_ADDR")
 	overrideString(&raw.UpstreamBaseURL, "UPSTREAM_BASE_URL")
@@ -125,7 +135,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.MaturityDryRun, "MATURITY_DRY_RUN")
 	overrideString(&raw.MaturityTouchModel, "MATURITY_TOUCH_MODEL")
 	overrideInt(&raw.MaturityTargetDays, "MATURITY_TARGET_DAYS")
-	overrideBool(&raw.MaturityAllowPremium, "MATURITY_ALLOW_PREMIUM")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
@@ -511,7 +520,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		MaturityDryRun:                   raw.MaturityDryRun,
 		MaturityTouchModel:               maturityTouchModel,
 		MaturityTargetDays:               maturityTargetDays,
-		MaturityAllowPremium:             raw.MaturityAllowPremium,
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -626,6 +634,18 @@ func applyDotenv(raw *rawConfig, path string) error {
 		raw.AuthTokens = splitList(v)
 		raw.AuthTokensSet = true
 	}
+	applyMappedValues(raw, get)
+	return nil
+}
+
+// applyMappedValues overlays KEY=VALUE pairs from get onto raw. It is the
+// single key list shared by applyDotenv (the .env file tier) and
+// applySettingsOverlay (the DB overlay tier, ADR-0019), so every key the
+// loader parses is overlay-addressable by construction — a new knob lands
+// here once and both tiers learn it (pinned by
+// TestCatalogCoversApplyDotenvKeys on the dotenv side and
+// TestOverlayCoversCatalog on the overlay side).
+func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideStringFrom(&raw.ListenAddr, get, "LISTEN_ADDR")
 	overrideStringFrom(&raw.UpstreamBaseURL, get, "UPSTREAM_BASE_URL")
 	overrideStringFrom(&raw.RotationInterval, get, "ROTATION_INTERVAL")
@@ -691,7 +711,6 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideBoolFrom(&raw.MaturityDryRun, get, "MATURITY_DRY_RUN")
 	overrideStringFrom(&raw.MaturityTouchModel, get, "MATURITY_TOUCH_MODEL")
 	overrideIntFrom(&raw.MaturityTargetDays, get, "MATURITY_TARGET_DAYS")
-	overrideBoolFrom(&raw.MaturityAllowPremium, get, "MATURITY_ALLOW_PREMIUM")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")
@@ -701,7 +720,6 @@ func applyDotenv(raw *rawConfig, path string) error {
 	overrideStringFrom(&raw.CompressPrompt, get, "COMPRESS_PROMPT")
 	overrideStringFrom(&raw.CacheControlInjection, get, "CACHE_CONTROL_INJECTION")
 	overrideStringFrom(&raw.ReasoningInContent, get, "REASONING_IN_CONTENT")
-	return nil
 }
 
 // override applies envName from get to target through parse. An unset or

@@ -37,10 +37,10 @@ func TestHistorySinkConfigEvents(t *testing.T) {
 	sink := &recordingSink{}
 	p.SetHistorySink(sink)
 
-	if err := p.SetMaturity(0, true, 7, MaturityModeUnmetered); err != nil {
+	if err := p.SetMaturity(0, true, 7, MaturityModeUnmetered, ""); err != nil {
 		t.Fatalf("SetMaturity: %v", err)
 	}
-	if err := p.SetMaturity(0, false, 0, ""); err != nil {
+	if err := p.SetMaturity(0, false, 0, "", ""); err != nil {
 		t.Fatalf("SetMaturity disable: %v", err)
 	}
 	kinds := sink.kinds()
@@ -55,7 +55,7 @@ func TestHistorySinkConfigEvents(t *testing.T) {
 	}
 
 	p.SetHistorySink(nil)
-	if err := p.SetMaturity(0, true, 7, MaturityModeUnmetered); err != nil {
+	if err := p.SetMaturity(0, true, 7, MaturityModeUnmetered, ""); err != nil {
 		t.Fatalf("SetMaturity: %v", err)
 	}
 	if len(sink.kinds()) != 2 {
