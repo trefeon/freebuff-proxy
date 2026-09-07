@@ -97,6 +97,7 @@ func (m *Manager) adoptOwner() (CLIOwner, bool) {
 // is enabled it adopts the CLI's active session (or refuses to create a
 // competing one); otherwise it creates a fresh session exactly as before.
 func (m *Manager) adoptOrCreate(ctx context.Context, requestedModel string) (*upstream.SessionState, error) {
+	admitStart := time.Now()
 	m.mu.Lock()
 	adopt := m.adopt
 	m.mu.Unlock()
@@ -147,7 +148,7 @@ func (m *Manager) adoptOrCreate(ctx context.Context, requestedModel string) (*up
 			}
 			st.PollAt = time.Now().Add(wait)
 		}
-		slog.Info("adopted queued CLI freebuff session", "instance_id", shortInstance(st.InstanceID), "position", st.Position)
+		slog.Info("adopted queued CLI freebuff session", "instance_id", shortInstance(st.InstanceID), "position", st.Position, "wait", queueWaitHuman(st.PollAt), "elapsed", queueElapsedHuman(admitStart))
 		return st, nil
 	case "disabled":
 		slog.Info("adopted disabled CLI freebuff session")
@@ -215,6 +216,27 @@ func shortInstance(id string) string {
 		return id[:8] + "…"
 	}
 	return id
+}
+
+// queueWaitHuman renders the remaining wait until pollAt as an
+// operator-readable duration ("1m30s"). Log-only helper: zero behavior
+// change, structured slog fields stay untouched.
+func queueWaitHuman(pollAt time.Time) string {
+	d := time.Until(pollAt).Round(time.Second)
+	if d < 0 {
+		d = 0
+	}
+	return d.String()
+}
+
+// queueElapsedHuman renders time spent in admission since start as an
+// operator-readable duration ("5s"). Log-only helper: zero behavior change.
+func queueElapsedHuman(start time.Time) string {
+	d := time.Since(start).Round(time.Second)
+	if d < 0 {
+		d = 0
+	}
+	return d.String()
 }
 
 // asyncReAdmit runs a pre-emptive refresh in the background (issue #99): the
@@ -356,6 +378,7 @@ func (m *Manager) releaseHeldSlotForTarget(ctx context.Context, targetModel stri
 // old instance is still authoritative must NOT invalidate the cached session
 // (the caller is riding it) — return instead of committing nil and looping.
 func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive bool) error {
+	admitStart := time.Now()
 	targetModel := requestedModel
 	// Issue #158: a model cached unavailable skips the 409 admission
 	// roundtrip entirely (see modelUnavailableShortCircuit).
@@ -508,7 +531,7 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			})
 			m.mu.Unlock()
 			slog.Debug("session queued", "instance_id", st.InstanceID, "model", model,
-				"position", st.Position, "queue_depth", st.QueueDepth, "poll_at", pollAt.Format(time.RFC3339))
+				"position", st.Position, "queue_depth", st.QueueDepth, "poll_at", pollAt.Format(time.RFC3339), "wait", queueWaitHuman(pollAt), "elapsed", queueElapsedHuman(admitStart))
 			return nil
 		case "ended", "superseded", "none":
 			if preemptive {

@@ -276,7 +276,7 @@ Daily management lives in the dashboard (`/admin`; see [Admin Dashboard](#admin-
 
 ## Configuration Reference
 
-All keys can be set via environment variables or the JSON config file passed to `-config` (`AUTO_DISCOVER_TOKEN` is environment-only); a `.env` file (resolved automatically from your platform config directory, or `./.env` in the working directory when present) is also read, and for the keys it covers it behaves like the environment. Precedence, lowest to highest: **built-in defaults < JSON `-config` < `.env` < environment**. List values (`AUTH_TOKENS`, `API_KEYS`, `MODELS_ALLOW`) are comma-separated in env and arrays in JSON (`MODELS_ALLOW` also accepts a plain comma-separated JSON string).
+All keys can be set via environment variables or the JSON config file passed to `-config` (`AUTO_DISCOVER_TOKEN` is environment-only); a `.env` file (resolved automatically from your platform config directory, or `./.env` in the working directory when present) is also read, and for the keys it covers it behaves like the environment. Precedence, lowest to highest: **built-in defaults < JSON `-config` < `.env` < environment**. List values (`AUTH_TOKENS`, `API_KEYS`, `MODELS_ALLOW`) are comma-separated in env and arrays in JSON (`MODELS_ALLOW` also accepts a plain comma-separated JSON string). Minimal starter: copy `.env.minimal` to `.env` for the 7 essential keys.
 
 | Environment Variable | Default | Description |
 |---|---|---|

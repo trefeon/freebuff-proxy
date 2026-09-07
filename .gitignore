@@ -10,6 +10,7 @@ reference/
 .env.*
 !.env.example
 !.env.full-example
+!.env.minimal
 config.json
 config.*.json
 !config.example.json
