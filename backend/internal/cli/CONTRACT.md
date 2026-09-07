@@ -30,10 +30,14 @@ are diagnostics/setup utilities, not second gateways.
 
 - `Serve` returns an exit code (0 normal, 1 server failure); the caller maps
   it to `os.Exit`. Do not `os.Exit` inside subpackages except main-mapped
-  mode runners.
 - Shutdown: `os.Interrupt` + `SIGTERM`; on Windows Ctrl+C and Ctrl+Break both
   arrive as SIGINT (pinned by `TestCtrlBreakDrainsGracefully`). The drain is
   graceful and bounded; every background worker joins the shutdown context.
+- Quota boot seed (ADR-0024, `quota_seed.go`): after the pool is built and
+  before `Start`, the latest persisted row per (token, model) pushes into
+  the live view via `pool.SeedQuotaSnapshot` (CLI maps store rows across the
+  boundary; the pool never imports the store). Bounded read, warn-only
+  failure (nil store skips), out-of-range token rows dropped.
 - Log-level precedence: `LOG_LEVEL` config wins, `-v` → debug, dev builds
   (unstamped version) default debug.
 - Service units (Task Scheduler XML, systemd unit, launchd plist) are
@@ -42,11 +46,8 @@ are diagnostics/setup utilities, not second gateways.
 - Self-update (`update/`): SHA-256-verified against `checksums.txt`, atomic
   swap; never overwrite a running binary on Windows without the deferred-swap path.
 - Exe-adjacent `.env` warning and admin-cleartext warning fire at the right
-  moments; they are operator-facing diagnostics, not logs to silence.
-
-## Tests that protect it
-
-`cli_test.go` (flags, Serve wiring), `cli_windows_test.go`
+`cli_test.go` (flags, Serve wiring), `quota_seed_test.go` (ADR-0024: row
+mapping/filtering, warn-only store failure, nil guards), `cli_windows_test.go`
 (ctrl+break, service units), `doctor/`, `update/`, `setup/`, `validate/`,
 `port/`, `service/`, `refreshtoken/` tests, cmd E2E suite
 (serve/drain/port-conflict/config-json/bridge/doctor/test-token/setup/update).

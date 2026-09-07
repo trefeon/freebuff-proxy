@@ -20,6 +20,10 @@ tokens; session owns the handshake mechanics.
 - Admission control: global + per-model concurrent-admission caps (wait-or-503);
   `SESSION_PROBE_CACHE_TTL` reuses poll state; `SESSION_RE_ADMIT_LEAD`
   refreshes ahead of expiry while the request rides the old session.
+- Quota seed: `SeedQuota` (ADR-0024, `quota_seed.go`) installs one persisted
+  row as last-known quota — no-op under live state, newer-probe-time-wins
+  per model via `savedQuotaSrcAt` (stamped by probe/admission/restore
+  writes), applied rows marked stale with their probe time.
 
 ## Allowed dependencies
 
@@ -46,10 +50,10 @@ in the pool sense; pool drives session from above.
   not just pooled ones (PR #348 pattern).
 - Store keys are token SHA-256 hashes; raw tokens never touch disk.
 
-## Tests that protect it
-
 `session_lifecycle_test.go`, `session_admission_test.go`,
-`session_quota_restore_test.go`, `session_commit_test.go`,
+`session_quota_restore_test.go`, `quota_seed_test.go` (ADR-0024 seed:
+fill/stale-mark, rejections, live-probe no-downgrade, newer-wins,
+idempotence, live-state skip, restore-time baseline), `session_commit_test.go`,
 `session_persist_test.go`, `store_test.go`, `glm_guard_test.go`,
 `session_handling_test.go` (in pool, cross-layer).
 

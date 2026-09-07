@@ -33,10 +33,12 @@ The HTTP surface of the bridge: OpenAI chat completions + responses, Anthropic m
 - Request correlation: every upstream attempt shares the server's `req_id` (D1); retry chains log once with real `backoff_ms`.
 - Client disconnect cancels the upstream body read (context propagation); keepalives hold the downstream connection during long reasoning pauses.
 - Dashboard security: open mode (`ADMIN_TOKEN` unset or factory default) is loopback-only (403 remote) for config/logs/token routes; login rate limit 5 fails/min/IP; stateless HMAC cookie; CSRF double-submit on admin POSTs.
+- Token test-all visit probe (ADR-0025): `POST /admin/tokens/test-all?auto=1` probes only when the pool-scoped last-bulk-probe timestamp is older than `pool.QuotaVisitProbeMaxAge` (1h); fresh returns the current view untouched with an ok skip note in the same envelope shape. No-param always forces with byte-identical per-token rows and refreshes the timestamp. No new route (query param only — `admin_routes_test.go` untouched).
 
 ## Tests that protect it
 
 Harness conformance (`conformance_pi/omp/codex/cline/kilocode/qwen/roo/aider/goose/continue/keepalive/opencode` + `harness_compatibility`), wire replays (`replay_openai/anthropic/responses/ops` incl. `TestReplayMessagesTurnSpendLimited`), engine (`chat_attempt_test`, `chat_core_snapshot_test`, `engine_helpers_test`), relays (`relay_binding/unclosed_xml/xml/protocol_fixes`, `anthropic_stream_blocks`, `stream_completeness`), surfaces (`server_chat/hybrid/bridge/api`, `agentic_mimo_e2e`, `omp_mimo_simulation`, `fallback_transparency`, `request_params`, `model_unavailable`, `health_quota`, `server_models`, `wire_metrics`, `ratelimit`, `env`, `configmeta`, `access_logs`, `gzip`, `lifecycle`), dashboard + admin (`dashboard_test/pages/edge`, `admin_auth/csrf/openmode/password/routes/restart/require_login/internal/tokens`).
+`admin_tokens_visitprobe_test.go` (ADR-0025: auto stale-probes every token session-less, auto fresh-skips with zero upstream touch, manual forces despite fresh and refreshes the timestamp).
 
 ## Safe modification patterns
 

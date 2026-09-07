@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/modelcat"
+	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/upstream"
 	"io"
 	"net/http"
@@ -227,12 +228,25 @@ func (a *adminHandlers) handleTokenTest(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *adminHandlers) handleTokenTestAll(w http.ResponseWriter, r *http.Request) {
+	// Visit auto-probe (ADR-0025): the Quota Tracker page fires ?auto=1 on
+	// mount so a cold page shows numbers without a button press. Stale
+	// only (pool-scoped 1h throttle shared by all clients/tabs); fresh
+	// returns the current view untouched with an ok note in the same
+	// envelope shape the client already drains. The manual button (no
+	// param) always forces and refreshes the throttle timestamp.
+	if r.URL.Query().Get("auto") == "1" {
+		if a.pool.ProbeAllIfStale(r.Context(), pool.QuotaVisitProbeMaxAge) {
+			a.dash.RenderConfigResult(w, r, true, "Quotas refreshed from upstream.")
+		} else {
+			a.dash.RenderConfigResult(w, r, true, "Quota snapshot is fresh; skipping upstream probe.")
+		}
+		return
+	}
+	results := a.pool.ProbeAll(r.Context())
 	count := 0
-	for _, snap := range a.pool.PoolSnapshot().Tokens {
-		i := snap.Token
-		ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-		state, err := a.pool.ProbeToken(ctx, i)
-		cancel()
+	for _, res := range results {
+		i := res.Index
+		state, err := res.State, res.Err
 		ok := err == nil || errors.Is(err, upstream.ErrNoActiveSession)
 		msg := "ok"
 		switch {
