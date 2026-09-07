@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { recordPageVisit } from "../stores/pageState.js";
   import { SvelteSet } from "svelte/reactivity";
   import PageShell from "../components/PageShell.svelte";
   import FieldBox from "../components/FieldBox.svelte";
@@ -190,6 +191,7 @@
   }
 
   onMount(() => {
+    recordPageVisit("maturity");
     const release = ensureTokensStore();
     unsubStore = tokensStore.subscribe(applyTokens);
     unsubErr = tokensErrorStore.subscribe((err) => {

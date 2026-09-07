@@ -19,6 +19,7 @@ import (
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/ratelimit"
 	"freebuff-proxy/backend/internal/registry"
+	"freebuff-proxy/backend/internal/store"
 	"freebuff-proxy/backend/internal/upstream"
 )
 
@@ -41,7 +42,11 @@ type adminHandlers struct {
 	// authClientFunc reads the Server's current login-wizard client: options
 	// may install it after construction.
 	authClientFunc func() *upstream.Client
-	rateLimiter    *ratelimit.Limiter
+	// settings is the DB settings overlay store (ADR-0019): the same handle
+	// as Server.hist (one SQLite file). Nil keeps the settings endpoints on
+	// file/env/default with mutations 503.
+	settings    *store.Store
+	rateLimiter *ratelimit.Limiter
 
 	// handleChat forwards the playground's synthetic chat request to the
 	// normal chat pipeline (admin.go:176).
@@ -59,7 +64,7 @@ func (a *adminHandlers) handleAdminRestart(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate configuration before restart to prevent exiting on broken settings
-	if _, err := config.Load(a.configPath); err != nil {
+	if _, err := a.loadConfig(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]any{

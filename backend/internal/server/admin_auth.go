@@ -677,7 +677,7 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 		return
 	}
 
-	newCfg, err := config.Load(a.configPath)
+	newCfg, err := a.loadConfig()
 	if err != nil {
 		restoreEnvFile(oldBytes, oldErr)
 		a.logfunc().Warn("admin change password reload failed; restored .env", "err", err)
@@ -778,7 +778,7 @@ func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	newCfg, err := config.Load(a.configPath)
+	newCfg, err := a.loadConfig()
 	if err != nil {
 		restoreEnvFile(oldBytes, oldErr)
 		a.logfunc().Warn("admin require login reload failed; restored .env", "err", err)

@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import { recordPageVisit } from "../stores/pageState.js";
   import { RefreshCw, Save, X } from "@lucide/svelte";
   import PageShell from "../components/PageShell.svelte";
   import Button from "../components/Button.svelte";
@@ -9,7 +10,7 @@
   import GatewaySettings from "./settings/GatewaySettings.svelte";
   import TrafficSettings from "./settings/TrafficSettings.svelte";
   import AdvancedSettings from "./settings/AdvancedSettings.svelte";
-  import { fetchAPI, postForm } from "../api/client.js";
+  import { fetchAPI, postForm, deleteAPI } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
@@ -30,7 +31,7 @@
   // eslint-disable svelte/prefer-svelte-reactivity -- codebase idiom: $state.raw + full reassignment (changedKeys = next etc.), never in-place mutation of the wrapped collection
   let changedKeys = $state.raw(new Set()); // form-touched keys — only these are serialized into the document
   let effectiveMap = $state.raw(new Map()); // key → { value, secret }
-
+  let settingSources = $state({}); // key → env|db|file|default (ADR-0019)
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
   // ---------------------------------------------------------------------------
@@ -117,6 +118,11 @@
     return n;
   });
 
+  // How many keys the DB overlay currently wins (ADR-0019 badge count).
+  let dbCount = $derived(
+    Object.values(settingSources).filter((s) => s === "db").length,
+  );
+
   // ---------------------------------------------------------------------------
   // Data
   // ---------------------------------------------------------------------------
@@ -143,15 +149,45 @@
       }
       // Keys absent from the effective config keep an informational "not set" badge;
       // the controls stay editable so the operator can set them from the form.
-      // When `effective` is missing entirely (old/mock payloads) nothing is
-      // marked unset — the form stays fully editable.
       rawText = baseContent;
       formValues = deriveValues(baseContent);
       changedKeys = new Set();
+      // Source tiers (env|db|file|default) hydrate fetch-only from the new
+      // settings endpoint; a failure hides the DB badges, never the form.
+      try {
+        const setRes = await fetchAPI(adminApi.settings);
+        const next = {};
+        for (const e of setRes.settings ?? []) next[e.key] = e.source;
+        settingSources = next;
+      } catch {
+        settingSources = {};
+      }
     } catch (e) {
       if (firstLoad) error = e.message || $tr("Failed to fetch configuration");
     } finally {
       if (firstLoad) loading = false;
+    }
+  }
+
+  // Drop one DB overlay row (ADR-0019): the key falls back to file/env and
+  // the whole form refetches, so badges, values, and the .env document
+  // agree again. Failures surface in the save-result alert, never silent.
+  async function resetSetting(key) {
+    try {
+      const res = await deleteAPI(adminApi.settingsDelete(key));
+      result = {
+        ok: true,
+        message: res?.message || $tr("DB override removed."),
+        restart_only: [],
+      };
+      await fetchData();
+      refreshTokens();
+    } catch (e) {
+      result = {
+        ok: false,
+        message: e.message || $tr("Failed to reset override"),
+        restart_only: [],
+      };
     }
   }
 
@@ -225,6 +261,7 @@
   }
 
   onMount(() => {
+    recordPageVisit("settings");
     fetchData();
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("keydown", handleKeyDown);
@@ -321,16 +358,44 @@
     </Alert>
   {/if}
 
+  {#if dbCount > 0}
+    <Alert tone="info" title={$tr("DB overrides active")}>
+      {$tr(
+        "{count} setting(s) come from the DB overlay and win over the .env file below until reset per row.",
+        { count: dbCount },
+      )}
+    </Alert>
+  {/if}
+
   <SecurityCard onSuccess={fetchData} />
 
   <!-- 2. Gateway & Protection (General - live reload) -->
-  <GatewaySettings {formValues} {rawText} onField={setField} />
+  <GatewaySettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+  />
 
   <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
-  <TrafficSettings {formValues} {rawText} onField={setField} />
+  <TrafficSettings
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+  />
 
   <!-- 4. Advanced (every remaining catalog key with its default) -->
-  <AdvancedSettings {meta} {formValues} {rawText} onField={setField} />
+  <AdvancedSettings
+    {meta}
+    {formValues}
+    {rawText}
+    onField={setField}
+    sources={settingSources}
+    onReset={resetSetting}
+  />
 
   <!-- 5. Command Center (Lifecycle, updates & rollback) -->
   <CommandCenterCard />

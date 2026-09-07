@@ -314,7 +314,7 @@ func (a *adminHandlers) syncTokensAfterMutation(tokens []string) error {
 	if _, err := updateAuthTokensEnv(tokens); err != nil {
 		return fmt.Errorf("persist AUTH_TOKENS: %w", err)
 	}
-	newCfg, err := config.Load(a.configPath)
+	newCfg, err := a.loadConfig()
 	if err != nil {
 		restoreEnvFile(old, oldErr)
 		return fmt.Errorf("reload config: %w", err)
@@ -668,7 +668,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}
-		newCfg, err := config.Load(a.configPath)
+		newCfg, err := a.loadConfig()
 		if err != nil {
 			restoreEnvFile(old, oldErr)
 			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())
@@ -705,7 +705,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}
-		newCfg, err := config.Load(a.configPath)
+		newCfg, err := a.loadConfig()
 		if err != nil {
 			restoreEnvFile(old, oldErr)
 			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())
@@ -739,7 +739,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
 			return
 		}
-		newCfg, err := config.Load(a.configPath)
+		newCfg, err := a.loadConfig()
 		if err != nil {
 			restoreEnvFile(old, oldErr)
 			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())

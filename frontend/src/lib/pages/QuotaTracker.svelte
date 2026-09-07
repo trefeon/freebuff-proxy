@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { recordPageVisit } from "../stores/pageState.js";
   import { RefreshCw } from "@lucide/svelte";
   import PageShell from "../components/PageShell.svelte";
   import Card from "../components/Card.svelte";
@@ -109,6 +110,7 @@
   let unsubErr = null;
   let tick = null;
   onMount(() => {
+    recordPageVisit("quota");
     const release = ensureTokensStore();
     fetchAPI(adminApi.models)
       .then((res) => {

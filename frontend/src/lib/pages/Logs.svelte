@@ -1,5 +1,5 @@
 <script>
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     RefreshCw,
     ChevronLeft,
@@ -25,6 +25,11 @@
   import { copyToClipboard } from "../utils/clipboard.js";
   import { confirmAction } from "../stores/confirm.js";
   import { tr } from "../i18n.js";
+  import {
+    loadPageState,
+    savePageState,
+    recordPageVisit,
+  } from "../stores/pageState.js";
   /** @type {any} */
   let data = $state(null);
   let loading = $state(true);
@@ -477,6 +482,9 @@
 
   function handleFilterChange() {
     page = 0;
+    // Deep page state: the message filter survives restarts via
+    // pages_state (debounced, warn-only).
+    savePageState("logs", { filterMsg });
     fetchLogs();
   }
 
@@ -486,6 +494,16 @@
     hideAdmin = true;
     handleFilterChange();
   }
+
+  onMount(() => {
+    recordPageVisit("logs");
+    loadPageState("logs").then((d) => {
+      if (typeof d?.filterMsg === "string" && d.filterMsg !== filterMsg) {
+        filterMsg = d.filterMsg;
+        handleFilterChange();
+      }
+    });
+  });
 
   // Auto-poll every 1s while enabled; manual refresh / filter changes always fetch.
   usePolling(async () => {

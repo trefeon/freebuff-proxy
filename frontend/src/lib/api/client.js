@@ -121,6 +121,31 @@ export async function postAPI(path, body) {
 }
 
 /**
+ * PUT JSON to an admin API endpoint (per-page state upserts).
+ * Carries the CSRF double-submit header like POST.
+ * @param {string} path
+ * @param {any} body
+ * @returns {Promise<any>} Parsed JSON response
+ */
+export async function putAPI(path, body) {
+  return fetchAPI(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
+ * DELETE to an admin API endpoint (keyed resource resets).
+ * Carries the CSRF double-submit header like POST.
+ * @param {string} path
+ * @returns {Promise<any>} Parsed JSON response
+ */
+export async function deleteAPI(path) {
+  return fetchAPI(path, { method: "DELETE" });
+}
+
+/**
  * POST form data to an admin endpoint.
  * @param {string} path
  * @param {Record<string, string>} fields

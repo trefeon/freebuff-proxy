@@ -1,6 +1,7 @@
 <script>
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
   import { Activity } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -12,8 +13,16 @@
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
    */
-  let { formValues, rawText = "", onField } = $props();
+  let {
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+  } = $props();
 
   let env = $derived(parseEnv(rawText));
   let rateLimitPerIp = $derived(formValues.RATE_LIMIT_PER_IP ?? "0");
@@ -47,6 +56,9 @@
           class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
           >{$tr("default")}</span
         >
+      {/if}
+      {#if sources.RATE_LIMIT_PER_IP === "db"}
+        <DbBadge settingKey="RATE_LIMIT_PER_IP" {onReset} />
       {/if}
     {/snippet}
 
@@ -94,6 +106,9 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.MAX_REQUESTS_PER_MINUTE === "db"}
+        <DbBadge settingKey="MAX_REQUESTS_PER_MINUTE" {onReset} />
+      {/if}
     {/snippet}
 
     <div class="w-full sm:w-44">
@@ -140,6 +155,9 @@
           class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
           >{$tr("default")}</span
         >
+      {/if}
+      {#if sources.MAX_REQUESTS_PER_DAY === "db"}
+        <DbBadge settingKey="MAX_REQUESTS_PER_DAY" {onReset} />
       {/if}
     {/snippet}
 

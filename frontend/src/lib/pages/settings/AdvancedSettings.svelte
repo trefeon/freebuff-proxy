@@ -2,6 +2,7 @@
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
   import { SlidersHorizontal } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -17,8 +18,17 @@
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
    */
-  let { meta = [], formValues, rawText = "", onField } = $props();
+  let {
+    meta = [],
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+  } = $props();
 
   // Keys owned by the curated section components above; Advanced shows
   // everything else the catalog exposes.
@@ -123,6 +133,9 @@
                 class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
                 >{$tr("restart")}</span
               >
+            {/if}
+            {#if sources[entry.key] === "db"}
+              <DbBadge settingKey={entry.key} {onReset} />
             {/if}
           {/snippet}
           {#if entry.kind === "bool"}

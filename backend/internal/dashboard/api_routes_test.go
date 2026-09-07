@@ -14,14 +14,16 @@ import (
 // --- AdminRoutes table shape ---
 
 // TestAdminRoutesTableShape pins the table's own invariants: only GET/POST
-// rows, known auth levels, and no duplicate (method, path) pairs (a
-// duplicate would panic the mux at registration).
+// rows plus DELETE for keyed resource resets (ADR-0019 settings overlay)
+// and PUT for the pages_state upsert (slice 4), known auth levels, and no
+// duplicate (method, path) pairs (a duplicate would panic the mux at
+// registration).
 func TestAdminRoutesTableShape(t *testing.T) {
 	type key struct{ method, path string }
 	seen := make(map[key]bool)
 	for _, r := range dashboard.AdminRoutes {
-		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			t.Errorf("%s %s: method %q not GET/POST", r.Method, r.Path, r.Method)
+		if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
+			t.Errorf("%s %s: method %q not GET/POST/PUT/DELETE", r.Method, r.Path, r.Method)
 			continue
 		}
 		switch r.Auth {

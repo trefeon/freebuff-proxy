@@ -2,6 +2,7 @@
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
+  import DbBadge from "../../components/DbOverrideBadge.svelte";
   import { ShieldCheck } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
@@ -13,8 +14,16 @@
    * @prop {Record<string, string>} formValues
    * @prop {string} rawText
    * @prop {(key: string, value: string) => void} onField
+   * @prop {Record<string, string>} [sources] - ADR-0019 source tiers
+   * @prop {(key: string) => Promise<void>} [onReset] - DB override reset
    */
-  let { formValues, rawText = "", onField } = $props();
+  let {
+    formValues,
+    rawText = "",
+    onField,
+    sources = {},
+    onReset = null,
+  } = $props();
 
   let env = $derived(parseEnv(rawText));
   let safeMode = $derived(formValues.SAFE_MODE !== "false");
@@ -79,6 +88,9 @@
           >{$tr("default")}</span
         >
       {/if}
+      {#if sources.SAFE_MODE === "db"}
+        <DbBadge settingKey="SAFE_MODE" {onReset} />
+      {/if}
     {/snippet}
 
     <div class="flex items-center gap-2.5">
@@ -107,6 +119,9 @@
           class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
           >{$tr("default")}</span
         >
+      {/if}
+      {#if sources.LOG_LEVEL === "db"}
+        <DbBadge settingKey="LOG_LEVEL" {onReset} />
       {/if}
     {/snippet}
 
@@ -150,6 +165,9 @@
         class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/50 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
         >{$tr("restart")}</span
       >
+      {#if sources.HTTP_READ_TIMEOUT === "db"}
+        <DbBadge settingKey="HTTP_READ_TIMEOUT" {onReset} />
+      {/if}
     {/snippet}
 
     <div class="w-full sm:w-48">
@@ -191,6 +209,9 @@
           class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
           >{$tr("default")}</span
         >
+      {/if}
+      {#if sources.BRIDGE_ENABLED === "db"}
+        <DbBadge settingKey="BRIDGE_ENABLED" {onReset} />
       {/if}
     {/snippet}
 

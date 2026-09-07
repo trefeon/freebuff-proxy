@@ -23,6 +23,11 @@
   import { tr } from "../i18n.js";
   import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
   import { confirmAction } from "../stores/confirm.js";
+  import {
+    loadPageState,
+    savePageState,
+    recordPageVisit,
+  } from "../stores/pageState.js";
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -385,12 +390,23 @@
       oauthStarting = false;
     }
   }
-
   function toggleExpand(idx) {
     expandedToken = expandedToken === idx ? null : idx;
+    savePageState("tokens", { expandedToken });
+  }
+
+  // Deep page state: the expanded token row survives restarts via
+  // pages_state (warn-only; an out-of-range index is dropped).
+  function restoreExpandedToken() {
+    loadPageState("tokens").then((d) => {
+      if (Number.isInteger(d?.expandedToken) && d.expandedToken >= 0)
+        expandedToken = d.expandedToken;
+    });
   }
 
   onMount(() => {
+    recordPageVisit("tokens");
+    restoreExpandedToken();
     // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
     // #292); this page renders from the cached snapshot and refreshes the
     // store after every mutation.

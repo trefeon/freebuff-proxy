@@ -16,8 +16,8 @@ type AdminRoute struct {
 }
 
 // Auth levels select the middleware stacks the server has always used.
-// POST rows are additionally wired through the CSRF gate (adminCSRF): every
-// state-changing admin route carried it before this table existed.
+// POST, PUT, and DELETE rows are additionally wired through the CSRF gate
+// (adminCSRF): every state-changing admin route carried it before this table existed.
 const (
 	// AuthNone: no auth wrapper (login page, logout, static assets).
 	AuthNone = "none"

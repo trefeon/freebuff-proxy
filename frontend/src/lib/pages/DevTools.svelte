@@ -21,6 +21,7 @@
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
   import { onMount } from "svelte";
+  import { recordPageVisit } from "../stores/pageState.js";
 
   // Dev Tools is an operator-only manual testing surface (issue: dev testing
   // removed from public). Hidden unless DEVTOOLS_ENABLED=true in the proxy
@@ -54,6 +55,7 @@
 
   let modelsList = $state(fallbackModelOptions);
   onMount(() => {
+    recordPageVisit("devtools");
     // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
     // #292); this page just renders the cached snapshot.
     const release = ensureTokensStore();

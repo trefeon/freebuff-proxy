@@ -26,7 +26,9 @@ never drives relays.
 ## Critical invariants
 
 - Every `AdminRoutes` row maps to a server handler; unmapped rows panic at
-  wiring (table and mapper ship as one commit).
+  wiring (table and mapper ship as one commit). The table spans GET/POST
+  plus DELETE for keyed resource resets (ADR-0019 overlay) and PUT for the
+  pages_state upsert; POST, PUT, and DELETE rows carry the CSRF gate.
 - Route auth levels select the middleware stacks they have always carried;
   sensitive rows keep the loopback gate while the factory `ADMIN_TOKEN` is
   active (INV-SEC-002). New sensitive routes must pick the correct level.
