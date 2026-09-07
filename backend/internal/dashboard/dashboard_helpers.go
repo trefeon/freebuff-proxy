@@ -105,6 +105,7 @@ func maturityCardFromSnapshot(m *pool.MaturitySnapshot) *maturityCard {
 		Enabled:       m.Enabled,
 		Target:        m.Target,
 		Mode:          m.Mode,
+		TouchModel:    m.TouchModel,
 		Badge:         m.Badge,
 		LastAction:    m.LastAction,
 		LastResult:    m.LastResult,

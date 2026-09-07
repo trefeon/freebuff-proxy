@@ -133,6 +133,7 @@ type maturityCard struct {
 	Enabled       bool   `json:"enabled"`
 	Target        int    `json:"target"`
 	Mode          string `json:"mode"`
+	TouchModel    string `json:"touch_model,omitempty"`
 	Badge         string `json:"badge,omitempty"`
 	Slot          string `json:"slot,omitempty"`
 	LastTouch     string `json:"last_touch,omitempty"`

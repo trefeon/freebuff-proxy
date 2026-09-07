@@ -51,3 +51,36 @@ func TestMaturityCardFromSnapshot(t *testing.T) {
 		t.Errorf("bare live.Maturity = %+v, want nil", liveBare.Maturity)
 	}
 }
+
+// TouchModel rides the card: the per-token override set on the pool snapshot
+// must survive the dashboard mapper on both the full and the live card, so
+// the Maturity page select shows the saved value after a refresh.
+func TestMaturityCardTouchModelRoundTrip(t *testing.T) {
+	snap := pool.TokenSnapshot{
+		Maturity: &pool.MaturitySnapshot{
+			Enabled: true, Target: 7, Mode: "unmetered",
+			TouchModel: "mimo/mimo-v2.5", Badge: "Warming",
+		},
+	}
+	card := cardFromSnapshot(snap)
+	if card.Maturity == nil {
+		t.Fatal("card.Maturity = nil, want rendered card")
+	}
+	if card.Maturity.TouchModel != "mimo/mimo-v2.5" {
+		t.Errorf("card touch_model = %q, want mimo/mimo-v2.5", card.Maturity.TouchModel)
+	}
+	live := liveCardFromSnapshot(snap)
+	if live.Maturity == nil {
+		t.Fatal("live.Maturity = nil, want rendered card")
+	}
+	if live.Maturity.TouchModel != "mimo/mimo-v2.5" {
+		t.Errorf("live touch_model = %q, want mimo/mimo-v2.5", live.Maturity.TouchModel)
+	}
+	// Fallback (empty override) stays empty: the page renders Global default.
+	bare := cardFromSnapshot(pool.TokenSnapshot{
+		Maturity: &pool.MaturitySnapshot{Enabled: true, Target: 7, Mode: "unmetered"},
+	})
+	if bare.Maturity == nil || bare.Maturity.TouchModel != "" {
+		t.Errorf("fallback touch_model = %+v, want empty", bare.Maturity)
+	}
+}
