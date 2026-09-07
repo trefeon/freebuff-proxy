@@ -175,7 +175,7 @@ export function probeAllQuotas(opts = {}) {
         // the human message (e.g. "No tokens to test…") instead of a bare
         // HTTP status. The manual test-all body shape (array vs objects)
         // is irrelevant here — only the failure message is parsed.
-        let msg = "";
+        let msg;
         try {
           const parsed = JSON.parse(text);
           msg = parsed?.message ?? "";
