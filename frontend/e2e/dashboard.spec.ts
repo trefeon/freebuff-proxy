@@ -195,6 +195,11 @@ test.describe("dashboard hermetic mocks", () => {
     // Account 1 fixture carries premium_quota → Premium pool bar renders
     await expect(page.getByText("Premium pool").first()).toBeVisible();
     await expect(page.getByText("4/day pacific_day")).toBeVisible();
+    // The 2026-08-30 reset window has passed: the bar reads "Reset <local
+    // date>" (formatLocalDate), never raw ISO or "Resets in now".
+    await expect(page.getByText(/Reset Aug 30/).first()).toBeVisible();
+    await expect(page.getByText("Resets in now")).toHaveCount(0);
+    await expect(page.getByText("2026-08-30T07:00:00Z")).toHaveCount(0);
     // Tokens without Freebucks or premium data show the empty-state hint
     await expect(
       page
@@ -977,6 +982,40 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("acquire_ms")).toBeVisible();
     // The error row surfaces the error text
     await expect(page.getByText("upstream timeout")).toBeVisible();
+  });
+
+  test("Traces error shows a titled alert with retry", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/traces");
+    await page.route("**/admin/api/traces", async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: false,
+          message: "boom",
+          code: "traces_failed",
+        }),
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#traces");
+    await expect(
+      page.getByRole("heading", { name: "Traces", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Could not load this page")).toBeVisible();
+    await expect(page.getByText("boom")).toBeVisible();
+    // Retry refetches: restore success and click through to the table.
+    await page.unroute("**/admin/api/traces");
+    await page.route("**/admin/api/traces", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(f.traces),
+      });
+    });
+    await page.getByRole("button", { name: "Retry" }).click();
+    await expect(page.locator("table tbody tr")).toHaveCount(2);
   });
 
   test("Direct /admin/setup and /admin/playground URLs render; unknown tab shows NotFound", async ({

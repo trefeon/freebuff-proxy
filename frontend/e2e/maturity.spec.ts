@@ -94,7 +94,10 @@ test.describe("account maturity", () => {
         r.method() === "POST" && r.url().includes("/admin/tokens/0/maturity"),
     );
     await page.getByLabel("Streak target for Account #1").fill("14");
-    await page.getByRole("button", { name: "Save" }).first().click();
+    await page
+      .getByRole("button", { name: "Save", exact: true })
+      .first()
+      .click();
     await saveReq;
     expect(posts[0].body).toContain("14");
 
@@ -191,5 +194,32 @@ test.describe("account maturity", () => {
     const options = await picker.locator("option").allTextContents();
     expect(options).toContain("deepseek/deepseek-v4-flash");
     expect(options.length).toBeGreaterThan(1);
+  });
+
+  test("shared harness renders the seeded maturity timeline without clipping", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await expect(
+      page.getByRole("heading", { name: "Account Maturity" }),
+    ).toBeVisible();
+    // Token #1 carries a maturity object in the shared tokens fixture, so
+    // the restart-surviving timeline renders with no bespoke mocks.
+    const timeline = page.getByRole("list", {
+      name: "Maturity history for Account #1",
+    });
+    await expect(timeline).toBeVisible();
+    await expect(timeline.getByText("admit ok")).toBeVisible();
+    // Long descriptions must wrap instead of clipping header actions
+    // (Pips 0/7 case): no card header may overflow horizontally.
+    const overflow = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("section.fp-card header")).filter(
+          (el) => el.scrollWidth > el.clientWidth + 1,
+        ).length,
+    );
+    expect(overflow).toBe(0);
   });
 });

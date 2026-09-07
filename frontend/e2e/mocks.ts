@@ -132,6 +132,28 @@ export async function mockDashboard(
     });
   });
 
+  // Maturity history (ADR-0016 event timeline): the Maturity page fetches
+  // this once per maturity-bearing token. Served for every token so the
+  // seeded fixture token renders its timeline under the shared harness;
+  // specs needing bespoke events re-route after mockDashboard (their
+  // later route wins).
+  await page.route("**/admin/api/maturity/history*", async (route) => {
+    const url = new URL(route.request().url());
+    const token = Number(url.searchParams.get("token") ?? 0);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        enabled: true,
+        token,
+        events: [
+          { ts: 1785900000000, kind: "touch", detail: "admit ok" },
+          { ts: 1785903600000, kind: "config", detail: "enabled target=7" },
+        ],
+      }),
+    });
+  });
+
   // Setup
   await page.route("**/admin/api/setup", async (route) => {
     await route.fulfill({

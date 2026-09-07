@@ -33,6 +33,10 @@
   let changedKeys = $state.raw(new Set()); // form-touched keys — only these are serialized into the document
   let effectiveMap = $state.raw(new Map()); // key → { value, secret }
   let settingSources = $state({}); // key → env|db|file|default (ADR-0019)
+  // Live-only read-only flag from GET /admin/api/settings (ADR-0019): when
+  // the store is nil the gateway serves file/env/default with degraded:true
+  // and overlay writes 503 — banner it, keep the .env form usable.
+  let settingsDegraded = $state(false);
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
   // ---------------------------------------------------------------------------
@@ -155,11 +159,14 @@
       changedKeys = new Set();
       // Source tiers (env|db|file|default) hydrate fetch-only from the new
       // settings endpoint; a failure hides the DB badges, never the form.
+      // degraded:true means live-only (nil store): overlay writes 503, so
+      // banner the read-only state while the .env form stays usable.
       try {
         const setRes = await fetchAPI(adminApi.settings);
         const next = {};
         for (const e of setRes.settings ?? []) next[e.key] = e.source;
         settingSources = next;
+        settingsDegraded = setRes.degraded === true;
       } catch {
         // Keep the last-known sources: a failed background refresh must not
         // wipe the DB badges (first load simply keeps the empty default).
@@ -368,12 +375,26 @@
     </Alert>
   {/if}
 
+  {#if settingsDegraded}
+    <Alert tone="warning" title={$tr("DB overlay unavailable")}>
+      {$tr(
+        "The settings store is offline — the dashboard runs live-only. Overlay saves and resets will fail; .env saves below still apply.",
+      )}
+    </Alert>
+  {/if}
+
   {#if dbCount > 0}
     <Alert tone="info" title={$tr("DB overrides active")}>
-      {$tr(
-        "{count} setting(s) come from the DB overlay and win over the .env file below until reset per row.",
-        { count: dbCount },
-      )}
+      {#if dbCount === 1}
+        {$tr(
+          "1 setting comes from the DB overlay and wins over the .env file below until reset per row.",
+        )}
+      {:else}
+        {$tr(
+          "{count} settings come from the DB overlay and win over the .env file below until reset per row.",
+          { count: dbCount },
+        )}
+      {/if}
     </Alert>
   {/if}
 

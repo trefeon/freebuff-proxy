@@ -153,7 +153,7 @@ Shared library in `src/lib/components/`. Pages import these; do not restyle inli
   size: 'sm'|'md' = 'md', disabled=false, loading=false, type='button', class }`,
   spreads `$$restProps`, children = label. Classes `.fp-btn .fp-btn-{variant}`.
 - `Card.svelte` — `{ title?, description?, pad: 'md'|'none' = 'md', class }`,
-  slots `{ actions, default, footer }`. Hairline border, radius 8px.
+  slots `{ actions, default, footer }`. Hairline border, radius 4px.
 - `Stat.svelte` — `{ label, value, hint?, tone: 'default'|'good'|'warn'|'bad' = 'default',
   big=false }`. Value in mono 600, label in sans muted sm. Tone colors the value + LED.
 - `StatusBadge.svelte` — `{ status, tone: 'good'|'warn'|'bad'|'info'|'idle' = 'info',

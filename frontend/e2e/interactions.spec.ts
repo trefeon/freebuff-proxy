@@ -575,15 +575,19 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await mockDashboard(page, f);
 
     await page.goto("http://127.0.0.1:4173/admin/#logs");
-    // Console is the default view: header counts model requests.
-    await expect(page.getByText("model requests").first()).toBeVisible();
+    // Console is the default view: the seeded chat request/done pair renders
+    // one request-group card (singular header + POST line).
+    await expect(page.getByText("1 model request").first()).toBeVisible();
+    await expect(
+      page.getByText("POST openai/gpt-5.6-luna").first(),
+    ).toBeVisible();
 
     // Table view exposes the labelled filter controls.
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#log-level")).toBeVisible();
     await expect(page.locator("#log-msg")).toBeVisible();
     await page.getByRole("button", { name: "Console" }).click();
-    await expect(page.getByText("model requests").first()).toBeVisible();
+    await expect(page.getByText("1 model request").first()).toBeVisible();
 
     // Auto toggle flips label and pauses the 1s poll.
     const auto = page.getByRole("button", { name: /^Auto / });

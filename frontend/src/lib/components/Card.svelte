@@ -1,6 +1,6 @@
 <script>
   /**
-   * Card — hairline-bordered surface, radius 8px (defined edge, no shadow).
+   * Card — hairline-bordered surface, radius 4px (defined edge, no shadow).
    *
    * @prop {string} [title]
    * @prop {string} [description]
@@ -24,7 +24,7 @@
 <section class="fp-card overflow-hidden {className}">
   {#if title || description || actions}
     <header class="flex items-start justify-between gap-4 px-5 pt-4">
-      <div>
+      <div class="min-w-0 flex-1">
         {#if title}
           <h2 class="text-[15px] font-semibold text-[var(--fp-text)]">
             {title}

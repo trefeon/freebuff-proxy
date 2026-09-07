@@ -193,7 +193,27 @@ test.describe("settings DB overlay", () => {
     page: Parameters<typeof mockDashboard>[0],
     posted: Posted,
     postStatus = 200,
+    opts: { degraded?: boolean } = {},
   ) {
+    // Mutable overlay: DELETE drops a key and later GETs reflect the drop,
+    // so the DbOverrideBadge reset round-trip is actually observable.
+    let live: Array<Record<string, unknown>> = [
+      {
+        key: "LOG_LEVEL",
+        value: "info",
+        source: "db",
+        restart_only: false,
+        secret: false,
+      },
+      {
+        key: "MODEL_ALIASES",
+        value: "gpt-4o:openai/gpt-5.6-luna",
+        source: "db",
+        restart_only: false,
+        secret: false,
+      },
+    ];
+    const deleted: string[] = [];
     await page.route("**/admin/api/settings", async (route) => {
       if (route.request().method() === "POST") {
         try {
@@ -228,26 +248,35 @@ test.describe("settings DB overlay", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            settings: [
-              {
-                key: "LOG_LEVEL",
-                value: "info",
-                source: "db",
-                restart_only: false,
-                secret: false,
-              },
-              {
-                key: "MODEL_ALIASES",
-                value: "gpt-4o:openai/gpt-5.6-luna",
-                source: "db",
-                restart_only: false,
-                secret: false,
-              },
-            ],
+            settings: live,
+            degraded: opts.degraded === true,
           }),
         });
       }
     });
+    // DELETE /admin/api/settings/:key needs its own glob: Playwright * does
+    // not cross /, so the base pattern above never sees the keyed path and
+    // the badge reset fell through unmocked before this route existed.
+    await page.route("**/admin/api/settings/*", async (route) => {
+      if (route.request().method() !== "DELETE") {
+        await route.continue();
+        return;
+      }
+      const key =
+        new URL(route.request().url()).pathname.split("/").pop() ?? "";
+      deleted.push(key);
+      live = live.filter((e) => e.key !== key);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          message: "DB override removed.",
+          code: "setting_deleted",
+        }),
+      });
+    });
+    return deleted;
   }
 
   test("model routing rows mount with DB badges and per-key save posts the overlay", async ({
@@ -303,5 +332,58 @@ test.describe("settings DB overlay", () => {
     await expect(
       page.locator('span[role="status"]', { hasText: "Setting rejected" }),
     ).toBeVisible();
+  });
+
+  test("DB badge reset deletes the overlay key and refetches the form", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    const posted: Posted = [];
+    const deleted = await mockSettings(page, posted);
+    await mockPageState(page);
+    await page.goto(admin("settings"));
+    await expect(page.locator('input[aria-label="MODEL_ALIASES"]')).toBeVisible(
+      { timeout: 10_000 },
+    );
+    // Two seeded db rows → two override badges + plural count copy.
+    await expect(page.getByText("DB override", { exact: true })).toHaveCount(2);
+    await expect(
+      page.getByText("2 settings come from the DB overlay"),
+    ).toBeVisible();
+    const delReq = page.waitForRequest(
+      (r) =>
+        r.method() === "DELETE" && r.url().includes("/admin/api/settings/"),
+    );
+    // First Reset in DOM order drops LOG_LEVEL (Gateway card precedes
+    // Model Routing); the refetch then leaves one badge + singular copy.
+    await page.getByRole("button", { name: "Reset" }).first().click();
+    await delReq;
+    expect(deleted).toEqual(["LOG_LEVEL"]);
+    await expect(page.getByText("DB override", { exact: true })).toHaveCount(1);
+    await expect(
+      page.getByText("1 setting comes from the DB overlay"),
+    ).toBeVisible();
+    await expect(page.getByText("DB override removed.")).toBeVisible();
+  });
+
+  test("degraded store banners read-only while the .env form stays usable", async ({
+    page,
+  }) => {
+    await mockDashboard(page, loadFixtures());
+    await mockSettings(page, [], 200, { degraded: true });
+    await mockPageState(page);
+    await page.goto(admin("settings"));
+    await expect(page.locator('input[aria-label="MODEL_ALIASES"]')).toBeVisible(
+      { timeout: 10_000 },
+    );
+    await expect(page.getByText("DB overlay unavailable")).toBeVisible();
+    await expect(page.getByText(/runs live-only/)).toBeVisible();
+    // The .env form keeps working: editing a key enables Save Changes.
+    await page
+      .locator('input[aria-label="MODEL_ALIASES"]')
+      .fill("gpt-4o:openai/gpt-5.6-luna,x:y");
+    await expect(
+      page.getByRole("button", { name: "Save Changes", exact: true }),
+    ).toBeEnabled();
   });
 });
