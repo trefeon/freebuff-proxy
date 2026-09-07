@@ -115,3 +115,40 @@ func TestTokenMaturityTouchModel(t *testing.T) {
 		t.Errorf("cleared touch_model = %q, want fallback empty", got)
 	}
 }
+
+// warn-reset is additive: it clears only the warning loop, never the
+// config. Warning behavior itself is proven at the pool level
+// (TestClearMaturityWarnRearms); here the route, idempotency, and range
+// validation are pinned.
+func TestTokenMaturityWarnReset(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.StreakBody = map[string]any{"streak": 2, "todayUsed": false, "timeZone": "America/Los_Angeles"}
+	ts, p := newTestServerCfg(t, nil, func(c *config.Config) {
+		c.AdminToken = "secret"
+		c.MaturityEnabled = true
+		c.MaturityDryRun = true
+		c.MaturityTouchModel = "deepseek/deepseek-v4-flash"
+	}, mock)
+	cookie := loginCookie(t, ts, "secret")
+	post := func(path, body string) (int, string) {
+		resp, data := doJSON(t, http.MethodPost, ts.URL+path, []byte(body),
+			map[string]string{"Cookie": cookie, "Content-Type": "application/json"})
+		return resp.StatusCode, string(data)
+	}
+	if code, body := post("/admin/tokens/0/maturity", `{"enabled":true,"target":7,"mode":"unmetered"}`); code != http.StatusOK {
+		t.Fatalf("enable status = %d, want 200: %s", code, body)
+	}
+	// No warning set: idempotent success, config untouched.
+	if code, body := post("/admin/tokens/0/maturity/warn-reset", `{}`); code != http.StatusOK {
+		t.Fatalf("warn-reset status = %d, want 200: %s", code, body)
+	}
+	snap := p.Snapshot()[0]
+	if snap.Maturity == nil || !snap.Maturity.Enabled || snap.Maturity.Target != 7 {
+		t.Errorf("snapshot after reset = %+v, want enabled/7 kept", snap.Maturity)
+	}
+	// Out-of-range token rejects.
+	if code, _ := post("/admin/tokens/99/maturity/warn-reset", `{}`); code != http.StatusBadRequest {
+		t.Errorf("warn-reset token 99 status = %d, want 400", code)
+	}
+}

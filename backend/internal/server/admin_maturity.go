@@ -161,3 +161,21 @@ func (a *adminHandlers) handleTokenMaturityTouch(w http.ResponseWriter, r *http.
 	a.logfunc().Info("dashboard token maturity touched", "token", id, "action", action, "result", result)
 	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" touch: "+action+" → "+result+".")
 }
+
+// handleTokenMaturityWarnReset clears one token's non-advance warning
+// (POST /admin/tokens/{id}/maturity/warn-reset): the dashboard Reset warning
+// lever. Additive: only the warn loop resets (warn + day counters drop, the
+// daily touch re-arms); enabled/target/mode/touch_model are untouched, so
+// this never locks, unlocks, or reconfigures the token.
+func (a *adminHandlers) handleTokenMaturityWarnReset(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err == nil {
+		err = a.pool.ClearMaturityWarn(id)
+	}
+	if err != nil {
+		a.dash.RenderConfigResult(w, r, false, "Maturity warn reset failed: "+err.Error())
+		return
+	}
+	a.logfunc().Info("dashboard token maturity warning cleared", "token", id)
+	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" maturity warning cleared — daily loop re-armed.")
+}
