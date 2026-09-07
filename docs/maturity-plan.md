@@ -1,3 +1,18 @@
+# Streak Display + Maturity Automation — Status
+
+PR1 (streak display) and PR2 (preserve-only automation v1) are shipped.
+Implementation: `backend/internal/pool/maturity.go`, `backend/internal/upstream/session.go`
+(`StreakInfo`), config keys `MATURITY_ENABLED` (default on) + `MATURITY_DRY_RUN`
+(default true). Per-token touch-model override, folded cards, and Probe-all
+removal are decided in ADR-0021, which supersedes §2 details below.
+
+Remaining: the §3 ladder experiment on one sacrificial token, then the 7-day
+soak before any fleet rollout. Do not expand scope before that soak passes.
+
+The full design is kept below for reference.
+
+---
+
 # Streak Display + Maturity Automation — Full Plan
 
 Status: PR1 (display) shipped; PR2 automation landed as preserve-only v1

@@ -1,3 +1,15 @@
+# Database durability — Status
+
+Slice 1 is shipped: the `backend/internal/store` package (SQLite via
+`DB_PATH`, default `data/freebuff.db`) persists sessions, agent runs,
+settings, tokens, history, and pages, including legacy snapshot import.
+Slices 2 and 3 below are still open: spend/usage ledgers, cooldowns, and
+the bridge cache stay in memory (`backend/internal/pool/pool_ledger.go`
+has no store wiring), and dashboard backup/restore/wipe endpoints do not
+exist yet. The design below stays as the build reference.
+
+---
+
 # Database durability plan — embedded SQLite persistence
 
 ## Goal

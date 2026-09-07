@@ -1,7 +1,20 @@
-# Command Center: Install, Update, Rollback — Full Plan (no code yet)
+# Command Center — Status
 
-Status: planning only. Execution order is by value unlocked; each phase
-ships separately. Target: post-v1.8.8.
+Partly shipped, so the "no code yet" line below is stale. Live now: the
+restart endpoint with supervisor gating, the `CommandCenterCard` (version
+check, restart, host upgrade command with copy button), `scripts/install.sh`,
+and binary self-update plus update check (`backend/internal/cli/update`,
+`backend/internal/updatecheck`). Open: GHCR publish on tag (§1), official
+installers with supervisor registration (§2), in-dashboard binary
+self-update trigger with failsafe and notify (§3). The plan below stays
+as the build reference.
+
+---
+
+# Command Center: Install, Update, Rollback — Full Plan (partly shipped)
+
+Status: partly shipped (see header). Execution order is by value
+unlocked; each phase ships separately. Target: post-v1.8.8.
 
 ## 0. Non-negotiable boundaries
 

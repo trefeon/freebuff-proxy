@@ -1,3 +1,15 @@
+# Rotation Lab — Status
+
+All four modes are shipped: `TOKEN_ROTATION` (`drain` default,
+`round_robin`, `least_used`, `random`) in `backend/internal/config`,
+branching in `backend/internal/pool/acquire_order.go`, toggle in the
+Tokens page. Burst spreading on top of drain is decided in ADR-0023
+(`BURST_BALANCE_*`, default off). Open: the comparative study itself
+(which scheme fits which load) was never published. The build plan below
+stays for reference.
+
+---
+
 # Rotation Lab — Backend + Frontend Plan
 
 **Goal:** Sediakan lab studi 4 skema rotasi token agar user bebas pilih `gimana token mau dipakai` (aman vs eksperimen banned), untuk jawab pertanyaan: *“rolling per 1 session per 1 auth key lebih bagus daripada 1 auth key dihabisin 5/5 baru rolling?”*
