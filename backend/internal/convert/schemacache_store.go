@@ -11,6 +11,11 @@ import (
 	"sync/atomic"
 )
 
+// ---------------------------------------------------------------------------
+// Tool-schema normalization (ported from proxy-freebuff/lib/convert.js,
+// normalizeToolSchemas / normalizeSchemaMap, lines ~40-154).
+// ---------------------------------------------------------------------------
+
 // maxSchemaDepth caps recursive JSON-schema normalization. Ported from
 // proxy-freebuff's normalizeSchemaMap, which resolves with depth 12.
 const maxSchemaDepth = 12
@@ -29,11 +34,6 @@ func capHint(a, b int) int {
 	}
 	return a + b
 }
-
-// ---------------------------------------------------------------------------
-// Tool-schema normalization (ported from proxy-freebuff/lib/convert.js,
-// normalizeToolSchemas / normalizeSchemaMap, lines ~40-154).
-// ---------------------------------------------------------------------------
 
 // normalizeToolSchemas normalizes fn.parameters for every function tool in
 // the payload, in place. Each tool's parameters are normalized through the
@@ -66,20 +66,8 @@ func normalizeToolSchemas(payload map[string]any, opts Options) {
 		}
 		fn["parameters"] = normalizeToolSchemaCached(params, &budget)
 	}
-	// Inject end_turn tool definition to pass Codebuff's foreign_toolset validation
-	if !hasEndTurn {
-		payload["tools"] = append(tools, map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "end_turn",
-				"description": "Signal the end of the current task.",
-				"parameters": map[string]any{
-					"type":       "object",
-					"properties": map[string]any{},
-				},
-			},
-		})
-	}
+	// End-turn injection lives in schemacache_endturn.go; behavior unchanged.
+	injectEndTurnTool(payload, tools, hasEndTurn)
 }
 
 // ---------------------------------------------------------------------------
