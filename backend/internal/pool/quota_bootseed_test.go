@@ -151,9 +151,10 @@ func TestQuotaBootProbeVirginFiresOnce(t *testing.T) {
 	defer mock.Close()
 	p := seededPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	// Boot long ago: every staggered slot is due on the next tick.
-	p.quotaBootAt = time.Now().Add(-time.Hour)
+	// Boot relatif terhadap tick (bukan wall now) agar slot selalu lewat:
+	// pola yang sama dengan perbaikan TestQuotaBootProbeSeededSkips.
 	tick := laNoon(time.Now())
+	p.quotaBootAt = tick.Add(-time.Hour)
 
 	p.quotaAutoProbeTickAt(context.Background(), tick)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
