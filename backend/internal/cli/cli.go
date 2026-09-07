@@ -183,28 +183,33 @@ func Serve(configPath string, verbose bool, version string) int {
 		{
 			dbPath := history.DBPathFromEnv()
 			logger.Info("dashboard history enabled", "file", dbPath)
-			// One-time migration: fold the legacy JSON session file into
-			// sessions_persist, then archive it to .bak (never delete).
+			// One-time migration: fold every legacy JSON session file into
+			// sessions_persist, then archive each to .bak (never delete).
 			// Gated on SESSION_PERSIST; a failure only warns — the JSON
-			// store above stays authoritative.
+			// store above stays authoritative. SaveSession upserts by token
+			// hash, so importing from several split-brain locations is safe.
 			if cfg.SessionPersist {
-				if n, err := history.ImportLegacySessionFile(st, cfg.SessionStateFile); err != nil {
-					logger.Warn("legacy session import skipped; JSON state file stays in use", "file", cfg.SessionStateFile, "err", err)
-				} else if n > 0 {
-					logger.Info("imported legacy session state into dashboard store", "sessions", n)
+				for _, legacy := range history.LegacySessionCandidates(cfg.SessionStateFile) {
+					if n, err := history.ImportLegacySessionFile(st, legacy); err != nil {
+						logger.Warn("legacy session import skipped; JSON state file stays in use", "file", legacy, "err", err)
+					} else if n > 0 {
+						logger.Info("imported legacy session state into dashboard store", "file", legacy, "sessions", n)
+					}
 				}
 			}
-			// One-time display-history carry: the pre-unified history file
-			// (<state-file-dir>/freebuff-history.db) folds into the new DB
-			// when the new history tables are still empty. Warn-only, the
-			// legacy file is left in place.
-			if abs, err := filepath.Abs(cfg.SessionStateFile); err == nil {
-				legacyHist := filepath.Join(filepath.Dir(abs), "freebuff-history.db")
+			// One-time display-history carry: every legacy dashboard DB still
+			// on disk folds into the new DB while the new history tables are
+			// empty (old bind mounts, pre-unified files). First non-empty
+			// import wins; ImportLegacyHistoryDB no-ops once the target holds
+			// rows, so later candidates stop. Warn-only, legacy files stay.
+			for _, legacyHist := range history.LegacyHistoryCandidates(history.DBPathFromEnv(), cfg.SessionStateFile) {
 				if n, err := history.ImportLegacyHistoryDB(st, history.DBPathFromEnv(), legacyHist); err != nil {
-					logger.Warn("legacy history carry skipped; charts regrow from live data", "file", legacyHist, "err", err)
+					logger.Warn("legacy history carry skipped", "file", legacyHist, "err", err)
+					continue
 				} else if n > 0 {
-					logger.Info("carried legacy history into dashboard store", "rows", n)
+					logger.Info("carried legacy history into dashboard store", "file", legacyHist, "rows", n)
 				}
+				break
 			}
 		}
 	}
