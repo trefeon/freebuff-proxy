@@ -57,6 +57,28 @@ func TestImportLegacyHistoryDBCarriesRows(t *testing.T) {
 		t.Errorf("legacy file missing after import: %v", err)
 	}
 }
+func TestImportLegacyHistoryDBReadOnlySource(t *testing.T) {
+	dir := t.TempDir()
+	oldPath := filepath.Join(dir, "freebuff-history.db")
+	seedLegacyHistory(t, oldPath)
+	if err := os.Chmod(oldPath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(oldPath, 0o644)
+	st, err := Open(filepath.Join(dir, "freebuff.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	// ATTACH needs write access; the import stages a temp copy instead.
+	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 4 {
+		t.Errorf("carried %d rows, want 4", n)
+	}
+}
 
 func TestImportLegacyHistoryDBNoops(t *testing.T) {
 	dir := t.TempDir()

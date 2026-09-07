@@ -241,7 +241,31 @@ func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 			return 0, nil
 		}
 	}
-	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(oldAbs, "'", "''") + "' AS legacy"); err != nil {
+	// The legacy file may sit on a read-only mount (old bind kept ro for
+	// safety) or be held by a still-running old container: ATTACH needs
+	// write access for WAL/shm, so copy to temp and attach the copy. The
+	// source is never modified.
+	tmp, err := os.CreateTemp("", "freebuff-legacy-*.db")
+	if err != nil {
+		return 0, fmt.Errorf("store: stage legacy history: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	src, err := os.Open(oldAbs)
+	if err != nil {
+		tmp.Close()
+		return 0, fmt.Errorf("store: read legacy history: %w", err)
+	}
+	if _, err := tmp.ReadFrom(src); err != nil {
+		src.Close()
+		tmp.Close()
+		return 0, fmt.Errorf("store: stage legacy history: %w", err)
+	}
+	src.Close()
+	if err := tmp.Close(); err != nil {
+		return 0, fmt.Errorf("store: stage legacy history: %w", err)
+	}
+	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(tmpPath, "'", "''") + "' AS legacy"); err != nil {
 		return 0, fmt.Errorf("store: attach legacy history: %w", err)
 	}
 	defer s.db.Exec("DETACH DATABASE legacy")
