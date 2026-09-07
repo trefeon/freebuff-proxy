@@ -11,14 +11,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
-// schemaVersion guards the on-disk format; bump it when the schema changes so
-// a stale file is ignored instead of mis-parsed (mirrors session.storeVersion).
-const schemaVersion = 1
+// schemaVersion guards the on-disk format. v1 held the history tables only
+// (log_entries, quota_snapshots, maturity_events, request_records); v2 adds
+// the persistence tables (settings, pages_state, sessions_persist, tokens).
+// Open migrates v1 files in place; anything else non-zero is rejected so a
+// stale file is ignored instead of mis-parsed (mirrors session.storeVersion).
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE IF NOT EXISTS log_entries(
@@ -61,6 +65,35 @@ CREATE TABLE IF NOT EXISTS request_records(
   error TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_req_ts ON request_records(ts);
+-- v2 persistence tables (settings, page snapshots, sessions, token meta).
+-- Value columns hold raw JSON; the store never interprets them (leaf
+-- package: stdlib + the sqlite driver only, zero internal imports).
+CREATE TABLE IF NOT EXISTS settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS pages_state(
+  page_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS sessions_persist(
+  id INTEGER PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  session_data TEXT NOT NULL DEFAULT '',
+  runs_data TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions_persist(token_hash);
+CREATE TABLE IF NOT EXISTS tokens(
+  id INTEGER PRIMARY KEY,
+  value_hash TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
+  quota_data TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT 0
+);
 `
 
 // LogEntry is one persisted log record. TS is Unix millis UTC; Fields carries
@@ -127,9 +160,26 @@ type Store struct {
 	db *sql.DB
 }
 
+// defaultDBPath is the DB file used when DB_PATH is unset: ./data/freebuff.db
+// relative to the process working directory (mirrored by the compose
+// db_data volume at /app/data/freebuff.db inside Docker).
+const defaultDBPath = "data/freebuff.db"
+
+// DBPathFromEnv resolves the SQLite file: DB_PATH wins (blank counts as
+// unset), otherwise the ./data/freebuff.db default. Callers log the resolved
+// value so a mis-pointed env is visible at startup.
+func DBPathFromEnv() string {
+	if v := strings.TrimSpace(os.Getenv("DB_PATH")); v != "" {
+		return v
+	}
+	return filepath.FromSlash(defaultDBPath)
+}
+
 // Open creates the parent dir, opens (or creates) the SQLite file at path,
-// and applies pragmas + schema. A version mismatch or unusable file returns
-// an error and the caller runs live-only; Open never fails the boot itself.
+// and applies pragmas + schema. A v1 file migrates in place to v2 (the
+// schema is IF NOT EXISTS, so existing history rows survive); any other
+// version mismatch or unusable file returns an error and the caller runs
+// live-only. Open never fails the boot itself.
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -155,7 +205,13 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: user_version: %w", err)
 	}
-	if v != 0 && v != schemaVersion {
+	switch v {
+	case 0, schemaVersion:
+		// Fresh file or current: apply the schema as-is.
+	case 1:
+		// v1 -> v2: the schema below is IF NOT EXISTS, so it only adds
+		// the persistence tables and keeps every v1 history row.
+	default:
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema v%d unsupported (want v%d)", v, schemaVersion)
 	}

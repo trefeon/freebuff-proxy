@@ -1,7 +1,10 @@
 package store
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -187,4 +190,69 @@ func (s *Store) MaturityHistory(tokenIdx int, since int64, limit int) ([]Maturit
 func escapeLike(s string) string {
 	r := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_")
 	return r.Replace(s)
+}
+
+// historyCarryTables are the display-history tables copied from a legacy
+// history file on first boot with the unified DB. All use INTEGER rowid
+// PKs with no UNIQUE constraint, so the copy only runs into empty
+// targets (never merges), keeping the import idempotent.
+var historyCarryTables = []string{
+	"log_entries",
+	"quota_snapshots",
+	"maturity_events",
+	"request_records",
+}
+
+// ImportLegacyHistoryDB carries display history forward when the dashboard
+// DB path moves: if oldPath exists, differs from newPath, and every
+// history table in the open store is empty, it copies all rows from the
+// legacy file (ATTACH + INSERT SELECT) and returns the row count. Any
+// other state is a no-op (0, nil): missing file, same file, non-empty
+// target, or a legacy file without history tables. A corrupt legacy file
+// returns an error and copies nothing (callers only warn). The legacy
+// file is left in place — history regrows, the old file never deletes.
+func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
+	if oldPath == "" {
+		return 0, nil
+	}
+	newAbs, err := filepath.Abs(newPath)
+	if err != nil {
+		return 0, fmt.Errorf("store: resolve new db path: %w", err)
+	}
+	oldAbs, err := filepath.Abs(oldPath)
+	if err != nil {
+		return 0, fmt.Errorf("store: resolve legacy history path: %w", err)
+	}
+	if newAbs == oldAbs {
+		return 0, nil
+	}
+	if _, err := os.Stat(oldAbs); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("store: stat legacy history: %w", err)
+	}
+	for _, t := range historyCarryTables {
+		var n int64
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM " + t).Scan(&n); err != nil {
+			return 0, fmt.Errorf("store: count %s: %w", t, err)
+		}
+		if n > 0 {
+			return 0, nil
+		}
+	}
+	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(oldAbs, "'", "''") + "' AS legacy"); err != nil {
+		return 0, fmt.Errorf("store: attach legacy history: %w", err)
+	}
+	defer s.db.Exec("DETACH DATABASE legacy")
+	var total int64
+	for _, t := range historyCarryTables {
+		res, err := s.db.Exec("INSERT INTO main." + t + " SELECT * FROM legacy." + t)
+		if err != nil {
+			return total, fmt.Errorf("store: carry %s: %w", t, err)
+		}
+		n, _ := res.RowsAffected()
+		total += n
+	}
+	return total, nil
 }
