@@ -338,17 +338,9 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			p.logger.Debug("pool: token skipped (daily message limit)", "token", idx+1, "limit", cfg.MaxMessagesPerDay)
 			continue
 		}
-		// Per-minute request cap (MAX_REQUESTS_PER_MINUTE): a token that
-		// already admitted its quota of chat requests in the last 60s is
-		// skipped like a rate limit — upstream-visible bursts (including
-		// retries that later fail) are throttled at the exact rate upstream
-		// observes, keeping the account under abuse-detection patterns.
-		if cfg.MaxRequestsPerMinute > 0 && p.rpmCount(idx) >= cfg.MaxRequestsPerMinute {
-			rateLimited = append(rateLimited, p.rpmLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
-			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
-			continue
-		}
+		// No second per-minute pre-filter here: MAX_REQUESTS_PER_MINUTE is
+		// pre-filtered above and enforced atomically at lease grant
+		// (tryAdmitRequest) — nothing between mutates the RPM window.
 		// Daily request cap (MAX_REQUESTS_PER_DAY): a token that already
 		// sent its daily successful-request quota is skipped like the daily
 		// message cap; it unlocks at the next Pacific midnight — the same
@@ -575,8 +567,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
-		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
-			"country", ss.CountryCode)
 		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
 			entry: tok, AcquiredAt: time.Now()}
 		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
@@ -616,7 +606,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	// Failover precedence (PRD §6 error matrix): when buckets are mixed the
 	// highest-precedence non-empty bucket wins — ban > country-blocked >
 	// model-IP-limited > rate-limit > ip-capped > waiting-room > daily cap.
-	// Each bucket contributes its best error (first ban, longest rate
+	// Each bucket contributes its best error (first ban, shortest rate
 	// window, first ip_capped, lowest queue position, earliest daily
 	// reset). Only when every bucket is empty — all tokens failed with
 	// errors outside the matrix — is the generic error surfaced.
