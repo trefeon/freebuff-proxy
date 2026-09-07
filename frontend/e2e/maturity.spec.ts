@@ -329,5 +329,13 @@ test.describe("account maturity", () => {
     await expect(timeline).toBeVisible();
     await expect(timeline.getByText("admit ok")).toBeVisible();
     // Long descriptions must wrap instead of clipping header actions
+    // (Pips 0/7 case): no card header may overflow horizontally.
+    const overflow = await page.evaluate(
+      () =>
+        Array.from(document.querySelectorAll("section.fp-card header")).filter(
+          (el) => el.scrollWidth > el.clientWidth + 1,
+        ).length,
+    );
+    expect(overflow).toBe(0);
   });
 });
