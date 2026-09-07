@@ -88,7 +88,9 @@ func TestImportLegacySkipsEmptyCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty.Close()
+	if err := empty.Close(); err != nil {
+		t.Fatal(err)
+	}
 	fullPath := filepath.Join(dir, "freebuff-history.db")
 	seedLegacyHistory(t, fullPath)
 	st, err := Open(filepath.Join(dir, "freebuff.db"))
