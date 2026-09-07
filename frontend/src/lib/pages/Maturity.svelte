@@ -96,15 +96,6 @@
     return isNaN(d) ? "—" : d.toLocaleString();
   }
 
-  function progressDots(streak) {
-    const filled = Math.min(streak ?? 0, 7);
-    return (
-      "●".repeat(filled) +
-      "○".repeat(Math.max(0, 7 - filled)) +
-      (streak > 7 ? "+" : "")
-    );
-  }
-
   async function save(idx) {
     if (saving[idx]) return;
     saving[idx] = true;

@@ -21,7 +21,6 @@
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
-  let now = $state(Date.now());
 
   // Issue #322: restart/deploy-only fields (mode, model_count, safe_mode,
   // transient_retries, max_messages_per_day, upstream_sync) and account-stable
@@ -108,7 +107,6 @@
     merge: (_cached, live) => mergeLive(live),
   });
 
-  let tick = null;
   let releaseQuery = null;
   let unsubData = null;
   let unsubError = null;
@@ -130,16 +128,12 @@
         loading = false;
       }
     });
-    tick = setInterval(() => {
-      now = Date.now();
-    }, 1000);
     function onConfigSaved() {
       staticPart = null;
       overviewQuery.refresh();
     }
     window.addEventListener("fp-config-saved", onConfigSaved);
     return () => {
-      clearInterval(tick);
       window.removeEventListener("fp-config-saved", onConfigSaved);
       unsubData?.();
       unsubError?.();

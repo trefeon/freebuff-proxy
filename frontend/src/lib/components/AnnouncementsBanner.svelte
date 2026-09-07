@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import {
     Megaphone,
     Clock,
@@ -19,7 +20,7 @@
   let notices = $state([]);
   let peakHours = $state(null);
   let loaded = $state(false);
-  let folded = $state(new Set());
+  let folded = new SvelteSet();
 
   onMount(async () => {
     try {
@@ -39,10 +40,8 @@
   // unfold chevron) instead of removing it, so a dismissed announcement
   // stays one tap away. Session-scoped; reload restores everything.
   function toggleFold(id) {
-    const next = new Set(folded);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    folded = next;
+    if (folded.has(id)) folded.delete(id);
+    else folded.add(id);
   }
 </script>
 
