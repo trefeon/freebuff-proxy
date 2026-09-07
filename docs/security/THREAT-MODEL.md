@@ -78,7 +78,7 @@ recommended action (with pointer to TECH-DEBT where open).
 - Mitigation: pinned modules (go.sum), locked npm (package-lock.json),
   SHA-pinned actions, Dependabot weekly groups, `go mod verify` in CI,
   dependency-review on PRs, CodeQL weekly, SLSA attestations on release
-  artifacts, `golang:1.26.6` Docker base with binary-only final stage.
+  artifacts, `golang:1.26-alpine` Docker build stage with binary-only `alpine:3.20` final stage.
 - Gap: no SBOM (documented out of scope); npm minor/patch auto-PRs still
   need test gates (they have them: CI frontend job on every PR).
 
@@ -89,8 +89,8 @@ recommended action (with pointer to TECH-DEBT where open).
 - Mitigation: least-privilege per-workflow permissions, SHA pins, release
   re-gates the full hermetic suite on tag push, SLSA provenance attached
   post-release, no auto-merge on drift PRs.
-- Gap: release.yml test/frontend jobs inherit workflow-level write
-  permissions (minor; scoped in this program). No `pull_request_target`
+- Gap: release.yml test/frontend jobs inherited workflow-level write
+  permissions (minor; scoped to `contents:read` in this program, verified). No `pull_request_target`
   usage, no secret exfiltration paths found.
 
 ## Log leakage to operators' machines

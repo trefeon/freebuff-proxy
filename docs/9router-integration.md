@@ -20,7 +20,7 @@ Codebuff / FreeBuff Upstream
 Verify the proxy is reachable before configuring 9router:
 ```bash
 curl http://127.0.0.1:3457/healthz
-# Expected response: {"status":"ok","models":15,...}
+# Expected response: {"status":"ok", ...} with a model catalog
 ```
 
 ### Step 2: Add Custom Provider in 9router
@@ -83,12 +83,12 @@ In the 9router provider node, you can add any of these models from the proxy cat
 
 | Model ID in 9router | Description & Tags | Upstream Quota & Tier |
 | :--- | :--- | :--- |
-| `deepseek/deepseek-v4-flash` | **DeepSeek V4 Flash 07/31 (Recommended)**<br>Smart & Fast · Reasoning: `high` · NEW | **Full Tier** (5 sessions/day pool) |
+| `deepseek/deepseek-v4-flash` | **DeepSeek V4 Flash 07/31 (Recommended)**<br>Smart & Fast · Reasoning: `high` · NEW | **Full Tier** (shared `5/day` premium pool) |
 | `mimo/mimo-v2.5` | **MiMo 2.5**<br>Balanced · Images | **All Tiers — UNLIMITED** (default for limited tier) |
-| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (**Capped at 1 session/day**) |
-| `deepseek/deepseek-v4-pro` | **DeepSeek V4 Pro**<br>Deep reasoning · Reasoning: `high` | Full Tier (**Capped at 1 session/day; pauses at peak times**) |
+| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (shared `5/day` premium pool) |
+| `deepseek/deepseek-v4-pro` | **DeepSeek V4 Pro**<br>Deep reasoning · Reasoning: `high` | Full Tier (paused upstream at peak times) |
 | `z-ai/glm-5.2` | **GLM 5.2**<br>Top open-source agentic model | **Referral-gated** (+1 session per referral) |
-| `minimax/minimax-m3` | **MiniMax M3** | ⚠️ **Temporarily Unavailable upstream** |
+| `minimax/minimax-m3` | **MiniMax M3** | Paused upstream (kept in the catalog, not servable) |
 Clients calling 9router address these models as `freebuff/<model-id>`, for example:
 ```json
 {
@@ -124,13 +124,13 @@ Go to 9router **Chat** tab, select provider `freebuff` and model `freebuff/deeps
 
 | Symptom | Root Cause | Solution |
 | :--- | :--- | :--- |
-| **Every request returns 404** | Old proxy binary without `/v1/responses` or `/v1/messages`, or an unsupported endpoint such as `/v1/embeddings` (400 `unsupported_endpoint`). | Upgrade to the latest release. Chat Completions, Responses, and Messages all work on v0.10.0+. |
+| **Every request returns 404** | Old proxy binary without `/v1/responses` or `/v1/messages`, or an unsupported endpoint such as `/v1/embeddings` (400 `unsupported_endpoint`). | Upgrade to a current release. Chat Completions, Responses, and Messages all work on current builds. |
 | **Connection Refused on Base URL** | Proxy is not running or bound only to loopback inside Docker. | Run `curl http://127.0.0.1:3457/healthz`. In Docker, ensure `LISTEN_ADDR=:3457`. |
 | **"URL not allowed" during Check** | 9router SSRF guard blocks private IPs when accessed from remote browser. | Ignore the check and click **Create** anyway, then add the API Key in the next modal. |
 | **502 `upstream_auth_rejected`** | Token in `.env` or the 9router connection is expired or invalid. | Regenerate a token via `.\scripts\gen-token.cmd` (or `./scripts/gen-token.sh`). |
 | **429 Rate Limited** | Daily account quota exhausted (resets at Pacific Midnight / 07:00 UTC). | In Bridge mode, 9router will auto-fallback to your next key. |
 | **Truncated Reasoning / Tool Calls** | Model ran out of token generation budget. | Increase `max_tokens` (≥ 4000) in your client settings. |
-| **Model shows as `region_limited`** | Limited-tier account (non-Tier-1 country IP). | Use `mimo/mimo-v2.5` as default model, or route through a residential Tier-1 proxy. See [Getting Started — Access Tiers](getting-started.md#access-tiers--workarounds). |
+| **Model shows as `region_limited`** | Limited-tier account (non-Tier-1 country IP). | Use `mimo/mimo-v2.5` as default model, or route through a residential Tier-1 exit. See [Getting Started — Access Tiers](getting-started.md#access-tiers-models--upstream-quotas). |
 
 ---
 

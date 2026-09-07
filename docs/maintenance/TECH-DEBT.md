@@ -35,7 +35,7 @@ Approach: shellcheck in CI + smoke tests for gen-token/start arg parsing;
 sync-upstream already exercised by drift CI. Effort: small-medium.
 
 ### TD-P2-2 — Fixed time.Sleep waits are latent flakes
-~34 sites; sensitive: runs 400ms, admin_restart 300ms, pool_quota_window 1s,
+~60 sites; sensitive: runs 400ms, admin_restart 300ms, pool_quota_window 1s,
 update 500ms/2s, leader-election 20ms.
 Approach: migrate to poll-until-deadline (pattern exists in
 pool_mismatch_test.go:49). Effort: small, mechanical.

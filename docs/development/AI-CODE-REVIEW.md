@@ -69,7 +69,7 @@ pass/fail; a single fail blocks the change.
 - [ ] ADR written or marked superseded when a decision changed.
 - [ ] INVARIANTS.md updated when a contract-level behavior moved.
 - [ ] README/docs touched only for user-visible changes; no duplicate facts
-      created (see docs/maintenance/TECH-DEBT.md duplication notes).
+      created.
 
 ## Diff hygiene
 

@@ -70,21 +70,11 @@ If your VPS has no public IP, is behind CGNAT, or you prefer not to expose ports
 Cloudflare terminates SSL at the edge and forwards HTTPS traffic to your local gateway.
 
 ---
-
 ## Option 3: Plain HTTP on Cloud VPS (No Domain / Quick Dev)
 
-If you must access the dashboard directly via plain HTTP (`http://<vps-ip>:3457`) without a domain or TLS certificate:
+If you must access the dashboard directly via plain HTTP (`http://<vps-ip>:3457`) without a domain or TLS certificate, no extra flag is needed: the `fb_admin` session cookie drops its `Secure` attribute on plain-HTTP origins automatically (see `isSecureCookie` in `backend/internal/server/admin_auth.go`), so login works out of the box.
 
-1. In your `.env` file, set:
-   ```ini
-   ADMIN_INSECURE_HTTP=true
-   ```
-2. Rebuild/restart:
-   ```bash
-   docker compose up -d --build
-   ```
-
-> ⚠️ **Security Warning**: When `ADMIN_INSECURE_HTTP=true` is enabled, session cookies do not require HTTPS. On public networks, login credentials and session tokens travel in cleartext and may be intercepted. Use HTTPS in production.
+> Security Warning: on plain HTTP the admin login POST and the session cookie travel in cleartext and may be intercepted on public networks. Use HTTPS in production. Set `ADMIN_FORCE_SECURE_COOKIES=true` to force `Secure` unconditionally (plain-HTTP logins then stop working, which is the point).
 
 ---
 

@@ -209,29 +209,22 @@ CLI to refresh it.
 
 ## 5. The dashboard
 
-Open the browser UI at `http://127.0.0.1:3457/admin`. Set `ADMIN_TOKEN`
-in `.env` if you want the login page; without it, the read-only pages
-(overview, tokens, models, traces) stay open and the secret-bearing pages
-(config, logs) require a loopback client.
+Open the browser UI at `http://127.0.0.1:3457/admin`. Login is on by default (`DASHBOARD_REQUIRE_LOGIN=true`); the password is `ADMIN_TOKEN` (`123456` when unset — change it via the Settings Security card). Set `DASHBOARD_REQUIRE_LOGIN=false` for login-free loopback access; even then, the secret-bearing pages (config, logs) require a loopback client from a non-loopback address.
 
 What a healthy dashboard shows:
 
-- **Overview**: uptime, 6 KPI counters, client-integration base URL. (Account
+- **Overview**: uptime, 6 KPI counters in pooled mode, client-integration base URL. (Account
   risk cards live on the Tokens page, not here.)
 - **Tokens**: `Account #1, #2, …` rows (1-based pool order) with live
   cooldown countdowns, per-account Lock/Remove/Move actions, rotation
   radios, and the at-risk account cards. `low` risk is healthy; `high`
   is worth a look at what changed (new egress, new device).
+- **Maturity**: per-account maturity cards with model and mode selects.
 - **Quota Tracker**: per-account premium-pool bars and session-quota tables.
 - **Logs**: console (live `/v1` traffic, 1s auto-refresh) plus the table
   view of the newest 200 ring entries, no `level=ERROR` spam.
-- **Metrics**: live SVG sparklines of requests, runs, and usage.
-- **Setup**: mode card, client API key field, and per-model copy buttons.
-
-Polling is per-page (Overview 15s, Tokens live store, Logs 1s). If one
-page's numbers freeze while the proxy still answers curl, reload that
-page; a proxy restart clears in-flight streams and transient cooldowns,
-but persisted sessions and last-seen quota resume (see §7).
+- **Deep-link-only pages** (`/admin/setup`, `/admin/metrics`, `/admin/traces`, `/admin/playground`): Setup shows the mode card, client API key field, and per-model copy buttons; Metrics shows live SVG sparklines; Traces shows per-request latency breakdowns; Playground renders the Dev Tools page (needs `DEVTOOLS_ENABLED=true`).
+Polling is per-page (Overview 15s, Tokens live store, Logs 1s). If one page's numbers freeze while the proxy still answers curl, reload that page; a proxy restart clears in-flight streams and transient cooldowns, but persisted sessions and last-seen quota resume (see §7).
 
 ## 6. Service mode (run forever)
 
@@ -356,9 +349,9 @@ Windows:
   tool that writes UTF-8 explicitly.
 - Loopback-only binding means other machines on your LAN cannot reach
   the proxy. That is intentional. To serve your LAN, set
-  `LISTEN_ADDR=:3457` and, if you set `ADMIN_TOKEN`, the dashboard cookie
-  always carries the `Secure` flag (unconditional — loopback dev still
-  works because browsers accept Secure cookies on localhost/127.0.0.1).
+  `LISTEN_ADDR=:3457` and preferably terminate TLS in front (the `fb_admin`
+  cookie drops `Secure` on plain HTTP so logins keep working, and
+  `ADMIN_FORCE_SECURE_COOKIES=true` forces `Secure` unconditionally).
 - Windows Defender SmartScreen may flag the unsigned binary. Allow it
   once; the release carries SLSA provenance if you want to verify it
   instead of trusting the popup.

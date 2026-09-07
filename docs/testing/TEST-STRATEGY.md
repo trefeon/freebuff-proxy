@@ -1,8 +1,8 @@
 # Test Strategy
 
-State of the suite on 2026-09-06 (from the test inventory, `TestInventory`
-scout): backend **~207 test files, ~1,399 `func Test` entries** across 25
-packages plus `cmd`; frontend **63 Playwright e2e tests** (6 specs), zero unit
+State of the suite on 2026-09-08 (from the test inventory, `TestInventory`
+scout): backend **236 test files, 1,588 `func Test` entries** across 26
+packages plus `cmd`; frontend **92 Playwright e2e tests** (8 specs), zero unit
 tests; `scripts/` untested; zero real-network tests (all upstream goes through
 in-process `testutil.NewMock`/httptest); concurrency exercised via goroutine
 hammers under `-race`, never `t.Parallel`.
@@ -25,16 +25,14 @@ follow that pattern for new tests.
 
 | Area | Strength | Protected by |
 |---|---|---|
-| SSE/Anthropic/OpenAI/Responses protocol + 13-harness conformance | strongest | server relay/replay/conformance suites (407 tests) |
-| Pool failover precedence (ban>country>rate>waiting), cooldowns, quota windows | strong | pool suite (230) |
-| Wire classification + transient retries + header fidelity | strong | upstream suite (143) |
-| Session admission/poll/readmit, persistence, store CAS | strong | session suite (107) |
-| Config precedence, keycatalog parity, atomic writes | strong | config suite (102) |
-| Run lifecycle, drain queues, FINISH-once, shutdown races | good | runs suite (47) |
-| Admin APIs/auth/CSRF, dashboard pages | good | dashboard + server admin tests (≈100) |
-| Model parity vs upstream pins | good | modelcat/registry tests (25) |
-| Real-binary lifecycle (serve/drain/update/config/doctor) | thin but real | cmd E2E (15) |
-| SPA flows (tokens, quota, settings, logs, login/CSRF, a11y) | e2e only | frontend Playwright (63) |
+| SSE/Anthropic/OpenAI/Responses protocol + 13-harness conformance | strongest | server relay/replay/conformance suites (434 tests) |
+| Pool failover precedence (ban>country>rate>waiting), cooldowns, quota windows | strong | pool suite (275) |
+| Wire classification + transient retries + header fidelity | strong | upstream suite (155) |
+| Session admission/poll/readmit, persistence, store CAS | strong | session suite (117) |
+| Config precedence, keycatalog parity, atomic writes | strong | config suite (131) |
+| Run lifecycle, drain queues, FINISH-once, shutdown races | good | runs suite (54) |
+| Admin APIs/auth/CSRF, dashboard pages | good | dashboard + server admin tests (125) |
+| SPA flows (tokens, quota, settings, logs, login/CSRF, a11y) | e2e only | frontend Playwright (92) |
 | SPA unit logic (stores, validation, state) | GAP | none — see tech debt |
 | Shell/PS1 scripts (install, gen-token, start, sync) | GAP | none — see tech debt |
 
@@ -58,12 +56,12 @@ headers, state transition), never log-line wording or incidental internals.
   file collisions, `t.Parallel` avoided (serial suite by choice; hammers +
   race do the concurrency checking).
 
-## Known weaknesses (from inventory 2026-09-06, track in TECH-DEBT.md)
+## Known weaknesses (from inventory 2026-09-08, track in TECH-DEBT.md)
 
 1. Frontend/src has zero unit tests (HIGH): stores/validation bugs invisible
-   to the 63 route-mocked E2E specs; no vitest script in package.json.
+   to the 92 route-mocked E2E specs; no vitest script in package.json.
 2. scripts/ untested (MEDIUM): installer/gen-token/start/sync wrappers ship silently.
-3. Fixed `time.Sleep` waits (~34 sites; runs 400ms, admin_restart 300ms,
+3. Fixed `time.Sleep` waits (~60 sites; runs 400ms, admin_restart 300ms,
    pool_quota_window 1s, update 500ms/2s) are latent flakes; prefer the
    poll-until-deadline pattern already used elsewhere.
 4. ~20 conditional skips (Windows-only ctrl+break/update-swap/chmod, root
@@ -75,7 +73,7 @@ headers, state transition), never log-line wording or incidental internals.
 6. No fuzz targets; parser edge cases (convert/schema) rely on hand-built
    tables only. Characterization over coverage: add fuzz seeds for
    `XMLToolCallExtractor`, schema normalization, and SSE sanitization.
-7. SOCKS5 dial path (PROXY_ROTATION) selects/rotates in tests but never dials
+7. SOCKS5 dial path selects/rotates in tests but never dials
    through a real SOCKS proxy.
 8. E2E cmd suite compiles a real binary per suite (slow); keep new E2E at the
    invariant level, not per-case.

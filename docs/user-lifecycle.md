@@ -105,8 +105,8 @@ freebuff-proxy doctor diagnostic tool
 [ok] DNS lookup for www.codebuff.com resolved (104.18.1.2, ...)
 [ok] TLS connection to www.codebuff.com:443 succeeded
 [ok] Egress region: US (203.0.113.7)
-[ok] Model registry offline fallback loaded (6 models, 6 agents)
-[ok] Registry live refresh succeeded (6 models)
+[ok] Model registry offline fallback loaded (21 models, 20 agents)
+[ok] Registry live refresh succeeded (21 models)
 [ok] Token #1 validity probe succeeded
 Summary: 10 passed, 0 warnings, 0 failed
 ```
@@ -213,7 +213,7 @@ curl -s http://127.0.0.1:3457/healthz
 ```
 
 ```json
-{"status":"ok","mode":"hybrid","uptime_seconds":42.1,"models":6,
+{"status":"ok","mode":"hybrid","uptime_seconds":42.1,"models":21,
  "tokens":[{"token":1,"status":"healthy","quota":{"deepseek/deepseek-v4-flash":{"limit":5,"recent":2}}}],
  "bridge_tokens":0,"bridge_entries":[]}
 ```

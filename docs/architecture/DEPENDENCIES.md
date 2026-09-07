@@ -67,7 +67,7 @@ No test-only external Go modules. `CGO_ENABLED=0` for release builds.
 | `svelte` 5 | SPA framework (runes, no stores boilerplate) |
 | `tailwindcss` 4 + `@tailwindcss/vite` | styling, token-driven |
 | `vite` 6 | build + dev server |
-| `@fontsource/ibm-plex-{sans,mono}` | self-hosted type (no CDN) |
+| `@fontsource/geist` + `@fontsource/jetbrains-mono` | self-hosted type (no CDN) |
 | `@lucide/svelte` | icon set only |
 | `@playwright/test` | e2e suite |
 | `svelte-check`, `eslint`, `prettier` | check/lint/format gates |
