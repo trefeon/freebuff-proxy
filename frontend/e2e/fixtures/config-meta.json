@@ -289,6 +289,16 @@
     "description": "How long a model_unavailable admission refusal is remembered per model (off-window models short-circuit to the fallback within the TTL)."
   },
   {
+    "key": "QUOTA_AUTO_PROBE",
+    "group": "pool",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Keep per-token quota fresh without manual probes: each pooled token is probed once per Pacific day at a deterministic jittered slot in the 2h window before its known quota reset (ADR-0022). Applies live on reload; false restores pre-scheduler behavior."
+  },
+  {
     "key": "RATE_LIMIT_BURST",
     "group": "pool",
     "kind": "int",

@@ -173,6 +173,8 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.MaturityTouchModel, false
 	case "MATURITY_TARGET_DAYS":
 		return strconv.Itoa(c.MaturityTargetDays), false
+	case "QUOTA_AUTO_PROBE":
+		return strconv.FormatBool(c.QuotaAutoProbe), false
 	default:
 		// A catalog key with no Config field (new upstream knob not yet
 		// wired into Config): fall back to the catalog default so the

@@ -320,6 +320,11 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// need keeping. It never fires on unhealthy accounts (banned, cooling,
 	// quarantined, country-blocked) and defaults to dry-run probes.
 	p.maturityTick(ctx)
+	// Quota auto-probe (ADR-0022) rides every pass alongside maturity —
+	// including idle stretches, so quota is fresh when traffic resumes.
+	// Session-less ProbeToken, warn-only, one GET per token per Pacific
+	// day; QUOTA_AUTO_PROBE=false skips the pass entirely.
+	p.quotaAutoProbeTick(ctx)
 	// Idle handling — tryIdleFinish atomically checks the threshold and
 	// marks idleFinished in one lastActiveMu critical section (TOCTOU fix).
 	// The first idle pass FINISHes all runs so rotation/refresh stops

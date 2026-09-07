@@ -446,6 +446,12 @@ type tokenEntry struct {
 	// (SetConfig slot changes) drop it — re-enable after a token swap.
 	maturityMu sync.Mutex
 	maturity   maturityState
+	// quotaProbeDay is the Pacific calendar day (YYYY-MM-DD) the quota
+	// auto-probe last fired for this entry (ADR-0022). Touched only by the
+	// maintain goroutine (quotaAutoProbeTick), so no lock is needed — the
+	// same single-writer rule as nextPollAt/pollFailures above. Zero value
+	// = never probed; entry rebuilds (SetConfig slot changes) drop it.
+	quotaProbeDay string
 }
 
 func (e *tokenEntry) Email() string {

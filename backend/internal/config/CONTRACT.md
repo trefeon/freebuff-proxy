@@ -30,9 +30,11 @@ Everything internal, including `telemetry` (the 2026-08-31 P3 inversion: LOG_LEV
 ## Tests that protect it
 
 `TestDotenv*` (precedence, BOM, CRLF, quoting/comments, duplicate-last-wins, JSON-wins, env-wins, missing-is-fine, empty-auth-clears), `TestEnv*` (bridge-mode detection), `TestDotenvFullKeySet(+EnvWins)`, `TestCORSAllowedOrigin`, `TestSessionPersist*`, `TestModelsHideUnavailableEnv`, `keycatalog_test.go`, `env_example_test.go`, `envfile_test.go`, `TestParseLevelGrammar`, `TestSettingsOverlay*` + `TestOverlayCoversCatalog` + `TestValidateSettingValue` + `TestSettingSources*` (ADR-0019 overlay precedence, blocked-key filtering, POST gate, source tiers).
+`quota_autoprobe_test.go` (`QUOTA_AUTO_PROBE` default-true plus env/`.env`/DB-overlay tiers and the `ValidateSettingValue` bool gate).
 
 ## Safe modification patterns
 
 - New knobs: shape-only `Validate` checks here (e.g. provider/model slash shape); semantic checks (served/unmetered) live where `modelcat` is visible (pool fire path + admin endpoint).
+- New default-true live-apply bools (e.g. `QUOTA_AUTO_PROBE`, ADR-0022): default in `defaultRawConfig`, `overrideBool` (env tier) + `overrideBoolFrom` in `applyMappedValues` (shared `.env`/overlay tier — overlay + `ValidateSettingValue` need no extra code), `Config` + `rawConfig` fields, GroupPool catalog entry (byte-ascending slot) + `renderKey` case + `dotenvKeys` entry, then regen the `config-meta.json` fixture with `FP_REGEN_FIXTURE=1`. No `Validate` case (bool zero = off; production default ON comes from `Load`).
 - Never import an internal package for validation logic — move the logic down into config instead.
 - Duplicate-key files: last wins; quoting/BOM/CRLF handling must stay total (fuzz-adjacent edge tests pin it).
