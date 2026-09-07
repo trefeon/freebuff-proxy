@@ -20,9 +20,11 @@ import (
 // schemaVersion guards the on-disk format. v1 held the history tables only
 // (log_entries, quota_snapshots, maturity_events, request_records); v2 adds
 // the persistence tables (settings, pages_state, sessions_persist, tokens).
-// Open migrates v1 files in place; anything else non-zero is rejected so a
-// stale file is ignored instead of mis-parsed (mirrors session.storeVersion).
-const schemaVersion = 2
+// v3 adds the maturity columns (maturity_json, streak_blob) to tokens.
+// Open migrates older files in place; anything else non-zero is rejected so
+// a stale file is ignored instead of mis-parsed (mirrors
+// session.storeVersion).
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE IF NOT EXISTS log_entries(
@@ -92,6 +94,8 @@ CREATE TABLE IF NOT EXISTS tokens(
   label TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT '',
   quota_data TEXT NOT NULL DEFAULT '',
+  maturity_json TEXT NOT NULL DEFAULT '',
+  streak_blob BLOB,
   created_at INTEGER NOT NULL DEFAULT 0
 );
 `
@@ -176,10 +180,11 @@ func DBPathFromEnv() string {
 }
 
 // Open creates the parent dir, opens (or creates) the SQLite file at path,
-// and applies pragmas + schema. A v1 file migrates in place to v2 (the
-// schema is IF NOT EXISTS, so existing history rows survive); any other
-// version mismatch or unusable file returns an error and the caller runs
-// live-only. Open never fails the boot itself.
+// and applies pragmas + schema. Older files migrate in place (v1 gains the
+// v2 persistence tables via the IF NOT EXISTS schema; v2 gains the v3
+// maturity columns via ALTER); any other version mismatch or unusable file
+// returns an error and the caller runs live-only. Open never fails the boot
+// itself.
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -205,12 +210,18 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: user_version: %w", err)
 	}
+	migrate := false
 	switch v {
 	case 0, schemaVersion:
 		// Fresh file or current: apply the schema as-is.
 	case 1:
 		// v1 -> v2: the schema below is IF NOT EXISTS, so it only adds
-		// the persistence tables and keeps every v1 history row.
+		// the persistence tables and keeps every v1 history row. The
+		// tokens table is created fresh by that same schema, already
+		// carrying the v3 maturity columns.
+	case 2:
+		// v2 -> v3: tokens exists without the maturity columns.
+		migrate = true
 	default:
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema v%d unsupported (want v%d)", v, schemaVersion)
@@ -219,11 +230,60 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)
 	}
+	if migrate {
+		if err := migrateV2ToV3(db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: stamp version: %w", err)
 	}
 	return &Store{db: db}, nil
+}
+
+// migrateV2ToV3 adds the maturity columns to an existing v2 tokens table.
+// Column presence is probed first so a half-migrated file stays idempotent.
+func migrateV2ToV3(db *sql.DB) error {
+	cols := map[string]bool{}
+	rows, err := db.Query(`PRAGMA table_info(tokens)`)
+	if err != nil {
+		return fmt.Errorf("store: migrate v2->v3 table_info: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull int
+		var dflt interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("store: migrate v2->v3 scan: %w", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("store: migrate v2->v3 rows: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("store: migrate v2->v3 close: %w", err)
+	}
+	for _, alter := range []struct {
+		col string
+		ddl string
+	}{
+		{"maturity_json", `ALTER TABLE tokens ADD COLUMN maturity_json TEXT NOT NULL DEFAULT ''`},
+		{"streak_blob", `ALTER TABLE tokens ADD COLUMN streak_blob BLOB`},
+	} {
+		if cols[alter.col] {
+			continue
+		}
+		if _, err := db.Exec(alter.ddl); err != nil {
+			return fmt.Errorf("store: migrate v2->v3 add %s: %w", alter.col, err)
+		}
+	}
+	return nil
 }
 
 // Close releases the database handle.
