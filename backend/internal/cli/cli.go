@@ -292,7 +292,14 @@ func Serve(configPath string, verbose bool, version string) int {
 	// Dashboard history (ADR-0016): pool maturity events persist through a
 	// nil-safe adapter; without a store the pool stays persistence-free.
 	p.SetHistorySink(&poolHistorySink{st: histStore})
-
+	// Quota boot seed (ADR-0024): push the latest persisted quota row per
+	// (token, model) into the live view before Start, so a restart shows
+	// last-known quotas instantly and the scheduler learns reset_at from
+	// the seed. Warn-only: a store failure keeps the boot green. The nil
+	// guard stays here: a nil *Store would arrive as a non-nil interface.
+	if histStore != nil {
+		seedQuotaFromStore(logger, histStore, p, len(cfg.AuthTokens))
+	}
 	// Issue #48: best-effort webhook alerts (WEBHOOK_URL) for pool
 	// exhaustion / token bans — fire-and-forget, throttled, never blocking.
 	if cfg.WebhookURL != "" {
