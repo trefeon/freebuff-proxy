@@ -61,20 +61,6 @@ func (s *Store) RecordMaturity(e MaturityEvent) error {
 	return nil
 }
 
-// RecordRequest upserts one /v1 inference outcome. OR REPLACE keeps the
-// latest row when a retried request reports twice under one req_id.
-func (s *Store) RecordRequest(r RequestRecord) error {
-	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO request_records(req_id, ts, endpoint, model, token_idx, status, ttfb_ms, error)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.ReqID, r.TS, r.Endpoint, r.Model, r.TokenIdx, r.Status, r.TTFBms, r.Err,
-	)
-	if err != nil {
-		return fmt.Errorf("store: request upsert: %w", err)
-	}
-	return nil
-}
-
 const (
 	defaultLogLimit = 500
 	maxLogLimit     = 5000

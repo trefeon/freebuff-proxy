@@ -19,7 +19,7 @@ func seedLegacyHistory(t *testing.T, path string) {
 	if err := old.RecordMaturity(MaturityEvent{TS: 2, TokenIdx: 0, Kind: "touch", Detail: "ok"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := old.RecordRequest(RequestRecord{ReqID: "r1", TS: 3, Endpoint: "/v1/chat/completions"}); err != nil {
+	if _, err := old.db.Exec(`INSERT OR REPLACE INTO request_records(req_id, ts, endpoint, model, token_idx, status, ttfb_ms, error) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, "r1", 3, "/v1/chat/completions", "", 0, "", 0, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := old.AppendLogs([]LogEntry{{TS: 4, Level: "info", Msg: "boot"}}); err != nil {

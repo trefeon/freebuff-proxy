@@ -96,21 +96,12 @@ type legacySessionFile struct {
 	Runs     map[string]map[string]json.RawMessage `json:"runs"`
 }
 
-// ImportLegacySessionFile imports a legacy .freebuff-session-state.json into
-// sessions_persist, then archives it to path+".bak" (rename, never delete).
-// A missing file is a no-op (0, nil); a parse failure returns an error and
-// leaves the file in place. Callers gate on SESSION_PERSIST and only warn on
-// error — the JSON path keeps working when the DB is unavailable.
-func ImportLegacySessionFile(s *Store, path string) (int, error) {
-	return importSessionsReader(s, path, true, nil)
-}
-
-// ImportLegacySessionFileWithCollisions imports like ImportLegacySessionFile
-// (archiving the source to .bak) and additionally fires onCollision once per
-// token hash whose stored blobs already exist with different content — a
-// later candidate overwriting an earlier-imported row (the incoming row
-// wins; identical re-imports stay silent). Boot logs each collision at WARN
-// so split-brain session files are visible instead of silently last-wins.
+// ImportLegacySessionFileWithCollisions imports a legacy
+// .freebuff-session-state.json into sessions_persist (archiving the source
+// to .bak) and fires onCollision once per token hash whose stored blobs
+// already exist with different content (the incoming row wins; identical
+// re-imports stay silent). Boot logs each collision at WARN so split-brain
+// session files are visible instead of silently last-wins.
 func ImportLegacySessionFileWithCollisions(s *Store, path string, onCollision func(tokenHash string)) (int, error) {
 	return importSessionsReader(s, path, true, onCollision)
 }
@@ -124,10 +115,9 @@ func ImportLegacySessionBackup(s *Store, path string, onCollision func(tokenHash
 	return importSessionsReader(s, path, false, onCollision)
 }
 
-// importSessionsReader is the shared legacy-session reader behind the three
-// Import entry points. When archive is true the source renames to
-// path+".bak" (never deleted); a path already ending in .bak never renames
-// even then, so the archive cannot orphan itself as .bak.bak.
+// importSessionsReader is the shared legacy-session reader behind the two
+// Import entry points. When archive is true the source renames to path+".bak"
+// (never deleted); a path already ending in .bak never renames even then,
 func importSessionsReader(s *Store, path string, archive bool, onCollision func(tokenHash string)) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

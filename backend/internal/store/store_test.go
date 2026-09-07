@@ -140,24 +140,6 @@ func TestQuotaAndMaturityHistory(t *testing.T) {
 	}
 }
 
-func TestRequestUpsertKeepsLatest(t *testing.T) {
-	s := openTest(t)
-	base := Millis(time.Now())
-	if err := s.RecordRequest(RequestRecord{ReqID: "r9", TS: base, Endpoint: "chat", Status: "ok"}); err != nil {
-		t.Fatalf("insert: %v", err)
-	}
-	if err := s.RecordRequest(RequestRecord{ReqID: "r9", TS: base + 5, Endpoint: "chat", Status: "error", Err: "ban"}); err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-	var status, recErr string
-	if err := s.db.QueryRow("SELECT status, error FROM request_records WHERE req_id = 'r9'").Scan(&status, &recErr); err != nil {
-		t.Fatalf("select: %v", err)
-	}
-	if status != "error" || recErr != "ban" {
-		t.Fatalf("upsert kept stale row: %s/%s", status, recErr)
-	}
-}
-
 func TestPurgeKeepsFreshRows(t *testing.T) {
 	s := openTest(t)
 	old := Millis(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC))

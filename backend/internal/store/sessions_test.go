@@ -63,71 +63,6 @@ func TestSessionPersistRejectsEmptyHash(t *testing.T) {
 	}
 }
 
-func TestImportLegacySessionFile(t *testing.T) {
-	dir := t.TempDir()
-	legacy := filepath.Join(dir, ".freebuff-session-state.json")
-	fixture := `{"version":1,"sessions":{"abc123":{"instance_id":"inst-1","model":"m","status":"active"}},"runs":{"abc123":{"agent-1":{"run_id":"run-9","agent_id":"agent-1"}}}}`
-	if err := os.WriteFile(legacy, []byte(fixture), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	s := openTest(t)
-	n, err := ImportLegacySessionFile(s, legacy)
-	if err != nil {
-		t.Fatalf("ImportLegacySessionFile: %v", err)
-	}
-	if n != 1 {
-		t.Fatalf("imported = %d, want 1", n)
-	}
-	sess, runs, ok, err := s.LoadSession("abc123")
-	if err != nil || !ok {
-		t.Fatalf("LoadSession after import = %v,%v", ok, err)
-	}
-	if !strings.Contains(sess, "inst-1") {
-		t.Fatalf("session blob = %q, want inst-1 inside", sess)
-	}
-	if !strings.Contains(runs, "run-9") {
-		t.Fatalf("runs blob = %q, want run-9 inside", runs)
-	}
-	// Archive, never delete: the original path is gone, the .bak holds it.
-	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
-		t.Fatal("legacy file still in place, want it renamed away")
-	}
-	bak, err := os.ReadFile(legacy + ".bak")
-	if err != nil {
-		t.Fatalf("read .bak: %v", err)
-	}
-	if string(bak) != fixture {
-		t.Fatalf(".bak = %q, want the original bytes", bak)
-	}
-}
-
-func TestImportLegacySessionFileMissingIsNoop(t *testing.T) {
-	s := openTest(t)
-	missing := filepath.Join(t.TempDir(), "no-such-state.json")
-	n, err := ImportLegacySessionFile(s, missing)
-	if err != nil || n != 0 {
-		t.Fatalf("missing import = %d,%v, want 0,nil", n, err)
-	}
-	if _, err := os.Stat(missing + ".bak"); !os.IsNotExist(err) {
-		t.Fatal("noop import created a .bak, want nothing")
-	}
-}
-
-func TestImportLegacySessionFileBadJSONKeepsFile(t *testing.T) {
-	dir := t.TempDir()
-	legacy := filepath.Join(dir, ".freebuff-session-state.json")
-	if err := os.WriteFile(legacy, []byte("{not json"), 0o600); err != nil {
-		t.Fatalf("write garbage: %v", err)
-	}
-	s := openTest(t)
-	if _, err := ImportLegacySessionFile(s, legacy); err == nil {
-		t.Fatal("garbage import accepted, want an error")
-	}
-	if _, err := os.Stat(legacy); err != nil {
-		t.Fatalf("garbage legacy file renamed away on failure: %v", err)
-	}
-}
-
 func TestSessionsEmptyGate(t *testing.T) {
 	s := openTest(t)
 	if empty, err := s.SessionsEmpty(); err != nil || !empty {
@@ -234,17 +169,18 @@ func TestImportLegacySessionBackupNoArchive(t *testing.T) {
 	}
 }
 
-// TestImportLegacySessionFileNeverOrphansBak pins the suffix guard on the
-// archiving entry point: even archive=true must not rename a .bak path.
-func TestImportLegacySessionFileNeverOrphansBak(t *testing.T) {
+// TestImportLegacySessionArchiveNeverOrphansBak pins the suffix guard on the
+// archiving entry point (WithCollisions, archive=true): even then a .bak
+// path must not rename again.
+func TestImportLegacySessionArchiveNeverOrphansBak(t *testing.T) {
 	dir := t.TempDir()
 	bak := filepath.Join(dir, "state.json.bak")
 	if err := os.WriteFile(bak, []byte(`{"version":1,"sessions":{"h1":{"x":1}},"runs":{}}`), 0o600); err != nil {
 		t.Fatalf("write .bak: %v", err)
 	}
 	s := openTest(t)
-	if _, err := ImportLegacySessionFile(s, bak); err != nil {
-		t.Fatalf("ImportLegacySessionFile(.bak): %v", err)
+	if _, err := ImportLegacySessionFileWithCollisions(s, bak, nil); err != nil {
+		t.Fatalf("ImportLegacySessionFileWithCollisions(.bak): %v", err)
 	}
 	if _, err := os.Stat(bak); err != nil {
 		t.Fatalf(".bak path renamed away: %v", err)
