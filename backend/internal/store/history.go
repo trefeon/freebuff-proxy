@@ -161,6 +161,37 @@ func (s *Store) QuotaHistory(tokenIdx int, model string, since int64, limit int)
 	return out, rows.Err()
 }
 
+// LatestQuotaSnapshots returns the latest row per (token_idx, model),
+// newest-first, capped at limit (<=0 defaults to 2000). The quota boot seed
+// (ADR-0024) loads the live-view baseline from these without replaying full
+// history. Latest = highest rowid per group (inserts are append-only, so the
+// last write per group is its freshest sample).
+func (s *Store) LatestQuotaSnapshots(limit int) ([]QuotaSnapshot, error) {
+	if limit <= 0 {
+		limit = 2000
+	}
+	rows, err := s.db.Query(
+		`SELECT id, ts, token_idx, model, quota_limit, recent_count, reset_at, entitlements
+		 FROM quota_snapshots
+		 WHERE id IN (SELECT MAX(id) FROM quota_snapshots GROUP BY token_idx, model)
+		 ORDER BY ts DESC, id DESC LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: latest quota: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := []QuotaSnapshot{}
+	for rows.Next() {
+		var q QuotaSnapshot
+		if err := rows.Scan(&q.ID, &q.TS, &q.TokenIdx, &q.Model, &q.Limit, &q.Recent, &q.ResetAt, &q.Entitlements); err != nil {
+			return nil, fmt.Errorf("store: scan quota: %w", err)
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
+}
+
 // MaturityHistory returns oldest-first events for one token since the cutoff.
 func (s *Store) MaturityHistory(tokenIdx int, since int64, limit int) ([]MaturityEvent, error) {
 	if limit <= 0 {

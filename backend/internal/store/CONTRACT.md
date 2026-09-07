@@ -18,7 +18,8 @@ merges these views with live pool state; no page reads SQL directly.
   `DBPathFromEnv` (`DB_PATH`, default `./data/freebuff.db`).
 - `history.go`: history writes/queries (`AppendLogs`, `RecordQuota`,
   `RecordMaturity`, `RecordRequest`, `QueryLogs`, `QuotaHistory`,
-  `MaturityHistory`) + `ImportLegacyHistoryDB` (one-file carry into empty
+  `LatestQuotaSnapshots` (latest row per token/model for the ADR-0024 boot
+  seed), `MaturityHistory`) + `ImportLegacyHistoryDB` (one-file carry into empty
   targets, legacy file left in place) + `CountLegacyHistoryRows`
   (read-only staged-copy per-table counts for multi-era skip logging —
   never imports).
@@ -108,6 +109,7 @@ read-only-source staging, empty-candidate scan continuation, WAL-sidecar
 staging, missing/same-path/garbage noops, `CountLegacyHistoryRows`
 per-table counts + missing/empty-path/row-less zeroes + garbage error +
 source still carries afterwards.
+`latest_quota_test.go` (ADR-0024: latest-per-group, newest-first order, limit bound, empty store).
 
 ## Safe modification patterns
 

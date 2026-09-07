@@ -264,6 +264,12 @@ type Pool struct {
 
 	rr     atomic.Uint64 // round-robin start index
 	logger *slog.Logger
+	// quotaBootAt anchors the ADR-0024 staggered boot-probe slots. Set once
+	// in Start before the maintain loop launches (happens-before the first
+	// tick via the goroutine spawn); zero until then, which also keeps
+	// unit tests that never Start probe-free. Never reset — Shutdown is
+	// terminal and a second Start is a no-op (p.once).
+	quotaBootAt time.Time
 	// histSink is the optional maturity history consumer (ADR-0016); nil
 	// keeps the pool free of persistence. Set once via SetHistorySink.
 	histSink atomic.Pointer[HistorySink]
@@ -352,6 +358,14 @@ type Pool struct {
 	burstMu   sync.Mutex
 	burstHits map[string][]burstHit
 	burstOn   map[string]bool
+
+	// lastBulkProbe is the pool-scoped timestamp of the last bulk probe
+	// pass (manual Probe-all button or stale visit auto-probe, ADR-0025).
+	// In-memory only (a restart re-probes on the next stale visit); the
+	// slot is claimed before probing so concurrent tabs share one pass.
+	// Guarded by bulkProbeMu.
+	bulkProbeMu   sync.Mutex
+	lastBulkProbe time.Time
 
 	// modelAdmissionGate serializes cold-path Acquire per model: the leader
 	// creates a gate on registration; concurrent followers block on it
@@ -460,6 +474,14 @@ type tokenEntry struct {
 	// same single-writer rule as nextPollAt/pollFailures above. Zero value
 	// = never probed; entry rebuilds (SetConfig slot changes) drop it.
 	quotaProbeDay string
+	// quotaSeeded reports the ADR-0024 boot seed filled this entry's
+	// last-known quota (SeedQuotaSnapshot, before Start). quotaBootProbed
+	// marks the one staggered recovery probe fired (maintain goroutine).
+	// Same single-writer discipline: seed flag written pre-Start
+	// (happens-before the maintain loop via the Start spawn), boot flag by
+	// the maintain goroutine only. Entry rebuilds drop both.
+	quotaSeeded     bool
+	quotaBootProbed bool
 }
 
 func (e *tokenEntry) Email() string {
