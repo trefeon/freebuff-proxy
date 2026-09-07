@@ -917,8 +917,10 @@ func TestResolveModelMaxUpgradeRemoved(t *testing.T) {
 // #201 and the 2026-08-23 luna-es drop, and by #209, and by d64972c (2026-08-27)
 // adding z-ai/glm-5.3-flash, and by 5951772 (2026-08-28) pausing
 // deepseek-v4-pro + ox-alpha and keeping claude-fable-5 gated, and by 87ef664
-// (2026-08-28) serving upstage/solar-pro4: ServedModels contains ONLY the 6
-// operational FreeBuff models. openai/gpt-5.6-luna-es was removed
+// (2026-08-28) serving upstage/solar-pro4, and by upstream 92c4f5e
+// (2026-09-07) withdrawing meta/muse-spark-1.3-contributor (404
+// model_not_found) and serving meta/muse-spark-1.2-contributor in its place:
+// ServedModels contains ONLY the 6 operational FreeBuff models. openai/gpt-5.6-luna-es was removed
 // after the vendor moved it into FREEBUFF_WEB_GOD_ONLY_MODELS ("Codex
 // (test)" — Novita route, evaluation only; hidden from the CLI picker and
 // SUPPORTED_FREEBUFF_MODELS in snapshot 0603bc1) — not the documented
@@ -931,7 +933,7 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"deepseek/deepseek-v4-flash",
 		"openai/gpt-5.6-luna",
 		"upstage/solar-pro4",
-		"meta/muse-spark-1.3-contributor",
+		"meta/muse-spark-1.2-contributor",
 		"z-ai/glm-5.3-flash",
 		"mimo/mimo-v2.5",
 	}
@@ -957,7 +959,7 @@ func TestStrictServedModelsPinned(t *testing.T) {
 		"google/gemini-3.5-flash-lite",
 		"crof/kimi-k3-eco",
 		"openai/gpt-5.6-luna-es",
-		"meta/muse-spark-1.2-contributor",
+		"meta/muse-spark-1.3-contributor",
 		"deepseek/deepseek-v4-pro-max",
 		"deepseek/deepseek-v4-flash-max",
 		"openai/gpt-5.6-luna-max",

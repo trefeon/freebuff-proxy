@@ -998,7 +998,7 @@ func TestStrictServedModelsEnforced(t *testing.T) {
 		"deepseek/deepseek-v4-flash":      true,
 		"openai/gpt-5.6-luna":             true,
 		"upstage/solar-pro4":              true,
-		"meta/muse-spark-1.3-contributor": true,
+		"meta/muse-spark-1.2-contributor": true,
 		"z-ai/glm-5.3-flash":              true,
 		"mimo/mimo-v2.5":                  true,
 	}
@@ -1014,7 +1014,7 @@ func TestStrictServedModelsEnforced(t *testing.T) {
 		"google/gemini-3.5-flash-lite",
 		"anthropic/claude-fable-5",
 		"crof/kimi-k3-eco",
-		"meta/muse-spark-1.2-contributor",
+		"meta/muse-spark-1.3-contributor",
 	}
 
 	for _, dm := range disabledModels {
@@ -1037,7 +1037,13 @@ func TestStrictServedModelsEnforced(t *testing.T) {
 		if errChat.Error.Code != "model_unavailable" {
 			t.Errorf("chat %s error code = %q, want model_unavailable", dm, errChat.Error.Code)
 		}
-		if !strings.Contains(errChat.Error.Message, "Supported models: openai") {
+		if dm == "meta/muse-spark-1.3-contributor" {
+			// Paused (withdrawn 2026-09-07): the refusal names the replacement,
+			// not the supported list.
+			if !strings.Contains(errChat.Error.Message, "Muse Spark 1.3 is no longer available") {
+				t.Errorf("chat %s message = %q, want withdrawn-model notice", dm, errChat.Error.Message)
+			}
+		} else if !strings.Contains(errChat.Error.Message, "Supported models: openai") {
 			t.Errorf("chat %s message = %q, want supported models notice", dm, errChat.Error.Message)
 		}
 
@@ -1061,7 +1067,11 @@ func TestStrictServedModelsEnforced(t *testing.T) {
 		if errAnthropic.Error.Type != "invalid_request_error" {
 			t.Errorf("messages %s error type = %q, want invalid_request_error", dm, errAnthropic.Error.Type)
 		}
-		if !strings.Contains(errAnthropic.Error.Message, "Supported models: openai") {
+		if dm == "meta/muse-spark-1.3-contributor" {
+			if !strings.Contains(errAnthropic.Error.Message, "Muse Spark 1.3 is no longer available") {
+				t.Errorf("messages %s message = %q, want withdrawn-model notice", dm, errAnthropic.Error.Message)
+			}
+		} else if !strings.Contains(errAnthropic.Error.Message, "Supported models: openai") {
 			t.Errorf("messages %s message = %q, want supported models notice", dm, errAnthropic.Error.Message)
 		}
 

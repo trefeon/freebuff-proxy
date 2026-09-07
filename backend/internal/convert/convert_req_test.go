@@ -529,17 +529,20 @@ func TestClampReasoningEffort(t *testing.T) {
 }
 
 func TestEffortsForModel(t *testing.T) {
-	// Every id the ServedModels gate serves, with its upstream-verified
-	// ladder (reference/freebuff/common/src/constants/freebuff-models.ts,
-	// modelcat catalog, pinned 5951772).
+	// Every id the ServedModels gate serves, plus paused rows with frozen
+	// ladders, with its upstream-verified ladder
+	// (reference/freebuff/common/src/constants/freebuff-models.ts,
+	// modelcat catalog, pinned 92c4f5e: 1.3 withdrawn 2026-09-07, 1.2 served
+	// in its place).
 	for model, want := range map[string][]string{
-		"deepseek/deepseek-v4-flash": {"low", "high", "max"},
-		"deepseek/deepseek-v4-pro":   {"low", "high", "max"},
-		"stealth/ox-alpha":           {"low", "high", "max"},
-		"mimo/mimo-v2.5":             {"high"}, // Xiaomi: disabled/high only
-		"minimax/minimax-m3":         {"high"}, // adaptive/disabled only
-		"anthropic/claude-fable-5":   {"low", "medium", "high", "xhigh", "max"},
-		"openai/gpt-5.6-luna":        {"low", "medium", "high", "xhigh", "max"},
+		"deepseek/deepseek-v4-flash":      {"low", "high", "max"},
+		"deepseek/deepseek-v4-pro":        {"low", "high", "max"},
+		"stealth/ox-alpha":                {"low", "high", "max"},
+		"mimo/mimo-v2.5":                  {"high"}, // Xiaomi: disabled/high only
+		"minimax/minimax-m3":              {"high"}, // adaptive/disabled only
+		"anthropic/claude-fable-5":        {"low", "medium", "high", "xhigh", "max"},
+		"meta/muse-spark-1.2-contributor": {"minimal", "low", "medium", "high", "xhigh"},
+		"meta/muse-spark-1.3-contributor": {"minimal", "low", "medium", "high", "xhigh"}, // paused, frozen ladder
 	} {
 		if got := effortsForModel(model); !reflect.DeepEqual(got, want) {
 			t.Errorf("effortsForModel(%s) = %v, want %v", model, got, want)
@@ -552,7 +555,6 @@ func TestEffortsForModel(t *testing.T) {
 	for _, model := range []string{
 		"z-ai/glm-5.2",
 		"crof/kimi-k3-eco",
-		"meta/muse-spark-1.2-contributor", // god-only, gate-blocked; ladder dropped with the 5951772 catalog sync
 		"google/gemini-2.5-flash-lite",
 		"google/gemini-3.1-flash-lite",
 		"google/gemini-3.5-flash-lite",

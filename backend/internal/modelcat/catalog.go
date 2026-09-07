@@ -1,6 +1,6 @@
 // about the FreeBuff free catalog. One row per model in upstream
 // SUPPORTED_FREEBUFF_MODELS (reference/freebuff/common/src/constants/
-// freebuff-models.ts, pinned snapshot f25d405, vendor 0.0.167).
+// freebuff-models.ts, pinned snapshot 92c4f5e, vendor 0.0.171).
 //
 // Every package that needs a per-model fact — registry (served/paused gate,
 // withdrawn-model copy), convert (effort ladders), pool (premium pool and
@@ -85,19 +85,29 @@ var Catalog = []ModelInfo{
 	// per-session spend ceiling is upstream-enforced, so unmodeled.
 	{ID: "google/gemini-3.8-flash", DisplayName: "Gemini 3.8 Flash",
 		Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
-	// meta/muse-spark-1.3-contributor joined every surface 2026-09-04
-	// (upstream SUPPORTED_FREEBUFF_MODELS + FREEBUFF_MODELS, last on
-	// purpose — the one row that may answer on a different model when its
-	// shared ceiling is full). Premium shared-pool row; rate-limited with a
-	// 15s queue window, then answers on DeepSeek V4 Flash. Contributor
-	// terms: Meta trains on prompts and completions (dataUse 'training'),
-	// and upstream keeps no traces for it. Full ladder, defaultEffort
-	// xhigh. Meta publishes 1,048,576 for every Muse Spark variant, entered
-	// as 1,000,000 like Luna (upstream only keys the retired 1.2 id, so the
-	// parity context check has no 1.3 entry to compare — this is the
-	// documented upstream figure, not a guess).
+	// meta/muse-spark-1.3-contributor joined every surface 2026-09-04 and
+	// was WITHDRAWN 2026-09-07: Meta returns `404 model_not_found` for it on
+	// every key, every attempt, while 1.2 answers (see its FREEBUFF_MODELS
+	// row). Paused rather than deleted so the installed binaries that hold
+	// the id are coerced instead of refused. Keeps its frozen row facts
+	// (display name, ladder, 1M window) for the refusal copy; Served and
+	// Premium are off — a paused row consumes no pool.
 	{ID: "meta/muse-spark-1.3-contributor", DisplayName: "Muse Spark 1.3",
 		Tagline: "Queues, then falls back", Badges: []string{"Reasoning: xhigh", "NEW"},
+		Notice:            "May use data for AI training",
+		PausedReplacement: "z-ai/glm-5.3-flash", ContextWindow: 1_000_000,
+		Efforts: []string{"minimal", "low", "medium", "high", "xhigh"}},
+	// meta/muse-spark-1.2-contributor takes 1.3's place on every surface
+	// since 2026-09-07 (upstream SUPPORTED_FREEBUFF_MODELS + FREEBUFF_MODELS,
+	// last on purpose — the one row that may answer on a different model
+	// when its shared ceiling is full). Premium shared-pool row; answered 5
+	// of 5 on all four keys in the probe that found 1.3 dead. Contributor
+	// terms: Meta trains on prompts and completions (dataUse 'training').
+	// Full ladder, defaultEffort xhigh. 1,000,000 like Luna (Meta publishes
+	// 1,048,576 for every Muse Spark variant; upstream keys this id, so the
+	// parity context check compares it directly).
+	{ID: "meta/muse-spark-1.2-contributor", DisplayName: "Muse Spark 1.2",
+		Tagline: "Queue", Badges: []string{"Reasoning: xhigh"},
 		Notice: "May use data for AI training",
 		Served: true, Premium: true, ContextWindow: 1_000_000,
 		Efforts: []string{"minimal", "low", "medium", "high", "xhigh"}},
@@ -279,8 +289,9 @@ func IsPremium(id string) bool {
 }
 
 // SharedPremiumModels returns the ids metered by the shared daily premium
-// pool: Luna + Muse Spark 1.3 since 2026-09-04 (solar left the pool when its
-// entitlement went unmetered; gemini is Pro-paywalled).
+// pool: Luna + Muse Spark 1.2 since 2026-09-07 (1.3 withdrawn that day;
+// solar left the pool when its entitlement went unmetered; gemini is
+// Pro-paywalled).
 // GLM 5.3 Flash is unmetered.
 func SharedPremiumModels() []string {
 	var out []string
