@@ -1,3 +1,11 @@
+<script module>
+  // Visit auto-probe guard (ADR-0025): the mount fires one silent ?auto=1
+  // probe after the first tokens load. Module-scoped so a double-mount
+  // (HMR / StrictMode-style remount) still fires once per page load; the
+  // server throttles pool-wide to one upstream pass per hour regardless.
+  let visitAutoProbeSent = false;
+</script>
+
 <script>
   import { onMount } from "svelte";
   import { recordPageVisit } from "../stores/pageState.js";
@@ -125,6 +133,16 @@
         data = v;
         loading = false;
         error = "";
+        // Visit auto-probe (ADR-0025): one silent ?auto=1 probe after the
+        // first tokens load, then the store reload carries the numbers.
+        // No success banner; a failure surfaces on the probeMsg error path.
+        if (!visitAutoProbeSent) {
+          visitAutoProbeSent = true;
+          probeAllQuotas({ auto: true }).catch((e) => {
+            probeOk = false;
+            probeMsg = e.message || $tr("Quota refresh failed.");
+          });
+        }
       }
     });
     unsubErr = tokensError.subscribe((err) => {

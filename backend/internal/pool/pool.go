@@ -359,6 +359,14 @@ type Pool struct {
 	burstHits map[string][]burstHit
 	burstOn   map[string]bool
 
+	// lastBulkProbe is the pool-scoped timestamp of the last bulk probe
+	// pass (manual Probe-all button or stale visit auto-probe, ADR-0025).
+	// In-memory only (a restart re-probes on the next stale visit); the
+	// slot is claimed before probing so concurrent tabs share one pass.
+	// Guarded by bulkProbeMu.
+	bulkProbeMu   sync.Mutex
+	lastBulkProbe time.Time
+
 	// modelAdmissionGate serializes cold-path Acquire per model: the leader
 	// creates a gate on registration; concurrent followers block on it
 	// Guarded by modelAdmissionGateMu; entries are deleted when the channel
