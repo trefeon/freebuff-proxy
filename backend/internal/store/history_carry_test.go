@@ -12,7 +12,7 @@ func seedLegacyHistory(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer old.Close()
+	defer func() { _ = old.Close() }()
 	if err := old.RecordQuota(QuotaSnapshot{TS: 1, TokenIdx: 0, Model: "m", Limit: 30, Recent: 3}); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestImportLegacyHistoryDBCarriesRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath)
 	if err != nil {
 		t.Fatal(err)
@@ -64,12 +64,12 @@ func TestImportLegacyHistoryDBReadOnlySource(t *testing.T) {
 	if err := os.Chmod(oldPath, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(oldPath, 0o644)
+	defer func() { _ = os.Chmod(oldPath, 0o644) }()
 	st, err := Open(filepath.Join(dir, "freebuff.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	// ATTACH needs write access; the import stages a temp copy instead.
 	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestImportLegacySkipsEmptyCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	if n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), emptyPath); err != nil || n != 0 {
 		t.Fatalf("empty candidate = (%d, %v), want (0, nil)", n, err)
 	}
@@ -115,19 +115,19 @@ func TestImportLegacyStagesWALSidecars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer writer.Close()
+	defer func() { _ = writer.Close() }()
 	if err := writer.RecordQuota(QuotaSnapshot{TS: 1, TokenIdx: 0, Model: "m", Limit: 30, Recent: 3}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(oldPath, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(oldPath, 0o644)
+	defer func() { _ = os.Chmod(oldPath, 0o644) }()
 	st, err := Open(filepath.Join(dir, "freebuff.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), oldPath)
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +143,7 @@ func TestImportLegacyHistoryDBNoops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	if n, err := ImportLegacyHistoryDB(st, filepath.Join(dir, "freebuff.db"), filepath.Join(dir, "absent.db")); err != nil || n != 0 {
 		t.Errorf("missing file = (%d, %v), want (0, nil)", n, err)
 	}
@@ -171,7 +171,7 @@ func TestCountLegacyHistoryRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	counts, err := CountLegacyHistoryRows(st, oldPath)
 	if err != nil {
 		t.Fatalf("CountLegacyHistoryRows: %v", err)

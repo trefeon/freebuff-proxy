@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-// Legacy migration search paths (old-user seamless upgrade).
+// LegacyHistoryCandidates lists pre-existing legacy dashboard DBs that may
 //
 // Releases before the unified DB kept state next to the working directory:
 // freebuff-history.db beside SESSION_STATE_FILE, and later data/freebuff.db

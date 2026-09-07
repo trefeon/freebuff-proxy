@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// Settings is dashboard control state (key -> raw JSON value), the durable
-// counterpart of the live config the settings console edits. Values are
-// opaque to the store: callers marshal/unmarshal their own shapes.
+// SetSetting stores one dashboard control-state entry (key -> raw JSON
+// value), the durable counterpart of the live config the settings console
+// edits. Values are opaque to the store: callers marshal/unmarshal shapes.
 func (s *Store) SetSetting(key, value string) error {
 	if key == "" {
 		return errors.New("store: setting key cannot be empty")

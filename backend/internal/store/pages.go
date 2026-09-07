@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Page snapshots are per-dashboard-page UI state (scroll, filters, selected
-// cards) persisted as raw JSON so a restart restores the console view.
+// PutPageState stores one dashboard page's UI snapshot (scroll, filters,
+// selected cards) as raw JSON so a restart restores the console view.
 // Display data only: a missing row degrades to the page default.
 func (s *Store) PutPageState(pageID, data string) error {
 	if pageID == "" {

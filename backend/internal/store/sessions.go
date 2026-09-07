@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// Session persistence in the DB mirrors session.Store semantics without
-// importing it (leaf package: the blobs stay opaque JSON):
+// SaveSession persists one token's session + runs blobs without importing
+// session.Store (leaf package: the blobs stay opaque JSON):
 //   - SaveSession(nil-equivalent) removes: two empty blobs delete the row.
 //   - SaveSessionRuns updates only the runs column (mirrors SaveRun),
 //     creating the row with an empty session blob when absent.

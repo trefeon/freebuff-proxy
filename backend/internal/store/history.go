@@ -264,7 +264,7 @@ func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 		return err
 	}
 	if err := attach(oldAbs); err == nil {
-		defer s.db.Exec("DETACH DATABASE legacy")
+		defer func() { _, _ = s.db.Exec("DETACH DATABASE legacy") }()
 		return carry()
 	}
 	staged, cleanup, err := stageLegacyTrio(oldAbs)
@@ -275,7 +275,7 @@ func ImportLegacyHistoryDB(s *Store, newPath, oldPath string) (int64, error) {
 	if err := attach(staged); err != nil {
 		return 0, fmt.Errorf("store: attach legacy history: %w", err)
 	}
-	defer s.db.Exec("DETACH DATABASE legacy")
+	defer func() { _, _ = s.db.Exec("DETACH DATABASE legacy") }()
 	return carry()
 }
 
@@ -314,7 +314,7 @@ func CountLegacyHistoryRows(s *Store, oldPath string) (map[string]int64, error) 
 	if _, err := s.db.Exec("ATTACH DATABASE '" + strings.ReplaceAll(staged, "'", "''") + "' AS legacy_count"); err != nil {
 		return nil, fmt.Errorf("store: attach legacy history: %w", err)
 	}
-	defer s.db.Exec("DETACH DATABASE legacy_count")
+	defer func() { _, _ = s.db.Exec("DETACH DATABASE legacy_count") }()
 	for _, t := range historyCarryTables {
 		var exists int64
 		if err := s.db.QueryRow("SELECT COUNT(*) FROM legacy_count.sqlite_master WHERE type='table' AND name=?", t).Scan(&exists); err != nil {
@@ -340,7 +340,7 @@ func stageLegacyTrio(oldAbs string) (staged string, cleanup func(), err error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("store: stage legacy history: %w", err)
 	}
-	cleanup = func() { os.RemoveAll(dir) }
+	cleanup = func() { _ = os.RemoveAll(dir) }
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		src, err := os.Open(oldAbs + suffix)
 		if err != nil {
@@ -352,12 +352,12 @@ func stageLegacyTrio(oldAbs string) (staged string, cleanup func(), err error) {
 		}
 		dst, err := os.OpenFile(filepath.Join(dir, "legacy.db"+suffix), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
-			src.Close()
+			_ = src.Close()
 			cleanup()
 			return "", nil, fmt.Errorf("store: stage legacy history: %w", err)
 		}
 		_, cpyErr := dst.ReadFrom(src)
-		src.Close()
+		_ = src.Close()
 		closeErr := dst.Close()
 		if cpyErr != nil || closeErr != nil {
 			cleanup()
