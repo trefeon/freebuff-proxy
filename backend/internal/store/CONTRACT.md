@@ -14,7 +14,7 @@ views with live pool state; no page reads SQL directly.
 
 ## File layout
 
-- `store.go`: `Open` (pragmas + schema + v1→v2 migrate), `Close`,
+- `store.go`: `Open` (pragmas + schema + v1→v2 migrate + v2→v3 ALTER for maturity columns), `Close`,
   `DBPathFromEnv` (`DB_PATH`, default `./data/freebuff.db`).
 - `history.go`: history writes/queries (`AppendLogs`, `RecordQuota`,
   `RecordMaturity`, `QueryLogs`, `QuotaHistory`, `LatestQuotaSnapshots`
@@ -32,8 +32,8 @@ views with live pool state; no page reads SQL directly.
   cross-file hash overwrites with different content) +
   `ImportLegacySessionBackup` (`.bak` re-consult import WITHOUT
   re-archiving — the path already is the archive).
-- `tokens` table (in `store.go` schema): no accessors; retained in DDL
-  only, never purged.
+- `pages.go`: `PutPageState` / `GetPageState` (per-page UI snapshots as raw JSON; missing row degrades to default).
+- `tokens.go`: `SaveTokenMaturity` / `LoadTokenMaturity` (hash-keyed maturity_json + streak blob; empty hash rejects).
 
 ## Allowed dependencies
 

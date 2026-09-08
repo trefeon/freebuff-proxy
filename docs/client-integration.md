@@ -191,7 +191,7 @@ the proxy without risking your account's trust tier.
 
 ## Access Tiers
 
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. Access to premium models (`openai/gpt-5.6-luna`, `meta/muse-spark-1.3-contributor` — both on the `5/day` shared premium pool). **GLM 5.3 Flash**, DeepSeek V4 Flash, MiMo 2.5 and Solar Pro 4 are **unmetered unlimited** on full tier (GLM left the premium pool `2026-08-28`; solar graduated from trial and left the pool `2026-09-04`). **5 premium sessions/day base** (resets every `07:00 UTC`).
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, etc.) with residential ASN. Access to premium models (`openai/gpt-5.6-luna`, `meta/muse-spark-1.2-contributor` — both on the `5/day` shared premium pool; 1.3 paused upstream). **GLM 5.3 Flash**, DeepSeek V4 Flash, MiMo 2.5 and Solar Pro 4 are **unmetered unlimited** on full tier (GLM left the premium pool `2026-08-28`; solar graduated from trial and left the pool `2026-09-04`). **5 premium sessions/day base** (resets every `07:00 UTC`).
 - **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries. All model requests coerced to `mimo/mimo-v2.5` (`MiMo 2.5`). **MiMo 2.5 stays unlimited across all tiers**.
 
 See [Getting Started — Access Tiers](getting-started.md#access-tiers-models--upstream-quotas) for how to reach full tier from a limited-tier location.
