@@ -15,6 +15,10 @@
   import { adminApi, tokenActions } from "../api/paths.js";
   import { fetchMaturityHistory, historyKindTone } from "../utils/history.js";
   import {
+    touchOptions as sharedTouchOptions,
+    touchLabel,
+  } from "../utils/touchModels.js";
+  import {
     tokensData as tokensStore,
     tokensError as tokensErrorStore,
     ensureTokensStore,
@@ -115,44 +119,11 @@
     return isNaN(d) ? "—" : d.toLocaleString();
   }
 
-  // Served touch candidates, cheapest-Freebucks-cost first: the rows the
-  // gateway can admit (live agent binding, served, never the referral
-  // grant). Server order already sorts cheapest-first, so priced rows
-  // stay ahead without re-sorting.
-  function touchCandidates() {
-    const rows = (modelRows ?? []).filter(
-      (m) => m?.agent && m?.served !== false && m?.pool !== "referral",
-    );
-    return [
-      ...rows.filter((m) => m.pool !== "premium"),
-      ...rows.filter((m) => m.pool === "premium"),
-    ];
-  }
-
-  // Server-reported cost class for one candidate row (never invented:
-  // price_label/quota straight from /admin/api/models). The legacy pool
-  // tag renders only when the row carries no price.
-  function touchCostClass(m) {
-    if (!m) return "";
-    return m.price_label || m.quota || "";
-  }
-
-  function touchLabel(m) {
-    const cls = touchCostClass(m);
-    return cls ? `${m.id} (${cls})` : m.id;
-  }
-
-  // Fail-open options for one card: live candidates when the catalog
-  // loaded, else the drafted value alone so the select never empties.
+  // Touch-model options live in utils/touchModels.js (shared with the
+  // Settings → Advanced global MATURITY_TOUCH_MODEL select so both
+  // dropdowns stay identical).
   function touchOptions(d) {
-    const cands = touchCandidates();
-    if (cands.length > 0) return cands;
-    if (d?.touchModel) {
-      return [
-        { id: d.touchModel, price_label: "", quota: "", pool: "unlimited" },
-      ];
-    }
-    return [];
+    return sharedTouchOptions(modelRows, d?.touchModel ?? "");
   }
 
   async function save(idx) {
