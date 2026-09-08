@@ -157,7 +157,7 @@ var keyCatalog = []KeyDef{
 		Description: `Default streak target for newly-enabled tokens (1-28 days); a token whose streak reaches its target auto-releases its administrative lock.`},
 	{Key: "MATURITY_TOUCH_MODEL", Group: GroupPool, Kind: "text",
 		Default:     "deepseek/deepseek-v4-flash",
-		Description: `Model the unmetered maturity touch admits (a served, non-premium model — the reservation rides an infinite limit, free, and never burns premium quota for farming).`},
+		Description: `Model the unmetered maturity touch admits (a served, unpriced row — the touch never spends Freebucks).`},
 	{Key: "MODEL_LOCKS", Group: GroupPool, Kind: "text",
 		Default:     "",
 		Description: `Pin pool slots to models (slot-indexed allowlist, e.g. "0:z-ai/glm-5.2;1:deepseek/deepseek-v4-flash,mimo/mimo-v2.5"). Slots without an entry serve any model. Applies live on reload; malformed values reject the config.`},

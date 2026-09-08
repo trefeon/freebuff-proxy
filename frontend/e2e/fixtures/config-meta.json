@@ -305,7 +305,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Model the unmetered maturity touch admits (a served, non-premium model — the reservation rides an infinite limit, free, and never burns premium quota for farming)."
+    "description": "Model the unmetered maturity touch admits (a served, unpriced row — the touch never spends Freebucks)."
   },
   {
     "key": "MODEL_LOCKS",

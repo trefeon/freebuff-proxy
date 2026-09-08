@@ -200,8 +200,7 @@ type Config struct {
 	MaturityDryRun bool
 	// MaturityTouchModel is the unmetered model the maturity touch admits
 	// (MATURITY_TOUCH_MODEL; default deepseek/deepseek-v4-flash). Must be a
-	// served, non-premium, uncapped catalog row so the touch never burns
-	// premium quota for farming.
+	// served, unpriced catalog row so the touch never spends Freebucks.
 	MaturityTouchModel string
 	// MaturityTargetDays is the default streak target for newly-enabled
 	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose

@@ -30,12 +30,11 @@ import (
 // Maturity touch modes.
 const (
 	// MaturityModeUnmetered admits the configured unmetered model
-	// (MATURITY_TOUCH_MODEL): reservation against an infinite limit, free,
+	// (MATURITY_TOUCH_MODEL): reservation on an unpriced row, free,
 	// plus a live session real traffic can reuse.
 	MaturityModeUnmetered = "unmetered"
 	// MaturityModePremiumShort admits one short session on a premium row
-	// instead. It spends from the account's metered pool and stays
-	// opt-in per token.
+	// instead. It is billed in Freebucks and stays opt-in per token.
 	MaturityModePremiumShort = "premium-short"
 )
 
