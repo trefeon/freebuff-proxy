@@ -57,12 +57,12 @@ FreeBuff assigns an access tier at the Cloudflare edge based on your TCP source 
 
 > **📢 Official Freebuff Upstream Notice** (vendor snapshot `b14414d59` · npm `0.0.168` `2026-09-05`):
 > *"Every model runs on your normal daily sessions — no per-model caps; your shared premium allowance still charges partial time, rounded up to a tenth. MiMo, DeepSeek V4 Flash and GLM 5.3 Flash are unmetered. —❤️ Freebuff Team"*
-> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` + `Muse Spark 1.3`. `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are **unmetered** — no per-model cap; solar graduated from trial `2026-09-04`.)
+> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` + `Muse Spark 1.2` (`1.3` paused upstream `2026-09-07`). `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are **unmetered** — no per-model cap; solar graduated from trial `2026-09-04`.)
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
 | **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool. |
-| **Premium** | **Muse Spark 1.3** `NEW` | `meta/muse-spark-1.3-contributor` | **Queues, then falls back** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Shares `5/day` premium pool. |
+| **Premium** | **Muse Spark 1.2** | `meta/muse-spark-1.2-contributor` | **Queues** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Shares `5/day` premium pool. |
 | **Unlimited**| **Solar Pro 4** | `upstage/solar-pro4` | Graduated from trial `2026-09-04` (no longer experimental). OpenRouter BYOK (Upstage), text-only, context `500_000`. **Unmetered** — always available, no per-model cap. |
 | **Unlimited**| **GLM 5.3 Flash** | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; default pick again since `2026-09-05`). |
 | **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; default pick `2026-09-02`→`2026-09-05`). |

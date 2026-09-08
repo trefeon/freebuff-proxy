@@ -67,10 +67,10 @@ export const MODEL_METADATA = {
     badges: ["Reasoning: high", "NEW"],
     disclaimer: "May use data for AI training",
   },
-  "meta/muse-spark-1.3-contributor": {
-    displayName: "Muse Spark 1.3",
-    tagline: "Queues, then falls back",
-    badges: ["Reasoning: xhigh", "NEW"],
+  "meta/muse-spark-1.2-contributor": {
+    displayName: "Muse Spark 1.2",
+    tagline: "Queue",
+    badges: ["Reasoning: xhigh"],
     disclaimer: "May use data for AI training",
   },
   "openai/gpt-5.6-luna": {

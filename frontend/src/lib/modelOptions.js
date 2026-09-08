@@ -12,8 +12,8 @@ export const fallbackModelOptions = [
     tag: "metered",
   },
   {
-    id: "meta/muse-spark-1.3-contributor",
-    label: "meta/muse-spark-1.3-contributor (metered)",
+    id: "meta/muse-spark-1.2-contributor",
+    label: "meta/muse-spark-1.2-contributor (metered)",
     tag: "metered",
   },
   {
