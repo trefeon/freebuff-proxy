@@ -189,7 +189,7 @@
   aria-label="Sidebar"
 >
   <nav class="flex-1 flex flex-col px-3 pt-5 pb-3" aria-label="Main navigation">
-    <!-- Brand mark: amber bolt matching the favicon -->
+    <!-- Brand mark: signal-green bolt matching the favicon -->
     <a
       href={adminRoot}
       class="flex items-center gap-3 px-2 group"
