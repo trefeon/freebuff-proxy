@@ -61,7 +61,7 @@ Per-account maturity tracking with stacked model and mode selects, per-token tou
 
 ### 4. Quota Tracker
 
-- **Per-Account Cards** (`Account #1…`): Freebucks allowance windows with per-model hourly prices (cheapest first), period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them. A token with a live session keeps serving on it (already paid at session start); only fresh sessions spend Freebucks.
+- **Per-Account Cards** (`Account #1…`): Freebucks allowance windows with per-model hourly prices (cheapest first), period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them. A token with a live session keeps serving on it (admitted session bills once at session start; re-polls ride free and DELETE refunds); only fresh sessions spend Freebucks.
 
 ### 5. Models
 

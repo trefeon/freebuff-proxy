@@ -196,7 +196,7 @@ func defaultRawConfig() rawConfig {
 		BurstMaxTokens:                   ptrInt(2),                    // distinct accounts one model's burst spreads across (minimum 2)
 		MaturityEnabled:                  true,                         // streak-maturity automation on by default; dry-run probes prove schedule before live touches
 		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
-		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never burns premium quota
+		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never spends Freebucks
 		QuotaAutoProbe:                   true,                         // quota auto-probe scheduler on by default (ADR-0022); false restores pre-scheduler behavior
 	}
 }

@@ -138,8 +138,8 @@ func (c Config) Validate() error {
 	}
 
 	// The maturity touch model must look like a catalog id
-	// (provider/model). Whether it is actually served and unmetered
-	// (never burns premium quota) is enforced where modelcat is visible —
+	// (provider/model). Whether it is actually served and unpriced
+	// (never spends Freebucks) is enforced where modelcat is visible —
 	// the pool skips misconfigured touches with a warn log and the admin
 	// maturity endpoint rejects them (config is a bottom-layer package
 	// and must not import modelcat).

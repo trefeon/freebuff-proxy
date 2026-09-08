@@ -37,15 +37,15 @@ Sections: `PREMIUM | UNLIMITED | REFERRAL | LIMITED_OFFER` (empty filtered). Her
 
 | Data | Wire → Computed | TUI Display |
 |---|---|---|
-| `rateLimitsByModel: Record<model, FreebuffSessionRateLimit>` | `getRateLimitsByModel(session)` (`freebuff-session.ts:371`) → `getFreebuffSectionQuotas(rateLimits, accessTier)` (`freebuff-session-pools.ts`) groups by `pool` | Section header `PREMIUM — 2 of 5 used · resets in 22h` (amber when exhausted) |
-| `limit, recentCount, period, resetAt, entitlementBreakdown{base,referral,streak}` | `FreebuffSessionRateLimit` `freebuff-session.ts:223` (`limit number, recentCount number, pool?, poolLabel?`) | Row second line `Premium · 2/5 · resets Sep 2 14:00` (`rowDetails`) |
-| `referralInfo{referralCode, qualifiedCount, dailySessions, endsAt}` | `getReferralInfo(session)` | `FreebuffReferralBanner`: `Share link freebuff.com/?ref=XXX · 3 qualified · +1/day` |
+| `rateLimitsByModel: Record<model, FreebuffSessionRateLimit>` | `getRateLimitsByModel(session)` (`freebuff-session.ts:371`) → `getFreebuffSectionQuotas(rateLimits, accessTier)` (`freebuff-session-pools.ts`) groups by `pool` | Section header `PREMIUM — 2 of 5 used · resets in 22h` (amber when exhausted; pre-Freebucks count wording, kept for inventory) |
+| `limit, recentCount, period, resetAt, entitlementBreakdown{base,referral,streak}` | `FreebuffSessionRateLimit` `freebuff-session.ts:223` (`limit number, recentCount number, pool?, poolLabel?`) | Row second line `Premium · 2/5 · resets Sep 2 14:00` (`rowDetails`; pre-Freebucks count wording, kept for inventory) |
+| `referralInfo{referralCode, qualifiedCount, dailySessions, endsAt}` | `getReferralInfo(session)` | `FreebuffReferralBanner`: `Share link freebuff.com/?ref=XXX · 3 qualified · +1/day` (pre-Freebucks count wording, kept for inventory) |
 | `freebucks{balance, daily{limit,spent,remaining,resetAt}, weekly, monthly, bindingWindow}` | `getFreebucksInfo(session)` | `Freebucks $12.5 · Daily 5/20` |
 | `glmPromo{dailySessions, endsAt}` | `getGlmPromo(session)` | `GLM 2/day · ends Sep 3` |
 | `standing{cappedBy, cappedReason, blurb, nextSteps[]}` | `getStanding(session)` (`freebuff-standing.ts`) | `Trust: capped by hosting · Blurb · Next: link GitHub` |
 | `desktopSessionCounts{active, total}` | `FreebuffDesktopSessionCounts` | `Desktop 2/3 tabs` |
 | `limitedModelOffers[]{model, spotsLeft}` | `getLimitedModelOffers(session)` (`limitedModelOffers` only while global pool has capacity) | Extra row `Claude Fable 5 · 12 spots left` |
-| `streak{currentStreak, longestStreak, bonusNote}` | `useFreebuffStreakQuery` + `freebuff-streak-line.ts` | Landing header `🔥 7 day streak · +1 session` |
+| `streak{currentStreak, longestStreak, bonusNote}` | `useFreebuffStreakQuery` + `freebuff-streak-line.ts` | Landing header `🔥 7 day streak · +1 session` (pre-Freebucks perk wording, kept for inventory — streak grants no sessions on metered accounts) |
 | `subscription{plan, usage}` | `useSubscriptionQuery` / `useUsageQuery` (poll 15s/30s) | `Subscription $20 · 34/100 credits` (non-freebuff) |
 | `availability` | `getFreebuffModelUnavailableLabel(model)`, `isFreebuffModelAvailable(tier)` | Greyed row `Unavailable 9am-5pm ET` |
 | `contextWindow` | `FREEBUFF_MODEL_CONTEXT_WINDOWS[model]` | Row badge `1M` |

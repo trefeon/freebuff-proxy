@@ -14,7 +14,9 @@ stays for reference.
 
 **Goal:** Sediakan lab studi 4 skema rotasi token agar user bebas pilih `gimana token mau dipakai` (aman vs eksperimen banned), untuk jawab pertanyaan: *“rolling per 1 session per 1 auth key lebih bagus daripada 1 auth key dihabisin 5/5 baru rolling?”*
 
-**Default aman tetap `drain`** (hot-session-first, `tok0×5 → tok1×5 …`) sesuai `acquire.go:612-765` + `README:330` + `docs/9router-integration.md:57` (NEVER round-robin — farm detection).
+Sessions below are 1-hour billable rows (priced 'N Freebucks/hr' off the wire prices map, charged once at session start) — `×5` counts consecutive session admissions per token, not a quota allowance.
+
+**Default aman tetap `drain`** (hot-session-first, `tok0×5 → tok1×5 …` consecutive session admissions per token, not a quota allowance) sesuai `acquire.go:612-765` + `README:330` + `docs/9router-integration.md:57` (NEVER round-robin — farm detection).
 
 ## Backend
 

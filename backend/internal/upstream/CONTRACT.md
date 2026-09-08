@@ -26,7 +26,7 @@ The codebuff.com wire client for ONE token: session create/poll/release, run STA
 ## Critical invariants (anti-ban contract)
 
 - Session POST: bare-fetch shape — Authorization + optional `x-freebuff-model` ONLY (session.go). `GetSession` adds `x-freebuff-instance-id` (+ `x-freebuff-compact-session` when compact). Chat POST carries NO model/instance header (model rides only in body metadata).
-- `ProbeAccount`: GET with NO `x-freebuff-instance-id` — zero-cost, claims no session slot, burns no daily allowance.
+- `ProbeAccount`: GET with NO `x-freebuff-instance-id` — zero-cost, admits no session, spends nothing.
 - Chat POST: pinned `ai-sdk` User-Agent, Bearer-only (never `x-codebuff-api-key`). Envelope: `codebuff_metadata`, `provider.data_collection=deny`, forced `stream:true`, JSON-quoted `"cb_easp"` stop sentinel. Other calls default to the Bun UA; `/api/auth/cli/*` uses the login UA.
 - `ACTING_USER_ID` is only safe when it equals the token's own account id; any other value impersonates a foreign user.
 - `REQUEST_TIMEOUT` bounds only the wait for response headers (TTFB) via the transport's `ResponseHeaderTimeout` — the streamed body runs until upstream EOF or caller cancel (request-context deadlines cut healthy long streams; fixed 2026-09-06).

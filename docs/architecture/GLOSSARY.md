@@ -13,7 +13,7 @@ naming or update this file deliberately; never leave both in circulation.
 | **token** | One FreeBuff account credential (`cb_...`). Owns an independent daily quota and can be rate-limited or banned independently. Never printed, never persisted raw. |
 | **session** | Per-token upstream admission state (instance id, expiry, tier/country, model locks). Created by session admission POSTs, refreshed by polls, ended by DELETE or expiry. One session per token at a time. |
 | **run** | One upstream agent execution for a model, shared across requests. Started on first use, lives up to `ROTATION_INTERVAL` (default 6h), then rotated (fresh start, old one drained and FINISHed). |
-| **admission** | The upstream session-create handshake that claims the token's daily session slot and returns `rateLimitsByModel` quota data. |
+| **admission** | The upstream session-create handshake starting a billable session (charged once at session start), returning live quota/price data (`rateLimitsByModel`). |
 | **pool** | The set of pre-configured upstream tokens (`AUTH_TOKENS`) plus the state the proxy keeps per token: sessions, runs, cooldowns, quotas, spend. |
 | **pooled mode** | Requests are served from `AUTH_TOKENS`; the pool picks the token (hot-session-first, rotation policy, cooldown skip). |
 | **bridge mode** | No `AUTH_TOKENS`. Each client presents its own token as the bearer credential and the proxy relays with it, caching per-token state (LRU, 32 entries, 72h idle eviction). |
