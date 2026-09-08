@@ -7,9 +7,11 @@ endpoints plus an embedded Svelte dashboard.
 
 - Speaks OpenAI chat (`POST /v1/chat/completions`, `GET /v1/models`) and an
   Anthropic-compatible layer, then translates to the FreeBuff wire protocol.
-- Runs in pooled or bridge mode:
-  - **Pooled** — set `AUTH_TOKENS`; the proxy multiplexes its token pool.
-  - **Bridge** — leave `AUTH_TOKENS` empty; each request carries its own token.
+- Runs in pooled, bridge, or hybrid mode (`EffectiveMode`):
+  - **Pooled** — `AUTH_TOKENS` set + `BRIDGE_ENABLED=0`; pool only.
+  - **Bridge** — `AUTH_TOKENS` empty; each request carries its own token.
+  - **Hybrid** (default with `AUTH_TOKENS`) — `API_KEYS` credential uses the
+    pool, any other credential relays upstream as a bridge token.
 - Dashboard at `/admin` (Svelte SPA embedded in the binary).
 - Freebucks metering follows the wire `prices` map: charged once per session-hour
   at session start, refunded on early `DELETE`, refilled on a Pacific-midnight

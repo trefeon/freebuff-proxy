@@ -13,8 +13,10 @@ Machine-readable rules for agents working in this repo. Human overview lives in
 - Svelte 5 dashboard (`frontend/`, `freebuff-proxy-dashboard`) embedded via
   `go:embed` (`backend/internal/dashboard/assets_embed.go`) and served at `/admin`.
   Health probe: `GET /healthz` → 200.
-- Modes (`backend/internal/config/config.go`): pooled (`AUTH_TOKENS` set),
-  bridge (`AUTH_TOKENS` empty, per-request client token).
+- Modes (`backend/internal/config/config.go:HybridBridgeMode/EffectiveMode`):
+  pooled (`AUTH_TOKENS` set + `BRIDGE_ENABLED=0`), bridge (`AUTH_TOKENS`
+  empty, per-request client token), hybrid (default when `AUTH_TOKENS` set:
+  `API_KEYS` credential uses the pool, any other credential relays as bridge).
 - Freebucks meter: the wire `prices` map is the sole cost source; charge-once at
   session start; 1h sessions; `DELETE` refund; Pacific-midnight refill.
   `deepseek/deepseek-v4-flash` is an unpriced row (verified cost-0 live 2026-09-08).
