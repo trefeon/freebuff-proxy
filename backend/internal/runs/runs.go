@@ -1,7 +1,7 @@
 // Package runs implements the per-agent FreeBuff agent-run lifecycle for a
 // single token: lazy START on first use, 6h rotation, FINISH drain, 30-min
 // auth cooldown, and a shutdown drain. Port of
-// reference/proxy-freebuff/lib/runs.js and freebuff2api-quorinex
+// reference/proxy-freebuff/lib/runs.js and freebuff-2api-lza6
 // run_manager.go (tokenPool half), adapted to this project's layout: the
 // session manager is owned by the caller (pool) and only used here for the
 // shutdown EndSession, and the pool — not this package — decides which token
