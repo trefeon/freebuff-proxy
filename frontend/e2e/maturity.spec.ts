@@ -270,6 +270,58 @@ test.describe("account maturity", () => {
     // No mode select: the Touch box is model-select-only, mode rides the save.
     await expect(page.getByLabel("Touch mode for Account #1")).toHaveCount(0);
   });
+  test("maturity touch select names the global default and links to its Settings row", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
+    await page.unroute("**/admin/api/config");
+    await page.route("**/admin/api/config", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          env_content: "AUTH_TOKENS=a,b\nMATURITY_ENABLED=true\n",
+          has_env_file: true,
+          effective: [
+            { key: "MATURITY_ENABLED", value: "true", secret: false },
+            {
+              key: "MATURITY_TOUCH_MODEL",
+              value: "z-ai/glm-5.3-flash",
+              secret: false,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    const picker = page.getByLabel("Touch model for Account #1");
+    await expect(picker).toBeVisible();
+    // The effective global is visible inline, not buried in a tooltip.
+    await expect(picker.locator("option").first()).toHaveText(
+      "Global default (z-ai/glm-5.3-flash)",
+    );
+
+    // The jump link lands on the exact Settings row and focuses its control.
+    await page
+      .getByRole("link", {
+        name: "Settings → Advanced → Maturity Touch Model",
+      })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/admin\/#settings/);
+    await expect(page.locator("#setting-MATURITY_TOUCH_MODEL")).toBeVisible();
+    await expect(page.getByLabel("MATURITY_TOUCH_MODEL")).toBeFocused();
+  });
 
   test("maturity cards render expanded with no toggle", async ({ page }) => {
     const f = loadFixtures();

@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from "svelte";
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
@@ -89,6 +90,39 @@
     if (v === "") return (entry?.default ?? "true") !== "false";
     return v !== "false";
   }
+  // Deep-link focus from cross-page jump links (Maturity Touch Model):
+  // the link stashes a catalog key in sessionStorage, then routes here.
+  // Meta loads async, so consume the key once the rows exist, scroll the
+  // row into view, and focus its control (visible accent focus ring).
+  // $state + rows-first read: the effect must subscribe to BOTH, whatever
+  // order onMount/meta/fetch resolve in (an early return before reading a
+  // source never re-fires on that source).
+  let pendingFocusKey = $state("");
+  onMount(() => {
+    try {
+      pendingFocusKey =
+        sessionStorage.getItem("fp-settings-focus") ?? "";
+      sessionStorage.removeItem("fp-settings-focus");
+    } catch {
+      /* storage blocked: no deep focus, page still renders */
+    }
+  });
+  $effect(() => {
+    const rowCount = rows.length;
+    if (!pendingFocusKey || rowCount === 0) return;
+    const key = pendingFocusKey;
+    pendingFocusKey = "";
+    requestAnimationFrame(() => {
+      // Scope to the row's own labeled control: the row also hosts the
+      // per-key DbOverrideSave button, so a bare "input, button" selector
+      // would focus the save button instead of the setting control.
+      const el = document.getElementById(`setting-${key}`);
+      const control = el?.querySelector(`[aria-label="${CSS.escape(key)}"]`);
+      if (!el || !(control instanceof HTMLElement)) return;
+      el.scrollIntoView({ block: "center" });
+      control.focus({ preventScroll: true });
+    });
+  });
 </script>
 
 <SettingsCard
@@ -116,6 +150,8 @@
       {/if}
       {#each rows.filter((e) => e.group === group) as entry, ei (entry.key)}
         {@const isFirst = gi === 0 && ei === 0}
+        <!-- Stable anchor for cross-page jump links (fp-settings-focus). -->
+        <div id="setting-{entry.key}" class="scroll-mt-24">
         <SettingsRow
           first={isFirst}
           label={labelFor(entry.key)}
@@ -188,6 +224,7 @@
             />
           {/if}
         </SettingsRow>
+        </div>
       {/each}
     {/each}
   {/if}

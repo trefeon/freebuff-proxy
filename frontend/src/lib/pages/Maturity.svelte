@@ -33,6 +33,9 @@
   // header notice. Settings renders the toggle itself (catalog Essential).
   let globalEnabled = $state(true);
   let globalLoaded = $state(false);
+  // Resolved global MATURITY_TOUCH_MODEL for the per-card "Global default"
+  // option label: effective snapshot first, raw .env fallback, "" = unknown.
+  let globalTouchModel = $state("");
 
   // Touch-model candidates: served models the gateway can admit (same
   // usable filter as Quota Tracker: a live agent binding, no withdrawn
@@ -253,6 +256,21 @@
             globalEnabled = true;
           }
         }
+        // Effective snapshot wins (it reflects the live value incl. any DB
+        // overlay); fall back to the raw .env line. Masked secret-style
+        // display values ("N token(s)") never name a model, so ignore them.
+        const effTouch = (cfgRes?.effective || []).find(
+          (e) => e.key === "MATURITY_TOUCH_MODEL",
+        );
+        const effRaw =
+          effTouch?.value !== undefined && effTouch?.value !== null
+            ? String(effTouch.value).trim()
+            : "";
+        const envRaw = (
+          getEnvValue(content, "MATURITY_TOUCH_MODEL") ?? ""
+        ).trim();
+        const resolved = effRaw && !effRaw.includes("(") ? effRaw : envRaw;
+        globalTouchModel = resolved.includes("(") ? "" : resolved;
       } catch {
         globalEnabled = false;
       } finally {
@@ -332,10 +350,19 @@
             {#if m?.warn}
               <StatusBadge tone="bad" status={$tr("Touch not advancing")} />
             {/if}
+            <!-- Dots stay for never-enrolled accounts (consistent geometry,
+              0/7 reads honestly as nothing banked); the tooltip explains
+              what the count measures in each case. -->
             <Pips
               value={t.streak ?? 0}
               total={streakTarget}
-              label={$tr("Current streak / target")}
+              label={m
+                ? $tr(
+                    "Daily touches banked toward the target (streak/target)",
+                  )
+                : $tr(
+                    "Streak/target counts daily touches once enrolled — nothing banked yet",
+                  )}
             />
           </span>
         {/snippet}
@@ -391,11 +418,36 @@
                   "Per-token touch model (cheapest first, priced rows last). Empty uses the global default from Settings → Advanced → Maturity Touch Model.",
                 )}
               >
-                <option value="">{$tr("Global default")}</option>
+                <option value="">
+                  {globalTouchModel
+                    ? $tr("Global default ({model})", {
+                        model: globalTouchModel,
+                      })
+                    : $tr("Global default")}
+                </option>
                 {#each touchOptions(d) as o (o.id)}
                   <option value={o.id}>{touchLabel(o)}</option>
                 {/each}
               </select>
+              <!-- Jump link to the exact Settings row that owns the global. The
+                click stashes a focus key; AdvancedSettings scrolls to the row
+                and focuses its control on mount. -->
+              <a
+                href="#settings"
+                class="fp-num text-[11px] text-[var(--fp-dim)] underline underline-offset-2 hover:text-[var(--fp-fg)]"
+                onclick={() => {
+                  try {
+                    sessionStorage.setItem(
+                      "fp-settings-focus",
+                      "MATURITY_TOUCH_MODEL",
+                    );
+                  } catch {
+                    /* storage blocked: plain navigation still lands on Settings */
+                  }
+                }}
+              >
+                {$tr("Settings → Advanced → Maturity Touch Model")}
+              </a>
             </FieldBox>
           </div>
           <div
