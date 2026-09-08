@@ -175,7 +175,8 @@ type Config struct {
 	FallbackModels map[string]string
 	// QuotaFallbackModels maps a model to its fallback model when its session
 	// quota is exhausted or unentitled (QUOTA_FALLBACK_MODELS; comma-separated k=v pairs).
-	// Default: {"deepseek/deepseek-v4-flash": "mimo/mimo-v2.5", "z-ai/glm-5.2": "deepseek/deepseek-v4-flash", "openai/gpt-5.6-luna": "deepseek/deepseek-v4-flash"}.
+	// Default: empty — quota exhaustion surfaces an honest 429 with no automatic
+	// fallback (kept per revamp decision: Hidden, cycle-validated, depth-guarded).
 	QuotaFallbackModels map[string]string
 	// AdoptCLISession, when enabled (ADOPT_CLI_SESSION=false default),
 	// makes the proxy behave like the official CLI for a single account:
