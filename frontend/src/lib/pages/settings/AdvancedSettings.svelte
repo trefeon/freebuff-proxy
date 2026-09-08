@@ -100,8 +100,7 @@
   let pendingFocusKey = $state("");
   onMount(() => {
     try {
-      pendingFocusKey =
-        sessionStorage.getItem("fp-settings-focus") ?? "";
+      pendingFocusKey = sessionStorage.getItem("fp-settings-focus") ?? "";
       sessionStorage.removeItem("fp-settings-focus");
     } catch {
       /* storage blocked: no deep focus, page still renders */
@@ -152,78 +151,78 @@
         {@const isFirst = gi === 0 && ei === 0}
         <!-- Stable anchor for cross-page jump links (fp-settings-focus). -->
         <div id="setting-{entry.key}" class="scroll-mt-24">
-        <SettingsRow
-          first={isFirst}
-          label={labelFor(entry.key)}
-          description={entry.description ?? ""}
-        >
-          {#snippet badge()}
-            <code
-              class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
-              >{entry.key}</code
-            >
-            {#if !env[entry.key]}
-              <span
-                class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
-                >{$tr("default")}</span
+          <SettingsRow
+            first={isFirst}
+            label={labelFor(entry.key)}
+            description={entry.description ?? ""}
+          >
+            {#snippet badge()}
+              <code
+                class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
+                >{entry.key}</code
               >
-            {/if}
-            {#if entry.restart_only}
-              <span
-                class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
-                >{$tr("restart")}</span
+              {#if !env[entry.key]}
+                <span
+                  class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
+                  >{$tr("default")}</span
+                >
+              {/if}
+              {#if entry.restart_only}
+                <span
+                  class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] font-semibold uppercase tracking-wider shrink-0"
+                  >{$tr("restart")}</span
+                >
+              {/if}
+              {#if sources[entry.key] === "db"}
+                <DbBadge settingKey={entry.key} {onReset} />
+              {/if}
+            {/snippet}
+            {#snippet extra()}
+              <DbOverrideSave
+                settingKey={entry.key}
+                value={val(entry.key, entry)}
+                restartOnly={entry.restart_only}
+                {onSaved}
+              />
+            {/snippet}
+            {#if entry.kind === "bool"}
+              <ToggleSwitch
+                checked={boolVal(entry.key, entry)}
+                ariaLabel={entry.key}
+                onchange={(v) => onField(entry.key, v ? "true" : "false")}
+              />
+            {:else if entry.kind === "select"}
+              <select
+                class="fp-select"
+                value={val(entry.key, entry)}
+                aria-label={entry.key}
+                onchange={(e) => onField(entry.key, e.currentTarget.value)}
               >
+                {#each entry.enum ?? [] as opt (opt)}
+                  <option value={opt}>{opt}</option>
+                {/each}
+              </select>
+            {:else if entry.kind === "int"}
+              <input
+                type="number"
+                class="fp-input fp-num"
+                value={val(entry.key, entry)}
+                aria-label={entry.key}
+                placeholder={entry.default ?? ""}
+                oninput={(e) => onField(entry.key, e.currentTarget.value)}
+              />
+            {:else}
+              <input
+                type="text"
+                class="fp-input fp-mono"
+                value={val(entry.key, entry)}
+                title={val(entry.key, entry)}
+                aria-label={entry.key}
+                placeholder={entry.default ?? ""}
+                oninput={(e) => onField(entry.key, e.currentTarget.value)}
+              />
             {/if}
-            {#if sources[entry.key] === "db"}
-              <DbBadge settingKey={entry.key} {onReset} />
-            {/if}
-          {/snippet}
-          {#snippet extra()}
-            <DbOverrideSave
-              settingKey={entry.key}
-              value={val(entry.key, entry)}
-              restartOnly={entry.restart_only}
-              {onSaved}
-            />
-          {/snippet}
-          {#if entry.kind === "bool"}
-            <ToggleSwitch
-              checked={boolVal(entry.key, entry)}
-              ariaLabel={entry.key}
-              onchange={(v) => onField(entry.key, v ? "true" : "false")}
-            />
-          {:else if entry.kind === "select"}
-            <select
-              class="fp-select"
-              value={val(entry.key, entry)}
-              aria-label={entry.key}
-              onchange={(e) => onField(entry.key, e.currentTarget.value)}
-            >
-              {#each entry.enum ?? [] as opt (opt)}
-                <option value={opt}>{opt}</option>
-              {/each}
-            </select>
-          {:else if entry.kind === "int"}
-            <input
-              type="number"
-              class="fp-input fp-num"
-              value={val(entry.key, entry)}
-              aria-label={entry.key}
-              placeholder={entry.default ?? ""}
-              oninput={(e) => onField(entry.key, e.currentTarget.value)}
-            />
-          {:else}
-            <input
-              type="text"
-              class="fp-input fp-mono"
-              value={val(entry.key, entry)}
-              title={val(entry.key, entry)}
-              aria-label={entry.key}
-              placeholder={entry.default ?? ""}
-              oninput={(e) => onField(entry.key, e.currentTarget.value)}
-            />
-          {/if}
-        </SettingsRow>
+          </SettingsRow>
         </div>
       {/each}
     {/each}

@@ -42,7 +42,9 @@
         {/if}
       </div>
       {#if actions}
-        <div class="flex min-w-0 shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end">
+        <div
+          class="flex min-w-0 shrink-0 flex-wrap items-center justify-start gap-2 sm:justify-end"
+        >
           {@render actions()}
         </div>
       {/if}

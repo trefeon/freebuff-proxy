@@ -357,9 +357,7 @@
               value={t.streak ?? 0}
               total={streakTarget}
               label={m
-                ? $tr(
-                    "Daily touches banked toward the target (streak/target)",
-                  )
+                ? $tr("Daily touches banked toward the target (streak/target)")
                 : $tr(
                     "Streak/target counts daily touches once enrolled — nothing banked yet",
                   )}
