@@ -959,7 +959,7 @@ func (p *Pool) saveMaturity(idx int, tok *tokenEntry) {
 		return
 	}
 	ms := p.maturityCopy(tok)
-	if !ms.enabled && ms.lastAction == "" && ms.lastResult == "" && ms.releasedTarget <= 0 {
+	if !ms.enabled && ms.lastAction == "" && ms.lastResult == "" && ms.releasedTarget <= 0 && ms.touchModel == "" {
 		return
 	}
 	stateJSON, err := ms.marshalMaturity()

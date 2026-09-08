@@ -744,7 +744,9 @@ func (p *Pool) maturitySnapshot(tok *tokenEntry, streak int) *MaturitySnapshot {
 	tok.maturityMu.Lock()
 	defer tok.maturityMu.Unlock()
 	m := tok.maturity
-	if !m.enabled && m.lastAction == "" && m.lastResult == "" {
+	// A drafted touch-model override counts as state: operators pre-configure
+	// it while disabled, and the card must echo it back after refresh.
+	if !m.enabled && m.lastAction == "" && m.lastResult == "" && m.touchModel == "" {
 		return nil
 	}
 	target := m.target

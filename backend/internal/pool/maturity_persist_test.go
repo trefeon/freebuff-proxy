@@ -96,6 +96,54 @@ func TestMaturityRestartRestoresState(t *testing.T) {
 	}
 }
 
+// A touch-model draft on a disabled, never-enrolled token is operator state:
+// the snapshot must echo it (so the card survives refresh) and the store
+// must persist it (so it survives restart). A disabled token with no draft
+// and no history still snapshots nil.
+func TestMaturityDisabledTouchDraftSurvives(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.StreakBody = streakBody(2, false)
+	mem := newMemMaturityStore()
+
+	p1 := newMaturityPool(t, mock, true)
+	p1.SetMaturityStore(mem)
+	const draft = "z-ai/glm-5.3-flash"
+	if err := p1.SetMaturity(0, false, 7, "", draft); err != nil {
+		t.Fatalf("SetMaturity disabled: %v", err)
+	}
+	snap := p1.Snapshot()[0].Maturity
+	if snap == nil {
+		t.Fatal("disabled draft snapshot is nil, want the drafted touch model")
+	}
+	if snap.TouchModel != draft {
+		t.Errorf("snapshot touch = %q, want %q", snap.TouchModel, draft)
+	}
+	if snap.Enabled {
+		t.Error("snapshot enabled, want disabled")
+	}
+
+	p2 := newMaturityPool(t, mock, true)
+	p2.SetMaturityStore(mem)
+	if err := p2.RestoreMaturity(); err != nil {
+		t.Fatalf("RestoreMaturity: %v", err)
+	}
+	got := p2.Snapshot()[0].Maturity
+	if got == nil || got.TouchModel != draft {
+		t.Fatalf("restored snapshot = %+v, want touch %q", got, draft)
+	}
+
+	// No draft, no history, disabled: still nil (never-enrolled).
+	p3 := newMaturityPool(t, mock, true)
+	p3.SetMaturityStore(newMemMaturityStore())
+	if err := p3.SetMaturity(0, false, 7, "", ""); err != nil {
+		t.Fatalf("SetMaturity empty: %v", err)
+	}
+	if got := p3.Snapshot()[0].Maturity; got != nil {
+		t.Errorf("empty disabled snapshot = %+v, want nil", got)
+	}
+}
+
 // A released token whose streak drops below its release target re-locks
 // after 2 consecutive below-target days (counter survives restarts via the
 // blob). One bad day alone never re-locks; recovery resets the counter.
