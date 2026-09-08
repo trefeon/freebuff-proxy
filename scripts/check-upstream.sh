@@ -7,7 +7,11 @@
 #                             [ref] [clone-dir]
 #
 #   ref        upstream branch or full commit SHA to compare against
-#              (default: main)
+#              (default: main). A full-SHA ref additionally gates on the
+#              wiregen manifest: backend/internal/wirefacts/testdata/wire/
+#              snapshots.json must pin that same SHA, else the check fails
+#              (exit 2) with the re-pin + regenerate fix. Branch refs skip
+#              the gate (floating drift-detection mode).
 #   clone-dir  local clone of https://github.com/CodebuffAI/freebuff
 #              (default: $FREEBUFF_REFERENCE_DIR, else <repo>/../freebuff-reference).
 #              Missing → shallow-cloned with --depth 50; present → fetched.
@@ -24,7 +28,10 @@
 #
 # Prints one table row per pinned file: file | pinned-sha | vendor-sha |
 # status (SAME/DRIFT/MISSING). Exit codes: 0 all SAME, 1 any DRIFT/MISSING,
-# 2 environment error.
+# 2 environment error (incl. a full-SHA ref the snapshots manifest does not
+# pin). The JSON report also carries wiregen_sha (the snapshots manifest
+# SHA) so the dashboard embed surfaces the generator input alongside the
+# drift data.
 #
 # Windows: run under Git Bash, e.g.
 #   "C:\Program Files\Git\bin\bash.exe" scripts/check-upstream.sh
@@ -144,6 +151,32 @@ if ! [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
 		die "cannot resolve ref '$REF' in $CLONE_DIR (fetch failed?)"
 fi
 
+# Wiregen manifest gate (Wave D slice 5): every _gen file is stamped with
+# the upstream_sha from backend/internal/wirefacts/testdata/wire/
+# snapshots.json, and cmd/wiregen refuses any other -upstream value. A
+# full-SHA ref is a pinned verification (sync-upstream's post-sync check
+# passes $UPSTREAM_SHA) — the manifest must pin that same commit, else the
+# invocation is incoherent and the parity tests would fail opaquely
+# downstream. Branch refs stay in floating drift-detection mode: the
+# manifest legitimately lags a moving branch between syncs.
+PINNED_REF=0
+if [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+	PINNED_REF=1
+fi
+SNAPSHOTS_MANIFEST="$REPO_ROOT/backend/internal/wirefacts/testdata/wire/snapshots.json"
+WIREGEN_SHA=""
+if [[ -f "$SNAPSHOTS_MANIFEST" ]]; then
+	WIREGEN_SHA="$(grep -o '"upstream_sha"[[:space:]]*:[[:space:]]*"[^"]*"' "$SNAPSHOTS_MANIFEST" | head -1 | sed 's/.*"\(.*\)"$/\1/')"
+fi
+if ((PINNED_REF)); then
+	if [[ -z "$WIREGEN_SHA" ]]; then
+		die "cannot read upstream_sha from $SNAPSHOTS_MANIFEST (re-pin the snapshots, then: go run ./backend/cmd/wiregen -upstream $UPSTREAM_SHA)"
+	fi
+	if [[ "$WIREGEN_SHA" != "$UPSTREAM_SHA" ]]; then
+		die "snapshots manifest pins upstream ${WIREGEN_SHA} but checked ${UPSTREAM_SHA} (ref: $REF) — re-pin the snapshots, then: go run ./backend/cmd/wiregen -upstream $UPSTREAM_SHA"
+	fi
+fi
+
 echo "check-upstream: comparing pins against CodebuffAI/freebuff @ $UPSTREAM_SHA (ref: $REF)"
 echo
 printf '%-12s %-64s %-14s %-14s %s\n' GROUP FILE PINNED-SHA VENDOR-SHA STATUS
@@ -254,6 +287,7 @@ DRIFT_REPORT="${DRIFT_REPORT:-$REPO_ROOT/.drift-report.json}"
 	printf '  "upstream": "%s",\n' "$VENDOR_URL"
 	printf '  "upstream_sha": "%s",\n' "$UPSTREAM_SHA"
 	printf '  "checked_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	printf '  "wiregen_sha": "%s",\n' "$WIREGEN_SHA"
 	printf '  "vendor_version": "%s",\n' "$NPM_VERSION"
 	printf '  "vendor_version_pinned": "%s",\n' "$PINNED_VERSION"
 	printf '  "files": [\n'

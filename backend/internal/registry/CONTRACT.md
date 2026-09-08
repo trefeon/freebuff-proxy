@@ -33,5 +33,6 @@ Everything else, especially `server` (registry resolves; it is not an orchestrat
 ## Safe modification patterns
 
 - Upstream model churn: sync reference first, update fallback maps + `modelcat` rows in the same change (TYPE C work — never mixed with features).
+- Generated consumers of these pins (`modelcat/catalog_gen.go` via `cmd/wiregen`, `wirefacts` package contract) regenerate in the same change — the parity tests fail until pins, fallback maps, and `_gen` files agree; CI `codegen-parity` enforces the `_gen` half.
 - New alias: one-hop only, add a `TestModelAliases` case; object-property names with regex metacharacters need escaping (`TestResolveObjectPropertyRegexMetachar`).
 - Refresh sources: bounded fetch (2 MiB cap); never block serving on refresh — state updates are atomic swaps.
