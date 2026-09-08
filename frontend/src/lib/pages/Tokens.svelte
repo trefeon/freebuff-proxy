@@ -513,7 +513,7 @@
   crumb="freebuff-proxy / Admin / tokens.conf"
   title={$tr("Tokens")}
   description={$tr(
-    "Upstream credentials, device login, client API keys, and per-token session quotas",
+    "Upstream credentials, device login, client API keys, and per-token Freebucks allowances",
   )}
   {loading}
   {error}

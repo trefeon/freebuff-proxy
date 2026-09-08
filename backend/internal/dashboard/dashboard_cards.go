@@ -169,7 +169,7 @@ type freebucksWindowCard struct {
 // shape issue #321): balance + the daily pool window + the never-expiring
 // wallet + the USD spend ceiling + the plan id + per-model prices.
 // Nil when the session has not reported Freebucks (nil-safe callers check).
-// Exposed alongside premium_quota, not replacing it.
+// This is now the quota view (ADR-0027 dropped the premium_quota mirror).
 type freebucksCard struct {
 	Balance float64             `json:"balance"`
 	Daily   freebucksWindowCard `json:"daily"`
@@ -252,20 +252,19 @@ type standingStepCard struct {
 
 // bridgeTokenCard is a dashboard-ready view of one bridge entry (#187).
 type bridgeTokenCard struct {
-	Key           string                     `json:"key"`    // masked hash prefix
-	Status        string                     `json:"status"` // active|cooldown|locked
-	Model         string                     `json:"model"`
-	ActiveRuns    int                        `json:"active_runs"`
-	Requests      int                        `json:"requests"`
-	Locked        bool                       `json:"locked"`
-	CooldownUntil string                     `json:"cooldown_until"`
-	SessionActive bool                       `json:"session_active"`
-	SpendDay      float64                    `json:"spend_day"`
-	SpendPct      int                        `json:"spend_pct"`
-	BanType       string                     `json:"ban_type,omitempty"`
-	BannedUntil   string                     `json:"banned_until,omitempty"`
-	PremiumQuota  *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
-	Freebucks     *freebucksCard             `json:"freebucks,omitempty"`
+	Key           string         `json:"key"`    // masked hash prefix
+	Status        string         `json:"status"` // active|cooldown|locked
+	Model         string         `json:"model"`
+	ActiveRuns    int            `json:"active_runs"`
+	Requests      int            `json:"requests"`
+	Locked        bool           `json:"locked"`
+	CooldownUntil string         `json:"cooldown_until"`
+	SessionActive bool           `json:"session_active"`
+	SpendDay      float64        `json:"spend_day"`
+	SpendPct      int            `json:"spend_pct"`
+	BanType       string         `json:"ban_type,omitempty"`
+	BannedUntil   string         `json:"banned_until,omitempty"`
+	Freebucks     *freebucksCard `json:"freebucks,omitempty"`
 }
 
 func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
@@ -292,7 +291,6 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		SpendPct:      snap.SpendPct,
 		BanType:       snap.BanType,
 		BannedUntil:   bannedUntil,
-		PremiumQuota:  snap.PremiumQuota,
 		Freebucks:     freebucksCardFromInfo(snap.Freebucks),
 	}
 }
@@ -470,9 +468,8 @@ type tokenSessionQuota struct {
 	HasQuota                bool       `json:"has_quota"`
 	// QuotaStale labels quota restored from the on-disk session entry
 	// after a restart; QuotaSavedAt is when it was last polled.
-	QuotaStale   bool                       `json:"quota_stale,omitempty"`
-	QuotaSavedAt string                     `json:"quota_saved_at,omitempty"`
-	PremiumQuota *pool.PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
+	QuotaStale   bool   `json:"quota_stale,omitempty"`
+	QuotaSavedAt string `json:"quota_saved_at,omitempty"`
 }
 
 type tokenDetail struct {
@@ -547,7 +544,6 @@ func (d *Dashboard) sessionQuotaFor(t pool.TokenSnapshot, sample bool) tokenSess
 		SessionExpiresAt:        utcAttr(t.SessionExpiresAt),
 		QuotaStale:              t.QuotaStale,
 		QuotaSavedAt:            utcAttr(t.QuotaSavedAt),
-		PremiumQuota:            t.PremiumQuota,
 	}
 	for model, q := range t.QuotaByModel {
 		if !modelcat.IsServed(model) {
@@ -773,13 +769,12 @@ type aliasRow struct {
 	Real  string `json:"real"`
 }
 
-// quotaFor returns the daily session-quota label for a model row. For premium
-// pool models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
+// quotaFor returns the meter label for a model row. For premium
+// models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
 // (rateLimitsByModel mirrored per token — server-computed, moves with trust/
 // streak/referral bonuses) rendered as "<limit> premium quota", falling back
-// to the static "5 premium quota" when no live data exists (5 = base
-// modelcat.PremiumSessionLimit since the Levels retirement;
-// see modelcat.PremiumSessionLimit comment).
+// to the static meter label when no live data exists (session-count caps
+// are retired upstream; see ADR-0027).
 // Referral GLM 5.2 keeps "referral +1/day", and all other served rows are
 // "unlimited session".
 // The old live copy "1 of 5 used" was per-single-token usage, which confused
@@ -790,7 +785,7 @@ func (d *Dashboard) quotaFor(id string) string {
 		if live := d.livePremiumQuotaLabel(id); live != "" {
 			return live
 		}
-		return fmt.Sprintf("%s premium quota", formatSessionUnits(float64(modelcat.PremiumSessionLimit)))
+		return "metered — Freebucks/hr at session start"
 	}
 	if d.pool != nil {
 		if live := d.liveQuotaLabel(id); live != "" {

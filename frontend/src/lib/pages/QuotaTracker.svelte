@@ -185,7 +185,7 @@
   crumb="freebuff-proxy / Admin / quota.conf"
   title={$tr("Quota Tracker")}
   description={$tr(
-    "Live per-model session quota and premium pool usage across pooled tokens",
+    "Live Freebucks allowances and model pricing across pooled tokens",
   )}
   {loading}
   {error}
@@ -193,7 +193,7 @@
     ? {
         title: $tr("No tokens in pool"),
         description: $tr(
-          "Add a token to the pool to see per-model session quota and premium pool usage.",
+          "Add a token to the pool to see Freebucks allowances and model pricing.",
         ),
       }
     : null}

@@ -50,19 +50,19 @@ Using this proxy conflicts with Codebuff's terms of service. Upstream abuse dete
 
 FreeBuff assigns an access tier at the Cloudflare edge based on your TCP source IP's GeoIP location:
 
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all premium models including `openai/gpt-5.6-luna`. **5 premium sessions/day base** (resets every 24h / Pacific midnight; streaks and trust ladders can raise this further).
-- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries (e.g. `countryCode: ID` → `countryBlockReason: "country_not_allowed"`). All model requests coerced to `mimo/mimo-v2.5` (`MiMo 2.5`). **3 limited sessions/day** (level ladder up to **7**).
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all premium models including `openai/gpt-5.6-luna`. Metered rows spend Freebucks per hour of session, charged once when the session starts. Daily Freebucks allowances reset at Pacific midnight; streaks and trust ladders can raise them further.
+- **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries (e.g. `countryCode: ID` → `countryBlockReason: "country_not_allowed"`). All model requests coerced to `mimo/mimo-v2.5` (`MiMo 2.5`). A limited daily budget on that single model (the trust ladder can raise it).
 
 ### Current Upstream Model Status & Quotas
 
 > **📢 Official Freebuff Upstream Notice** (vendor snapshot `b14414d59` · npm `0.0.168` `2026-09-05`):
 > *"Every model runs on your normal daily sessions — no per-model caps; your shared premium allowance still charges partial time, rounded up to a tenth. MiMo, DeepSeek V4 Flash and GLM 5.3 Flash are unmetered. —❤️ Freebuff Team"*
-> (Premium pool `5/day` `pacific_day` `America/Los_Angeles`; shared by `GPT-5.6 Luna` + `Muse Spark 1.2` (`1.3` paused upstream `2026-09-07`). `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are **unmetered** — no per-model cap; solar graduated from trial `2026-09-04`.)
+> (Daily Freebucks pools reset at Pacific midnight (`America/Los_Angeles`). `GPT-5.6 Luna` + `Muse Spark 1.2` are metered (`1.3` paused upstream `2026-09-07`). `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are **unmetered**; solar graduated from trial `2026-09-04`.)
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
-| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Shares `5/day` premium pool. |
-| **Premium** | **Muse Spark 1.2** | `meta/muse-spark-1.2-contributor` | **Queues** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Shares `5/day` premium pool. |
+| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Metered — priced per hour of session, charged at session start. |
+| **Premium** | **Muse Spark 1.2** | `meta/muse-spark-1.2-contributor` | **Queues** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Metered — priced per hour of session, charged at session start. |
 | **Unlimited**| **Solar Pro 4** | `upstage/solar-pro4` | Graduated from trial `2026-09-04` (no longer experimental). OpenRouter BYOK (Upstage), text-only, context `500_000`. **Unmetered** — always available, no per-model cap. |
 | **Unlimited**| **GLM 5.3 Flash** | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; default pick again since `2026-09-05`). |
 | **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; default pick `2026-09-02`→`2026-09-05`). |
@@ -81,7 +81,7 @@ Route traffic through a residential connection in a Tier-1 country. If you have 
 The proxy is **direct-egress only** — there is no HTTP/SOCKS proxy support (the upstream transport forces `transport.Proxy = nil`, and `.env` values are never exported to process env). For a VPS/LAN box whose own IP is datacenter or non-Tier-1, route the whole box through a WireGuard/Tailscale tunnel to a residential exit node in a Tier-1 country so its own routing egresses residential; the proxy needs no config, it just rides the tunnel. Never mint tokens from datacenter egress either (issue #140 P0) — residential egress is the safe minting path.
 
 **Option C — Multi-token pooling (no VPN needed):**
-Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,token3,token4,token5` in `.env` with 4-5 accounts. Each gets 3 sessions/day on `mimo/mimo-v2.5` (base; the 0.0.150 trust-level ladder can raise a token up to 7/day), giving you ~12-15 usable sessions per day.
+Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,token3,token4,token5` in `.env` with 4-5 accounts. Each carries its own limited daily budget on `mimo/mimo-v2.5` (the 0.0.150 trust-level ladder can raise a token's budget), pooling to roughly a day of moderate use.
 
 > **Shared-network cap (issue #140 P2b):** all pooled tokens in one deployment
 > share the proxy's egress, so its accounts sit on one /24 by construction.
@@ -90,7 +90,7 @@ Stay on limited tier but maximize throughput. Set `AUTH_TOKENS=token1,token2,tok
 > two or more tokens are configured. For full-trust isolation, route distinct
 > accounts through distinct residential exits (Option A per machine).
 
-See the [Getting Started — Access Tiers](#access-tiers-models--upstream-quotas) section for per-model quota pools and effort ladders.
+See the [Getting Started — Access Tiers](#access-tiers-models--upstream-quotas) section for per-model pricing and effort ladders.
 
 **Do NOT use any of these — they trigger the restricted cohort or an outright ban:**
 - Commercial VPN (NordVPN, ExpressVPN, Surfshark, etc.)

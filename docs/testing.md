@@ -220,7 +220,7 @@ What a healthy dashboard shows:
   radios, and the at-risk account cards. `low` risk is healthy; `high`
   is worth a look at what changed (new egress, new device).
 - **Maturity**: per-account maturity cards with model and mode selects.
-- **Quota Tracker**: per-account premium-pool bars and session-quota tables.
+- **Quota Tracker**: per-account Freebucks allowance bars and hourly model prices.
 - **Logs**: console (live `/v1` traffic, 1s auto-refresh) plus the table
   view of the newest 200 ring entries, no `level=ERROR` spam.
 - **Deep-link-only pages** (`/admin/setup`, `/admin/metrics`, `/admin/traces`, `/admin/playground`): Setup shows the mode card, client API key field, and per-model copy buttons; Metrics shows live SVG sparklines; Traces shows per-request latency breakdowns; Playground renders the Dev Tools page (needs `DEVTOOLS_ENABLED=true`).

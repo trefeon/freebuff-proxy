@@ -83,9 +83,9 @@ In the 9router provider node, you can add any of these models from the proxy cat
 
 | Model ID in 9router | Description & Tags | Upstream Quota & Tier |
 | :--- | :--- | :--- |
-| `deepseek/deepseek-v4-flash` | **DeepSeek V4 Flash 07/31 (Recommended)**<br>Smart & Fast · Reasoning: `high` · NEW | **Full Tier** (shared `5/day` premium pool) |
+| `deepseek/deepseek-v4-flash` | **DeepSeek V4 Flash 07/31 (Recommended)**<br>Smart & Fast · Reasoning: `high` · NEW | **Full Tier** (unmetered) |
 | `mimo/mimo-v2.5` | **MiMo 2.5**<br>Balanced · Images | **All Tiers — UNLIMITED** (default for limited tier) |
-| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (shared `5/day` premium pool) |
+| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (metered — Freebucks/hr at session start) |
 | `deepseek/deepseek-v4-pro` | **DeepSeek V4 Pro**<br>Deep reasoning · Reasoning: `high` | Full Tier (paused upstream at peak times) |
 | `z-ai/glm-5.2` | **GLM 5.2**<br>Top open-source agentic model | **Referral-gated** (+1 session per referral) |
 | `minimax/minimax-m3` | **MiniMax M3** | Paused upstream (kept in the catalog, not servable) |

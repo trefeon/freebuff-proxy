@@ -57,15 +57,15 @@ The page set has one source of truth: `NAV_ITEMS` in `frontend/src/lib/nav.js`. 
 
 ### 3. Maturity
 
-Per-account maturity tracking with stacked model and mode selects, per-token touch-model override plus global fallback, and persisted card expansion. Touch runs ride the live request poll path. The touch model defaults to the unmetered flash model so touches never burn premium quota. Automation state (config, slot, warning and relock counters) persists across restarts in the dashboard DB; a token that hits its streak target auto-releases, and one whose streak lapses for 2 straight days re-locks for warming. Endpoints: `POST /admin/tokens/{id}/maturity` (enable/disable), `POST /admin/tokens/{id}/maturity/touch` (manual touch, bypasses slot/throttle), `POST /admin/tokens/{id}/maturity/warn-reset` (clears only the non-advance warning and re-arms the loop — config untouched).
+Per-account maturity tracking with stacked model and mode selects, per-token touch-model override plus global fallback, and persisted card expansion. Touch runs ride the live request poll path. The touch model defaults to the unmetered flash model so touches never spend premium Freebucks. Automation state (config, slot, warning and relock counters) persists across restarts in the dashboard DB; a token that hits its streak target auto-releases, and one whose streak lapses for 2 straight days re-locks for warming. Endpoints: `POST /admin/tokens/{id}/maturity` (enable/disable), `POST /admin/tokens/{id}/maturity/touch` (manual touch, bypasses slot/throttle), `POST /admin/tokens/{id}/maturity/warn-reset` (clears only the non-advance warning and re-arms the loop — conf…
 
 ### 4. Quota Tracker
 
-- **Per-Account Cards** (`Account #1…`): premium-pool bars and per-model session-quota tables with live upstream limits, recent usage, period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them. A daily-capped account still serves its own live session (reuse costs no quota); only fresh admissions are refused until reset.
+- **Per-Account Cards** (`Account #1…`): Freebucks allowance windows with per-model hourly prices (cheapest first), period reset countdowns (Pacific midnight; day granularity past 24h, e.g. `27d 10h`), and entitlement tiers. Restart-restored rows are labeled last-seen until the next request refreshes them. A token with a live session keeps serving on it (already paid at session start); only fresh sessions spend Freebucks.
 
 ### 5. Models
 
-Live catalog of served models with upstream agent bindings and session quotas; 1-click model ID copy actions. The list is the registry the proxy routes on, refreshed on `REGISTRY_REFRESH`.
+Live catalog of served models with upstream agent bindings and Freebucks hourly prices; 1-click model ID copy actions. The list is the registry the proxy routes on, refreshed on `REGISTRY_REFRESH`.
 
 ### 6. Logs
 

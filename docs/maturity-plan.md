@@ -101,7 +101,7 @@ every maintain tick (15 min):
    (deepseek-flash / glm-flash) through the normal Acquire path —
    wire-identical to a user opening the CLI. Reservation 1.0 against
    an infinite limit = free, plus a live session real traffic can
-   reuse. Never burns premium quota for farming.
+   reuse. Never spends premium Freebucks for farming.
 3. Escalate (e.g. minimal chat) only if §3 proves rung 2
    insufficient. Never by default.
 
