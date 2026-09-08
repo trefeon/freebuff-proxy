@@ -1,8 +1,7 @@
 # Agentic workflow
 
-How multi-agent work runs in this repo. Distilled from the workflow-skills
-verdicts (`agent://WorkflowSkills`, 2026-09-08) and session lessons; each
-practice names the pain it answers.
+How multi-agent work runs in this repo. Distilled from 2026-09-08 session
+verdicts and lessons; each practice names the pain it answers.
 
 ## 1. One slice = one lane + explicit file ownership
 
@@ -23,7 +22,7 @@ Order: `sync-upstream.sh --check` (read-only) → `review-wire-drift.sh`
 classify → refresh pins/baseline → `check-upstream.sh` (canonical parity proof)
 → full tests + dist rebuild. LF-normalize before comparing hashes. Merge drift
 PRs serially wire → registry → dashboard with green CI between each. Vendor pin:
-2e57674fc; fresh 89703d78 verified zero functional drift (`local://upstream-delta.md`).
+2e57674fc; fresh-vendor check 2026-09-08 found zero functional drift.
 
 ## 3. Visual gate on every dashboard slice
 
