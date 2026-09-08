@@ -218,13 +218,16 @@ test.describe("account maturity", () => {
     await expect(
       page.getByRole("heading", { name: "Account Maturity" }),
     ).toBeVisible();
-    // Timelines render with the always-expanded cards.
+    // Timeline folds by default: latest event visible, older events behind
+    // the expander (capped at 5 recent).
     const timeline = page.getByRole("list", {
       name: "Maturity history for Account #1",
     });
     await expect(timeline).toBeVisible();
-    await expect(timeline.getByText("admit ok")).toBeVisible();
     await expect(timeline.getByText("enabled target=7")).toBeVisible();
+    await expect(timeline.getByText("admit ok")).toBeHidden();
+    await page.getByRole("button", { name: "Show 1 more" }).click();
+    await expect(timeline.getByText("admit ok")).toBeVisible();
   });
   test("maturity card offers the per-token touch model select", async ({
     page,
@@ -254,8 +257,8 @@ test.describe("account maturity", () => {
     const options = await picker.locator("option").allTextContents();
     // Served models labeled with their server-reported cost class.
     expect(options).toContain("upstage/solar-pro4 (0 Freebucks/hr)");
-    expect(options).toContain("openai/gpt-5.6-luna (premium pool)");
-    // Cheapest-Freebucks-cost first, premium pool last.
+    expect(options).toContain("openai/gpt-5.6-luna (20 Freebucks/hr)");
+    // Cheapest-Freebucks-cost first, priced rows last.
     const solarIdx = options.findIndex((o) =>
       o.startsWith("upstage/solar-pro4"),
     );
@@ -327,6 +330,7 @@ test.describe("account maturity", () => {
       name: "Maturity history for Account #1",
     });
     await expect(timeline).toBeVisible();
+    await page.getByRole("button", { name: "Show 1 more" }).click();
     await expect(timeline.getByText("admit ok")).toBeVisible();
     // Long descriptions must wrap instead of clipping header actions
     // (Pips 0/7 case): no card header may overflow horizontally.
