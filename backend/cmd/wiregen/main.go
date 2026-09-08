@@ -42,6 +42,13 @@ func main() {
 	wireDir := flag.String("wire", filepath.Join(backendRoot, "internal", "wirefacts", "testdata", "wire"), "directory holding snapshots.json and the verbatim snapshots")
 	registryDir := flag.String("registry", filepath.Join(backendRoot, "internal", "registry", "testdata", "upstream"), "directory holding the registry mirror files")
 	outPath := flag.String("out", filepath.Join(backendRoot, "internal", "wirefacts", "wirefacts_gen.go"), "output path for the generated Go source")
+	// --- S2 catalog (append-only; S3/S4 add their own flags below, never edit this one) ---
+	catalogOut := flag.String("catalog-out", filepath.Join(backendRoot, "internal", "modelcat", "catalog_gen.go"), "output path for the generated model catalog Go source")
+	// --- S3 wire (append-only; S4 adds its own flags below, never edit this one) ---
+	wirecodesOut := flag.String("wirecodes-out", filepath.Join(backendRoot, "internal", "upstream", "wirecodes_gen.go"), "output path for the generated WireCode Go source")
+	noticesOut := flag.String("notices-out", filepath.Join(backendRoot, "internal", "upstream", "notices_gen.go"), "output path for the generated notice-copy Go source")
+	// --- S4 tools (append-only; last block) ---
+	toolsOut := flag.String("tools-out", filepath.Join(backendRoot, "internal", "convert", "toolnames_gen.go"), "output path for the generated tool-names Go source")
 	flag.Parse()
 
 	if *upstream == "" {
@@ -59,4 +66,40 @@ func main() {
 		log.Fatalf("write %s: %v", *outPath, err)
 	}
 	fmt.Fprintf(os.Stderr, "wiregen: wrote %s at upstream %s\n", *outPath, *upstream)
+	// --- S2 catalog (append-only; S3/S4 add their own blocks below, never edit this one) ---
+	var cbuf bytes.Buffer
+	// Buffer first: a failing run emits nothing and leaves the previous
+	// generated file untouched.
+	if err := wirefacts.EmitCatalog(*upstream, *registryDir, &cbuf); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(*catalogOut, cbuf.Bytes(), 0o644); err != nil {
+		log.Fatalf("write %s: %v", *catalogOut, err)
+	}
+	fmt.Fprintf(os.Stderr, "wiregen: wrote %s at upstream %s\n", *catalogOut, *upstream)
+	// --- S3 wire (append-only; S4 adds its own block below, never edit this one) ---
+	var wbuf, nbuf bytes.Buffer
+	// Buffer first: a failing run emits nothing and leaves the previous
+	// generated files untouched.
+	if err := wirefacts.EmitWire(*upstream, *wireDir, &wbuf, &nbuf); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(*wirecodesOut, wbuf.Bytes(), 0o644); err != nil {
+		log.Fatalf("write %s: %v", *wirecodesOut, err)
+	}
+	if err := os.WriteFile(*noticesOut, nbuf.Bytes(), 0o644); err != nil {
+		log.Fatalf("write %s: %v", *noticesOut, err)
+	}
+	fmt.Fprintf(os.Stderr, "wiregen: wrote %s and %s at upstream %s\n", *wirecodesOut, *noticesOut, *upstream)
+	// --- S4 tools (append-only; last block) ---
+	var tbuf bytes.Buffer
+	// Buffer first: a failing run emits nothing and leaves the previous
+	// generated file untouched.
+	if err := wirefacts.EmitTools(*upstream, *wireDir, *registryDir, &tbuf); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(*toolsOut, tbuf.Bytes(), 0o644); err != nil {
+		log.Fatalf("write %s: %v", *toolsOut, err)
+	}
+	fmt.Fprintf(os.Stderr, "wiregen: wrote %s at upstream %s\n", *toolsOut, *upstream)
 }
