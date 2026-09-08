@@ -14,20 +14,24 @@ const (
 	TierChangeNotice = "Solar Pro 4 is now unmetered at full access and available with limited access. GPT-5.6 Luna still uses your shared premium allowance, charging partial time rounded up to a tenth. —❤️ Freebuff Team"
 
 	// CapacityNotice is FREEBUFF_CAPACITY_NOTICE
-	// (common/src/constants/freebuff-spend-ceilings.ts:185-186).
+	// (common/src/constants/freebuff-spend-ceilings.ts:5-6).
 	CapacityNotice = "Capacity is now limited per account — sustained automated abuse forced us to cap how much any one account can use."
 
 	// RestrictedNotice is FREEBUFF_RESTRICTED_NOTICE
-	// (common/src/constants/freebuff-spend-ceilings.ts:202-203).
+	// (common/src/constants/freebuff-spend-ceilings.ts:8-9).
 	RestrictedNotice = "This account has reduced capacity: it was flagged for VPN or proxy usage, a restricted location, or an email domain commonly used by bot farms. If you are on a VPN, connecting directly restores normal limits."
 
 	// BudgetNotice is FREEBUFF_BUDGET_NOTICE
-	// (common/src/constants/freebuff-spend-ceilings.ts:260-261).
+	// (common/src/constants/freebuff-spend-ceilings.ts:14-15).
 	BudgetNotice = "You have used all of today’s free usage on this account."
 
 	// FreebucksCeilingNotice is FREEBUFF_FREEBUCKS_CEILING_NOTICE
-	// (common/src/constants/freebuff-spend-ceilings.ts:244-245, vendor 8897a90).
-	FreebucksCeilingNotice = "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at four times what its Freebucks are worth, to protect the service from runaway usage."
+	// (common/src/constants/freebuff-spend-ceilings.ts:11-12, vendor abd1eed4a).
+	// Upstream reverted four-times back to three-times and retitled the file
+	// "Compatibility notices, not spend enforcement": the per-model caps are
+	// soft pacing targets now (a pause, never a refusal), and the spend field
+	// itself is @deprecated on the wire.
+	FreebucksCeilingNotice = "This account hit today’s hard usage cap. Freebucks pay for sessions, but the compute a day can draw is capped at three times what its Freebucks are worth, to protect the service from runaway usage."
 )
 
 // DeepSeekPeakHoursWindow holds the live evaluation of DeepSeek pricing windows

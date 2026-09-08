@@ -74,7 +74,7 @@ var (
 	pinnedFallbackAgents, pinnedFallbackRootByModel = buildPinnedFallback()
 )
 
-// buildPinnedFallback reads the five pinned snapshot files and runs the
+// buildPinnedFallback reads the six pinned snapshot files and runs the
 // live parsers in the same order Refresh does. A corrupted embed yields an
 // empty fallback rather than a panic: LoadFallback then simply serves no
 // mappings, and the registry parity test fails loudly on any drift.
@@ -110,7 +110,7 @@ type Registry struct {
 	client *http.Client                  // fetch client; redirects followed, fetchTimeout applied
 	logger *slog.Logger                  // success-refresh INFO sink (nil = slog.Default())
 
-	sources       []string // override of the default 5 source URLs (tests)
+	sources       []string // override of the default 6 source URLs (tests)
 	lastAttempted []string // URLs tried during the most recent Refresh, in order
 	modelToAgent  map[string]string
 	allModels     []string // sorted

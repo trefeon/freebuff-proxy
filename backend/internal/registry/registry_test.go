@@ -115,14 +115,14 @@ func TestFallbackMap(t *testing.T) {
 
 // TestFallbackParityWithPinnedUpstream guards issue #121 at the root: the
 // offline fallback must mirror the CURRENT upstream FREE_MODE_AGENT_MODELS.
-// testdata/upstream/ is a pinned snapshot of the five Codebuff source files
+// testdata/upstream/ is a pinned snapshot of the six Codebuff source files
 // (copied from reference/freebuff/common/src/constants, the RE-verified
 // installed CLI binary). This test parses that snapshot with the real parser
 // — the same code a live Refresh runs — and requires LoadFallback to produce
 // the identical model set, model→agent routing, and agent set. The fallback
 // is now DERIVED at init from the embedded snapshot (issue #273), so when
 // upstream adds or retires a model only the pinned snapshot needs refreshing
-// (copy the five files from the vendored reference or CodebuffAI/freebuff
+// (copy the six files from the vendored reference or CodebuffAI/freebuff
 // main); this test stays as the cross-check that the derivation matches a
 // live parse.
 func TestFallbackParityWithPinnedUpstream(t *testing.T) {
@@ -599,7 +599,7 @@ func TestRefreshPartialMultiSourceFailureKeepsState(t *testing.T) {
 }
 
 // TestSetSourcesNilRestoresDefaults verifies SetSources(nil) (or an empty
-// slice) restores the default 5 Codebuff source URLs (R4).
+// slice) restores the default 6 Codebuff source URLs (R4).
 func TestSetSourcesNilRestoresDefaults(t *testing.T) {
 	r := New(nil, nil)
 	r.SetSources([]string{"file:///custom"})

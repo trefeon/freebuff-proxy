@@ -110,7 +110,7 @@ The default install root is the platform directory (see [README → Where the fi
 
 ## 4. Upstream Synchronization (`sync-upstream.*` / `check-upstream.sh`)
 
-Automates fetching upstream changes from `CodebuffAI/freebuff`, syncing the five pinned model registry definitions (`backend/internal/registry/testdata/upstream/`), checking hash parity, and running tests.
+Automates fetching upstream changes from `CodebuffAI/freebuff`, syncing the six pinned model registry definitions (`backend/internal/registry/testdata/upstream/`), checking hash parity, and running tests.
 
 ### Windows (PowerShell / CMD)
 

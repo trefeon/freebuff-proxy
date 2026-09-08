@@ -76,8 +76,8 @@ export interface FreebuffSubscriptionTierOffer {
   dailySessions: number
   fiveDaySessions: number
   monthlySessions: number
-  /** Provider-spend ceiling per billing period, USD. Subject to change. */
-  monthlySpendLimitUsd: number
+  /** @deprecated Legacy cap field; new servers omit it and clients ignore it. */
+  monthlySpendLimitUsd?: number
   dailyPremiumSessions: number
   /** Plain-language constraints for the plan card and the paywall. */
   disclaimers: string[]
@@ -111,9 +111,9 @@ export interface FreebuffSubscriptionUsage {
   dayResetAt: string
   /** ISO instant the billing period ends, i.e. when the monthly cap resets. */
   periodEndsAt: string
-  /** Provider spend this billing period vs the tier's ceiling, USD. */
-  monthSpendUsd: number
-  monthSpendLimitUsd: number
+  /** @deprecated Legacy dollar usage; new servers omit it. */
+  monthSpendUsd?: number
+  monthSpendLimitUsd?: number
   /**
    * The caller's FREE premium-session pool for today, which the plan tops up.
    *
@@ -248,10 +248,9 @@ export interface FreebuffFreebucksInfo {
   balance: number
   daily: FreebuffFreebucksWindow
   wallet: FreebuffFreebucksWallet
-  spend: FreebuffFreebucksSpendCeiling
-  /** The monthly dollar allowance, shown to the user and enforced. Absent
-   *  from a server that predates it, so clients render nothing rather than
-   *  a zero that would read as "you have nothing left". */
+  /** @deprecated Provider-spend caps are no longer enforced or displayed. */
+  spend?: FreebuffFreebucksSpendCeiling
+  /** @deprecated Legacy cap field; new servers omit it and clients ignore it. */
   monthly?: FreebuffFreebucksMonthlyAllowance
   /** The plan the daily pool and bonus were sized from; null on free. */
   planId: string | null
@@ -785,6 +784,10 @@ export type FreebuffSessionAdmissionResponse = (
        *  client may also synthesize a no-grace `{ status: 'ended' }` when a
        *  poll reveals the row was swept. Both render the same UI. */
       status: 'ended'
+      /** Final early-end refund receipt, including zero; retries return the same amount. */
+      freebucksRefund?: number
+      /** Final usage is still outstanding; replay DELETE with the same instance for its receipt. */
+      freebucksRefundPending?: boolean
       accessTier?: FreebuffAccessTier
       instanceId?: string
       admittedAt?: string

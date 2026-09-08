@@ -22,7 +22,10 @@ type FreebucksWallet struct {
 }
 
 // FreebucksSpendCeiling is the settled-USD daily spend cap for the account's
-// tier (issue #321 wire drift).
+// tier (issue #321 wire drift). Upstream deprecated the wire field at
+// abd1eed4a ("Provider-spend caps are no longer enforced or displayed"):
+// new servers omit spend, the raw pointer stays nil, and Spend keeps its
+// zero value. The dashboard passthrough renders that zero, never a refusal.
 type FreebucksSpendCeiling struct {
 	LimitUsd float64   `json:"limitUsd"`
 	ResetAt  time.Time `json:"resetAt,omitempty"`
@@ -56,9 +59,12 @@ type FreebucksPriceChange struct {
 // the server-authorized quota exemption + per-model prices with their
 // display copy + the announced repricing schedule (issue #350).
 type FreebucksInfo struct {
-	Balance float64                    `json:"balance"`
-	Daily   FreebucksWindow            `json:"daily"`
-	Wallet  FreebucksWallet            `json:"wallet"`
+	Balance float64         `json:"balance"`
+	Daily   FreebucksWindow `json:"daily"`
+	Wallet  FreebucksWallet `json:"wallet"`
+	// Spend is the deprecated provider-spend cap (upstream abd1eed4a omits
+	// it; nil raw leaves this zero). Monthly is the deprecated monthly
+	// allowance (upstream abd1eed4a omits it; nil raw leaves this nil).
 	Spend   FreebucksSpendCeiling      `json:"spend"`
 	Monthly *FreebucksMonthlyAllowance `json:"monthly,omitempty"`
 	PlanID  string                     `json:"planId,omitempty"`

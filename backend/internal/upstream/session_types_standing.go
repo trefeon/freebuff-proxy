@@ -24,6 +24,9 @@ type SessionUpgradeHint struct {
 
 // SubscriptionInfo mirrors upstream FreebuffSubscriptionUsage (subscriber
 // usage rings + provider spend; rollout audience only).
+// MonthSpendUsd/MonthSpendLimitUsd are deprecated legacy fields upstream
+// marked @deprecated at abd1eed4a ("new servers omit it"): absent on the
+// wire they decode to zero, which callers must read as "not reported".
 type SubscriptionInfo struct {
 	DayUsed            float64   `json:"dayUsed"`
 	DayLimit           float64   `json:"dayLimit"`

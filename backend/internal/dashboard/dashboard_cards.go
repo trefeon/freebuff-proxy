@@ -50,7 +50,7 @@ type upstreamSync struct {
 	UpstreamSHA  string         `json:"upstream_sha"`            // short SHA, "(not yet reported)" before first CI run
 	CheckedAt    string         `json:"checked_at"`              // RFC3339
 	HasDrift     bool           `json:"has_drift"`               // any non-SAME file
-	HasRegistry  bool           `json:"has_registry_drift"`      // 5 pinned files
+	HasRegistry  bool           `json:"has_registry_drift"`      // 6 pinned files
 	HasWire      bool           `json:"has_wire_drift"`          // wire files MISSING_UPSTREAM
 	DriftedFiles []upstreamFile `json:"drifted_files,omitempty"` // the actual changes
 	ReleasesURL  string         `json:"releases_url"`            // where to update
@@ -197,7 +197,10 @@ type freebucksWalletCard struct {
 }
 
 // freebucksSpendCard is the dashboard view of the Freebucks USD spend
-// ceiling: the cap plus the ISO instant the day rolls.
+// ceiling: the cap plus the ISO instant the day rolls. Upstream deprecated
+// the wire field at abd1eed4a (no longer enforced or displayed): new
+// servers omit spend and this renders the zero value; legacy servers still
+// fill it. No frontend surface reads it.
 type freebucksSpendCard struct {
 	LimitUsd float64 `json:"limit_usd"`
 	ResetAt  string  `json:"reset_at,omitempty"`
@@ -218,7 +221,8 @@ type freeWindowsCard struct {
 
 // subscriptionCard is the dashboard view of upstream.SubscriptionInfo
 // (issue #319): subscriber day / five-day / month usage rings + provider
-// spend USD. Rollout-audience only.
+// spend USD. Rollout-audience only. The month_*_spend_usd pair is deprecated
+// upstream (abd1eed4a omits it): zero reads as "not reported".
 type subscriptionCard struct {
 	DayUsed            float64  `json:"day_used"`
 	DayLimit           float64  `json:"day_limit"`
