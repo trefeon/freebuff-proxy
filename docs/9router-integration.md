@@ -78,6 +78,7 @@ The proxy listens on port `3457`. The Base URL in 9router depends on where 9rout
 ## 🤖 Recommended Models to Add
 
 > **📢 Freebuff Team Notice**: *"V4 Pro and GPT-5.6 Luna are 1 session a day, V4 Pro pauses at peak times, and MiniMax M3 is unavailable. MiMo 2.5 stays unlimited."*
+> *Legacy wording: "1 session a day" in the notice above is pre-meter phrasing — pooled users here are metered: priced rows bill 'N Freebucks/hr' off the wire prices map, charged once at session start; unpriced rows are unmetered.*
 
 In the 9router provider node, you can add any of these models from the proxy catalog:
 
@@ -85,9 +86,9 @@ In the 9router provider node, you can add any of these models from the proxy cat
 | :--- | :--- | :--- |
 | `deepseek/deepseek-v4-flash` | **DeepSeek V4 Flash 07/31 (Recommended)**<br>Smart & Fast · Reasoning: `high` · NEW | **Full Tier** (unmetered) |
 | `mimo/mimo-v2.5` | **MiMo 2.5**<br>Balanced · Images | **All Tiers — UNLIMITED** (default for limited tier) |
-| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (metered — Freebucks/hr at session start) |
+| `openai/gpt-5.6-luna` | **GPT-5.6 Luna**<br>Strong all-around · Reasoning: `high` · Images | Full Tier (metered — priced 'N Freebucks/hr' off the wire prices map, charged once at session start) |
 | `deepseek/deepseek-v4-pro` | **DeepSeek V4 Pro**<br>Deep reasoning · Reasoning: `high` | Full Tier (paused upstream at peak times) |
-| `z-ai/glm-5.2` | **GLM 5.2**<br>Top open-source agentic model | **Referral-gated** (+1 session per referral) |
+| `z-ai/glm-5.2` | **GLM 5.2**<br>Top open-source agentic model | **Referral-gated** — gated accounts earn Freebucks via the Earn page; 1-hour sessions stay the unit |
 | `minimax/minimax-m3` | **MiniMax M3** | Paused upstream (kept in the catalog, not servable) |
 Clients calling 9router address these models as `freebuff/<model-id>`, for example:
 ```json

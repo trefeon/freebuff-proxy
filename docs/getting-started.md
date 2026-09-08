@@ -36,7 +36,7 @@ Using this proxy conflicts with Codebuff's terms of service. Upstream abuse dete
 | ✅ Do | ❌ Don't |
 |---|---|
 | **Keep `SAFE_MODE=true`** (default; anti-ban stealth: TLS fingerprint, header sanitization, request jitter, idle rotation) | **Don't** run 24/7 on heavy unattended automated tasks |
-| Use a **normal residential connection** | **Don't use a VPN / proxy / Tor**. FreeBuff determines access tier via **TCP source IP GeoIP at the Cloudflare edge** — not HTTP headers. Header spoofing (`X-Forwarded-For`, `CF-Connecting-IP`) is impossible because Cloudflare overwrites them at L4. VPN and datacenter IPs are detected via MaxMind/Spur Intelligence ASN database (`ipPrivacySignals: ["vpn"]`) and placed in a restricted cohort ($0.50/day spend ceiling, ≈1 session/day) or hard-blocked |
+| Use a **normal residential connection** | **Don't use a VPN / proxy / Tor**. FreeBuff determines access tier via **TCP source IP GeoIP at the Cloudflare edge** — not HTTP headers. Header spoofing (`X-Forwarded-For`, `CF-Connecting-IP`) is impossible because Cloudflare overwrites them at L4. VPN and datacenter IPs are detected via MaxMind/Spur Intelligence ASN database (`ipPrivacySignals: ["vpn"]`) and placed in a restricted cohort ($0.50/day spend ceiling) or hard-blocked |
 | Request **only models your tier/region offers** | **Don't request out-of-region models**: on limited-tier accounts (non-Tier-1 countries), **all model requests are coerced to `mimo/mimo-v2.5` server-side** regardless of what you send in `x-freebuff-model`. Verified via MITM: CLI sends `deepseek/deepseek-v4-flash`, server responds with `model: mimo/mimo-v2.5` in admission. This is upstream behavior, not proxy behavior |
 | Keep **one modest account** | **Don't create spam clusters**: upstream caps distinct active sessions per egress IP (`ip_capped`); accounts from the same signup network (≥8 per /24) or mailbox (≥3) are permanently capped at lower trust levels |
 | **Use one key until it is rate-limited** | **Don't rotate several healthy keys aggressively** (farming signal) |
@@ -50,24 +50,24 @@ Using this proxy conflicts with Codebuff's terms of service. Upstream abuse dete
 
 FreeBuff assigns an access tier at the Cloudflare edge based on your TCP source IP's GeoIP location:
 
-- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all premium models including `openai/gpt-5.6-luna`. Metered rows spend Freebucks per hour of session, charged once when the session starts. Daily Freebucks allowances reset at Pacific midnight; streaks and trust ladders can raise them further.
+- **Full tier** (`accessTier: "full"`): Tier-1 countries (US, UK, DE, JP, CA, AU, etc.) with a residential/ISP ASN. Access to all premium models including `openai/gpt-5.6-luna`. Priced rows spend 'N Freebucks/hr' off the wire prices map, charged once when the session starts. The daily Freebucks pool refills at Pacific midnight; the wallet itself never self-refills.
 - **Limited tier** (`accessTier: "limited"`): Non-Tier-1 countries (e.g. `countryCode: ID` → `countryBlockReason: "country_not_allowed"`). All model requests coerced to `mimo/mimo-v2.5` (`MiMo 2.5`). A limited daily budget on that single model (the trust ladder can raise it).
 
 ### Current Upstream Model Status & Quotas
 
 > **📢 Official Freebuff Upstream Notice** (vendor snapshot `b14414d59` · npm `0.0.168` `2026-09-05`):
 > *"Every model runs on your normal daily sessions — no per-model caps; your shared premium allowance still charges partial time, rounded up to a tenth. MiMo, DeepSeek V4 Flash and GLM 5.3 Flash are unmetered. —❤️ Freebuff Team"*
+> *Legacy wording: "daily sessions" in the notice above is pre-meter phrasing — pooled users here are metered: priced rows bill 'N Freebucks/hr' off the wire prices map, charged once at session start; unpriced rows are unmetered.*
 > (Daily Freebucks pools reset at Pacific midnight (`America/Los_Angeles`). `GPT-5.6 Luna` + `Muse Spark 1.2` are metered (`1.3` paused upstream `2026-09-07`). `GLM 5.3 Flash`, `DeepSeek V4 Flash`, `MiMo 2.5` and `Solar Pro 4` are **unmetered**; solar graduated from trial `2026-09-04`.)
 
 | Category | Model Name | Wire Model ID | Specs & Upstream Quota Policy |
 |---|---|---|---|
-| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Metered — priced per hour of session, charged at session start. |
-| **Premium** | **Muse Spark 1.2** | `meta/muse-spark-1.2-contributor` | **Queues** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Metered — priced per hour of session, charged at session start. |
-| **Unlimited**| **Solar Pro 4** | `upstage/solar-pro4` | Graduated from trial `2026-09-04` (no longer experimental). OpenRouter BYOK (Upstage), text-only, context `500_000`. **Unmetered** — always available, no per-model cap. |
-| **Unlimited**| **GLM 5.3 Flash** | `z-ai/glm-5.3-flash` | **Deep reasoning**, Images. **Unmetered** — always available, no per-model cap (left the premium pool `2026-08-28`; default pick again since `2026-09-05`). |
+| **Premium** | **GPT-5.6 Luna** | `openai/gpt-5.6-luna` | **Strong all-around**, Reasoning: `high`, Images. Metered — priced 'N Freebucks/hr' off the wire prices map, charged once at session start. |
+| **Premium** | **Muse Spark 1.2** | `meta/muse-spark-1.2-contributor` | **Queues** — rate-limited shared ceiling (15s queue, then answers on DeepSeek V4 Flash). Meta trains on prompts/completions (Contributor discount). Context `1_000_000`. Metered — priced 'N Freebucks/hr' off the wire prices map, charged once at session start. |
+| **Unlimited**| **Solar Pro 4** | `upstage/solar-pro4` | Graduated from trial `2026-09-04` (no longer experimental). OpenRouter BYOK (Upstage), text-only, context `500_000`. **Unmetered** — unpriced row, always available, no per-model cap. |
 | **Unlimited**| **DeepSeek V4 Flash** | `deepseek/deepseek-v4-flash` | **Smart & Fast**, Reasoning: `high`. **Unmetered** — always available (peak pricing applies; default pick `2026-09-02`→`2026-09-05`). |
 | **Unlimited**| **MiMo 2.5** | `mimo/mimo-v2.5` | **Balanced**, Images. **Unlimited across all tiers** (sole active model on limited tier). |
-| **Referral** | **GLM 5.2** | `z-ai/glm-5.2` | **Top open-source agentic model**. Referral-gated (`+1/day` promo pool), 1-hour sessions. |
+| **Referral** | **GLM 5.2** | `z-ai/glm-5.2` | **Top open-source agentic model**. Referral-gated: gated accounts earn Freebucks via the Earn page; 1-hour sessions stay the unit. |
 | **Pro-only** | **Gemini 3.8 Flash** | `google/gemini-3.8-flash` | Returned `2026-09-04` behind the Pro paywall, Web-only. The proxy has no Pro surface, so this row is **not served**. |
 | **Disabled** | **MiniMax M3** | `minimax/minimax-m3` | **Withdrawn** upstream (2026-08-20). |
 | **Disabled** | **DeepSeek V4 Pro** | `deepseek/deepseek-v4-pro` | **Withdrawn** upstream (2026-08-26, cost). |
