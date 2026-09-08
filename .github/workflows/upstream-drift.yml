@@ -2,7 +2,7 @@
 #
 #  Wire drift is additionally classified by scripts/review-wire-drift.sh:
 #  COMMENT-ONLY (docs) vs FUNCTIONAL (needs a Go-side port).
-#  1. **Registry pin drift** (the 5 files in backend/internal/registry/testdata/upstream/):
+#  1. **Registry pin drift** (the 6 files in backend/internal/registry/testdata/upstream/):
 #     auto-open a PR that runs sync-upstream so the change lands in front of a
 #     human reviewer. Idempotent: reruns reuse the same branch + open PR.
 #  2. **Wire-shape file drift** (freebuff-trust.ts, foreign-client-signals.ts,

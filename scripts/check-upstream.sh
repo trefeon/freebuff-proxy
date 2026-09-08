@@ -85,6 +85,7 @@ REGISTRY_FILES=(
 	freebuff-models.ts
 	gemini.ts
 	model-config.ts
+	freebuff-model-entitlements.ts
 )
 # Wire-shape files the proxy reads at runtime but does NOT pin. Drift here
 # changes the answer to "what does the upstream wire look like" without
