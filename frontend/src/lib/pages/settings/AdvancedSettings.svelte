@@ -8,6 +8,12 @@
   import { SlidersHorizontal } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
+  import { fetchAPI } from "../../api/client.js";
+  import { adminApi } from "../../api/paths.js";
+  import {
+    touchOptions as sharedTouchOptions,
+    touchLabel,
+  } from "../../utils/touchModels.js";
 
   /**
    * Advanced settings: every catalog key the curated sections do not own.
@@ -98,6 +104,11 @@
   // order onMount/meta/fetch resolve in (an early return before reading a
   // source never re-fires on that source).
   let pendingFocusKey = $state("");
+  // Served-model catalog for the global MATURITY_TOUCH_MODEL select: same
+  // option source as the per-token Touch Model select on the Maturity page
+  // (shared utils/touchModels.js, priced labels kept). Fetched here so the
+  // generic catalog row can render a dropdown instead of a raw text input.
+  let modelRows = $state([]);
   onMount(() => {
     try {
       pendingFocusKey = sessionStorage.getItem("fp-settings-focus") ?? "";
@@ -105,7 +116,21 @@
     } catch {
       /* storage blocked: no deep focus, page still renders */
     }
+    (async () => {
+      try {
+        const res = await fetchAPI(adminApi.models);
+        modelRows = res?.models ?? [];
+      } catch {
+        modelRows = [];
+      }
+    })();
   });
+  // Global touch options: this IS the global value, so no empty
+  // fallback option — the current value (or catalog default) is selected.
+  // Fail-open to the current value alone while the catalog loads.
+  function globalTouchOpts(entry) {
+    return sharedTouchOptions(modelRows, val(entry.key, entry));
+  }
   $effect(() => {
     const rowCount = rows.length;
     if (!pendingFocusKey || rowCount === 0) return;
@@ -185,7 +210,23 @@
                 {onSaved}
               />
             {/snippet}
-            {#if entry.kind === "bool"}
+            {#if entry.key === "MATURITY_TOUCH_MODEL"}
+              <!-- Global touch default: same priced options as the per-token
+                Touch Model select (shared helper). No empty option — this IS
+                the global value; the current value (or catalog default)
+                stays selected. Saves through the existing row path. -->
+              <select
+                class="fp-select"
+                value={val(entry.key, entry)}
+                aria-label={entry.key}
+                title={val(entry.key, entry)}
+                onchange={(e) => onField(entry.key, e.currentTarget.value)}
+              >
+                {#each globalTouchOpts(entry) as opt (opt.id)}
+                  <option value={opt.id}>{touchLabel(opt)}</option>
+                {/each}
+              </select>
+            {:else if entry.kind === "bool"}
               <ToggleSwitch
                 checked={boolVal(entry.key, entry)}
                 ariaLabel={entry.key}
