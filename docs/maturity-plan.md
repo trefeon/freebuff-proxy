@@ -52,9 +52,9 @@ still needs the §3 ladder experiment + 7-day soak on one token.
 
 - Streak row in CLI style: `18 day streak ●●●●●●●+` (7-dot grid,
   `+` past 7).
-- Perk note (ported logic): below 7 days →
-  `🎁 N more days to unlock +1 bonus session every day`; at 7+ →
-  `🎁 Streak perk: …` (GLM variant only when `accessTier == 'full'`).
+- Milestone note: below 7 days →
+  `{N} more day(s) to complete the 7 day streak`; at 7+ →
+  `7 day streak complete` (no perk promise — streak grants no sessions on metered accounts).
 - Zero/unavailable streak → row hidden (a lapsed user needs a first
   day, not a countdown).
 
