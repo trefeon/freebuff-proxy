@@ -85,21 +85,6 @@ func (s *Server) writeJSONErrorWithHint(w http.ResponseWriter, status int, messa
 	})
 }
 
-// openAIErrorType maps an internal error code to the OpenAI error `type`
-// field at the call sites that route through writeClientError. The shared
-// handler needs a single OpenAI shape; the type is derived from the code
-// so every site keeps its historical categorization.
-func openAIErrorType(status int, code string) string {
-	switch code {
-	case "rate_limit_exceeded":
-		return "rate_limit_exceeded"
-	case "missing_bearer_token":
-		return "invalid_request_error"
-	default:
-		return "upstream_error"
-	}
-}
-
 // writeClientError writes a client-error response in the envelope the
 // request's wire expects: the OpenAI shape for /v1/chat/completions and
 // /v1/responses, the Anthropic shape for /v1/messages. The Retry-After
@@ -119,50 +104,6 @@ func (s *Server) writeClientError(w http.ResponseWriter, r *http.Request, status
 		return
 	}
 	s.writeJSONErrorWithHint(w, status, message, openAIErrorType(status, code), code, "", 0)
-}
-
-func defaultHintForCode(code, message string) string {
-	lowerMsg := strings.ToLower(message)
-	switch {
-	case code == "free_mode_cli_required" || strings.Contains(lowerMsg, "free_mode_cli_required"):
-		return "Upstream free tier gate requires official CLI traffic envelope. See FAQ: https://github.com/trefeon/freebuff-proxy#faq"
-	case code == "free_mode_legacy_luna_agent" || strings.Contains(lowerMsg, "free_mode_legacy_luna_agent"):
-		return "Retired Luna agent — new session required, retry immediately."
-	case code == "free_mode_rate_limited" || strings.Contains(lowerMsg, "free_mode_rate_limited"):
-		return "Free-tier sliding window rate limit (30m). Wait for Retry-After or retry with backoff."
-	case code == "free_mode_run_fanout" || strings.Contains(lowerMsg, "free_mode_run_fanout"):
-		return "Upstream refused the account's concurrent agent runs (proxy-fanout signal). Honor Retry-After; run fewer parallel requests per token, or add another token."
-	case code == "free_mode_invalid_agent_model" || strings.Contains(lowerMsg, "free_mode_invalid_agent_model"):
-		return "The model is not in upstream's free-mode allowlist (retired id or stale registry). Wait for the registry refresh; if it persists, remove the model from MODELS_ALLOW and update."
-	case code == "free_mode_capacity_deferred" || strings.Contains(lowerMsg, "free_mode_capacity_deferred"):
-		return "Free tier at capacity — request deferred. Honor Retry-After (approx 2s for 30m window, 10s default) before retrying."
-	case code == "account_banned" || strings.Contains(lowerMsg, "banned"):
-		return "Account suspended upstream. Token is dead; create a fresh account with an established GitHub login."
-	case code == "country_blocked" || strings.Contains(lowerMsg, "country blocked") || strings.Contains(lowerMsg, "country_blocked"):
-		return "Your egress IP is in an unsupported region. Route traffic through an allowed country (e.g. US/EU/ID/SG)."
-	case code == "out_of_credits" || strings.Contains(lowerMsg, "out of credits"):
-		return "Upstream free-tier credits exhausted. Check COST_MODE in .env — valid values are free or unset; any other value fails startup validation."
-	case code == "upstream_timeout":
-		return "The upstream request exceeded its deadline. Retry, or raise REQUEST_TIMEOUT/SESSION_CALL_TIMEOUT in .env."
-	case code == "upstream_auth_rejected" || code == "invalid_api_key" || strings.Contains(lowerMsg, "invalid api key"):
-		return "Token invalid or expired. Get a fresh token by running scripts/gen-token.cmd (Windows) or scripts/gen-token.sh (Linux/macOS)"
-	case code == "rate_limited":
-		return "Session quota exhausted. Switch your coding harness to an unlimited model: z-ai/glm-5.3-flash or deepseek/deepseek-v4-flash, or wait for reset at Pacific midnight (07:00 UTC)."
-	case code == "model_ip_limited":
-		return "Model restricted on this egress IP/tier. Limited-tier accounts should switch to 'mimo/mimo-v2.5', or route traffic through a Tier-1 country (US/EU/SG)."
-	case code == "ip_capped":
-		return "Too many distinct users on this egress IP (admission-only). Retry after Retry-After or use a different egress."
-	case code == "load_shedding":
-		return "Upstream load shedding — transient minutes-scale saturation. Retry after ~90s."
-	case code == "peak_hours":
-		return "Premium peak-hours window — transient. Retry after ~30m."
-	case code == "missing_bearer_token":
-		return "Bridge mode active: pass your FreeBuff token in Authorization: Bearer <token>"
-	case code == "model_not_found":
-		return "Check available models via GET /v1/models"
-	default:
-		return ""
-	}
 }
 
 // rateLimitWarnShouldLog reports whether the (token, code, window) log
