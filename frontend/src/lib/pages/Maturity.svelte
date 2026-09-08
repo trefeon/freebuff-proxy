@@ -338,7 +338,7 @@
       >
         {#snippet actions()}
           {@const streakTarget = m?.target ?? d.target ?? 7}
-          <span class="flex flex-wrap items-center justify-end gap-1.5">
+          <span class="flex shrink-0 flex-nowrap items-center gap-1.5">
             {#if m?.badge}
               <StatusBadge tone={badgeTone(m.badge)} status={m.badge} />
             {:else}
