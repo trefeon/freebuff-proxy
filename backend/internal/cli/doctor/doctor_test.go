@@ -14,7 +14,6 @@ import (
 
 	"freebuff-proxy/backend/internal/egress"
 	"freebuff-proxy/backend/internal/testutil"
-	"freebuff-proxy/backend/internal/upstream"
 )
 
 // TestDoctorEgressProbeParsesTrace guards the doctor's region probe: a
@@ -145,44 +144,20 @@ func TestSharedSubnetworkAdvisory(t *testing.T) {
 	}
 }
 
-// TestQuotaSuffix pins the -test-token quota readout: a probe response
-// carrying rateLimitsByModel renders " — quota: <recent>/<limit> <period>,
-// resets <resetAt>" (the account's own model wins; the first entry by
-// sorted model id otherwise), and an absent quota map renders "" so the
-// line degrades to a plain "token OK".
+// TestQuotaSuffix pins the ADR-0027 -test-token behavior: the success line
+// carries no session-count readout (no used/limit, period, or reset), even
+// when the probe response carries rateLimitsByModel. Deliberate divergence
+// from the pre-0027 " — quota: 2/5 pacific_day, resets …" rendering,
+// recorded in ADR-0027.
 func TestQuotaSuffix(t *testing.T) {
-	if got := quotaSuffix(nil); got != "" {
-		t.Errorf("quotaSuffix(nil) = %q, want empty", got)
+	got := tokenOKLine()
+	if want := "freebuff-proxy: token OK"; got != want {
+		t.Errorf("tokenOKLine() = %q, want %q", got, want)
 	}
-	if got := quotaSuffix(&upstream.SessionState{}); got != "" {
-		t.Errorf("quotaSuffix(no quota) = %q, want empty", got)
-	}
-
-	now := time.Date(2026, 8, 16, 7, 0, 0, 0, time.UTC)
-	ownModel := "deepseek/deepseek-v4-flash"
-	otherModel := "z-ai/glm-5.2"
-	st := &upstream.SessionState{
-		Model: ownModel,
-		RateLimitsByModel: map[string]upstream.ModelQuota{
-			ownModel:   {Model: ownModel, RecentCount: 2, Limit: 5, Period: "pacific_day", ResetAt: now},
-			otherModel: {Model: otherModel, RecentCount: 4, Limit: 5, Period: "pacific_day", ResetAt: now},
-		},
-	}
-	if got, want := quotaSuffix(st), " — quota: 2/5 pacific_day, resets 2026-08-16T07:00:00Z"; got != want {
-		t.Errorf("quotaSuffix(own model) = %q, want %q", got, want)
-	}
-
-	// Account model absent from the map → deterministic sorted-first pick;
-	// an absent period and resetAt drop those clauses.
-	st2 := &upstream.SessionState{
-		Model: ownModel,
-		RateLimitsByModel: map[string]upstream.ModelQuota{
-			otherModel: {Model: otherModel, RecentCount: 4, Limit: 5, Period: "pacific_week"},
-			"a-model":  {Model: "a-model", RecentCount: 1, Limit: 3},
-		},
-	}
-	if got, want := quotaSuffix(st2), " — quota: 1/3"; got != want {
-		t.Errorf("quotaSuffix(sorted pick) = %q, want %q", got, want)
+	for _, banned := range []string{"quota:", "pacific_day", "pacific_week", "resets", "/5", "/3"} {
+		if strings.Contains(got, banned) {
+			t.Errorf("tokenOKLine() = %q, must not contain count copy %q (ADR-0027)", got, banned)
+		}
 	}
 }
 

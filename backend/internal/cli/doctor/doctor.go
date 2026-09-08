@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -92,9 +91,9 @@ func doctorSummary(passed, warnings, failed int) string {
 }
 
 // RunTokenTest probes the first configured token with a zero-cost GET
-// /api/v1/freebuff/session probe (no session claimed, no daily slot
-// consumed) and exits 0 on success, 1 on failure. Exposed as -test-token
-// for installers and scripts.
+// /api/v1/freebuff/session probe (no session claimed, nothing billed) and
+// exits 0 on success, 1 on failure. Exposed as -test-token for installers
+// and scripts.
 func RunTokenTest(configPath string) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -113,8 +112,7 @@ func RunTokenTest(configPath string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	st, err := client.ProbeAccount(ctx)
-	if err != nil {
+	if _, err := client.ProbeAccount(ctx); err != nil {
 		if errors.Is(err, upstream.ErrNoActiveSession) {
 			fmt.Println("freebuff-proxy: token OK (no active session)")
 			os.Exit(0)
@@ -122,37 +120,15 @@ func RunTokenTest(configPath string) {
 		fmt.Fprintf(os.Stderr, "freebuff-proxy: -test-token: token rejected upstream: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("freebuff-proxy: token OK%s\n", quotaSuffix(st))
+	fmt.Println(tokenOKLine())
 	os.Exit(0)
 }
 
-// quotaSuffix renders the live session quota read back by a successful
-// account probe: " — quota: 4/5 pacific_day, resets 2026-08-16T07:00:00Z"
-// (the account's own model when present in rateLimitsByModel, else the
-// first entry by sorted model id). Returns "" when the probe response
-// carried no quota — compact responses omit rateLimitsByModel, so the line
-// degrades to a plain "token OK".
-func quotaSuffix(st *upstream.SessionState) string {
-	if st == nil || len(st.RateLimitsByModel) == 0 {
-		return ""
-	}
-	q, ok := st.RateLimitsByModel[st.Model]
-	if !ok {
-		ids := make([]string, 0, len(st.RateLimitsByModel))
-		for id := range st.RateLimitsByModel {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		q = st.RateLimitsByModel[ids[0]]
-	}
-	s := fmt.Sprintf(" — quota: %g/%g", q.RecentCount, q.Limit)
-	if q.Period != "" {
-		s += " " + q.Period
-	}
-	if !q.ResetAt.IsZero() {
-		s += fmt.Sprintf(", resets %s", q.ResetAt.Format(time.RFC3339))
-	}
-	return s
+// tokenOKLine renders the -test-token success line. The probe result is
+// accepted but never rendered: session-count copy retired (ADR-0027) —
+// the line carries no used/limit, period, or reset readout.
+func tokenOKLine() string {
+	return "freebuff-proxy: token OK"
 }
 
 // Run drives the -doctor diagnostics and exits.
@@ -257,10 +233,10 @@ func Run(configPath string) {
 	}
 
 	// Token validity probe: one zero-cost GET /api/v1/freebuff/session probe
-	// per configured token (no session claimed, no daily slot consumed). This
+	// per configured token (no session claimed, nothing billed). This
 	// is the check that catches expired/revoked tokens before the first chat
 	// 401s. Probes always run: unlike the old session-handshake probes they
-	// never touch the session create API, so there is no allowance cost to
+	// never touch the session create API, so there is no session cost to
 	// opt out of.
 	if !cfg.BridgeMode() {
 		warn(fmt.Sprintf("Probing %d token(s) (zero-cost GET probes)", len(cfg.AuthTokens)))

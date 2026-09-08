@@ -266,8 +266,8 @@ func (m *Manager) asyncReAdmit(model string) {
 
 // recordReAdmitTrigger remembers a pre-emptive re-admit trigger (issue #99)
 // for the re-admit storm summary's burned_slots count: a trigger whose
-// session is later invalidated burned a daily session slot. Caller must NOT
-// hold m.mu.
+// session is later invalidated burned a fresh billable admission. Caller
+// must NOT hold m.mu.
 func (m *Manager) recordReAdmitTrigger() {
 	m.mu.Lock()
 	now := m.now()
@@ -326,9 +326,9 @@ func (m *Manager) recordInvalidation(reason string) {
 		}
 	}
 	// burned_slots: pre-emptive re-admit triggers within the same window —
-	// each one whose session the storm then invalidated burned a daily slot.
-	// The trigger list is pruned to the window above, so its length is the
-	// count.
+	// each one whose session the storm then invalidated burned a fresh
+	// billable admission. The trigger list is pruned to the window above,
+	// so its length is the count.
 	burned := len(m.snap.reAdmitTriggers)
 	m.mu.Unlock()
 
@@ -402,9 +402,9 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			st, err = m.client.GetSession(ctx, cached.instanceID)
 		} else if cached == nil {
 			// Fresh manager (first call or restart): resume a persisted
-			// session before creating a new one. A persisted active slot
+			// session before creating a new one. A persisted active session
 			// that is still alive upstream (and model-compatible) is adopted
-			// instead of burning a fresh session quota.
+			// instead of admitting a fresh billable one.
 			st, err = m.pollPersisted(ctx, targetModel)
 			if st == nil && err == nil {
 				st, err = m.adoptOrCreate(ctx, targetModel)

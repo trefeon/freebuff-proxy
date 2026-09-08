@@ -61,9 +61,9 @@ const (
 
 	// Re-admit storm detector: more than stormThreshold terminal
 	// session events within stormWindow is a session re-admit storm — each
-	// invalidation is followed by a fresh admission that burns a daily
-	// session slot, so the burst is surfaced once (one Info summary) and
-	// re-armed only after a full quiet window passes.
+	// invalidation is followed by a fresh billable admission, so the burst
+	// is surfaced once (one Info summary) and re-armed only after a full
+	// quiet window passes.
 	stormWindow    = 60 * time.Second
 	stormThreshold = 3
 )
@@ -189,7 +189,7 @@ type cachedState struct {
 // stays alive and chat passes — reference/freebuff freebuff-session.ts). The
 // instance-id test guards the grace extension: an ended row whose instance id
 // is gone cannot be ridden, and an expired active cache is only reusable
-// while its slot survives upstream.
+// while the session survives upstream.
 func sessionUsable(s *cachedState) bool {
 	if s == nil || s.instanceID == "" {
 		return false
@@ -206,8 +206,8 @@ func sessionUsable(s *cachedState) bool {
 //
 // A nil cs removes the store entry conditionally on the instance id being
 // dropped: the entry is only deleted while it still belongs to the session
-// being invalidated, so a stale commit cannot clobber a persisted slot that
-// was replaced concurrently (e.g. a restart re-adopting a different one).
+// being invalidated, so a stale commit cannot clobber a persisted session
+// that was replaced concurrently (e.g. a restart re-adopting a different one).
 func (m *Manager) commit(cs *cachedState) {
 	oldInstance := ""
 	if m.state != nil {

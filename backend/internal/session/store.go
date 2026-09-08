@@ -86,10 +86,10 @@ type storeFile struct {
 }
 
 // Store persists cached session state to a single JSON file so a proxy
-// restart can resume an unexpired upstream session instead of burning a new
-// session slot. Keys are token hashes (upstream.Client.TokenKey), never raw
-// tokens. All methods are safe for concurrent use; writes are atomic
-// (temp file + rename) and the file is created with mode 0600.
+// restart can resume an unexpired upstream session instead of admitting a
+// fresh billable one. Keys are token hashes (upstream.Client.TokenKey),
+// never raw tokens. All methods are safe for concurrent use; writes are
+// atomic (temp file + rename) and the file is created with mode 0600.
 type Store struct {
 	path string
 
@@ -109,7 +109,7 @@ type Store struct {
 	// them back over the disk content on the next successful reload so the
 	// in-window updates survive instead of being silently discarded by the
 	// rebuild (a lost update would leave a restart unable to resume the
-	// session, burning a daily slot). Guarded by mu.
+	// session, forcing a fresh billable admission). Guarded by mu.
 	pending map[string]*persistedState
 }
 
@@ -504,8 +504,8 @@ func (s *Store) recordPendingLocked(key string, ps *persistedState) {
 // was never flushed. Without this, a Save/Remove made during the failure
 // window would be silently discarded by the reload, and the following flush
 // would persist WITHOUT it — a restart then fails to resume that session
-// and burns a daily slot. The merged map is flushed immediately so the disk
-// catches up. Caller holds s.mu.
+// and forces a fresh billable admission. The merged map is flushed
+// immediately so the disk catches up. Caller holds s.mu.
 func (s *Store) applyPendingLocked() {
 	if len(s.pending) == 0 {
 		return
