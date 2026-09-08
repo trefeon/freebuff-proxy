@@ -1,9 +1,9 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
-  "upstream_sha": "a28c7849b32aa0b9b20456917f3e13eea9587e72",
-  "checked_at": "2026-09-08T08:10:50Z",
-  "wiregen_sha": "abd1eed4ab8de4111232935a21962b5a03ff5a33",
-  "vendor_version": "0.0.171",
+  "upstream_sha": "f5dedead553e3bdb4526db049ee4ab527070a6f0",
+  "checked_at": "2026-09-08T21:10:47Z",
+  "wiregen_sha": "2e57674fc24e8f857cd9e4f8c690f10e6e5342d1",
+  "vendor_version": "0.0.172",
   "vendor_version_pinned": "0.0.171",
   "files": [
     {"group":"registry","file":"common/src/constants/free-agents.ts","pinned_sha":"e2077f92c632","vendor_sha":"e2077f92c632","status":"SAME"},
