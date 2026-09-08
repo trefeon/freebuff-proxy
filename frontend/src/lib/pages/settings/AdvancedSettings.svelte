@@ -181,6 +181,7 @@
               type="text"
               class="fp-input fp-mono"
               value={val(entry.key, entry)}
+              title={val(entry.key, entry)}
               aria-label={entry.key}
               placeholder={entry.default ?? ""}
               oninput={(e) => onField(entry.key, e.currentTarget.value)}
