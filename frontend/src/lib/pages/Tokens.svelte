@@ -767,7 +767,7 @@
               >{$tr("Drain Mode (Default & Recommended):")}</strong
             >
             {$tr(
-              "Exhausts one account completely (e.g. 5/5 Luna sessions) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
+              "Sticks to one account until it is unfit (cooldown, quota, or ban) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
             )}
           </p>
         {:else if tokenRotation === "round_robin"}
@@ -776,7 +776,7 @@
               >{$tr("Round-Robin Mode:")}</strong
             >
             {$tr(
-              "Rotates to the next token on every single session (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
+              "Rotates to the next token on every request (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
             )}
           </p>
         {:else if tokenRotation === "least_used"}

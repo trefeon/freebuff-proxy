@@ -60,7 +60,6 @@
     "has_referral",
     "referral_code",
     "referral_qualified_count",
-    "referral_sessions_left",
     "referral_github_linked",
     "referral_reset_at",
     "allowed_models",

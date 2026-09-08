@@ -250,8 +250,14 @@
       )}
     </p>
     <ul class="list-disc list-inside space-y-1 text-[var(--fp-muted)] pl-0.5">
-      <li>{$tr("A fresh pool every day – spend it on any model.")}</li>
-      <li>{$tr("No more weekly or monthly session caps.")}</li>
+      <li>
+        {$tr("A fresh Freebucks pool every day – spend it on any model.")}
+      </li>
+      <li>
+        {$tr(
+          "No per-model caps — every served row draws from the same daily pool.",
+        )}
+      </li>
       <li>
         {$tr(
           "Each model shows its price per hour; the list runs cheapest first.",
@@ -260,7 +266,7 @@
     </ul>
     <p class="text-[11px] text-[var(--fp-muted)] font-mono pt-0.5">
       {$tr(
-        "Codebuff is transitioning accounts from legacy session pools to daily Freebucks allowances. Per-account Daily pools and model pricing below are live upstream values.",
+        "Accounts run on daily Freebucks allowances. Per-account daily pools and model pricing below are live upstream values.",
       )}
     </p>
   </div>
@@ -321,16 +327,13 @@
                 </div>
                 {#if token.streak < 7}
                   <p class="text-xs text-[var(--fp-muted)]">
-                    🎁 {$tr(
-                      "{count} more day(s) to unlock +1 bonus session every day",
-                      { count: 7 - token.streak },
-                    )}
+                    {$tr("{count} more day(s) to complete the 7 day streak", {
+                      count: 7 - token.streak,
+                    })}
                   </p>
                 {:else}
                   <p class="text-xs text-emerald-400 font-medium">
-                    🎁 {$tr(
-                      "Streak perk: +1 bonus session every day + 1 reward session each day",
-                    )}
+                    {$tr("7 day streak complete")}
                   </p>
                 {/if}
               </div>

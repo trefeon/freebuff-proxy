@@ -881,13 +881,11 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#quota");
     await expect(page.getByText("5 day streak")).toBeVisible();
     await expect(page.getByText("Active today")).toBeVisible();
-    await expect(page.getByText(/2 more day.*to unlock/)).toBeVisible();
+    await expect(page.getByText(/2 more day.*to complete/)).toBeVisible();
 
     await expect(page.getByText("12 day streak")).toBeVisible();
     await expect(page.getByText("Needs activity today")).toBeVisible();
-    await expect(
-      page.getByText("Streak perk: +1 bonus session every day"),
-    ).toBeVisible();
+    await expect(page.getByText("7 day streak complete")).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------
