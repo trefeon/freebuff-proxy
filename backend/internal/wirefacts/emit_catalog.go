@@ -10,9 +10,9 @@
 // What flows from the snapshots: SUPPORTED order and row ids, Served
 // (FREEBUFF_MODELS membership), Paused (FREEBUFF_PAUSED_FREE_MODEL_IDS),
 // Premium (served rows mirror the resolved row flag; paused rows never are),
-// per-model count caps, context windows, effort ladders, display names,
+// context windows, effort ladders, display names,
 // taglines, training notices, multimodal/isNew badges, and the default,
-// fallback, session-length, premium-limit and context-default scalars.
+// fallback, session-length and context-default scalars.
 //
 // What stays curated in pinned tables below (with the snapshot precondition
 // each pin asserts): the display-trim set (withdrawn/never-served rows drop
@@ -56,28 +56,21 @@ func EmitCatalog(upstreamSHA, registryDir string, out io.Writer) error {
 
 // catalogInputs are the parsed snapshot facts every row and scalar derives from.
 type catalogInputs struct {
-	commit       string
-	ids          map[string]string   // const/member refs -> wire id or bool word
-	bools        map[string]bool     // UI flag consts
-	strArrays    map[string][]string // effort ladders (SUPPORTED/MODELS/PAUSED kept separate)
-	rowNames     []string            // SUPPORTED_FREEBUFF_MODELS order
-	served       map[string]bool     // FREEBUFF_MODELS membership by row name
-	pausedNames  []string            // FREEBUFF_PAUSED_FREE_MODEL_IDS row refs
-	fields       map[string]map[string]string
-	ctx          map[string]int    // wire id -> context window
-	caps         map[string]capEnt // wire id -> count cap
-	defaultID    string
-	fallbackID   string
-	glm52ID      string
-	glm53ID      string
-	solarID      string
-	premiumLimit int
-	defaultCtx   int
-}
-
-type capEnt struct {
-	limit int
-	pool  string
+	commit      string
+	ids         map[string]string   // const/member refs -> wire id or bool word
+	bools       map[string]bool     // UI flag consts
+	strArrays   map[string][]string // effort ladders (SUPPORTED/MODELS/PAUSED kept separate)
+	rowNames    []string            // SUPPORTED_FREEBUFF_MODELS order
+	served      map[string]bool     // FREEBUFF_MODELS membership by row name
+	pausedNames []string            // FREEBUFF_PAUSED_FREE_MODEL_IDS row refs
+	fields      map[string]map[string]string
+	ctx         map[string]int // wire id -> context window
+	defaultID   string
+	fallbackID  string
+	glm52ID     string
+	glm53ID     string
+	solarID     string
+	defaultCtx  int
 }
 
 func loadCatalogInputs(registryDir, commit string) (*catalogInputs, error) {
@@ -108,7 +101,6 @@ func loadCatalogInputs(registryDir, commit string) (*catalogInputs, error) {
 		commit: commit,
 		served: map[string]bool{},
 		ctx:    map[string]int{},
-		caps:   map[string]capEnt{},
 	}
 	c.ids = parseTSStrings(idsSrc + "\n" + models)
 	c.bools = parseTSBools(models)
@@ -174,15 +166,6 @@ func loadCatalogInputs(registryDir, commit string) (*catalogInputs, error) {
 		v, _ := strconv.Atoi(strings.ReplaceAll(m[2], "_", ""))
 		c.ctx[id] = v
 	}
-	// Per-model count caps: [REF]: { limit: N, pool: 'P' } (empty at this pin).
-	for _, m := range regexp.MustCompile(`\[(\w+)\]:\s*\{[\s\S]*?limit:\s*(\d+),[\s\S]*?pool:\s*'([^']+)'`).FindAllStringSubmatch(models, -1) {
-		id, err := resolve(m[1], "session cap key")
-		if err != nil {
-			return nil, err
-		}
-		v, _ := strconv.Atoi(m[2])
-		c.caps[id] = capEnt{limit: v, pool: m[3]}
-	}
 	// Scalar ids.
 	for _, s := range []struct {
 		dst  *string
@@ -208,11 +191,6 @@ func loadCatalogInputs(registryDir, commit string) (*catalogInputs, error) {
 			return nil, err
 		}
 		*s.dst = v
-	}
-	if m := regexp.MustCompile(`export const FREEBUFF_PREMIUM_SESSION_LIMIT = (\d+)`).FindStringSubmatch(models); m != nil {
-		c.premiumLimit, _ = strconv.Atoi(m[1])
-	} else {
-		return nil, fmt.Errorf("wiregen: freebuff-models.ts: no FREEBUFF_PREMIUM_SESSION_LIMIT at upstream commit %s", commit)
 	}
 	// Reward session length must stay exactly one hour; anything else is a
 	// deliberate revisit, not a silent carry.
@@ -282,8 +260,6 @@ type catalogRow struct {
 	badges                       []string
 	served, premium              bool
 	pausedReplacement            string
-	cap                          int
-	capPool                      string
 	ctx                          int
 	efforts                      []string
 	hasEfforts                   bool
@@ -328,9 +304,6 @@ func buildCatalogRows(c *catalogInputs) ([]catalogRow, error) {
 				}
 				r.premium = b == "true"
 			}
-		}
-		if e, ok := c.caps[id]; ok {
-			r.cap, r.capPool = e.limit, e.pool
 		}
 		if v, ok := c.ctx[id]; ok {
 			r.ctx = v
@@ -831,10 +804,6 @@ type ModelInfo struct {
 	// own global pool (FREEBUFF_LIMITED_OFFER_MODEL_IDS), not the shared
 	// pool, so it is NOT marked Premium here.
 	Premium bool
-	// Cap is the FREEBUFF_PER_MODEL_SESSION_CAPS daily ceiling (0 = none).
-	Cap int
-	// CapPool is the upstream pool id for Cap ("" when uncapped).
-	CapPool string
 	// ContextWindow mirrors FREEBUFF_MODEL_CONTEXT_WINDOWS in tokens; 0
 	// means upstream falls back to DefaultContextWindow.
 	ContextWindow int
@@ -875,9 +844,6 @@ var Catalog = []ModelInfo{
 		}
 		if r.hasEfforts {
 			fmt.Fprintf(&b, ",\n\t\tEfforts: []string{%s}", quotedList(r.efforts))
-		}
-		if r.cap != 0 {
-			fmt.Fprintf(&b, ",\n\t\tCap: %d,\n\t\tCapPool: %q", r.cap, r.capPool)
 		}
 		if r.pausedReplacement != "" {
 			fmt.Fprintf(&b, ",\n\t\tPausedReplacement: %q", r.pausedReplacement)
@@ -920,9 +886,6 @@ const Glm53ModelID = %q
 // unmetered at full access (entitlement fullAccess.premium=false).
 const SolarPro4ModelID = %q
 
-// PremiumSessionLimit mirrors upstream FREEBUFF_PREMIUM_SESSION_LIMIT.
-const PremiumSessionLimit = %d
-
 // GLMSessionLength mirrors upstream FREEBUFF_REWARD_SESSION_LENGTH_MS (the
 // earned-reward session pool GLM 5.2 admits from; the older
 // FREEBUFF_GLM_V52_SESSION_LENGTH_MS name is gone upstream): GLM sessions
@@ -932,7 +895,7 @@ const GLMSessionLength = time.Hour
 // DefaultContextWindow mirrors upstream FREEBUFF_DEFAULT_CONTEXT_WINDOW:
 // assumed for any model absent from FREEBUFF_MODEL_CONTEXT_WINDOWS.
 const DefaultContextWindow = %d
-`, c.defaultID, c.fallbackID, c.fallbackID, c.glm52ID, c.glm53ID, c.solarID, c.premiumLimit, c.defaultCtx)
+`, c.defaultID, c.fallbackID, c.fallbackID, c.glm52ID, c.glm53ID, c.solarID, c.defaultCtx)
 	return []byte(b.String())
 }
 

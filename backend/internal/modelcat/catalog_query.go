@@ -89,7 +89,7 @@ func WithdrawnModelMessage(id string) string {
 // (FREEBUFF_PREMIUM_MODEL_IDS)
 func IsPremium(id string) bool {
 	if m := byID(id); m != nil {
-		return m.Premium || m.Cap > 0
+		return m.Premium
 	}
 	return false
 }
@@ -107,15 +107,6 @@ func SharedPremiumModels() []string {
 		}
 	}
 	return out
-}
-
-// PerModelCap returns the FREEBUFF_PER_MODEL_SESSION_CAPS ceiling and pool id
-// for a model (0, "" when the model has no cap).
-func PerModelCap(id string) (limit int, pool string) {
-	if m := byID(id); m != nil && m.Cap > 0 {
-		return m.Cap, m.CapPool
-	}
-	return 0, ""
 }
 
 // ContextWindow returns the model's context window in tokens, or

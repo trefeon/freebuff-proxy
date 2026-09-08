@@ -13,7 +13,6 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
-	"freebuff-proxy/backend/internal/upstream"
 )
 
 // futureReset is a ResetAt ~1h out for quota fixtures.
@@ -44,46 +43,51 @@ func admitBoth(t *testing.T, p *Pool, model string) {
 }
 
 func TestAcquireQuotaAwareOrdering(t *testing.T) {
+	// ADR-0027: cached session-count windows no longer rank acquisition.
+	// Token 1 reports the smaller remaining count (2 vs 8), yet the order
+	// still follows the pass order from the round-robin start and no
+	// token is reported limited — counts are envelope data only.
 	reset := futureReset()
 	mock0 := testutil.NewMock()
 	defer mock0.Close()
-	mock0.RateLimitsByModel = quotaFor(modelA, 10, 8, reset) // remaining 2
+	mock0.RateLimitsByModel = quotaFor(modelA, 10, 2, reset) // remaining 8
 	mock1 := testutil.NewMock()
 	defer mock1.Close()
-	mock1.RateLimitsByModel = quotaFor(modelA, 10, 2, reset) // remaining 8
+	mock1.RateLimitsByModel = quotaFor(modelA, 10, 8, reset) // remaining 2
 	p := newTestPool(t, mock0, mock1)
 	admitBoth(t, p, modelA)
 
-	// Both tokens hot with KNOWN positive remaining quota: smallest
-	// remaining (token 0, rem 2) must be tried first.
 	toks := p.roster.Load()
 	order, limited := p.acquireOrder(toks, 0, modelA)
 	if len(limited) != 0 {
 		t.Fatalf("unexpected quota-limited errors: %v", limited)
 	}
 	if len(order) < 2 || order[0] != 0 {
-		t.Fatalf("order = %v, want token 0 (smallest remaining) first", order)
+		t.Fatalf("order = %v, want token 0 first (cached counts ignored)", order)
 	}
-	// Token 1 must follow (larger remaining) before any cold token.
+	// Token 1 follows in pass order, not by smallest remaining.
 	if order[1] != 1 {
 		t.Errorf("order[1] = %d, want 1", order[1])
 	}
 }
 
 func TestAcquireKnownQuotaBeforeUnknown(t *testing.T) {
+	// ADR-0027: known-vs-unknown cached counts no longer rank acquisition.
+	// Token 1 reports a known window while token 0 reports none, yet the
+	// order still follows the pass order from the round-robin start.
 	reset := futureReset()
 	mock0 := testutil.NewMock()
-	defer mock0.Close()
-	mock0.RateLimitsByModel = quotaFor(modelA, 10, 8, reset) // known, rem 2
+	defer mock0.Close() // no quota → unknown
 	mock1 := testutil.NewMock()
-	defer mock1.Close() // no quota → unknown
+	defer mock1.Close()
+	mock1.RateLimitsByModel = quotaFor(modelA, 10, 8, reset) // known, rem 2
 	p := newTestPool(t, mock0, mock1)
 	admitBoth(t, p, modelA)
 
 	toks := p.roster.Load()
 	order, _ := p.acquireOrder(toks, 0, modelA)
 	if len(order) < 2 || order[0] != 0 {
-		t.Fatalf("order = %v, want known-quota token 0 first", order)
+		t.Fatalf("order = %v, want unknown-quota token 0 first (counts ignored)", order)
 	}
 }
 
@@ -125,11 +129,13 @@ func TestAcquireCappedHotReusesLiveSession(t *testing.T) {
 }
 
 func TestAcquireCappedMismatchedStill429(t *testing.T) {
-	// Capped quota + live session for a DIFFERENT model: serving would
-	// require release + fresh admission (a quota-burning POST), so Acquire
-	// must still surface 429 without attempting the switch. Luna has no
-	// QUOTA_FALLBACK_MODELS mapping in the test config, so no fallback
-	// fires either.
+	// ADR-0027: exhausted cached counts no longer refuse the switch. A
+	// token holding a live session for a DIFFERENT model attempts the
+	// release + fresh admission like an unmetered row, and the lease is
+	// granted when upstream admits. Luna has no QUOTA_FALLBACK_MODELS
+	// mapping in the test config, so no fallback fires either. (Name kept
+	// per the dequota contract; the 429 it pinned now only comes from a
+	// live upstream refusal.)
 	const luna = "openai/gpt-5.6-luna"
 	reset := futureReset()
 	newCappedMock := func() *testutil.MockUpstream {
@@ -148,17 +154,17 @@ func TestAcquireCappedMismatchedStill429(t *testing.T) {
 	p := newTestPool(t, mock0, mock1)
 	admitBoth(t, p, modelA)
 
-	_, err := p.Acquire(context.Background(), luna)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("Acquire err = %v, want *RateLimitError", err)
+	lease, err := p.Acquire(context.Background(), luna)
+	if err != nil {
+		t.Fatalf("Acquire on exhausted cached counts = %v, want switch-admission success", err)
 	}
-	if rle.Limit != 5 || rle.RecentCount != 5 {
-		t.Errorf("rate limit = %g/%g, want 5/5", rle.RecentCount, rle.Limit)
+	defer p.LeaseRelease(lease)
+	if lease.Model != luna {
+		t.Errorf("lease.Model = %q, want %q", lease.Model, luna)
 	}
-	// No switch admission was attempted on either token.
-	if mock0.SessionCreates != 1 || mock1.SessionCreates != 1 {
-		t.Errorf("session creates = %d/%d, want 1/1 (no switch admission)", mock0.SessionCreates, mock1.SessionCreates)
+	// Exactly one token attempted the switch admission.
+	if got := mock0.SessionCreates + mock1.SessionCreates; got != 3 {
+		t.Errorf("session creates = %d, want 3 (2 admits + 1 switch attempt)", got)
 	}
 }
 

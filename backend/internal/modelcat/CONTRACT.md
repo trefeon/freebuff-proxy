@@ -4,14 +4,14 @@ Task-local contract for agents modifying this package. Load before editing any f
 
 ## Purpose
 
-Single source of truth for per-model facts: served/paused/premium, caps and cap pools, context windows, reasoning-effort ladders, display metadata. Consumers (`registry`, `convert`, UI) derive; nothing else owns a model table.
+Single source of truth for per-model facts: served/paused/premium, context windows, reasoning-effort ladders, display metadata. Consumers (`registry`, `convert`, UI) derive; nothing else owns a model table. Session-count facts (per-model caps, the premium session limit) are retired upstream and no longer mirrored here (ADR-0027).
 
 ## Public API (stable surface)
 
-- Facts: `ModelInfo`, `IsServed`, `IsPaused`, `PausedReplacement`, `WithdrawnModelMessage`, `IsPremium`, `SharedPremiumModels`, `PerModelCap(id) (limit, pool)`, `ContextWindow`, `Efforts`, `IsMediumlessLadderModel`, `IsStrictReasoningModel`, `IsLimitedTierAllowed`.
+- Facts: `ModelInfo`, `IsServed`, `IsPaused`, `PausedReplacement`, `WithdrawnModelMessage`, `IsPremium`, `SharedPremiumModels`, `ContextWindow`, `Efforts`, `IsMediumlessLadderModel`, `IsStrictReasoningModel`, `IsLimitedTierAllowed`.
 - Sets: `PausedMap`, `ServedMap`, `ServedIDs`, `ServedHelpText`.
 - Display: `DisplayName`, `Tagline`, `Notice`, `Badges`.
-- Defaults: `DefaultModelID` (z-ai/glm-5.3-flash), `FallbackModelID` (mimo/mimo-v2.5), `LimitedModelID`, `PremiumSessionLimit` (5), `GLMSessionLength` (1h).
+- Defaults: `DefaultModelID` (z-ai/glm-5.3-flash), `FallbackModelID` (mimo/mimo-v2.5), `LimitedModelID`, `GLMSessionLength` (1h).
 
 ## Allowed dependencies
 

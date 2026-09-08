@@ -22,7 +22,11 @@ import (
 // TestUnentitledPoolTokenGlmQuotaFallback verifies that requesting z-ai/glm-5.2
 // on a pool where no token holds referral entitlement automatically quota-falls
 // back to deepseek/deepseek-v4-flash without sending any upstream session create
-// for GLM 5.2 (which upstream punishes with 403 account_banned).
+// for GLM 5.2 (which upstream punishes with 403 account_banned). ADR-0027
+// mechanism note: the pool no longer pre-gates referral models — it attempts
+// the admission and the SESSION admission gate (session package, kept)
+// refuses unentitled GLM with a quota-shaped error, which the pool's live-
+// refusal fallback then routes to flash. Observable behavior unchanged.
 func TestUnentitledPoolTokenGlmQuotaFallback(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -36,10 +40,9 @@ func TestUnentitledPoolTokenGlmQuotaFallback(t *testing.T) {
 		case "deepseek/deepseek-v4-flash":
 			flashCreates.Add(1)
 		}
-		expiresAt := time.Now().Add(30 * time.Minute).UTC().Format("2006-01-02T15:04:05.000Z07:00")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-flash-123","model":"deepseek/deepseek-v4-flash","expiresAt":"`+expiresAt+`"}`)
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1"}`)
 	}
 
 	p := newTestPoolCfg(t, func(c *config.Config) {
@@ -67,40 +70,33 @@ func TestUnentitledPoolTokenGlmQuotaFallback(t *testing.T) {
 }
 
 // TestUnentitledPoolTokenGlmRefusalWithoutFallback verifies that when
-// QUOTA_FALLBACK_MODELS is explicitly empty, an unentitled request for
-// z-ai/glm-5.2 returns a clean 429 rate limit error without sending any
-// upstream session create.
+// QUOTA_FALLBACK_MODELS is explicitly empty, a LIVE upstream refusal for
+// z-ai/glm-5.2 surfaces as an honest 429 after the admission is attempted —
+// the pool no longer pre-refuses unentitled tokens locally. (ADR-0027:
+// admit like unmetered until upstream refuses.)
 func TestUnentitledPoolTokenGlmRefusalWithoutFallback(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-
-	var glmCreates atomic.Int32
-	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("x-freebuff-model") == "z-ai/glm-5.2" {
-			glmCreates.Add(1)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
-		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1"}`)
-	}
+	mock.RateLimit = true // live upstream 429 on session admission
 
 	p := newTestPoolCfg(t, func(c *config.Config) {
 		c.QuotaFallbackModels = map[string]string{} // disable quota fallback
 	}, mock)
 
+	before := mock.RequestCount()
 	_, err := p.Acquire(context.Background(), "z-ai/glm-5.2")
 	if err == nil {
-		t.Fatal("Acquire(z-ai/glm-5.2) succeeded, want 429 rate-limit error")
+		t.Fatal("Acquire(z-ai/glm-5.2) succeeded against a refusing upstream, want 429 rate-limit error")
 	}
 	var rle *upstream.RateLimitError
 	if !errors.As(err, &rle) {
-		t.Fatalf("err = %v, want *upstream.RateLimitError", err)
+		t.Fatalf("err = %v, want *upstream.RateLimitError (honest upstream refusal)", err)
 	}
-	if !strings.Contains(rle.Body, "referral entitlement required") && !strings.Contains(rle.Body, "no referral quota") {
-		t.Errorf("rle.Body = %q, want referral entitlement notice", rle.Body)
+	if strings.Contains(rle.Body, "referral entitlement required") {
+		t.Errorf("rle.Body = %q, want live refusal, not the retired local pre-gate", rle.Body)
 	}
-	if glmCreates.Load() != 0 {
-		t.Errorf("glmCreates = %d, want 0", glmCreates.Load())
+	if after := mock.RequestCount(); after <= before {
+		t.Errorf("upstream requests = %d, want > %d (admission attempted before refusing)", after, before)
 	}
 }
 
@@ -152,7 +148,11 @@ func TestEntitledPoolTokenWithGlmPromo(t *testing.T) {
 
 // TestBridgeUnentitledGlmFallback verifies that in bridge mode an unentitled
 // client token falls back to deepseek/deepseek-v4-flash via QuotaFallbackModels
-// without attempting an unentitled upstream GLM create.
+// without attempting an unentitled upstream GLM create. ADR-0027 mechanism
+// note: the pool no longer pre-gates referral models — the SESSION admission
+// gate (session package, kept) refuses unentitled GLM with a quota-shaped
+// error, which the bridge live-refusal fallback routes to flash.
+// Observable behavior unchanged.
 func TestBridgeUnentitledGlmFallback(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()

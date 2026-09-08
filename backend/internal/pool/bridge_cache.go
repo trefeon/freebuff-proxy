@@ -364,7 +364,6 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			}
 		}
 		banType, bannedUntil := banView(eRuns.BanError, eRuns.BannedUntil)
-		premium := premiumSnapshotFromQuotaMap(quotaByModel)
 		snaps = append(snaps, BridgeTokenSnapshot{
 			Key:               ke.key,
 			LastUsed:          ke.lastUsed,
@@ -380,7 +379,6 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			SpendPct:          spendPct,
 			RequestsPerMinute: ke.rpm,
 			RequestsPerDay:    ke.rpd,
-			PremiumQuota:      premium,
 			Freebucks:         sess.Freebucks,
 			FreeWindows:       sess.FreeWindows,
 			Subscription:      sess.Subscription,

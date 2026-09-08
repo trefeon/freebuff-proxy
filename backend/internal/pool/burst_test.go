@@ -35,15 +35,20 @@ func newBurstPool(t *testing.T, mocks ...*testutil.MockUpstream) *Pool {
 	}, mocks...)
 }
 
-// seedBurstQuota installs a known session quota (as a manual probe would)
-// with remaining = Limit - RecentCount and a future reset, so least_used
-// ranks deterministically.
+// seedBurstQuota installs a known Freebucks position (as a manual probe
+// would) with spendable balance = remaining and a price for modelA, so
+// least_used ranks deterministically by balance (ADR-0027: session-count
+// remaining is envelope data, never ranking input). Balances cover the
+// price, so no token is Freebucks-capped.
 func seedBurstQuota(t *testing.T, p *Pool, token, remaining int, reset time.Time) {
 	t.Helper()
 	toks := p.roster.Load()
 	(*toks)[token].session.UpdateQuotaFromProbe(&upstream.SessionState{
-		RateLimitsByModel: map[string]upstream.ModelQuota{
-			modelA: {Model: modelA, Limit: 5, RecentCount: float64(5 - remaining), ResetAt: reset, Period: "pacific_day"},
+		Freebucks: &upstream.FreebucksInfo{
+			Balance: float64(remaining),
+			Daily:   upstream.FreebucksWindow{Limit: 20, Spent: 0, Remaining: 20, ResetAt: reset},
+			Wallet:  upstream.FreebucksWallet{},
+			Prices:  map[string]float64{modelA: 1},
 		},
 	})
 }
@@ -131,7 +136,7 @@ func TestBurstTripSwitchesOrder(t *testing.T) {
 	}
 	p := newBurstPool(t, mocks...)
 	toks := p.roster.Load()
-	// Least_used ranks tok2 (rem 4) > tok1 (rem 3) > tok0 (rem 1).
+	// Least_used ranks tok2 (balance 4) > tok1 (balance 3) > tok0 (balance 1).
 	seedBurstQuotas(t, p, 1, 3, 4)
 
 	// Steady: cold drain from the round-robin start.
@@ -261,7 +266,7 @@ func TestBurstGrantsDriveTrip(t *testing.T) {
 		t.Fatal("burstOn = false after 2 grants over threshold 1, want grant-path recording")
 	}
 
-	// Seed differing quotas AFTER the grants (a live admission would
+	// Seed differing balances AFTER the grants (a live admission would
 	// refresh them from upstream): tok2 fullest, tok0 thinnest.
 	seedBurstQuotas(t, p, 1, 2, 4)
 	toks := p.roster.Load()

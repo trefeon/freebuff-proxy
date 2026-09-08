@@ -15,7 +15,7 @@ Multi-token front door for chat requests. Owns token selection order, session ad
 - Cooldowns: `CooldownToken*` / `CooldownLease*` / `CooldownBridge*` (auth / rate-limit / IP-capped / ban / country-blocked); `UnlockToken`, `LockToken`, `UnlockLockToken`, `LockBridgeEntry`, `UnlockBridgeEntry`.
 - Probes: `ProbeNewToken(ctx, token)`, `ProbeToken(ctx, idx)`.
 - Token management: `AddToken`, `RemoveLastToken`, `RemoveTokenAt`, `RemoveAllTokens`, `SwapTokens`, `MoveToken`, `TokenCount`, `SetTokenAccountInfo`, `EnsureTokenSession`.
-- Views: `Snapshot() []TokenSnapshot`, `PoolSnapshot()`, `BridgeSnapshot() []BridgeTokenSnapshot`, `BridgeCount()`, `PremiumQuotaForToken/Bridge` (+ backward-compat aliases), maturity snapshot carried on `TokenSnapshot`.
+- Views: `Snapshot() []TokenSnapshot`, `PoolSnapshot()`, `BridgeSnapshot() []BridgeTokenSnapshot`, `BridgeCount()`, maturity snapshot carried on `TokenSnapshot`.
 - Boot seed: `SeedQuotaSnapshot([]QuotaSeedRow)` (ADR-0024, CLI-orchestrated boot push of latest persisted rows per token/model; idempotent, never downgrades live data).
 - Maturity: `SetMaturity`, `MaturityTouchNow`; type `MaturitySnapshot`.
 - Unfit: `MarkModelUnfit`, `ClearModelUnfit(Before)`, `ModelUnfit`.

@@ -182,26 +182,6 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		p.logger.Debug("pool: bridge entry daily request limit", "limit", cfg.MaxRequestsPerDay)
 		return nil, p.bridgeDayRequestLimitError(entry)
 	}
-	fellBack := false
-	// Issue #155: quota-exhaustion fallback in bridge mode. A capped
-	// entry holding a live session for the requested model is EXEMPT
-	// (hotReusableForModel): the single-flight gate below reuses the
-	// live instance with zero admission POST, so falling back (or 429ing)
-	// would strand a session that can still serve.
-	if _, _, quotaCapped := quotaRemaining(entry, model); quotaCapped && !hotReusableForModel(entry, model) {
-		if fb := cfg.QuotaFallbackModels[model]; fb != "" && fb != model {
-			p.logger.Info("pool: bridge token quota exhausted, falling back", "token", bridgeTokenLabel(entry), "requested", model, "fallback", fb)
-			fbAgent, err := p.reg.AgentForModel(fb)
-			if err != nil {
-				return nil, err
-			}
-			model = fb
-			agentID = fbAgent
-			fellBack = true // issue #164: report the switch to the client
-		} else {
-			return nil, quotaLimitError(entry, model)
-		}
-	}
 
 	// Per-entry single-flight: concurrent requests for the same bridge
 	// token share one session creation. The leader creates the session;
@@ -442,12 +422,8 @@ sessionReady:
 	p.idleFinished = false
 	p.sessionsEnded = false
 	p.lastActiveMu.Unlock()
-	fallbackReason := ""
-	if fellBack {
-		fallbackReason = "quota_exhausted"
-	}
 	return &Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-		Bridge: entry, FallbackReason: fallbackReason, AcquiredAt: time.Now()}, nil
+		Bridge: entry, AcquiredAt: time.Now()}, nil
 }
 
 // ProbeNewToken validates a NOT-yet-added token against upstream with a

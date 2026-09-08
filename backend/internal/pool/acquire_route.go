@@ -337,20 +337,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
 			continue
 		}
-		// Issue #85: session-quota-capped token for the requested model.
-		// The hot path excludes these in acquireOrder (their rate-limit
-		// reasons ride back in quotaLimited); the no-hot round-robin path
-		// reaches them here and records the reason the same way.
-		// Matching-hot tokens are EXEMPT (hotReusableForModel): the loop
-		// reaches EnsureSessionForModel, whose fast path reuses the live
-		// instance with zero admission POST — a capped token can still serve
-		// its own live session.
-		if _, _, capped := quotaRemaining(tok, model); capped && !hotReusableForModel(tok, model) {
-			rateLimited = append(rateLimited, quotaLimitError(tok, model))
-			errs = append(errs, fmt.Sprintf("%s: session quota exhausted for model", name))
-			p.logger.Debug("pool: token skipped (session quota exhausted)", "token", idx+1, "model", model)
-			continue
-		}
 
 		// Session-create admission gate (issue #86): concurrent session
 		// creates are bounded globally and per model; when the gate is at
@@ -596,7 +582,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	// window, first ip_capped, lowest queue position, earliest daily
 	// reset). Only when every bucket is empty — all tokens failed with
 	// errors outside the matrix — is the generic error surfaced.
-	// Issue #85: quota-capped tokens were excluded in acquireOrder (never
+	// Freebucks-capped tokens were excluded in acquireOrder (never
 	// attempted); their rate-limit reasons land here so a fully-capped pool
 	// surfaces a real 429 with the earliest window reset instead of a
 	// generic combined error.
@@ -618,8 +604,9 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	}
 	if len(rateLimited) > 0 {
 		// Issue #155: quota-exhaustion fallback — when every rate-limited error
-		// is a session quota exhaustion for the requested model, fall back to
-		// the unlimited model (mimo-v2.5) if configured.
+		// is a quota exhaustion for the requested model (a live upstream
+		// refusal, never a cached count — ADR-0027), fall back to the
+		// unlimited model (mimo-v2.5) if configured.
 		allQuotaCapped := true
 		for _, rle := range rateLimited {
 			if !isQuotaExhaustedError(rle) {
@@ -633,10 +620,9 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				// Issue #164: the fallback lease reports why it serves a
 				// different model so the server surfaces the switch to the
 				// client (X-FreeBuff-Fallback: quota_exhausted). By the time
-				// this branch is reached every token with positive quota for
-				// `model` has already been tried and failed (see acquireOrder:
-				// quota-capped tokens are excluded from the order, all others
-				// are visited by the failover loop before the fallback fires).
+				// this branch is reached every eligible token for `model` has
+				// already been tried and failed in the failover loop above
+				// before the fallback fires.
 				fbLease, fbErr := p.Acquire(ctx, fb)
 				if fbLease != nil {
 					fbLease.FallbackReason = "quota_exhausted"

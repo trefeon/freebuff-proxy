@@ -20,9 +20,6 @@ type BridgeTokenSnapshot struct {
 	Model         string                           `json:"model"`
 	AccessTier    string                           `json:"access_tier,omitempty"`
 	QuotaByModel  map[string]session.QuotaSnapshot `json:"quota_by_model,omitempty"`
-	// PremiumQuota mirrors TokenSnapshot's premium view (quota_tracker.go).
-	// Nil when the bridge entry has no premium quota.
-	PremiumQuota *PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil
 	// when the bridge entry has no Freebucks quota.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
@@ -171,7 +168,6 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 		}
 		// Active-ban view for healthz/dashboard consumers (issues #198/#199).
 		banType, bannedUntil := banView(rs.BanError, rs.BannedUntil)
-		premium := premiumSnapshotFromQuotaMap(ss.QuotaByModel)
 		q := tok.quarantine.Load()
 		quarantineReason := ""
 		if q != nil {
@@ -229,7 +225,6 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			QuotaByModel:            ss.QuotaByModel,
 			QuotaStale:              ss.QuotaStale,
 			QuotaSavedAt:            ss.QuotaSavedAt,
-			PremiumQuota:            premium,
 			Entitlement:             ss.Entitlement,
 			GlmPromo:                ss.GlmPromo,
 			Standing:                ss.Standing,

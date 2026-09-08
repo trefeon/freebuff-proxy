@@ -305,28 +305,6 @@ func TestCatalogParityWithPinnedUpstream(t *testing.T) {
 		}
 	}
 
-	// Per-model caps.
-	capsRe := regexp.MustCompile(`\[(\w+)\]:\s*\{[\s\S]*?limit:\s*(\d+),[\s\S]*?pool:\s*'([^']+)'`)
-	seen := 0
-	for _, m := range capsRe.FindAllStringSubmatch(modelsSrc, -1) {
-		id := resolveModelRef(t, ids, m[1])
-		wantLimit, _ := strconv.Atoi(m[2])
-		gotLimit, gotPool := PerModelCap(id)
-		if gotLimit != wantLimit || gotPool != m[3] {
-			t.Errorf("cap[%q] = (%d, %q), want (%d, %q)", id, gotLimit, gotPool, wantLimit, m[3])
-		}
-		seen++
-	}
-	capCount := 0
-	for _, c := range Catalog {
-		if c.Cap > 0 {
-			capCount++
-		}
-	}
-	if seen != capCount {
-		t.Errorf("capped rows = %d, upstream FREEBUFF_PER_MODEL_SESSION_CAPS entries = %d", capCount, seen)
-	}
-
 	// Context windows — extract entries inside FREEBUFF_MODEL_CONTEXT_WINDOWS
 	// (balance braces to find the map body).
 	ctxOpen := regexp.MustCompile(`FREEBUFF_MODEL_CONTEXT_WINDOWS[^=]*=\s*\{`)
@@ -363,22 +341,6 @@ func TestCatalogParityWithPinnedUpstream(t *testing.T) {
 		_ = ctxSeen
 	}
 
-	// Scalar constants.
-	scalarChecks := []struct {
-		name string
-		got  int
-	}{
-		{"FREEBUFF_PREMIUM_SESSION_LIMIT", PremiumSessionLimit},
-	}
-	for _, sc := range scalarChecks {
-		re := regexp.MustCompile(`export const ` + sc.name + ` = (\d+)`)
-		if m := re.FindStringSubmatch(modelsSrc); m != nil {
-			want, _ := strconv.Atoi(m[1])
-			if sc.got != want {
-				t.Errorf("%s = %d, want %d", sc.name, sc.got, want)
-			}
-		}
-	}
 	// GLM session length (60 * 60 * 1000).
 	if m := regexp.MustCompile(`export const FREEBUFF_GLM_V52_SESSION_LENGTH_MS = ([\d *]+)`).FindStringSubmatch(modelsSrc); m != nil {
 		want, err := strconv.Atoi(strings.ReplaceAll(m[1], " ", ""))
@@ -399,10 +361,10 @@ func catalogIDs() []string {
 // TestCatalogFactsPinned asserts the documented catalog reality directly:
 // the served set, the shared premium pool (Luna + Muse Spark 1.2 since
 // 2026-09-07, when 1.3 was withdrawn; GLM 5.3 Flash is unmetered), the
-// paused map (all five withdrawn rows recommend the default model),
-// per-model caps (none at this pin), and per-model effort ladders. This
-// pins what the doc comments CLAIM so a stale claim (e.g. "GLM 5.3 Flash
-// is premium") fails here before an operator reads it.
+// paused map (all five withdrawn rows recommend the default model), and
+// per-model effort ladders. This pins what the doc comments CLAIM so a
+// stale claim (e.g. "GLM 5.3 Flash is premium") fails here before an
+// operator reads it.
 func TestCatalogFactsPinned(t *testing.T) {
 	// Served set, catalog order.
 	wantServed := []string{
@@ -444,17 +406,6 @@ func TestCatalogFactsPinned(t *testing.T) {
 	}
 	if got := PausedMap(); !maps.Equal(got, wantPaused) {
 		t.Errorf("PausedMap() = %v, want %v", got, wantPaused)
-	}
-
-	// Per-model count caps: none at this pin. Upstream
-	// FREEBUFF_PER_MODEL_SESSION_CAPS is EMPTY — solar's 1/day trial cap
-	// closed 2026-09-01 (upstream 051fd4d9, its count cap came off; the
-	// per-session $ spend ceiling stays upstream-side).
-	for _, id := range ServedIDs() {
-		limit, pool := PerModelCap(id)
-		if limit != 0 || pool != "" {
-			t.Errorf("PerModelCap(%q) = (%d, %q), want (0, \"\")", id, limit, pool)
-		}
 	}
 
 	// Effort ladders for served models (nil = the route ignores it).

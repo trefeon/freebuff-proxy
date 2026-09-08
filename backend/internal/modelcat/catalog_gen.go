@@ -27,10 +27,6 @@ type ModelInfo struct {
 	// own global pool (FREEBUFF_LIMITED_OFFER_MODEL_IDS), not the shared
 	// pool, so it is NOT marked Premium here.
 	Premium bool
-	// Cap is the FREEBUFF_PER_MODEL_SESSION_CAPS daily ceiling (0 = none).
-	Cap int
-	// CapPool is the upstream pool id for Cap ("" when uncapped).
-	CapPool string
 	// ContextWindow mirrors FREEBUFF_MODEL_CONTEXT_WINDOWS in tokens; 0
 	// means upstream falls back to DefaultContextWindow.
 	ContextWindow int
@@ -149,9 +145,6 @@ const Glm53ModelID = "z-ai/glm-5.3-flash"
 // SolarPro4ModelID mirrors FREEBUFF_SOLAR_PRO_4_MODEL_ID: the Upstage row,
 // unmetered at full access (entitlement fullAccess.premium=false).
 const SolarPro4ModelID = "upstage/solar-pro4"
-
-// PremiumSessionLimit mirrors upstream FREEBUFF_PREMIUM_SESSION_LIMIT.
-const PremiumSessionLimit = 5
 
 // GLMSessionLength mirrors upstream FREEBUFF_REWARD_SESSION_LENGTH_MS (the
 // earned-reward session pool GLM 5.2 admits from; the older

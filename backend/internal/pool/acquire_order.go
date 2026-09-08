@@ -15,31 +15,30 @@ import (
 // the loop index past its own snapshot. start is the round-robin start
 // index; model is the requested upstream model.
 //
-// Issue #85: within the hot set, tokens whose last admission reported a
-// known positive remaining session quota for the requested model rank above
-// unknown-quota tokens, ordered by smallest remaining first (drain the
-// account closest to its limit; preserve fuller quotas —
-// reference/freebuff-reverse .../scheduler.go:472-496). Tokens
-// whose quota is exhausted for the model (RecentCount >= Limit with a future
-// ResetAt) are excluded from this pass entirely; their rate-limit reasons
-// are returned so the caller surfaces a real 429 when every token is capped.
+// ADR-0027: the pool no longer mirrors session-count quotas. Cached
+// QuotaByModel counts (limits, recent counts, resets) are envelope data
+// only — every token is attempted and upstream refusals surface as honest
+// errors. Within the hot set, tokens with the smallest Freebucks balance
+// for the requested model rank first (drain the thinnest allowance).
+// See the sort below.
 //
 // Issue #164 (fallback ordering): the order returned here exhausts EVERY
-// token with positive quota for the requested model before the caller's
+// eligible token for the requested model before the caller's
 // QUOTA_FALLBACK_MODELS fallback can fire. Non-capped tokens (matching hot,
 // cold, mismatched hot) are all in the order and the failover loop in
 // Acquire visits each of them in turn — a token only fails the pass with a
-// quota-exhausted error after it was actually attempted. Quota-capped
-// tokens are excluded (they have nothing left to serve), and when every
-// token is capped or cooling down the order degrades to full round-robin so
-// the loop still records every reason. The fallback branch in Acquire only
-// runs after that loop completed without a lease and every rate-limited
-// error it recorded is a quota exhaustion.
+// quota-exhausted error after it was actually attempted. Freebucks-capped
+// tokens are excluded (their allowance cannot cover the price), and when
+// every token is capped or cooling down the order degrades to full
+// round-robin so the loop still records every reason. The fallback branch
+// in Acquire only runs after that loop completed without a lease and every
+// rate-limited error it recorded is a quota exhaustion.
 func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int, []*upstream.RateLimitError) {
 	// eligible mirrors the per-token checks the failover loop applies:
-	// not cooling down, under the daily message cap, and not quota-capped
-	// for the requested model (issue #85). It never records the exclusion
-	// reasons — the caller does that in one place.
+	// not cooling down, under the daily message cap, and not
+	// Freebucks-capped for the requested model (ADR-0027: session-count
+	// caps are gone). It never records the exclusion reasons — the caller
+	// does that in one place.
 	eligible := func(idx int) bool {
 		tok := (*toks)[idx]
 		// Administratively locked tokens are never eligible for leasing.
@@ -51,15 +50,6 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		// never demoted or punished. Unlocked slots serve anything.
 		if lockedOutByModel(p.cfg.Load(), p.reg, idx, model) {
 			tok.allowlistSkips.Add(1)
-			return false
-		}
-		// Quota-capped tokens are excluded from the cold fallback: their
-		// rate-limit reasons ride back in quotaLimited, so the pool surfaces
-		// a real 429 when every token is capped. Matching-hot tokens are
-		// EXEMPT (hotReusableForModel): serving via a live session posts no
-		// admission and burns no quota — excluding them strands live
-		// sessions behind a 429 they could still serve.
-		if _, _, capped := quotaRemaining(tok, model); capped && !hotReusableForModel(tok, model) {
 			return false
 		}
 		if capped, _ := freebucksCapped(tok, model); capped {
@@ -118,18 +108,9 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 			return isAdmA
 		}
 
-		aKnown, aRem, _ := quotaRemaining(tokA, model)
-		bKnown, bRem, _ := quotaRemaining(tokB, model)
-		if aKnown != bKnown {
-			return aKnown
-		}
-		if aKnown && aRem != bRem {
-			return aRem < bRem
-		}
-
-		// Freebucks-aware tie-breaker: drain smallest balance first
-		// (preserve fuller Freebucks allowances), alongside existing quota
-		// logic. Only applies when both tokens price the model.
+		// Freebucks ordering: drain smallest balance first (preserve
+		// fuller Freebucks allowances). Only applies when both tokens
+		// price the model.
 		if snapA.Freebucks != nil && snapB.Freebucks != nil {
 			if _, okA := snapA.Freebucks.Prices[model]; okA {
 				if _, okB := snapB.Freebucks.Prices[model]; okB {
@@ -242,10 +223,10 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		}
 		return order, nil
 	}
-	// The capped tokens excluded above are never visited by the failover
-	// loop, so their rate-limit reasons must ride back with the order: when
-	// every token is capped the pool surfaces a real 429 with the earliest
-	// window reset instead of a generic combined error.
+	// The Freebucks-capped tokens excluded above are never visited by the
+	// failover loop, so their rate-limit reasons must ride back with the
+	// order: when every token is capped the pool surfaces a real 429 with
+	// the earliest window reset instead of a generic combined error.
 	inOrder := make(map[int]struct{}, len(order))
 	for _, idx := range order {
 		inOrder[idx] = struct{}{}
@@ -255,10 +236,6 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		if _, ok := inOrder[idx]; ok {
 			continue
 		}
-		if _, _, capped := quotaRemaining((*toks)[idx], model); capped {
-			quotaLimited = append(quotaLimited, quotaLimitError((*toks)[idx], model))
-			continue
-		}
 		if capped, _ := freebucksCapped((*toks)[idx], model); capped {
 			quotaLimited = append(quotaLimited, freebucksLimitError((*toks)[idx], model))
 		}
@@ -266,9 +243,11 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 	return order, quotaLimited
 }
 
-// leastUsedOrder ranks eligible token indexes with the LARGEST remaining
-// quota first (preserve balance). Shared by the "least_used" strategy and
-// the burst-balance override (ADR-0023) so the two rankings cannot drift.
+// leastUsedOrder ranks eligible token indexes with the LARGEST Freebucks
+// balance first (preserve balance; ADR-0027: session-count remaining is
+// envelope data, never ranking input). Shared by the "least_used" strategy
+// and the burst-balance override (ADR-0023) so the two rankings cannot
+// drift.
 func leastUsedOrder(toks *[]*tokenEntry, model string, eligible func(int) bool) []int {
 	var eligibleTokens []int
 	for idx := range *toks {
@@ -278,18 +257,32 @@ func leastUsedOrder(toks *[]*tokenEntry, model string, eligible func(int) bool) 
 	}
 	sort.SliceStable(eligibleTokens, func(i, j int) bool {
 		a, b := eligibleTokens[i], eligibleTokens[j]
-		tokA, tokB := (*toks)[a], (*toks)[b]
-		aKnown, aRem, _ := quotaRemaining(tokA, model)
-		bKnown, bRem, _ := quotaRemaining(tokB, model)
-		if aKnown != bKnown {
-			return aKnown
+		aBal, aOK := freebucksBalance((*toks)[a], model)
+		bBal, bOK := freebucksBalance((*toks)[b], model)
+		if aOK != bOK {
+			return aOK
 		}
-		if aKnown && aRem != bRem {
-			return aRem > bRem // largest remaining quota first
+		if aOK && aBal != bBal {
+			return aBal > bBal // largest Freebucks balance first
 		}
 		return a < b
 	})
 	return eligibleTokens
+}
+
+// freebucksBalance reports the token's Freebucks spendable balance for
+// model: false when the snapshot carries no Freebucks block or the model
+// has no price (unpriced rows never rank by balance).
+func freebucksBalance(tok *tokenEntry, model string) (float64, bool) {
+	snap := tok.session.Snapshot()
+	fb := snap.Freebucks
+	if fb == nil {
+		return 0, false
+	}
+	if _, ok := fb.Prices[model]; !ok {
+		return 0, false
+	}
+	return fb.Balance, true
 }
 
 // tokenAvailable reports whether tok can serve model right now, for ordering

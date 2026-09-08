@@ -147,107 +147,100 @@ func TestRemoveAllTokensDropsMismatchWindows(t *testing.T) {
 	}
 }
 
-// TestQuotaStateWindowSemantics pins the shared quota-window semantics: a
-// live window (recent < limit) is known + remaining; a capped window
-// (recent >= limit with a future reset) is capped; a past/absent ResetAt
-// means the window rolled and the quota is treated as fresh (never capped);
-// referral-gated models without entitlement are excluded.
+// TestQuotaStateWindowSemantics pins the ADR-0027 contract: cached
+// session-count windows never gate or rank acquisition — every shape below
+// (live, exhausted, rolled, absent, referral-unentitled) leaves the token
+// eligible with no limited reasons. (Name kept per the dequota contract.)
 func TestQuotaStateWindowSemantics(t *testing.T) {
 	future := time.Now().Add(6 * time.Hour)
 	past := time.Now().Add(-time.Hour)
 
 	cases := []struct {
-		name    string
-		model   string
-		snap    session.SessionSnapshot
-		wantKn  bool
-		wantRem float64
-		wantCap bool
+		name  string
+		model string
+		quota map[string]upstream.ModelQuota
 	}{
 		{
 			name:  "known live window",
 			model: modelB,
-			snap: session.SessionSnapshot{QuotaByModel: map[string]session.QuotaSnapshot{
-				modelB: {Limit: 5, RecentCount: 4, ResetAt: future, Period: "pacific_day"},
-			}},
-			wantKn: true, wantRem: 1,
+			quota: map[string]upstream.ModelQuota{
+				modelB: {Model: modelB, Limit: 5, RecentCount: 4, ResetAt: future, Period: "pacific_day"},
+			},
 		},
 		{
 			name:  "capped window future reset",
 			model: modelB,
-			snap: session.SessionSnapshot{QuotaByModel: map[string]session.QuotaSnapshot{
-				modelB: {Limit: 5, RecentCount: 5, ResetAt: future, Period: "pacific_day"},
-			}},
-			wantCap: true,
+			quota: map[string]upstream.ModelQuota{
+				modelB: {Model: modelB, Limit: 5, RecentCount: 5, ResetAt: future, Period: "pacific_day"},
+			},
 		},
 		{
 			name:  "rolled window never capped",
 			model: modelB,
-			snap: session.SessionSnapshot{QuotaByModel: map[string]session.QuotaSnapshot{
-				modelB: {Limit: 5, RecentCount: 5, ResetAt: past, Period: "pacific_day"},
-			}},
-			wantKn: false, wantCap: false,
+			quota: map[string]upstream.ModelQuota{
+				modelB: {Model: modelB, Limit: 5, RecentCount: 5, ResetAt: past, Period: "pacific_day"},
+			},
 		},
 		{
-			name:   "no quota entry unknown",
-			model:  modelB,
-			snap:   session.SessionSnapshot{},
-			wantKn: false, wantCap: false,
+			name:  "no quota entry unknown",
+			model: modelB,
 		},
 		{
-			name:    "referral gated no entitlement capped",
-			model:   ReferralGatedModel,
-			snap:    session.SessionSnapshot{},
-			wantCap: true,
+			name:  "referral gated no entitlement",
+			model: "z-ai/glm-5.2",
 		},
 		{
 			name:  "referral gated entitled live quota",
-			model: ReferralGatedModel,
-			snap: session.SessionSnapshot{QuotaByModel: map[string]session.QuotaSnapshot{
-				ReferralGatedModel: {Limit: 2, RecentCount: 1, ResetAt: future},
-			}},
-			wantKn: true, wantRem: 1,
+			model: "z-ai/glm-5.2",
+			quota: map[string]upstream.ModelQuota{
+				"z-ai/glm-5.2": {Model: "z-ai/glm-5.2", Limit: 2, RecentCount: 1, ResetAt: future},
+			},
 		},
 		{
-			name:  "referral gated entitled window rolled assumed 1",
-			model: ReferralGatedModel,
-			snap: session.SessionSnapshot{QuotaByModel: map[string]session.QuotaSnapshot{
-				ReferralGatedModel: {Limit: 2, RecentCount: 2, ResetAt: past},
-			}},
-			wantKn: true, wantRem: 1, wantCap: false,
+			name:  "referral gated entitled window rolled",
+			model: "z-ai/glm-5.2",
+			quota: map[string]upstream.ModelQuota{
+				"z-ai/glm-5.2": {Model: "z-ai/glm-5.2", Limit: 2, RecentCount: 2, ResetAt: past},
+			},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			kn, rem, cap := quotaStateForSnapshot(tc.snap, tc.model)
-			if kn != tc.wantKn || rem != tc.wantRem || cap != tc.wantCap {
-				t.Errorf("quotaStateForSnapshot = (%v, %v, %v), want (%v, %v, %v)",
-					kn, rem, cap, tc.wantKn, tc.wantRem, tc.wantCap)
+			mock := testutil.NewMock()
+			defer mock.Close()
+			p := newTestPool(t, mock)
+			toks := p.roster.Load()
+			if tc.quota != nil {
+				(*toks)[0].session.UpdateQuotaFromProbe(&upstream.SessionState{RateLimitsByModel: tc.quota})
+			}
+			order, limited := p.acquireOrder(toks, 0, tc.model)
+			if len(limited) != 0 {
+				t.Errorf("%s: quotaLimited = %v, want empty (counts never gate)", tc.name, limited)
+			}
+			if len(order) != 1 || order[0] != 0 {
+				t.Errorf("%s: order = %v, want [0] (counts never gate)", tc.name, order)
 			}
 		})
 	}
 }
 
-// TestQuotaResetRollsForwardOnNextAcquire pins the #351 full loop against a
-// mocked upstream: an exhausted window refuses the acquire, the reset
-// instant passes, and the very next acquire serves again. The reset is
-// 300ms out so no wall-clock day passes; the mock flips to the fresh
-// window the rolled admission would carry.
+// TestQuotaResetRollsForwardOnNextAcquire pins the ADR-0027 contract: an
+// exhausted cached window no longer refuses the acquire without upstream
+// contact. The pool attempts the admission and the mock admits, so the
+// lease is granted — upstream truth governs, not the cached count.
+// (Name kept per the dequota contract.)
 func TestQuotaResetRollsForwardOnNextAcquire(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	quotaBody := func(recent int, reset time.Time) map[string]any {
-		return map[string]any{
-			modelA: map[string]any{
-				"model":       modelA,
-				"limit":       5,
-				"recentCount": recent,
-				"period":      "pacific_day",
-				"resetAt":     reset.UTC().Format("2006-01-02T15:04:05.000Z"),
-			},
-		}
+	mock.RateLimitsByModel = map[string]any{
+		modelA: map[string]any{
+			"model":       modelA,
+			"limit":       5,
+			"recentCount": 5,
+			"period":      "pacific_day",
+			"resetAt":     time.Now().Add(2 * time.Second).UTC().Format("2006-01-02T15:04:05.000Z"),
+		},
 	}
-	mock.RateLimitsByModel = quotaBody(5, time.Now().Add(2*time.Second))
 	p := newTestPool(t, mock)
 
 	// Admit through a different model: the session (and its exhausted
@@ -258,53 +251,37 @@ func TestQuotaResetRollsForwardOnNextAcquire(t *testing.T) {
 	}
 	p.LeaseRelease(admit)
 
-	// Window still exhausted with a future reset, and no hot session to
-	// reuse: the token is limited without ever hitting upstream. The 2s
-	// margin keeps this deterministic even if CI stalls between acquires.
-	if _, err := p.Acquire(context.Background(), modelA); err == nil {
-		t.Fatal("acquire on exhausted window: want limit error, got lease")
-	}
-
-	// The pool caches admissions within the probe TTL (#60): flipping the
-	// mock alone is invisible until something re-admits, and the capped
-	// acquire cools the token until the window's reset. Sleeping past the
-	// reset lets the window genuinely roll, so the cached numbers go
-	// stale and the next acquire revalidates — exactly the production
-	// path.
-	time.Sleep(3 * time.Second)
-	mock.RateLimitsByModel = quotaBody(0, time.Now().Add(24*time.Hour))
-
+	// Exhausted cached window, no hot session — yet the acquire is
+	// attempted upstream instead of short-circuiting to a limit error.
+	before := mock.SessionCreates
 	lease, err := p.Acquire(context.Background(), modelA)
 	if err != nil {
-		t.Fatalf("acquire after reset: want lease, got %v", err)
+		t.Fatalf("acquire on exhausted cached window: want lease, got %v", err)
 	}
-	_ = lease
+	defer p.LeaseRelease(lease)
+	if mock.SessionCreates <= before {
+		t.Errorf("session creates = %d, want > %d (upstream admission attempted)", mock.SessionCreates, before)
+	}
 }
 
-// TestBridgeQuotaMirrorsPooled pins the single-implementation contract: for
-// identical quota state the pooled and bridge quota views agree (both
-// delegate to quotaStateForSnapshot), so the window semantics cannot drift
-// between the two modes.
+// TestBridgeQuotaMirrorsPooled pins the single-implementation contract for
+// the kept meter: for identical Freebucks state the pooled and bridge views
+// agree (both delegate to freebucksCapped), so the allowance semantics
+// cannot drift between the two modes. (Name kept per the dequota contract.)
 func TestBridgeQuotaMirrorsPooled(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	mock.RateLimitsByModel = map[string]any{
-		modelA: map[string]any{
-			"model":       modelA,
-			"limit":       3,
-			"recentCount": 3,
-			"period":      "pacific_day",
-			"resetAt":     time.Now().Add(6 * time.Hour).UTC().Format(time.RFC3339),
-		},
+
+	fb := &upstream.FreebucksInfo{
+		Balance: 0.5,
+		Daily:   upstream.FreebucksWindow{Limit: 20, Spent: 19, Remaining: 1, ResetAt: time.Now().Add(6 * time.Hour)},
+		Wallet:  upstream.FreebucksWallet{},
+		Prices:  map[string]float64{modelA: 2},
 	}
 
 	p := newTestPool(t, mock)
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p.LeaseRelease(lease)
-	pKn, pRem, pCap := quotaRemaining((*p.roster.Load())[0], modelA)
+	toks := p.roster.Load()
+	(*toks)[0].session.UpdateQuotaFromProbe(&upstream.SessionState{Freebucks: fb})
 
 	pb := newBridgePool(t, mock)
 	blease, err := pb.AcquireBridge(context.Background(), "parity-client", modelA)
@@ -312,14 +289,15 @@ func TestBridgeQuotaMirrorsPooled(t *testing.T) {
 		t.Fatal(err)
 	}
 	pb.LeaseRelease(blease)
-	bKn, bRem, bCap := quotaRemaining(blease.Bridge, modelA)
+	blease.Bridge.sessionMgr().UpdateQuotaFromProbe(&upstream.SessionState{Freebucks: fb})
 
-	if pKn != bKn || pRem != bRem || pCap != bCap {
-		t.Errorf("pooled vs bridge quota = (%v,%v,%v) vs (%v,%v,%v), want equal",
-			pKn, pRem, pCap, bKn, bRem, bCap)
+	pCapped, _ := freebucksCapped((*p.roster.Load())[0], modelA)
+	bCapped, _ := freebucksCapped(blease.Bridge, modelA)
+	if pCapped != bCapped {
+		t.Errorf("pooled vs bridge freebucks capped = %v vs %v, want equal", pCapped, bCapped)
 	}
-	if !pCap || !bCap {
-		t.Errorf("expected both views capped (limit 3, recent 3): pooled=%v bridge=%v", pCap, bCap)
+	if !pCapped || !bCapped {
+		t.Errorf("expected both views capped (balance 0.5 < price 2): pooled=%v bridge=%v", pCapped, bCapped)
 	}
 }
 

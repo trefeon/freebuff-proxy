@@ -220,10 +220,6 @@ type TokenSnapshot struct {
 	// outside it.
 	AllowedModels  []string `json:"allowed_models,omitempty"`
 	AllowlistSkips int64    `json:"allowlist_skips,omitempty"`
-	// PremiumQuota is the 5/day premium-pool quota (pacific_day) derived from
-	// the live QuotaByModel entry for the premium models. Nil when no premium
-	// quota has been reported.
-	PremiumQuota *PremiumQuotaSnapshot `json:"premium_quota,omitempty"`
 	// BanType / BannedUntil surface the token's active upstream ban
 	// (issues #198/#199): BanType is "temporary" when the ban carries a
 	// resumes_at deadline (auto-lifts at BannedUntil) and "hard" when it
