@@ -1475,40 +1475,43 @@ func TestClassifyLoadSheddingAndPeakHours(t *testing.T) {
 		t.Errorf("plain 429 RetryAfter = %s, want %s (bounded, not midnight)", rle.RetryAfter, opaqueRateLimitBackoff)
 	}
 
-	// A body that DOES signal a genuine daily reset — a pacific_day quota
-	// period with the counter at/over the limit — still resolves to the
-	// Pacific-midnight lock (#140 pins the daily-cap path).
+	// ADR-0027: a no-timestamp at-cap pacific_day body no longer fabricates
+	// a Pacific-midnight lock from the quota period/counters — it gets the
+	// same bounded backoff as any other timestamp-less 429. The quota
+	// fields stay parsed (pool-side routing still reads them); only the
+	// fabricated reset is gone.
 	errDaily := classifyError(http.StatusTooManyRequests, `{"status":"rate_limited","period":"pacific_day","limit":6,"recentCount":6}`, http.Header{})
 	var rleDaily *RateLimitError
 	if !errors.As(errDaily, &rleDaily) {
 		t.Fatalf("daily-cap 429 = %T %v, want *RateLimitError", errDaily, errDaily)
 	}
-	next := NextPacificMidnight()
-	if rleDaily.ResetAt.IsZero() {
-		t.Error("daily-cap 429 lost the Pacific-midnight lock")
-	} else if d := rleDaily.ResetAt.Sub(next); d < -time.Second || d > time.Second {
-		t.Errorf("daily-cap 429 ResetAt = %v, want near %v", rleDaily.ResetAt, next)
+	if !rleDaily.ResetAt.IsZero() {
+		t.Errorf("daily-cap 429 ResetAt = %v, want zero (no fabricated midnight lock)", rleDaily.ResetAt)
 	}
-	if rleDaily.RetryAfter <= 0 {
-		t.Error("daily-cap 429 RetryAfter <= 0")
+	if rleDaily.RetryAfter != opaqueRateLimitBackoff {
+		t.Errorf("daily-cap 429 RetryAfter = %s, want %s (bounded, not midnight)", rleDaily.RetryAfter, opaqueRateLimitBackoff)
+	}
+	if rleDaily.Period != "pacific_day" || rleDaily.Limit != 6 || rleDaily.RecentCount != 6 {
+		t.Errorf("daily-cap 429 lost quota fields = %+v, want period/limit/counters parsed", rleDaily)
 	}
 }
 
-// TestClassifyMonthlyCapQuotaShaped pins wire drift 2026-09-04 (#330): a
-// pacific_month quota period with the counter at/over the limit classifies
-// as quota exhaustion (Pacific-midnight lock), exactly like daily/weekly —
-// never as an opaque transient.
+// TestClassifyMonthlyCapQuotaShaped pins wire drift 2026-09-04 (#330) as
+// updated by ADR-0027: a pacific_month at-cap body still classifies as a
+// *RateLimitError (never an opaque transient mislabel), but — like
+// daily/weekly — with the bounded backoff, never a fabricated
+// Pacific-midnight lock.
 func TestClassifyMonthlyCapQuotaShaped(t *testing.T) {
 	errMonthly := classifyError(http.StatusTooManyRequests, `{"status":"rate_limited","period":"pacific_month","limit":100,"recentCount":100}`, http.Header{})
 	var rleMonthly *RateLimitError
 	if !errors.As(errMonthly, &rleMonthly) {
 		t.Fatalf("monthly-cap 429 = %T %v, want *RateLimitError", errMonthly, errMonthly)
 	}
-	if rleMonthly.RetryAfter <= 0 {
-		t.Error("monthly-cap 429 RetryAfter <= 0")
+	if rleMonthly.RetryAfter != opaqueRateLimitBackoff {
+		t.Errorf("monthly-cap 429 RetryAfter = %s, want %s (bounded, not midnight)", rleMonthly.RetryAfter, opaqueRateLimitBackoff)
 	}
-	if !IsDailyCapReset(rleMonthly) {
-		t.Error("IsDailyCapReset(monthly) = false, want true")
+	if !rleMonthly.ResetAt.IsZero() {
+		t.Errorf("monthly-cap 429 ResetAt = %v, want zero (no fabricated midnight lock)", rleMonthly.ResetAt)
 	}
 }
 

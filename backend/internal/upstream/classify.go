@@ -384,9 +384,11 @@ func parseResetAtFromText(text string) time.Time {
 // parseRateLimit builds a RateLimitError from a 429 body, extracting
 // retryAfterMs/resetAt/limit/recentCount/period best-effort across multiple
 // JSON schemas. Falls back to the Retry-After header; a body with no
-// timestamp/period and no header delay is bounded to opaqueRateLimitBackoff,
-// except a genuine daily-cap body (resetAt or an at-cap daily/weekly period)
-// which locks until the upcoming Pacific midnight (07:00 UTC).
+// timestamp and no header delay is bounded to opaqueRateLimitBackoff.
+// ADR-0027: no Pacific-midnight lock is ever fabricated from the quota
+// period/counters — upstream enforces its own pools server-side, explicit
+// resetAt/Retry-After signals are honored, and unmirrored refusals surface
+// as honest upstream errors.
 func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 	rle := &RateLimitError{Body: truncate(body, 200), RetryAfter: headerRetryAfter}
 	lower := strings.ToLower(body)
@@ -457,20 +459,12 @@ func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 			rle.RetryAfter = untilResetAt(rle.ResetAt, time.Now())
 		}
 	} else if rle.RetryAfter <= 0 {
-		// No timestamp and no header delay: lock until the next Pacific
-		// reset window (07:00 UTC) ONLY when the body signals a genuine
-		// daily reset — a parsed resetAt (handled above) or a daily/weekly
-		// quota period whose counter is at/over the limit (the daily-cap
-		// bodies). Every other opaque 429 gets a bounded backoff so a
-		// minutes-scale transient is never treated as a full-day lock
-		// (issue #140).
-		if IsDailyCapReset(rle) {
-			nextReset := NextPacificMidnight()
-			rle.ResetAt = nextReset
-			rle.RetryAfter = untilResetAt(nextReset, time.Now())
-		} else {
-			rle.RetryAfter = opaqueRateLimitBackoff
-		}
+		// No timestamp and no header delay: bounded backoff. ADR-0027
+		// dropped the session-count mirror, so a no-timestamp 429 never
+		// fabricates a Pacific-midnight lock from the quota
+		// period/counters — a minutes-scale transient must never be
+		// treated as a full-day lock (issue #140).
+		rle.RetryAfter = opaqueRateLimitBackoff
 	}
 
 	if rle.RetryAfter <= 0 {
@@ -478,24 +472,10 @@ func parseRateLimit(body string, headerRetryAfter time.Duration) error {
 	}
 	rle.RetryAfter = clampCooldown(rle.RetryAfter)
 	// Ledger window, computed after ResetAt/RetryAfter are finalized
-	// (the daily-cap fallback above sets ResetAt so the window is "reset"
-	// for daily-cap timestamp-less 429s; opaque ones carry just
+	// (explicit-ResetAt 429s carry "reset"; timestamp-less ones carry just
 	// RetryAfter → "retry-after").
 	rle.Window = rateLimitWindow(body, rle)
 	return rle
-}
-
-// IsDailyCapReset reports whether a no-timestamp 429 body signals a genuine
-// daily-cap reset: the quota period is pacific_day/pacific_week/
-// pacific_month AND the recent counter is at/over the limit (the
-// session-quota bodies the CLI serves on daily-cap refusals; monthly added
-// in wire drift 2026-09-04, issue #330). Only these lock until the next
-// Pacific midnight; truly opaque bodies get opaqueRateLimitBackoff.
-func IsDailyCapReset(rle *RateLimitError) bool {
-	if rle.Period != "pacific_day" && rle.Period != "pacific_week" && rle.Period != "pacific_month" {
-		return false
-	}
-	return rle.Limit > 0 && rle.RecentCount >= rle.Limit
 }
 
 // banFromBody builds a BanError from a banned body, extracting the

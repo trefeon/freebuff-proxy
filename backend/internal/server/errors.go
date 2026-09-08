@@ -222,21 +222,11 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		if retryAfter < 0 {
 			retryAfter = 0
 		}
-		if code == "rate_limited" {
-			targetModel := rle.Model
-			if targetModel == "" {
-				targetModel = model
-			}
-			if targetModel == "z-ai/glm-5.2" || strings.Contains(strings.ToLower(rle.Body), "referral") {
-				message = fmt.Sprintf("%s. Model '%s' requires referral entitlement on your account. Please switch your coding harness to an unlimited session model: 'z-ai/glm-5.3-flash' or 'deepseek/deepseek-v4-flash'.", message, targetModel)
-			} else {
-				resetHint := ""
-				if retryAfter > 0 {
-					resetHint = fmt.Sprintf(" Resets in %s at Pacific midnight (07:00 UTC).", formatDuration(retryAfter))
-				}
-				message = fmt.Sprintf("%s. Daily session quota exhausted for '%s'.%s Switch your coding harness to an unlimited session model: 'z-ai/glm-5.3-flash' or 'deepseek/deepseek-v4-flash'.", message, targetModel, resetHint)
-			}
-		}
+		// ADR-0027: no count-quota advisory rewrite. Upstream still
+		// enforces its own pools server-side; the refusal surfaces as an
+		// honest upstream error (rle.Error() carries the body verbatim
+		// plus any explicit reset detail) instead of a "daily session
+		// quota exhausted, switch harness" directive.
 	case errors.As(err, &ice):
 		// ip_capped: admission-only (too many distinct users on the egress
 		// IP) — 429, not the quota 429, with the body's retryAfterMs only.
@@ -406,8 +396,8 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 			return
 		}
 	}
-	// Routine client-caused 429 rate_limited (daily session quota) is
-	// expected churn, not an operator-actionable fault: log at Info. Every
+	// Routine 429 rate_limited (upstream pool refusal) is expected churn,
+	// not an operator-actionable fault: log at Info. Every
 	// upstream-class failure stays Warn (5xx, upstream_unavailable, bans;
 	// the upstream-class 429 variants carry their own codes above).
 	if code == "rate_limited" {
@@ -416,31 +406,4 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 		s.logger.Warn("request failed", attrs...)
 	}
 	s.writeClientError(w, r, status, message, code, retryAfter)
-}
-
-func formatDuration(d time.Duration) string {
-	if d <= 0 {
-		return "0s"
-	}
-	d = d.Round(time.Minute)
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	if h >= 24 {
-		dd := h / 24
-		hr := h % 24
-		if hr > 0 {
-			return fmt.Sprintf("%dd %dh", dd, hr)
-		}
-		return fmt.Sprintf("%dd", dd)
-	}
-	if h > 0 {
-		if m > 0 {
-			return fmt.Sprintf("%dh %dm", h, m)
-		}
-		return fmt.Sprintf("%dh", h)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%dm", m)
-	}
-	return fmt.Sprintf("%ds", int(d.Seconds()))
 }

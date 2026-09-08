@@ -16,7 +16,7 @@ import (
 	"net/http/httptest"
 )
 
-func TestHealthzPremiumQuotaEmitted(t *testing.T) {
+func TestHealthzPremiumQuotaOmitted(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	future := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
@@ -48,37 +48,8 @@ func TestHealthzPremiumQuotaEmitted(t *testing.T) {
 		t.Fatalf("tokens = %d want 1", len(hz.Tokens))
 	}
 	tok := hz.Tokens[0]
-	pq, ok := tok["premium_quota"]
-	if !ok {
-		t.Fatalf("premium_quota missing: token=%+v", tok)
-	}
-	m, ok := pq.(map[string]any)
-	if !ok {
-		t.Fatalf("premium_quota not map: %T", pq)
-	}
-	if int(m["limit"].(float64)) != 4 {
-		t.Errorf("premium limit = %v want 4", m["limit"])
-	}
-	if int(m["used"].(float64)) != 2 {
-		t.Errorf("premium used = %v want 2", m["used"])
-	}
-	if int(m["remaining"].(float64)) != 2 {
-		t.Errorf("premium remaining = %v want 2", m["remaining"])
-	}
-	if int(m["percent_used"].(float64)) != 50 {
-		t.Errorf("premium percent_used = %v want 50", m["percent_used"])
-	}
-	if m["period"] != "pacific_day" {
-		t.Errorf("premium period = %v want pacific_day", m["period"])
-	}
-	if m["capped"].(bool) {
-		t.Error("premium capped true want false")
-	}
-	if !m["entitled"].(bool) {
-		t.Error("premium entitled false want true")
-	}
-	if m["model"] != "_premium_pool" {
-		t.Errorf("premium model = %v want _premium_pool", m["model"])
+	if _, ok := tok["premium_quota"]; ok {
+		t.Errorf("premium_quota present want omitted (ADR-0027), token=%+v", tok)
 	}
 
 	resp, body = doJSON(t, http.MethodGet, ts.URL+"/metrics", nil, nil)
@@ -91,8 +62,8 @@ func TestHealthzPremiumQuotaEmitted(t *testing.T) {
 		`freebuff_proxy_premium_quota_used{token="1"} 2`,
 		`freebuff_proxy_premium_quota_remaining{token="1"} 2`,
 	} {
-		if !strings.Contains(metrics, want) {
-			t.Errorf("metrics missing %q\nmetrics:\n%s", want, metrics)
+		if strings.Contains(metrics, want) {
+			t.Errorf("metrics contains removed premium gauge %q (ADR-0027)\nmetrics:\n%s", want, metrics)
 		}
 	}
 }
@@ -174,14 +145,8 @@ func TestHealthzBridgePremiumQuota(t *testing.T) {
 	}
 	if len(hz.BridgeEntries) == 1 {
 		be := hz.BridgeEntries[0]
-		pq, ok := be["premium_quota"]
-		if !ok {
-			t.Errorf("bridge premium_quota missing, entry=%+v", be)
-		} else {
-			m := pq.(map[string]any)
-			if !m["capped"].(bool) {
-				t.Errorf("bridge capped false want true (4/4 future)")
-			}
+		if _, ok := be["premium_quota"]; ok {
+			t.Errorf("bridge premium_quota present want omitted (ADR-0027), entry=%+v", be)
 		}
 	}
 }

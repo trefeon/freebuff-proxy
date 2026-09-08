@@ -1212,10 +1212,6 @@ func TestMetricsFamiliesContract(t *testing.T) {
 		"freebuff_proxy_rate_limit_events_total":       "counter",
 		"freebuff_proxy_model_locked_total":            "counter",
 		"freebuff_proxy_allowlist_skips_total":         "counter",
-		"freebuff_proxy_premium_quota_limit":           "gauge",
-		"freebuff_proxy_premium_quota_used":            "gauge",
-		"freebuff_proxy_premium_quota_remaining":       "gauge",
-		"freebuff_proxy_premium_quota_percent":         "gauge",
 	}
 
 	// assertFamilies checks every expected family has a HELP and a TYPE

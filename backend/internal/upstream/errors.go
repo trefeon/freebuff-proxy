@@ -21,7 +21,7 @@ var (
 	ErrAuthRejected = errors.New("upstream auth rejected")
 	// ErrWaitingRoom: upstream queue. Surface as 503 + Retry-After.
 	ErrWaitingRoom = errors.New("upstream waiting room")
-	// ErrRateLimited: upstream quota exhausted (429 rate_limited). The token
+	// ErrRateLimited: upstream rate-limited (429 rate_limited). The token
 	// should cool down for RateLimitError.RetryAfter.
 	ErrRateLimited = errors.New("upstream rate limited")
 	// ErrBanned: the account is temporarily banned upstream (403 {"status":"banned"}).
@@ -196,9 +196,10 @@ func (e *UpstreamError) Error() string {
 	return fmt.Sprintf("upstream %d: %s", e.Status, e.Body)
 }
 
-// RateLimitError is a 429 rate_limited response (daily session quota, GLM
+// RateLimitError is a 429 rate_limited response (upstream pool refusal, GLM
 // 20h window, ...). RetryAfter comes from the body's retryAfterMs (or the
-// Retry-After header when the body is opaque). Unwrap makes
+// Retry-After header when the body is opaque); explicit resetAt bodies
+// resolve through it — no reset is ever fabricated (ADR-0027). Unwrap makes
 // errors.Is(err, ErrRateLimited) work.
 type RateLimitError struct {
 	Status      string

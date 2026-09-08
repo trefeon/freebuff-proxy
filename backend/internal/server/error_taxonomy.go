@@ -52,7 +52,7 @@ func defaultHintForCode(code, message string) string {
 	case code == "upstream_auth_rejected" || code == "invalid_api_key" || strings.Contains(lowerMsg, "invalid api key"):
 		return "Token invalid or expired. Get a fresh token by running scripts/gen-token.cmd (Windows) or scripts/gen-token.sh (Linux/macOS)"
 	case code == "rate_limited":
-		return "Session quota exhausted. Switch your coding harness to an unlimited model: z-ai/glm-5.3-flash or deepseek/deepseek-v4-flash, or wait for reset at Pacific midnight (07:00 UTC)."
+		return "Upstream refused the request (rate limit). Honor Retry-After before retrying; persistent refusals mean the account's upstream pool is spent."
 	case code == "model_ip_limited":
 		return "Model restricted on this egress IP/tier. Limited-tier accounts should switch to 'mimo/mimo-v2.5', or route traffic through a Tier-1 country (US/EU/SG)."
 	case code == "ip_capped":

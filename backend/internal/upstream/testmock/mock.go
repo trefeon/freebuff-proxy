@@ -70,28 +70,20 @@ func getMockState(token string) *mockTokenState {
 	return v.(*mockTokenState)
 }
 
-// mockQuotaLimit mirrors the real tier caps for the served models (derived
-// from modelcat: shared premium pool 5/day (luna, solar-pro4; glm-5.3-flash
-// left it 2026-08-28 and is unmetered; solar's 1/day per-model cap closed
-// 2026-09-01, upstream 051fd4d9), glm-5.2 promo 1/day, everything else
-// unmetered). Paused models
-// are never admitted so their cap is irrelevant — return 9999.
+// mockQuotaLimit reports the mock's admission cap. ADR-0027: no
+// session-count mirror — models admit unmetered (upstream still enforces
+// its own pools server-side; refusals are simulated per-test via explicit
+// RateLimitsByModel/429 fixtures, never via this ledger). The GLM 5.2
+// referral-promo row keeps its promo cap (promo, not the premium pool).
+// Paused models are never admitted so their cap is irrelevant.
 func mockQuotaLimit(model string) float64 {
 	if model == "" {
 		model = modelcat.DefaultModelID
 	}
-	switch model {
-	case modelcat.Glm52ModelID:
+	if model == modelcat.Glm52ModelID {
 		return 1
-	default:
-		if limit, _ := modelcat.PerModelCap(model); limit > 0 {
-			return float64(limit)
-		}
-		if modelcat.IsPremium(model) {
-			return modelcat.PremiumSessionLimit
-		}
-		return 9999 // mimo, fable, deepseek-flash: unmetered
 	}
+	return 9999 // unmetered: premium rows admit like unmetered (ADR-0027)
 }
 
 // mockSessionExpiry returns the session TTL for the mock: 1 hour for GLM
@@ -179,25 +171,27 @@ func mockSessionState(token string, requestedModel string, consume bool) *upstre
 		ResetAt:         pacMidnight,
 		RetryAfterMs:    retryAfterMs,
 		RateLimitsByModel: map[string]upstream.ModelQuota{
+			// ADR-0027: no pool counts — the former premium rows (luna,
+			// solar-pro4) report unmetered limits like every other standard
+			// row. Pool/Period/ResetAt stay as wire labels; upstream still
+			// enforces its own pools server-side.
 			"openai/gpt-5.6-luna": {
 				Model:       modelcat.DefaultModelID,
-				Limit:       modelcat.PremiumSessionLimit,
+				Limit:       unlimited,
 				RecentCount: st.recentCounts["openai/gpt-5.6-luna"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Pool:        "premium",
 				PoolLabel:   "Premium",
-				Entitlement: map[string]float64{"base": modelcat.PremiumSessionLimit},
 			},
 			"upstage/solar-pro4": {
 				Model:       modelcat.SolarPro4ModelID,
-				Limit:       modelcat.PremiumSessionLimit,
+				Limit:       unlimited,
 				RecentCount: st.recentCounts["upstage/solar-pro4"],
 				ResetAt:     pacMidnight,
 				Period:      "pacific_day",
 				Pool:        "premium",
 				PoolLabel:   "Premium",
-				Entitlement: map[string]float64{"base": modelcat.PremiumSessionLimit},
 			},
 			"z-ai/glm-5.3-flash": {
 				Model:       modelcat.Glm53ModelID,
