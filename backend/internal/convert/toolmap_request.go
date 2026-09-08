@@ -9,8 +9,9 @@ import (
 //
 // Upstream's free-mode gate classifies a request offering tools with NO
 // signature tool as third-party (foreign_toolset → downgrade to
-// ling-3.0-tiny:free, reference/freebuff common/src/constants/
-// foreign-client-signals.ts) and the trust system permanently caps any
+// ling-3.0-tiny:free, backend/internal/wirefacts/testdata/wire/common/src/
+// constants/foreign-client-signals.ts; generated mirror GenericToolNames in
+// toolnames_gen.go) and the trust system permanently caps any
 // account seen sending a foreign tool schema (third_party_client sticky cap).
 // The proxy neutralizes both by renaming common third-party harness tool
 // names to the official signature equivalents for the upstream wire and
@@ -27,8 +28,9 @@ import (
 // official codebuff signature tool they behave as. Keys are lowercase.
 // Only names whose behavior genuinely matches are mapped; everything else
 // passes through untouched (an unknown rename would break the client's
-// dispatcher). Derived from reference/freebuff common/src/tools/params/tool/*
-// schemas:
+// dispatcher). Behavior table owned by this file; the canonical upstream tool
+// names it maps onto are generated in toolnames_gen.go from
+// backend/internal/wirefacts/testdata/wire/common/src/tools/constants.ts:
 //
 //	read_files{paths[]}   write_file{path,instructions,content}
 //	run_terminal_command{command,...}   glob{pattern,...}

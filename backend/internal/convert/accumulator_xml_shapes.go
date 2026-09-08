@@ -16,15 +16,15 @@ import (
 //
 // or <tool_call>{"name":"...","arguments":{...}}</tool_call>
 //
-// codebuff_tool_call is the upstream's own canonical XML tag (issue #144;
-// reference common/src/tools/constants.ts — the CLI's stream parser
-// util/stream-xml-parser.ts extracts exactly this tag from model output).
+// ToolXMLName is the upstream's own canonical XML tag (issue #144; generated
+// in toolnames_gen.go from common/src/tools/constants.ts — the CLI's stream
+// parser util/stream-xml-parser.ts extracts exactly this tag from model output).
 var (
-	xmlToolCallBlockRe = regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>|<codebuff_tool_call>(.*?)</codebuff_tool_call>|<function_call>(.*?)</function_call>|<\|?tool[_\-]?call[_\-]?start\|?>(.*?)<\|?tool[_\-]?call[_\-]?end\|?>|<tool_calls>(.*?)</tool_calls>`)
-	fencedToolCallRe   = regexp.MustCompile("(?s)```(?:json|tool_?call)?\\s*\\n?(\\{\\s*\"(?:name|function|cb_tool_name)\"\\s*:\\s*.*?\\})\\s*\\n?```")
+	xmlToolCallBlockRe = regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>|<` + ToolXMLName + `>(.*?)</` + ToolXMLName + `>|<function_call>(.*?)</function_call>|<\|?tool[_\-]?call[_\-]?start\|?>(.*?)<\|?tool[_\-]?call[_\-]?end\|?>|<tool_calls>(.*?)</tool_calls>`)
+	fencedToolCallRe   = regexp.MustCompile("(?s)```(?:json|tool_?call)?\\s*\\n?(\\{\\s*\"(?:name|function|" + ToolNameParam + ")\"\\s*:\\s*.*?\\})\\s*\\n?```")
 	xmlFunctionHeadRe  = regexp.MustCompile(`(?i)<function[=\s]+["']?([^>"\s]+)["']?>`)
 	xmlParamRe         = regexp.MustCompile(`(?s)<parameter[=\s]+["']?([^>"\s]+)["']?>(.*?)</parameter>|<param[=\s]+["']?([^>"\s]+)["']?>(.*?)</param>`)
-	danglingToolTagsRe = regexp.MustCompile(`(?i)</?(?:tool_call|tool_calls|codebuff_tool_call|function_call|function|parameter|param|\|?tool[_\-]?call[_\-]?(?:start|end)\|?)(?:[=\s][^>]*)?>`)
+	danglingToolTagsRe = regexp.MustCompile(`(?i)</?(?:tool_call|tool_calls|` + "` + ToolXMLName + `" + `|function_call|function|parameter|param|\|?tool[_\-]?call[_\-]?(?:start|end)\|?)(?:[=\s][^>]*)?>`)
 )
 
 // extractXMLToolCalls parses text-based tool calls (Hermes/Qwen/MiMo XML format)
@@ -94,15 +94,15 @@ func extractXMLToolCallsBytes(content []byte) (string, []*toolCall) {
 // parseToolCallRaw parses a single raw tool call string in either JSON or XML format.
 func parseToolCallRaw(raw string) *toolCall {
 	// Try direct JSON: {"name":"...", "arguments":{...}} / {"function":{...}} /
-	// or the vendor's canonical codebuff_tool_call JSON keyed by cb_tool_name
-	// (reference common/src/tools/constants.ts toolNameParam):
+	// or the vendor's canonical ToolXMLName JSON keyed by ToolNameParam
+	// (generated in toolnames_gen.go from common/src/tools/constants.ts):
 	// {"cb_tool_name":"bash","command":"pwd","cb_easp":true}.
 	if strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}") {
 		var jObj map[string]any
 		if err := json.Unmarshal([]byte(raw), &jObj); err == nil {
 			name, _ := jObj["name"].(string)
 			if name == "" {
-				name, _ = jObj["cb_tool_name"].(string)
+				name, _ = jObj[ToolNameParam].(string)
 			}
 			if name == "" {
 				if fnObj, ok := jObj["function"].(map[string]any); ok {
@@ -121,12 +121,12 @@ func parseToolCallRaw(raw string) *toolCall {
 					argsStr = aStr
 				} else {
 					// Vendor canonical shape: the remaining keys ARE the tool
-					// input (cb_tool_name and the cb_easp stop sentinel are
-					// envelope params, never arguments — mirror of the
-					// vendor's parseToolCallContent delete pair).
+					// input (ToolNameParam and the EndsAgentStepParam stop
+					// sentinel are envelope params, never arguments — mirror
+					// of the vendor's parseToolCallContent delete pair).
 					args := make(map[string]any, len(jObj))
 					for k, v := range jObj {
-						if k == "cb_tool_name" || k == "cb_easp" {
+						if k == ToolNameParam || k == EndsAgentStepParam {
 							continue
 						}
 						args[k] = v
@@ -206,7 +206,7 @@ const (
 var xmlStreamClosers = map[xmlStreamShape]string{
 	xmlShapeToolCall:     "</tool_call>",
 	xmlShapeToolCalls:    "</tool_calls>",
-	xmlShapeCodebuff:     "</codebuff_tool_call>",
+	xmlShapeCodebuff:     "</" + ToolXMLName + ">",
 	xmlShapeFunctionCall: "</function_call>",
 }
 
@@ -216,7 +216,7 @@ var xmlStreamClosers = map[xmlStreamShape]string{
 var xmlStreamCloserBytes = map[xmlStreamShape][]byte{
 	xmlShapeToolCall:     []byte("</tool_call>"),
 	xmlShapeToolCalls:    []byte("</tool_calls>"),
-	xmlShapeCodebuff:     []byte("</codebuff_tool_call>"),
+	xmlShapeCodebuff:     []byte("</" + ToolXMLName + ">"),
 	xmlShapeFunctionCall: []byte("</function_call>"),
 }
 
@@ -226,7 +226,7 @@ var xmlStreamCloserBytes = map[xmlStreamShape][]byte{
 var xmlStreamLiteralOpeners = []string{
 	"<tool_call>",
 	"<tool_calls>",
-	"<codebuff_tool_call>",
+	"<" + ToolXMLName + ">",
 	"<function_call>",
 	"<|tool_call_start|>",
 	"<tool_call_start>",

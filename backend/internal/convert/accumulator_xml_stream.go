@@ -196,7 +196,7 @@ func (x *XMLToolCallExtractor) findOpener(s string) int {
 	for shape, open := range map[xmlStreamShape]string{
 		xmlShapeToolCall:     "<tool_call>",
 		xmlShapeToolCalls:    "<tool_calls>",
-		xmlShapeCodebuff:     "<codebuff_tool_call>",
+		xmlShapeCodebuff:     "<" + ToolXMLName + ">",
 		xmlShapeFunctionCall: "<function_call>",
 	} {
 		if i := strings.Index(s, open); i >= 0 && (best < 0 || i < best) {
@@ -315,7 +315,7 @@ func partialOpenerLen(s string) int {
 // language (go, py, bash, …) that must never open a block.
 func isStreamFenceTag(tag string) bool {
 	switch strings.ToLower(tag) {
-	case "json", "tool_call", "toolcall", "tool-call", "codebuff_tool_call", "codebuff-tool-call":
+	case "json", "tool_call", "toolcall", "tool-call", ToolXMLName, "codebuff-tool-call":
 		return true
 	}
 	return false

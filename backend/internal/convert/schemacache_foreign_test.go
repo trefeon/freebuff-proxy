@@ -15,14 +15,11 @@ import "testing"
 // (inclusionai/ling-3.0-tiny:free) under the foreign_toolset signal. Recheck
 // this pin on EVERY sync-upstream run.
 func TestInjectedEndTurnIsSignatureTool(t *testing.T) {
-	// GENERIC_TOOL_NAMES verbatim (foreign-client-signals.ts:33-44).
-	generic := map[string]bool{
-		"write_file":  true,
-		"web_search":  true,
-		"glob":        true,
-		"skill":       true,
-		"apply_patch": true,
-	}
+	// GenericToolNames is generated from the upstream snapshot
+	// (foreign-client-signals.ts:33-44) — see toolnames_gen.go. The test
+	// pins the same invariant against the generated table instead of a
+	// hand copy, so snapshot drift fails here until wiregen is re-run.
+	generic := GenericToolNames
 	if generic["end_turn"] {
 		t.Fatalf("end_turn joined GENERIC_TOOL_NAMES upstream: the injected tool no longer marks traffic first-party; remap the injection to another signature tool immediately")
 	}
