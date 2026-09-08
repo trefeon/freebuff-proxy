@@ -446,7 +446,7 @@
                   </ul>
                   <p class="text-[11px] text-[var(--fp-dim)] leading-relaxed">
                     {$tr(
-                      "Live served models for this account, cheapest first, charged hourly at session start.",
+                      "Live served models for this account, cheapest first, charged hourly in Freebucks.",
                     )}
                   </p>
                 </div>

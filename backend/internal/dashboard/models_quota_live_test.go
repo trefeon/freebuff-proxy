@@ -15,13 +15,10 @@ import (
 	"freebuff-proxy/backend/internal/upstream"
 )
 
-// quotaFor prefers the LIVE wire snapshot (rateLimitsByModel mirrored per
-// token) over static catalog copy. For premium pool models it renders
-// "<limit> premium quota" (e.g. "5 premium quota"), using Limit only — the
-// catalog view shows the model-level quota, not per-token usage; per-token
-// usage remains in the Tokens → per-token quota table. Fractional limits
-// are formatted via formatSessionUnits ("5", "1.6"). Non-premium rows still
-// render "1.6 of 5 used" when they gain live data.
+// quotaFor is Freebucks-based like the CLI picker: the wire prices map is
+// the only source of cost. A priced row renders "<n> Freebucks/hr", a
+// premium row with no live price renders "metered", other unpriced rows
+// render "unmetered". No label carries session counts or the word session.
 func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	cfg := &config.Config{
 		AuthTokens:         []string{"tok-0"},
@@ -40,13 +37,17 @@ func TestModelsPageLiveQuotaLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Seed the token's session manager with the observed live state BEFORE
-	// pool construction: recentCount 1.6 (0.6 settled + 1.0 active
-	// reservation), limit 5. UpdateQuotaFromProbe is the same path the
-	// admission/poll response uses to mirror the wire quota.
+	// pool construction: wire prices for luna (20/hr) and flash (0/hr).
+	// UpdateQuotaFromProbe is the same path the admission/poll response
+	// uses to mirror the wire state.
 	mgr := session.NewManager(client)
 	mgr.UpdateQuotaFromProbe(&upstream.SessionState{
-		RateLimitsByModel: map[string]upstream.ModelQuota{
-			"openai/gpt-5.6-luna": {Model: "openai/gpt-5.6-luna", Limit: 5, RecentCount: 1.6, Period: "pacific_day"},
+		Freebucks: &upstream.FreebucksInfo{
+			Balance: 100,
+			Prices: map[string]float64{
+				"openai/gpt-5.6-luna":        20,
+				"deepseek/deepseek-v4-flash": 0,
+			},
 		},
 	})
 	reg := registry.New(cfg, nil)
@@ -78,7 +79,13 @@ func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	for _, m := range data.Models {
 		quotaBy[m.ID] = m.Quota
 	}
-	if got, want := quotaBy["openai/gpt-5.6-luna"], "5 premium quota"; got != want {
-		t.Errorf("live quota label = %q, want %q (premium quota, limit only)", got, want)
+	if got, want := quotaBy["openai/gpt-5.6-luna"], "20 Freebucks/hr"; got != want {
+		t.Errorf("live quota label = %q, want %q (wire price)", got, want)
+	}
+	if got, want := quotaBy["deepseek/deepseek-v4-flash"], "0 Freebucks/hr"; got != want {
+		t.Errorf("live quota label = %q, want %q (zero wire price)", got, want)
+	}
+	if q, ok := quotaBy["mimo/mimo-v2.5"]; ok && q != "unmetered" {
+		t.Errorf("unpriced quota label = %q, want unmetered", q)
 	}
 }

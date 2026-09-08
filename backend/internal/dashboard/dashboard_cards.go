@@ -769,33 +769,34 @@ type aliasRow struct {
 	Real  string `json:"real"`
 }
 
-// quotaFor returns the meter label for a model row. For premium
-// models (luna, solar-pro4) it prefers the LIVE wire snapshot's limit
-// (rateLimitsByModel mirrored per token — server-computed, moves with trust/
-// streak/referral bonuses) rendered as "<limit> premium quota", falling back
-// to the static meter label when no live data exists (session-count caps
-// are retired upstream; see ADR-0027).
-// Referral GLM 5.2 keeps "referral +1/day", and all other served rows are
-// "unlimited session".
-// The old live copy "1 of 5 used" was per-single-token usage, which confused
-// the catalog view (the table should show the model-level quota, not one
-// token's used count); "unmetered" is now "unlimited session" per UX request.
+// quotaFor returns the meter label for a model row, Freebucks-based like the
+// CLI picker (cli/src/utils/freebucks.ts): the wire prices map is the only
+// source of cost, unpriced rows are unmetered. Session-count caps are retired
+// upstream (see ADR-0027), so no label renders used/limit counts or the word
+// session. Referral GLM 5.2 keeps "referral +1/day".
 func (d *Dashboard) quotaFor(id string) string {
-	if modelcat.IsPremium(id) {
-		if live := d.livePremiumQuotaLabel(id); live != "" {
-			return live
-		}
-		return "metered — Freebucks/hr at session start"
-	}
-	if d.pool != nil {
-		if live := d.liveQuotaLabel(id); live != "" {
-			return live
-		}
-	}
 	if id == modelcat.Glm52ModelID {
 		return "referral +1/day"
 	}
-	return "unlimited session"
+	if d.pool != nil {
+		if p, ok := d.firstFreebucksPrices()[id]; ok {
+			return freebucksPriceLabel(p)
+		}
+	}
+	if modelcat.IsPremium(id) {
+		return "metered"
+	}
+	return "unmetered"
+}
+
+// freebucksPriceLabel renders one wire price as "<n> Freebucks/hr" (0 reads
+// bare, fractionals to one decimal). Shared by the models table price and
+// quota columns so both stay Freebucks-based.
+func freebucksPriceLabel(p float64) string {
+	if p == 0 {
+		return "0 Freebucks/hr"
+	}
+	return fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(p))
 }
 
 // firstFreebucksPrices returns the first token snapshot's Freebucks price
@@ -828,42 +829,10 @@ func (d *Dashboard) firstFreebucksPriceNotices() map[string]string {
 	return nil
 }
 
-// livePremiumQuotaLabel renders "<limit> premium quota" from the first token
-// quota snapshot carrying an entry for the premium model ("5 premium quota").
-// "" when no token has live data for the model. Uses Limit only (not
-// RecentCount) — the catalog view shows the model-level quota, not per-token
-// usage; per-token usage remains in the Tokens → per-token quota table.
-func (d *Dashboard) livePremiumQuotaLabel(id string) string {
-	if d.pool == nil {
-		return ""
-	}
-	for _, t := range d.pool.Snapshot() {
-		if q, ok := t.QuotaByModel[id]; ok && q.Limit > 0 {
-			return fmt.Sprintf("%s premium quota", formatSessionUnits(q.Limit))
-		}
-	}
-	return ""
-}
-
-// liveQuotaLabel renders "used of limit" from the first token quota snapshot
-// carrying an entry for the model ("1.6 of 5 used" — the CLI's fractional
-// unit display). "" when no token has live data for the model. Kept for
-// non-premium rows (e.g. referral GLM 5.2 promo after it gains live data).
-func (d *Dashboard) liveQuotaLabel(id string) string {
-	if d.pool == nil {
-		return ""
-	}
-	for _, t := range d.pool.Snapshot() {
-		if q, ok := t.QuotaByModel[id]; ok && q.Limit > 0 {
-			return fmt.Sprintf("%s of %s used", formatSessionUnits(q.RecentCount), formatSessionUnits(q.Limit))
-		}
-	}
-	return ""
-}
-
 // formatSessionUnits mirrors the CLI's unit display
 // (format-session-units.ts): integers render bare, fractionals to one
-// decimal — a long run can consume 1.3 sessions and billing floors at 0.1.
+// decimal. Shared name with the CLI file; here it formats Freebucks/hr
+// prices, never session counts.
 func formatSessionUnits(v float64) string {
 	if v == float64(int64(v)) {
 		return strconv.FormatInt(int64(v), 10)
@@ -902,11 +871,7 @@ func (d *Dashboard) modelsData() modelsData {
 		if p, ok := livePrices[id]; ok {
 			row.Price = p
 			effectivePrices[id] = p
-			if p == 0 {
-				row.PriceLabel = "0 Freebucks/hr"
-			} else {
-				row.PriceLabel = fmt.Sprintf("%s Freebucks/hr", formatSessionUnits(p))
-			}
+			row.PriceLabel = freebucksPriceLabel(p)
 		}
 		if id == modelcat.Glm52ModelID {
 			row.PriceLabel = "Referral grant"

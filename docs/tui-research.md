@@ -50,7 +50,7 @@ Sections: `PREMIUM | UNLIMITED | REFERRAL | LIMITED_OFFER` (empty filtered). Her
 | `availability` | `getFreebuffModelUnavailableLabel(model)`, `isFreebuffModelAvailable(tier)` | Greyed row `Unavailable 9am-5pm ET` |
 | `contextWindow` | `FREEBUFF_MODEL_CONTEXT_WINDOWS[model]` | Row badge `1M` |
 
-**Proxy mapping:** Dashboard `dashboard_models.go:quotaFor` shows `5 premium quota` (limit only); `dashboard_tokens.go` `quotaRow{limit,recent,remaining,period,resetAt,entitlement}` shows per-model correctly via `formatQuota`. Gap: **no section header `N of M used`**, no `entitlementBreakdown` grouping, no `streak/freebucks/standing/limitedOffers` at all.
+**Proxy mapping:** Dashboard `dashboard_cards.go:quotaFor` renders the wire prices map (`20 Freebucks/hr`, `0 Freebucks/hr`); unpriced rows read `metered` (premium) or `unmetered`, referral GLM 5.2 reads `referral +1/day`. No session-count labels. Gap: **no section header**, no `entitlementBreakdown` grouping, no `streak/standing/limitedOffers` at all.
 
 ## 4. Landing Screen (`freebuff-landing-screen.tsx`)
 * Hero model (`getRecommendedFreebuffModelId` — `luna` full tier, `mimo` limited) + `takeOverFreebuffSession` button
