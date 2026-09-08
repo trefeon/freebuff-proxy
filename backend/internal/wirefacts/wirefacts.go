@@ -209,7 +209,7 @@ func ScanTS(name string, src []byte, commit string) error {
 		}
 		word := rest
 		if i := strings.IndexFunc(word, func(r rune) bool {
-			return !(r == '_' || r == '$' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+			return r != '_' && r != '$' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9')
 		}); i >= 0 {
 			word = word[:i]
 		}
