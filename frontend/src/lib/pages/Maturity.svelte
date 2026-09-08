@@ -428,7 +428,9 @@
                   disabled={!!resetting[idx]}
                   loading={!!resetting[idx]}
                   onclick={() => resetWarn(idx)}
-                  title={$tr("Clear the non-advance warning and re-arm the daily loop (config unchanged)")}
+                  title={$tr(
+                    "Clear the non-advance warning and re-arm the daily loop (config unchanged)",
+                  )}
                 >
                   {$tr("Reset warning")}
                 </Button>

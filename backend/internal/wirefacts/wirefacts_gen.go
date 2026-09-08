@@ -33,5 +33,5 @@ var RegistryPins = []WireFile{
 	{Path: "freebuff-models.ts", SHA256: "44bdaf31305ad26fe92af869cd940cc6c17dd6ed52b93839e5e4d2e95167da31"},
 	{Path: "gemini.ts", SHA256: "5de5784f96331b93cccd7a4356af17de52783f1727acee17f9c5ebe390569e80"},
 	{Path: "model-config.ts", SHA256: "210f9bbfe1ac249aafeb0b134c01c2725b491696130313d225803290f0b988ea"},
-	{Path: "freebuff-model-entitlements.ts", SHA256: "7561362b6c8f1c82ffaf25ba42290dd682d1cb2d849763004298cf650326950b"},
+	{Path: "freebuff-model-entitlements.ts", SHA256: "695bf9dd0c8d50937fbd01fd127631ef4cced7427cc1595c44476d84d2fc43cb"},
 }

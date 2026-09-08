@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// Token maturity persistence (Account Maturity rev 2): per-token automation
-// state rides the tokens table keyed by the SHA-256 hash of the token value
-// (raw tokens never touch disk). maturity_json is the opaque automation blob
+// SaveTokenMaturity persists per-token maturity automation state (Account
+// Maturity rev 2) in the tokens table keyed by the SHA-256 hash of the
+// value (raw tokens never touch disk). maturity_json is the opaque automation blob
 // the pool marshals (config, slot, counters, warning); streak_blob is the
 // opaque upstream streak JSON for the dashboard. CreatedAt is Unix millis
 // UTC, stamped once on first save and preserved afterwards.

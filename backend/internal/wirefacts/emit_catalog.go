@@ -290,10 +290,10 @@ func buildCatalogRows(c *catalogInputs) ([]catalogRow, error) {
 		}
 		// Premium: served rows mirror the resolved row flag, paused rows never.
 		if r.served {
-			switch v := f["premium"]; {
-			case v == "true":
+			switch v := f["premium"]; v {
+			case "true":
 				r.premium = true
-			case v == "false":
+			case "false":
 			default:
 				b, err := resolveCatalogRef(c.ids, v, "row "+n+" premium", c.commit)
 				if err != nil {
@@ -451,7 +451,11 @@ func isIdent(s string) bool {
 		return false
 	}
 	for i := range s {
-		if c := s[i]; !(c == '_' || c == '$' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' && i > 0) {
+		switch c := s[i]; {
+		case c == '_', c == '$':
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z':
+		case '0' <= c && c <= '9' && i > 0:
+		default:
 			return false
 		}
 	}

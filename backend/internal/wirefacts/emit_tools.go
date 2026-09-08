@@ -117,7 +117,7 @@ func parseToolConst(path string, src []byte, name, commit string) (string, error
 	}
 	val := rest[1 : 1+end]
 	for j := 0; j < len(val); j++ {
-		if c := val[j]; c != '_' && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') {
+		if c := val[j]; c != '_' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 			return fail("%s:%d: %q value %q is not a plain tool token at upstream commit %s", path, lineOf(src, i), name, val, commit)
 		}
 	}
@@ -279,7 +279,7 @@ func stripTSComments(s string) string {
 			}
 			if s[i+1] == '*' {
 				i += 2
-				for i+1 < len(s) && !(s[i] == '*' && s[i+1] == '/') {
+				for i+1 < len(s) && (s[i] != '*' || s[i+1] != '/') {
 					if s[i] == '\n' {
 						b.WriteByte('\n')
 					}
