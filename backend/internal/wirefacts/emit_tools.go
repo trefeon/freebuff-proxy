@@ -177,11 +177,14 @@ func parseGenericToolNames(src []byte, commit string) ([]string, error) {
 // pinnedSessionStatuses is the session status envelope at the current
 // upstream SHA: every status: '<literal>' variant clients switch on. Unknown
 // fails (upstream added a shape we do not handle), missing fails (upstream
-// removed one we may reference).
+// removed one we may reference). The purchase_* trio are Desktop purchase-
+// flow admission shapes (78a7ab4); they ride the default TokenOK path at
+// runtime, never a WireCode.
 var pinnedSessionStatuses = []string{
 	"none", "active", "ended", "country_blocked", "model_locked",
 	"model_unavailable", "banned", "ip_capped", "rate_limited",
 	"spend_limited", "premium_slot_taken", "superseded",
+	"purchase_claim_released", "purchase_in_use", "purchase_capacity",
 }
 
 // verifySessionStatuses checks the status envelope; it emits nothing and
@@ -194,30 +197,46 @@ func verifySessionStatuses(src []byte, commit string) error {
 		want[p] = true
 	}
 	seen := make(map[string]bool)
+	check := func(name string) error {
+		if seen[name] {
+			return nil
+		}
+		seen[name] = true
+		if !want[name] {
+			return fmt.Errorf("wiregen: %s:%d: unknown session status %q at upstream commit %s — teach backend/internal/wirefacts/emit_tools.go before regenerating", path, lineOf([]byte(code), strings.Index(code, "'"+name+"'")), name, commit)
+		}
+		return nil
+	}
 	for i := 0; i < len(code); {
 		j := strings.Index(code[i:], "status:")
 		if j < 0 {
 			break
 		}
 		i += j + len("status:")
-		rest := strings.TrimLeft(code[i:], " \t")
-		i += len(code[i:]) - len(rest)
-		if !strings.HasPrefix(rest, "'") {
-			i++
-			continue
-		}
-		end := strings.IndexByte(rest[1:], '\'')
-		if end < 0 {
-			break
-		}
-		name := rest[1 : 1+end]
-		i += 1 + end + 1
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-		if !want[name] {
-			return fmt.Errorf("wiregen: %s:%d: unknown session status %q at upstream commit %s — teach backend/internal/wirefacts/emit_tools.go before regenerating", path, lineOf([]byte(code), strings.Index(code, "'"+name+"'")), name, commit)
+		// One status: may carry same-line union arms
+		// (status: 'purchase_in_use' | 'purchase_capacity'): every arm is
+		// envelope, so follow '|' continuations instead of checking the
+		// head literal only.
+		for {
+			rest := strings.TrimLeft(code[i:], " \t")
+			i += len(code[i:]) - len(rest)
+			if !strings.HasPrefix(rest, "'") {
+				break
+			}
+			end := strings.IndexByte(rest[1:], '\'')
+			if end < 0 {
+				break
+			}
+			if err := check(rest[1 : 1+end]); err != nil {
+				return err
+			}
+			i += 1 + end + 1
+			tail := strings.TrimLeft(code[i:], " \t")
+			if !strings.HasPrefix(tail, "|") {
+				i += len(code[i:]) - len(tail)
+				break
+			}
+			i += len(code[i:]) - len(tail) + 1
 		}
 	}
 	for _, p := range pinnedSessionStatuses {

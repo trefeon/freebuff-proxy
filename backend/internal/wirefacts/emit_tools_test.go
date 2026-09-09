@@ -90,6 +90,30 @@ func TestEmitToolsFailsExplicit(t *testing.T) {
 			t.Errorf("failed run emitted %d bytes, want nothing", out.Len())
 		}
 	})
+	t.Run("union unknown status", func(t *testing.T) {
+		t.Parallel()
+		// Union arms are envelope too (status: 'purchase_in_use' |
+		// 'purchase_capacity'): an unknown second arm must fail naming it,
+		// not slide through while the head literal checks out.
+		wireDir, regDir, sha := toolsFixtureStage(t, map[string]func(string) string{
+			sessionTypesPath: func(s string) string {
+				return strings.Replace(s, "status: 'superseded'", "status: 'superseded' | 'zzz_unknown'", 1)
+			},
+		})
+		var out bytes.Buffer
+		err := EmitTools(sha, wireDir, regDir, &out)
+		if err == nil {
+			t.Fatal("EmitTools succeeded on unknown union-arm session status, want explicit failure")
+		}
+		for _, want := range []string{sessionTypesPath, "zzz_unknown", sha} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q lacks %q", err.Error(), want)
+			}
+		}
+		if out.Len() != 0 {
+			t.Errorf("failed run emitted %d bytes, want nothing", out.Len())
+		}
+	})
 	t.Run("missing const", func(t *testing.T) {
 		t.Parallel()
 		wireDir, regDir, sha := toolsFixtureStage(t, map[string]func(string) string{
