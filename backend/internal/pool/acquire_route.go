@@ -90,6 +90,7 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		p.admissionsMu.Lock()
 		p.admissions[model] = -1 // sentinel: "leader, target unknown"
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 		// Ensure the gate is closed and cleaned up on every exit path.
 		defer func() {
 			p.modelAdmissionGateMu.Lock()
@@ -350,6 +351,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// Update the pre-registered leader slot with the actual token index.
 		p.admissions[model] = idx
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 
 		permit, err := p.gate.acquire(ctx, model)
 		if err != nil {
@@ -358,6 +360,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				delete(p.admissions, model)
 			}
 			p.admissionsMu.Unlock()
+			p.markPersistDirty()
 			return nil, err
 		}
 		// Re-validate the entry is still current BEFORE the admission POST:
@@ -367,12 +370,12 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// post-admission check below stays: the removal can still land
 		// during the create.
 		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
-			permit.Release()
 			p.admissionsMu.Lock()
 			if p.admissions != nil && (p.admissions[model] == idx || p.admissions[model] == -1) {
 				delete(p.admissions, model)
 			}
 			p.admissionsMu.Unlock()
+			p.markPersistDirty()
 			continue
 		}
 		sessionStart := time.Now()
@@ -392,6 +395,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			delete(p.admissions, model)
 		}
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 		phasetiming.FromContext(ctx).Since(phasetiming.SessionRefreshMS, sessionStart)
 		if err != nil {
 			c := p.classifyAndCooldown(tok.runs, err)
@@ -539,8 +543,26 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
+		// Per-(token,model) in-flight chat lease cap (burst queue): at most cap
+		// concurrent leases may hold this token+model lane; excess waiters park
+		// until a slot frees or their context expires (wait-or-503, mirroring
+		// the create gate). Metered vs unmetered follows the Freebucks price
+		// table (nil price = unmetered). The permit rides the lease and is
+		// released through the entry pointer (LeaseRelease/LeaseAbandon), never
+		// by index. A removal racing the wait skips the token (the retired
+		// entry drains on its last release) instead of leasing a dead account.
+		chatPermit, _, err := p.chatGate.acquire(ctx, tok, effectiveModel, chatCap(cfg, chatMetered(tok, effectiveModel)))
+		if err != nil {
+			tok.runs.Release(run)
+			return nil, err
+		}
+		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
+			tok.runs.Release(run)
+			chatPermit.Release()
+			continue
+		}
 		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			entry: tok, AcquiredAt: time.Now()}
+			entry: tok, chat: chatPermit, AcquiredAt: time.Now()}
 		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
 		// lease grant. The pre-filter above only reads the rolling window;
 		// recording later (in Chat) raced it — a concurrent burst (agent

@@ -5,22 +5,23 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"freebuff-proxy/backend/internal/upstream"
 )
 
-// storeVersion guards the on-disk format; bump it when the schema changes so
-// a stale file is ignored instead of mis-parsed.
+// storeVersion guards the legacy on-disk format; a stale file is ignored
+// instead of mis-parsed. The live format is sessions_persist (SQLite); the
+// JSON file is import-only.
 const storeVersion = 1
 
-// maxStoreFileSize caps the on-disk store file; anything larger is treated
-// as empty instead of being read into memory wholesale.
+// maxStoreFileSize caps the legacy store file read on import; anything
+// larger is treated as empty instead of being read into memory wholesale.
 const maxStoreFileSize = 8 << 20 // 8 MiB
 
-// persistedState is the on-disk shape of one token's cached session. The
+// persistedState is the persisted shape of one token's cached session. The
 // instance id + expiry are the fields that matter for restart-resume; the
 // rest are carried so a resumed session keeps its country/queue view.
 type persistedState struct {
@@ -85,54 +86,87 @@ type storeFile struct {
 	Runs map[string]map[string]PersistedRun `json:"runs,omitempty"`
 }
 
-// Store persists cached session state to a single JSON file so a proxy
-// restart can resume an unexpired upstream session instead of admitting a
-// fresh billable one. Keys are token hashes (upstream.Client.TokenKey),
-// never raw tokens. All methods are safe for concurrent use; writes are
-// atomic (temp file + rename) and the file is created with mode 0600.
+// SessionBackend is the sessions_persist seam (DB unified storage). The
+// blobs stay opaque JSON: callers marshal, the backend never interprets
+// them. Keys are token hashes (upstream.Client.TokenKey), never raw tokens.
+//
+// The interface (not a concrete store) keeps this package out of the
+// store dependency: archtest pins session to telemetry + upstream only,
+// and the CLI wires the real backend.
+type SessionBackend interface {
+	SaveSession(tokenHash, sessionData, runsData string) error
+	LoadSession(tokenHash string) (sessionData, runsData string, found bool, err error)
+	SaveSessionRuns(tokenHash, runsData string) error
+	DeleteSession(tokenHash string) error
+}
+
+// Store persists cached session state so a proxy restart can resume an
+// unexpired upstream session instead of admitting a fresh billable one.
+// sessions_persist (via backend) is the sole truth: every Save/Load/Delete
+// goes through the backend under the token hash. The path is the legacy
+// JSON state file, kept as an import-only fallback: on first use its
+// entries fold into the backend (store-first on collision, WARN) and the
+// file archives to .bak. The file is never written.
+//
+// All methods are safe for concurrent use. A nil backend is memory-only
+// (tests, DB-unavailable degrade): same-instance behavior is unchanged,
+// cross-restart resume needs a backend.
 type Store struct {
-	path string
+	path    string
+	backend SessionBackend
 
-	mu     sync.Mutex
-	data   map[string]persistedState
-	runs   map[string]map[string]PersistedRun // token key → agent id → run (issue #40)
-	loaded bool
-	// readFailed is set when a read of the on-disk file failed with a
-	// non-NotExist error (chmod 000, transient EIO). While set, Save/Remove
-	// keep their in-memory update but must NOT flush the partial map over the
-	// file: that would destroy every other token's persisted entry. The
-	// flag is cleared once a load succeeds (the on-disk content is then
-	// established and a flush is safe again).
-	readFailed bool
-	// pending records mutations that could not be flushed while readFailed
-	// was set (key → state written, nil for a removal). loadLocked merges
-	// them back over the disk content on the next successful reload so the
-	// in-window updates survive instead of being silently discarded by the
-	// rebuild (a lost update would leave a restart unable to resume the
-	// session, forcing a fresh billable admission). Guarded by mu.
-	pending map[string]*persistedState
+	mu   sync.Mutex
+	data map[string]persistedState
+	runs map[string]map[string]PersistedRun // token key → agent id → run (issue #40)
+	// fetched marks keys already reconciled against the backend, so a
+	// memory miss consults the DB exactly once instead of on every Load.
+	fetched map[string]bool
+	// imported marks the one-time legacy-file fold (reset to retry while
+	// the file stays unreadable with a non-NotExist error).
+	imported bool
 }
 
-// NewStore builds a store backed by path. The file is read lazily on the
-// first Load; NewStore never fails (a missing/unreadable file is treated as
-// empty and a later Save overwrites it).
+// NewStore builds a memory-only store with a legacy import source at path.
+// The file is read lazily on first use; it is never written.
 func NewStore(path string) *Store {
-	return &Store{path: path, pending: make(map[string]*persistedState), runs: make(map[string]map[string]PersistedRun)}
+	return &Store{path: path}
 }
 
-func (s *Store) loadLocked() {
-	if s.loaded {
+// NewStoreWithBackend builds a store persisting through backend
+// (sessions_persist, the sole truth) with a legacy import source at path.
+// The file is read lazily on the first Load; NewStoreWithBackend never
+// fails (a missing/unreadable file is treated as empty).
+func NewStoreWithBackend(path string, backend SessionBackend) *Store {
+	return &Store{path: path, backend: backend}
+}
+
+// ensureImportedLocked folds the legacy JSON file into memory (and the
+// backend when set) exactly once. Precedence is store-first: a hash the
+// backend already holds keeps the backend row (collision WARN, incoming
+// file entry dropped); only hashes absent from the backend are pushed.
+// After a fully successful push the source archives to .bak (never
+// deleted); a path already ending in .bak never renames. Caller holds s.mu.
+func (s *Store) ensureImportedLocked() {
+	if s.imported {
 		return
 	}
-	s.data = make(map[string]persistedState)
-	s.runs = make(map[string]map[string]PersistedRun)
+	s.imported = true
+	if s.data == nil {
+		s.data = make(map[string]persistedState)
+	}
+	if s.runs == nil {
+		s.runs = make(map[string]map[string]PersistedRun)
+	}
+	if s.fetched == nil {
+		s.fetched = make(map[string]bool)
+	}
+	if s.path == "" {
+		return
+	}
 
 	// Reject oversized files before reading them into memory.
 	if fi, err := os.Stat(s.path); err == nil && fi.Size() > maxStoreFileSize {
-		slog.Warn("session store: file too large, ignoring", "path", s.path, "bytes", fi.Size())
-		s.loaded = true
-		s.readFailed = false
-		s.applyPendingLocked()
+		slog.Warn("session store: legacy file too large, ignoring", "path", s.path, "bytes", fi.Size())
 		return
 	}
 
@@ -140,56 +174,182 @@ func (s *Store) loadLocked() {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// First run: a missing file is a valid empty store.
-			s.loaded = true
-			s.readFailed = false
-			s.applyPendingLocked()
-		} else {
-			// Leave loaded=false so the next Load (or Save) retries the
-			// read instead of permanently freezing an empty view that a
-			// later Save would flush over the on-disk file, destroying
-			// other tokens' persisted sessions. Track readFailed so Save/
-			// Remove skip the flush while the file stays unreadable.
-			s.readFailed = true
-			slog.Warn("session store: read failed, will retry on next access", "path", s.path, "err", err)
+			return
 		}
+		// Leave imported=false so the next access retries instead of
+		// permanently freezing an empty view. The backend (when set)
+		// stays authoritative regardless.
+		s.imported = false
+		slog.Warn("session store: legacy file unreadable, will retry on next access", "path", s.path, "err", err)
 		return
 	}
 	var file storeFile
 	if err := json.Unmarshal(data, &file); err != nil {
-		// The file is genuinely bad: remember that so we stop re-parsing it
-		// and proceed empty (a later Save replaces it).
-		slog.Warn("session store: parse failed, ignoring", "path", s.path, "err", err)
-		s.loaded = true
-		s.readFailed = false
-		s.applyPendingLocked()
+		slog.Warn("session store: legacy file parse failed, ignoring", "path", s.path, "err", err)
 		return
 	}
 	if file.Version != storeVersion {
-		slog.Warn("session store: version mismatch, ignoring", "path", s.path, "version", file.Version)
-		s.loaded = true
-		s.readFailed = false
-		s.applyPendingLocked()
+		slog.Warn("session store: legacy file version mismatch, ignoring", "path", s.path, "version", file.Version)
 		return
 	}
-	if file.Sessions != nil {
-		for key, ps := range file.Sessions {
-			// An "active" entry without an instance id cannot be resumed and
-			// would poison the resume path; drop it on load.
-			if ps.Status == "active" && ps.InstanceID == "" {
-				slog.Warn("session store: dropping active entry with empty instance id", "path", s.path, "key", key)
+
+	// Union of session + run keys: a run without cached session state
+	// still carries resume value.
+	keys := make(map[string]struct{}, len(file.Sessions)+len(file.Runs))
+	for key := range file.Sessions {
+		keys[key] = struct{}{}
+	}
+	for key := range file.Runs {
+		keys[key] = struct{}{}
+	}
+	failed := false
+	for key := range keys {
+		if key == "" {
+			continue
+		}
+		ps, hasSess := file.Sessions[key]
+		if hasSess && ps.Status == "active" && ps.InstanceID == "" {
+			// An "active" entry without an instance id cannot be resumed
+			// and would poison the resume path; drop it on import.
+			slog.Warn("session store: dropping legacy active entry with empty instance id", "path", s.path, "key", key)
+			hasSess = false
+		}
+		var runMap map[string]PersistedRun
+		if agents, ok := file.Runs[key]; ok && len(agents) > 0 {
+			runMap = make(map[string]PersistedRun, len(agents))
+			for agentID, pr := range agents {
+				// A run entry without an id cannot be resumed; drop it.
+				if pr.RunID == "" {
+					continue
+				}
+				runMap[agentID] = pr
+			}
+			if len(runMap) == 0 {
+				runMap = nil
+			}
+		}
+		if !hasSess && len(runMap) == 0 {
+			continue
+		}
+		if s.backend == nil {
+			if hasSess {
+				s.data[key] = ps
+			}
+			if len(runMap) > 0 {
+				s.runs[key] = runMap
+			}
+			s.fetched[key] = true
+			continue
+		}
+		sessJSON := ""
+		if hasSess {
+			raw, err := json.Marshal(ps)
+			if err != nil {
+				slog.Warn("session store: legacy entry unmarshalable, skipping", "key", key, "err", err)
+				failed = true
 				continue
 			}
+			sessJSON = string(raw)
+		}
+		runsJSON := ""
+		if len(runMap) > 0 {
+			raw, err := json.Marshal(runMap)
+			if err != nil {
+				slog.Warn("session store: legacy runs unmarshalable, skipping", "key", key, "err", err)
+				failed = true
+				continue
+			}
+			runsJSON = string(raw)
+		}
+		prevSess, prevRuns, found, err := s.backend.LoadSession(key)
+		if err != nil {
+			slog.Warn("session store: backend read during legacy import failed; entry kept in memory only", "key", key, "err", err)
+			if hasSess {
+				s.data[key] = ps
+			}
+			if len(runMap) > 0 {
+				s.runs[key] = runMap
+			}
+			failed = true
+			continue
+		}
+		if found {
+			// Store-first: the backend row wins. Identical re-imports
+			// stay silent; a genuine split-brain warns.
+			if prevSess != sessJSON || prevRuns != runsJSON {
+				slog.Warn("session store: legacy import collision, dashboard store wins", "path", s.path, "token_hash", key)
+			}
+			continue
+		}
+		if err := s.backend.SaveSession(key, sessJSON, runsJSON); err != nil {
+			slog.Warn("session store: legacy import write failed; entry kept in memory only", "key", key, "err", err)
+			if hasSess {
+				s.data[key] = ps
+			}
+			if len(runMap) > 0 {
+				s.runs[key] = runMap
+			}
+			failed = true
+			continue
+		}
+		if hasSess {
+			s.data[key] = ps
+		}
+		if len(runMap) > 0 {
+			s.runs[key] = runMap
+		}
+		s.fetched[key] = true
+	}
+	if s.backend != nil && !failed && !strings.HasSuffix(s.path, ".bak") {
+		bak := s.path + ".bak"
+		// Windows rename fails over an existing target: clear a stale .bak
+		// first (the archive is replaced, the legacy source never deleted).
+		_ = os.Remove(bak)
+		if err := os.Rename(s.path, bak); err != nil {
+			// The rows are already in the backend, so a stranded file is
+			// harmless: the next import finds identical rows and stays
+			// silent instead of duplicating.
+			slog.Warn("session store: legacy archive failed (rows already imported; file left in place)", "path", s.path, "err", err)
+		}
+	}
+}
+
+// fetchLocked reconciles one key against the backend on a memory miss.
+// The backend row (when present) populates both the session and runs maps
+// so a later persist writes the row back whole instead of clobbering the
+// half it did not load. Returns true when the backend could not be read
+// (callers must not converge-delete a row they never saw). Caller holds
+// s.mu.
+func (s *Store) fetchLocked(key string) bool {
+	if s.backend == nil || s.fetched[key] {
+		return false
+	}
+	s.fetched[key] = true
+	sessBlob, runsBlob, found, err := s.backend.LoadSession(key)
+	if err != nil {
+		slog.Warn("session store: backend load failed, serving memory view", "err", err)
+		return true
+	}
+	if !found {
+		return false
+	}
+	if sessBlob != "" {
+		var ps persistedState
+		if err := json.Unmarshal([]byte(sessBlob), &ps); err != nil {
+			slog.Warn("session store: backend session blob unparsable, ignoring", "err", err)
+		} else if ps.Status == "active" && ps.InstanceID == "" {
+			slog.Warn("session store: backend holds active entry with empty instance id, ignoring")
+		} else {
 			s.data[key] = ps
 		}
 	}
-	if file.Runs != nil {
-		for key, agents := range file.Runs {
-			if len(agents) == 0 {
-				continue
-			}
+	if runsBlob != "" {
+		var agents map[string]PersistedRun
+		if err := json.Unmarshal([]byte(runsBlob), &agents); err != nil {
+			slog.Warn("session store: backend runs blob unparsable, ignoring", "err", err)
+		} else {
 			runMap := make(map[string]PersistedRun, len(agents))
 			for agentID, pr := range agents {
-				// A run entry without an id cannot be resumed; drop it.
 				if pr.RunID == "" {
 					continue
 				}
@@ -200,18 +360,59 @@ func (s *Store) loadLocked() {
 			}
 		}
 	}
-	s.loaded = true
-	s.readFailed = false
-	s.applyPendingLocked()
+	return false
+}
+
+// persistLocked writes key's current memory view to the backend: both
+// blobs when present, a row delete when both are gone. A nil backend is a
+// no-op (memory-only). Backend errors only warn — the in-memory update is
+// kept so the store stays consistent for this process. Caller holds s.mu.
+func (s *Store) persistLocked(key string) {
+	if s.backend == nil {
+		return
+	}
+	sessJSON := ""
+	if ps, ok := s.data[key]; ok {
+		raw, err := json.Marshal(ps)
+		if err != nil {
+			slog.Warn("session store: marshal failed, backend write skipped", "err", err)
+			return
+		}
+		sessJSON = string(raw)
+	}
+	runsJSON := ""
+	if agents, ok := s.runs[key]; ok && len(agents) > 0 {
+		raw, err := json.Marshal(agents)
+		if err != nil {
+			slog.Warn("session store: runs marshal failed, backend write skipped", "err", err)
+			return
+		}
+		runsJSON = string(raw)
+	}
+	var err error
+	if sessJSON == "" && runsJSON == "" {
+		err = s.backend.DeleteSession(key)
+	} else {
+		err = s.backend.SaveSession(key, sessJSON, runsJSON)
+	}
+	if err != nil {
+		slog.Warn("session store: backend write failed (in-memory update kept)", "err", err)
+	}
 }
 
 // Load returns the persisted cached state for key, or nil when absent or
 // already expired beyond the grace window. Load never performs upstream
 // calls; it only filters obviously-dead entries.
 func (s *Store) Load(key string) *cachedState {
+	if key == "" {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
+	s.ensureImportedLocked()
+	if _, ok := s.data[key]; !ok {
+		s.fetchLocked(key)
+	}
 	ps, ok := s.data[key]
 	if !ok {
 		return nil
@@ -220,9 +421,7 @@ func (s *Store) Load(key string) *cachedState {
 	// impossible and keeping them only delays the inevitable re-create.
 	if !ps.GracePeriodEndsAt.IsZero() && time.Now().After(ps.GracePeriodEndsAt) {
 		delete(s.data, key)
-		if s.flushLockedUnlessReadFailed() {
-			s.recordPendingLocked(key, nil)
-		}
+		s.persistLocked(key)
 		return nil
 	}
 	cs := &cachedState{
@@ -274,13 +473,14 @@ func (s *Store) Save(key string, cs *cachedState) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
+	s.ensureImportedLocked()
+	// This process now owns the key: later Loads must not re-fetch a
+	// backend row over the update (the push below keeps them in sync).
+	s.fetched[key] = true
 
 	if cs == nil || (cs.instanceID == "" && cs.status != "queued") {
 		delete(s.data, key)
-		if s.flushLockedUnlessReadFailed() {
-			s.recordPendingLocked(key, nil)
-		}
+		s.persistLocked(key)
 		return
 	}
 	s.data[key] = persistedState{
@@ -353,10 +553,7 @@ func (s *Store) Save(key string, cs *cachedState) {
 		ps.Standing = &st
 		s.data[key] = ps
 	}
-	if s.flushLockedUnlessReadFailed() {
-		ps := s.data[key]
-		s.recordPendingLocked(key, &ps)
-	}
+	s.persistLocked(key)
 }
 
 // cloneFreebucksInfo deep-copies the map/slice fields ApplyFreebucksPriceChanges
@@ -394,38 +591,46 @@ func (s *Store) Remove(key, expectedInstanceID string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
-
-	ps, ok := s.data[key]
-	if !ok {
-		return
+	s.ensureImportedLocked()
+	if _, ok := s.data[key]; !ok {
+		// The entry may live only in the backend (restart before any
+		// Load): fetch before comparing, and never converge-delete a
+		// row the backend refused to show.
+		if s.fetchLocked(key) {
+			return
+		}
+		if _, ok := s.data[key]; !ok {
+			return
+		}
 	}
-	if expectedInstanceID != "" && ps.InstanceID != expectedInstanceID {
+	if expectedInstanceID != "" && s.data[key].InstanceID != expectedInstanceID {
 		return
 	}
 	delete(s.data, key)
-	if s.flushLockedUnlessReadFailed() {
-		s.recordPendingLocked(key, nil)
-	}
+	s.persistLocked(key)
 }
 
 // SaveRun persists one active run for token key under agentID (issue #40).
-// A run with an empty id is dropped. Best-effort: a skipped flush (file
-// unreadable) is tolerated — the run is simply re-STARTed after a restart.
+// A run with an empty id is dropped. Best-effort: a failed backend write
+// only warns — the run is simply re-STARTed after a restart.
 func (s *Store) SaveRun(key, agentID string, pr PersistedRun) {
 	if key == "" || agentID == "" || pr.RunID == "" {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
+	s.ensureImportedLocked()
+	if _, ok := s.runs[key]; !ok {
+		s.fetchLocked(key)
+	}
+	s.fetched[key] = true
 	agents := s.runs[key]
 	if agents == nil {
 		agents = make(map[string]PersistedRun)
 		s.runs[key] = agents
 	}
 	agents[agentID] = pr
-	s.flushLockedUnlessReadFailed()
+	s.persistLocked(key)
 }
 
 // LoadRun returns the persisted run for token key + agentID, or nil when
@@ -437,7 +642,10 @@ func (s *Store) LoadRun(key, agentID string) *PersistedRun {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
+	s.ensureImportedLocked()
+	if _, ok := s.runs[key][agentID]; !ok {
+		s.fetchLocked(key)
+	}
 	pr, ok := s.runs[key][agentID]
 	if !ok {
 		return nil
@@ -454,7 +662,12 @@ func (s *Store) RemoveRun(key, agentID string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.loadLocked()
+	s.ensureImportedLocked()
+	if _, ok := s.runs[key]; !ok {
+		if s.fetchLocked(key) {
+			return
+		}
+	}
 	agents, ok := s.runs[key]
 	if !ok {
 		return
@@ -466,111 +679,5 @@ func (s *Store) RemoveRun(key, agentID string) {
 	if len(agents) == 0 {
 		delete(s.runs, key)
 	}
-	s.flushLockedUnlessReadFailed()
-}
-
-// flushLockedUnlessReadFailed writes the current map atomically unless the
-// on-disk file could not be read: flushing the partial in-memory view
-// over an unreadable file would destroy every other token's persisted entry.
-// The in-memory update is kept so the store stays consistent once the file
-// becomes readable again; a warn log is the only signal that persistence was
-// skipped. Returns true when the flush was skipped (file unreadable) so the
-// caller records the mutation into pending — otherwise a later successful
-// reload would rebuild s.data from disk and silently drop the update.
-func (s *Store) flushLockedUnlessReadFailed() bool {
-	if s.readFailed {
-		slog.Warn("session store: file unreadable, skipping persist (in-memory update kept)", "path", s.path)
-		return true
-	}
-	s.flushLocked()
-	return false
-}
-
-// recordPendingLocked remembers a mutation that could not be flushed because
-// the file was unreadable (readFailed): the key with the state that was
-// written, or nil for a removal. A later successful loadLocked merges
-// pending back over the disk content so the in-window update survives the
-// reload instead of being lost. Caller holds s.mu.
-func (s *Store) recordPendingLocked(key string, ps *persistedState) {
-	if s.pending == nil {
-		s.pending = make(map[string]*persistedState)
-	}
-	s.pending[key] = ps
-}
-
-// applyPendingLocked merges mutations recorded while the file was unreadable
-// back over the freshly-loaded disk view and persists the result: a nil
-// value removes the key, a non-nil value restores the in-memory update that
-// was never flushed. Without this, a Save/Remove made during the failure
-// window would be silently discarded by the reload, and the following flush
-// would persist WITHOUT it — a restart then fails to resume that session
-// and forces a fresh billable admission. The merged map is flushed
-// immediately so the disk catches up. Caller holds s.mu.
-func (s *Store) applyPendingLocked() {
-	if len(s.pending) == 0 {
-		return
-	}
-	for key, ps := range s.pending {
-		if ps == nil {
-			delete(s.data, key)
-		} else {
-			s.data[key] = *ps
-		}
-	}
-	clear(s.pending)
-	s.flushLocked()
-}
-
-// flushLocked writes the current map atomically. Caller holds s.mu.
-func (s *Store) flushLocked() {
-	file := storeFile{Version: storeVersion, Sessions: s.data}
-	if len(s.runs) > 0 {
-		file.Runs = s.runs
-	}
-	data, err := json.MarshalIndent(file, "", "  ")
-	if err != nil {
-		slog.Warn("session store: marshal failed", "path", s.path, "err", err)
-		return
-	}
-
-	dir := filepath.Dir(s.path)
-	if dir == "" {
-		dir = "."
-	} else if err := os.MkdirAll(dir, 0o700); err != nil {
-		slog.Warn("session store: mkdir failed", "dir", dir, "err", err)
-		return
-	}
-
-	// Write a temp file in the target directory, then rename it over the
-	// target so a crash mid-write never leaves a truncated state file.
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(s.path)+".tmp*")
-	if err != nil {
-		slog.Warn("session store: temp create failed", "dir", dir, "err", err)
-		return
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		slog.Warn("session store: write failed", "path", s.path, "err", err)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		slog.Warn("session store: close failed", "path", s.path, "err", err)
-		return
-	}
-	if err := os.Rename(tmpName, s.path); err != nil {
-		if _, statErr := os.Stat(s.path); statErr == nil {
-			// The target exists but rename-over-existing failed (e.g.
-			// Windows without MOVEFILE_REPLACE_EXISTING): fall back to
-			// removing the target first, then renaming.
-			_ = os.Remove(s.path)
-			if err := os.Rename(tmpName, s.path); err == nil {
-				return
-			}
-		}
-		_ = os.Remove(tmpName)
-		slog.Warn("session store: rename failed", "path", s.path, "err", err)
-	}
+	s.persistLocked(key)
 }

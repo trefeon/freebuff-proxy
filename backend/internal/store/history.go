@@ -61,6 +61,51 @@ func (s *Store) RecordMaturity(e MaturityEvent) error {
 	return nil
 }
 
+// RecordRequest stores one /v1 inference outcome for the Logs console view.
+// INSERT OR REPLACE keeps it idempotent per req_id (a retry re-records the
+// same request). An empty req_id skips the write: the PRIMARY KEY cannot
+// distinguish pre-attempt refusals, and the ring log still carries them.
+// Raw client tokens never reach this table — callers pass the token index.
+func (s *Store) RecordRequest(rec RequestRecord) error {
+	if rec.ReqID == "" {
+		return nil
+	}
+	if _, err := s.db.Exec(
+		`INSERT OR REPLACE INTO request_records(req_id, ts, endpoint, model, token_idx, status, ttfb_ms, error)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.ReqID, rec.TS, rec.Endpoint, rec.Model, rec.TokenIdx, rec.Status, rec.TTFBms, rec.Err,
+	); err != nil {
+		return fmt.Errorf("store: request insert: %w", err)
+	}
+	return nil
+}
+
+// QueryRequests returns newest-first request outcomes at/after since
+// (0 = all), capped at limit (<=0 defaults to 500).
+func (s *Store) QueryRequests(since int64, limit int) ([]RequestRecord, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	rows, err := s.db.Query(
+		`SELECT req_id, ts, endpoint, model, token_idx, status, ttfb_ms, error
+		 FROM request_records WHERE ts >= ? ORDER BY ts DESC, req_id DESC LIMIT ?`,
+		since, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store: query requests: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := []RequestRecord{}
+	for rows.Next() {
+		var rec RequestRecord
+		if err := rows.Scan(&rec.ReqID, &rec.TS, &rec.Endpoint, &rec.Model, &rec.TokenIdx, &rec.Status, &rec.TTFBms, &rec.Err); err != nil {
+			return nil, fmt.Errorf("store: scan request: %w", err)
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
 const (
 	defaultLogLimit = 500
 	maxLogLimit     = 5000
@@ -79,8 +124,8 @@ func (s *Store) QueryLogs(f LogFilter) ([]LogEntry, error) {
 		args = append(args, f.Until)
 	}
 	if f.Level != "" {
-		where = append(where, "level = ?")
-		args = append(args, strings.ToUpper(f.Level))
+		where = append(where, "level IN (?, ?)")
+		args = append(args, strings.ToUpper(f.Level), strings.ToLower(f.Level))
 	}
 	if f.Contains != "" {
 		where = append(where, "(msg LIKE ? ESCAPE '\\' OR fields LIKE ? ESCAPE '\\')")

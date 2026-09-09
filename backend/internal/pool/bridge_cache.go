@@ -223,6 +223,7 @@ func (p *Pool) bridgeRecordSurvivorLocked(entry *bridgeEntry, now time.Time) {
 		p.bridgeSurvivors = p.bridgeSurvivors[len(p.bridgeSurvivors)-maxBridgeSurvivors+1:]
 	}
 	p.bridgeSurvivors = append(p.bridgeSurvivors, bridgeSurvivor{count: count, evicted: now})
+	p.markPersistDirty()
 }
 
 // bridgeEvictLocked evicts the oldest bridge entries while the cache is
@@ -497,6 +498,7 @@ func (p *Pool) bridgeMaintain(ctx context.Context, idle bool) {
 	p.bridgeDailyUsage = total
 
 	p.bridgeMu.Unlock()
+	p.markPersistDirty()
 
 	for _, entry := range toEvict {
 		// Mirror the shutdown drain: FINISH the runs AND end the entry's

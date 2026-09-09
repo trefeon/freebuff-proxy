@@ -133,14 +133,26 @@ func Serve(configPath string, verbose bool, version string) int {
 	var store *session.Store
 	if cfg.SessionPersist {
 		// Log the absolute state-file path: a relative SESSION_STATE_FILE is
-		// resolved against the working directory, which is where the file
-		// actually appears on disk.
+		// resolved against the working directory. The JSON file is
+		// import-only now (sessions_persist is the sole truth): on first
+		// use the store folds it into the dashboard DB and archives it to
+		// .bak. The file is never written.
 		stateFile := cfg.SessionStateFile
 		if abs, err := filepath.Abs(stateFile); err == nil {
 			stateFile = abs
 		}
-		store = session.NewStore(stateFile)
-		logger.Info("session state persistence enabled", "file", stateFile)
+		if histStore != nil {
+			// *history.Store satisfies session.SessionBackend
+			// structurally (opaque blobs, SHA-256 keys); the session
+			// package never imports the store package (archtest leaf).
+			store = session.NewStoreWithBackend(stateFile, histStore)
+			logger.Info("session state persistence enabled (dashboard store)", "file", stateFile)
+		} else {
+			// DB unavailable: memory-only for this run. The legacy file
+			// still seeds memory on first use, never written.
+			store = session.NewStore(stateFile)
+			logger.Warn("dashboard store unavailable; session persistence is memory-only for this run", "file", stateFile)
+		}
 
 		// Same cwd-vs-exe trap as .env: on Windows launchers (Task
 		// Scheduler, shortcuts, services) the working directory is often not
@@ -166,7 +178,7 @@ func Serve(configPath string, verbose bool, version string) int {
 	// against the same handle below. DB_PATH wins, default
 	// ./data/freebuff.db (the compose db_data volume mirrors it at
 	// /app/data/freebuff.db). A nil store is the live-only degrade path; the
-	// JSON session path below keeps working.
+	// session managers above run memory-only (legacy file seeds, never written).
 	if histStore != nil {
 		st := histStore
 		{
@@ -174,8 +186,9 @@ func Serve(configPath string, verbose bool, version string) int {
 			logger.Info("dashboard history enabled", "file", dbPath)
 			// One-time migration: fold every legacy JSON session file into
 			// sessions_persist, then archive each to .bak (never delete).
-			// Gated on SESSION_PERSIST; a failure only warns — the JSON
-			// store above stays authoritative. SaveSession upserts by token
+			// Gated on SESSION_PERSIST; a failure only warns — the session
+			// managers above already run DB-backed (or memory-only without
+			// a DB) and the store-level import is idempotent. SaveSession upserts by token
 			// hash, so importing from several split-brain locations is
 			// last-wins; each overwrite of a previously imported hash with
 			// different content warns (identical re-imports stay silent).
@@ -187,7 +200,7 @@ func Serve(configPath string, verbose bool, version string) int {
 				}
 				for _, legacy := range history.LegacySessionCandidates(cfg.SessionStateFile) {
 					if n, err := history.ImportLegacySessionFileWithCollisions(st, legacy, onCollision(legacy)); err != nil {
-						logger.Warn("legacy session import skipped; JSON state file stays in use", "file", legacy, "err", err)
+						logger.Warn("legacy session import skipped; legacy file left in place (DB stays authoritative)", "file", legacy, "err", err)
 					} else if n > 0 {
 						logger.Info("imported legacy session state into dashboard store", "file", legacy, "sessions", n)
 					}

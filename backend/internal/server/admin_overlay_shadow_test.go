@@ -49,10 +49,11 @@ func shadowLogin(t *testing.T, h http.Handler, password string) *http.Cookie {
 	return nil
 }
 
-// TestModeSwitchPooledShadowNamesOverlay: with BRIDGE_ENABLED pinned by a DB
-// overlay row, the hybrid→pooled .env write cannot take effect — the error
-// must name the overlay (with its DELETE reset path), not the environment.
-func TestModeSwitchPooledShadowNamesOverlay(t *testing.T) {
+// TestModeSwitchPooledConvergesOverlay: with BRIDGE_ENABLED pinned to 1 by a
+// stale DB overlay row, the hybrid→pooled switch converges the row instead
+// of failing — the mode switch is write-through (DB-unified storage), so the
+// explicit UI action wins over the stale pin on both layers.
+func TestModeSwitchPooledConvergesOverlay(t *testing.T) {
 	s := newReviewFixServer(t, "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secretPass123\n",
 		func(c *config.Config) { c.BridgeEnabled = true })
 	st := attachShadowStore(t, s)
@@ -67,18 +68,21 @@ func TestModeSwitchPooledShadowNamesOverlay(t *testing.T) {
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	body := rec.Body.String()
-	if !strings.Contains(body, "DB settings overlay") {
-		t.Errorf("pooled shadow response = %q, want it to name the DB settings overlay", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("pooled switch status = %d, want 200 (stale overlay converges): %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(body, "DELETE /admin/api/settings/BRIDGE_ENABLED") {
-		t.Errorf("pooled shadow response = %q, want the overlay reset path", body)
+	if v, _, _ := st.GetSetting(config.OverlayRowKey("BRIDGE_ENABLED")); v != "0" {
+		t.Errorf("overlay BRIDGE_ENABLED = %q, want converged %q", v, "0")
+	}
+	if s.admin.cfgLoad().HybridBridgeMode() {
+		t.Error("effective config still hybrid after pooled switch")
 	}
 }
 
-// TestModeSwitchHybridShadowNamesOverlay: with BRIDGE_ENABLED pinned to 0 by
-// a DB overlay row, the pooled→hybrid .env write cannot take effect.
-func TestModeSwitchHybridShadowNamesOverlay(t *testing.T) {
+// TestModeSwitchHybridConvergesOverlay: with BRIDGE_ENABLED pinned to 0 by a
+// stale DB overlay row, the pooled→hybrid switch converges the row instead
+// of failing (write-through, like the pooled direction above).
+func TestModeSwitchHybridConvergesOverlay(t *testing.T) {
 	s := newReviewFixServer(t, "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secretPass123\n",
 		func(c *config.Config) { c.BridgeEnabled = false })
 	st := attachShadowStore(t, s)
@@ -93,16 +97,21 @@ func TestModeSwitchHybridShadowNamesOverlay(t *testing.T) {
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	body := rec.Body.String()
-	if !strings.Contains(body, "DB settings overlay") {
-		t.Errorf("hybrid shadow response = %q, want it to name the DB settings overlay", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hybrid switch status = %d, want 200 (stale overlay converges): %s", rec.Code, rec.Body.String())
+	}
+	if v, _, _ := st.GetSetting(config.OverlayRowKey("BRIDGE_ENABLED")); v != "1" {
+		t.Errorf("overlay BRIDGE_ENABLED = %q, want converged %q", v, "1")
+	}
+	if !s.admin.cfgLoad().HybridBridgeMode() {
+		t.Error("effective config not hybrid after switch")
 	}
 }
 
-// TestRequireLoginShadowNamesOverlay: with DASHBOARD_REQUIRE_LOGIN pinned by
-// a DB overlay row, the require-login .env write cannot take effect — the
-// 409 must name the overlay instead of blaming the environment/JSON.
-func TestRequireLoginShadowNamesOverlay(t *testing.T) {
+// TestRequireLoginConvergesOverlay: with DASHBOARD_REQUIRE_LOGIN pinned to
+// true by a stale DB overlay row, the require-login toggle converges the row
+// instead of 409ing — the toggle is write-through (DB-unified storage).
+func TestRequireLoginConvergesOverlay(t *testing.T) {
 	s := newReviewFixServer(t, "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secretPass123\n", nil)
 	st := attachShadowStore(t, s)
 	if err := st.SetSetting(config.OverlayRowKey("DASHBOARD_REQUIRE_LOGIN"), "true"); err != nil {
@@ -119,10 +128,13 @@ func TestRequireLoginShadowNamesOverlay(t *testing.T) {
 	req.Host = "127.0.0.1:3457"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("require-login shadow status = %d, want 409: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("require-login toggle status = %d, want 200 (stale overlay converges): %s", rec.Code, rec.Body.String())
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "DB settings overlay") {
-		t.Errorf("require-login shadow response = %q, want it to name the DB settings overlay", body)
+	if v, _, _ := st.GetSetting(config.OverlayRowKey("DASHBOARD_REQUIRE_LOGIN")); v != "false" {
+		t.Errorf("overlay DASHBOARD_REQUIRE_LOGIN = %q, want converged %q", v, "false")
+	}
+	if s.admin.cfgLoad().RequireLogin() {
+		t.Error("effective RequireLogin still true after toggle to false")
 	}
 }

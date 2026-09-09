@@ -117,6 +117,15 @@ type Config struct {
 	// SESSION_CREATE_MAX_PARALLEL_GLOBAL default 128; _PER_MODEL default 32.
 	SessionCreateMaxParallelGlobal   int
 	SessionCreateMaxParallelPerModel int
+	// ChatMaxInflightMetered / ChatMaxInflightUnmetered cap concurrent
+	// in-flight chat requests per token, split by cost class (chat burst
+	// queue): metered models (a priced Freebucks row) default 1, unmetered
+	// models (no price row) default 3. The pool's chat gate queues excess
+	// admissions instead of hammering upstream. 0 = unlimited, mirroring
+	// the SESSION_CREATE_MAX_PARALLEL convention. Live-apply (atomic
+	// pointer swap, no pool rebuild).
+	ChatMaxInflightMetered   int
+	ChatMaxInflightUnmetered int
 	// RunFinishQueueSize is the bounded deferred-FINISH worker queue size
 	// (issue #90, RUN_FINISH_QUEUE_SIZE default 64): rotated/drained runs
 	// are FINISHed by a background worker; when the queue is full the caller
@@ -244,7 +253,7 @@ type Config struct {
 	// (REASONING_IN_CONTENT; default "" = off). See CompressPrompt.
 	ReasoningInContent string
 	// BurstBalanceEnabled opts into per-model burst spreading (ADR-0023,
-	// BURST_BALANCE_ENABLED; default false): while one model's sliding-window
+	// BURST_BALANCE_ENABLED; default true): while one model's sliding-window
 	// admissions exceed BURST_THRESHOLD, that model's selection switches to
 	// least_used across at most BURST_MAX_TOKENS accounts. False restores
 	// exact drain-only selection. Live-apply (atomic pointer swap, no pool

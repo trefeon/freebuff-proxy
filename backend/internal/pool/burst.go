@@ -166,6 +166,7 @@ func (p *Pool) burstRecordAt(model string, idx int, now time.Time) {
 			"model", model, "admissions", total, "threshold", threshold,
 			"window", window.String(), "max_tokens", maxTokens)
 	}
+	p.markPersistDirty()
 }
 
 // burstPruneAt drops out-of-window hits (memory hygiene) and fires the exit

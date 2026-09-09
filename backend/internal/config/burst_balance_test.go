@@ -6,17 +6,17 @@ import (
 	"time"
 )
 
-// Burst-balance knobs (ADR-0023): default-off opt-in GroupPool quartet
-// across every tier (env, .env, DB overlay) plus shape validation
-// (BURST_MAX_TOKENS >= 2, parseable BURST_WINDOW, non-negative threshold).
+// Burst-balance knobs: default-on GroupPool quartet across every tier (env,
+// .env, DB overlay) plus shape validation (BURST_MAX_TOKENS >= 2, parseable
+// BURST_WINDOW, non-negative threshold).
 func TestBurstBalanceDefaults(t *testing.T) {
 	clearEnv(t)
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.BurstBalanceEnabled {
-		t.Error("BurstBalanceEnabled = true, want false (default off)")
+	if !cfg.BurstBalanceEnabled {
+		t.Error("BurstBalanceEnabled = false, want true (default on)")
 	}
 	if cfg.BurstWindow != time.Minute {
 		t.Errorf("BurstWindow = %v, want 1m (default)", cfg.BurstWindow)

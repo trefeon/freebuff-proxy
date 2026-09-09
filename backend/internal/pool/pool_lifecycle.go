@@ -311,6 +311,13 @@ func (p *Pool) maintainLoop(ctx context.Context) {
 // maintainLoop so tests can drive a pass without waiting for the
 // minute-long ticker.
 func (p *Pool) maintainTick(ctx context.Context) {
+	// Runtime persist flush rides every pass (background, never the
+	// request hot path): mutations only arm the dirty flag, this is
+	// where the allowlisted counters reach the store. Placed first so
+	// the idle early-returns below cannot skip it; a failed flush
+	// re-arms for the next pass and stays live-only. Errors are
+	// intentionally ignored here (warned inside the flush).
+	_ = p.FlushPoolPersist()
 	toks := p.roster.Load()
 	cfg := p.cfg.Load()
 	// Drop retired tokens that never saw a slipped lease (their runs were

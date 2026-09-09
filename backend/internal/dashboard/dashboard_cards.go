@@ -452,6 +452,9 @@ type tokensData struct {
 	TokenRotation     string         `json:"token_rotation,omitempty"`
 	RateLimitFailover bool           `json:"rate_limit_failover"`
 	MaturityEnabled   bool           `json:"maturity_enabled"`
+	BurstEnabled      bool           `json:"burst_balance_enabled"`
+	ChatMaxMetered    int            `json:"chat_max_inflight_metered"`
+	ChatMaxUnmetered  int            `json:"chat_max_inflight_unmetered"`
 }
 
 // tokenSessionQuota is the per-token session + quota block, identical on the
@@ -513,6 +516,9 @@ func (d *Dashboard) tokensData() tokensData {
 		TokenRotation:     cfg.TokenRotation,
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
+		BurstEnabled:      cfg.BurstBalanceEnabled,
+		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
+		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}
 	// client cards. Pure bridge hides the (empty) pooled table; pure pooled
 	// has no bridge cards.
@@ -662,6 +668,9 @@ type tokensLiveData struct {
 	TokenRotation     string            `json:"token_rotation,omitempty"`
 	RateLimitFailover bool              `json:"rate_limit_failover"`
 	MaturityEnabled   bool              `json:"maturity_enabled"`
+	BurstEnabled      bool              `json:"burst_balance_enabled"`
+	ChatMaxMetered    int               `json:"chat_max_inflight_metered"`
+	ChatMaxUnmetered  int               `json:"chat_max_inflight_unmetered"`
 }
 
 // tokensLiveData builds the 10s hot-poll payload directly from pool
@@ -677,6 +686,9 @@ func (d *Dashboard) tokensLiveData() tokensLiveData {
 		TokenRotation:     cfg.TokenRotation,
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
+		BurstEnabled:      cfg.BurstBalanceEnabled,
+		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
+		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}
 	showBridge := mode == "bridge" || mode == "hybrid"
 	live.BridgeTokenCards = d.bridgeCards(showBridge)

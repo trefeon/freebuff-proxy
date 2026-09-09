@@ -10,7 +10,6 @@ import (
 	"freebuff-proxy/backend/internal/modelcat"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -233,23 +232,24 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		// Persist AUTH_TOKENS= (explicit empty) and
 		// reload, verifying the effective config actually lands in bridge
 		// mode before touching the live pool. Roll the .env back on failure.
-		old, oldErr := os.ReadFile(config.EnvFileForWrite())
-		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: ""}}); err != nil {
-			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
-			return
-		}
-		newCfg, err := a.loadConfig()
+		// Dual-layer persist: AUTH_TOKENS= (explicit empty) to .env, token
+		// marker dropped from settings (bridge = no pooled tokens).
+		set, del := tokenMarkerDelta(nil)
+		newCfg, err := a.dualWrite(
+			[]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: ""}},
+			set, del,
+			func(newCfg config.Config) error {
+				if !newCfg.BridgeMode() {
+					// A higher-precedence source (e.g. AUTH_TOKENS in a -config JSON
+					// file or the real environment) still supplies tokens — .env alone
+					// cannot clear it, so the switch cannot succeed.
+					return errors.New("Could not switch to bridge mode: AUTH_TOKENS is still set by a -config JSON file or the environment, which overrides .env. Clear it there, or run without -config, then retry.")
+				}
+				return nil
+			},
+		)
 		if err != nil {
-			restoreEnvFile(old, oldErr)
-			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())
-			return
-		}
-		if !newCfg.BridgeMode() {
-			// A higher-precedence source (e.g. AUTH_TOKENS in a -config JSON
-			// file or the real environment) still supplies tokens — .env alone
-			// cannot clear it, so the switch cannot succeed.
-			restoreEnvFile(old, oldErr)
-			a.dash.RenderConfigResult(w, r, false, "Could not switch to bridge mode: AUTH_TOKENS is still set by a -config JSON file or the environment, which overrides .env. Clear it there, or run without -config, then retry.")
+			a.dash.RenderConfigResult(w, r, false, dualPersistMessage(err))
 			return
 		}
 		a.applyReloadedConfig(&newCfg)
@@ -267,31 +267,39 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		}
 		// Hybrid → pure pooled: disable the bridge relay (BRIDGE_ENABLED=0)
 		// and verify the effective config lands in pooled mode before
-		// touching the live pool. Roll the .env back on failure.
+		// touching the live pool. Dual-layer persist: .env is the boot
+		// seed/export, the settings overlay is runtime truth — both roll
+		// back on failure.
 		a.adminSaveMu.Lock()
 		defer a.adminSaveMu.Unlock()
-		old, oldErr := os.ReadFile(config.EnvFileForWrite())
-		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "0"}}); err != nil {
-			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
-			return
-		}
-		newCfg, err := a.loadConfig()
+		set, del := tokenMarkerDelta(cfg.AuthTokens)
+		set[config.OverlayRowKey("BRIDGE_ENABLED")] = "0"
+		newCfg, err := a.dualWrite(
+			[]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "0"}},
+			set, del,
+			func(newCfg config.Config) error {
+				if newCfg.HybridBridgeMode() {
+					return errBridgeStillEnabled{pooled: true}
+				}
+				return nil
+			},
+		)
 		if err != nil {
-			restoreEnvFile(old, oldErr)
-			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())
-			return
-		}
-		if newCfg.HybridBridgeMode() {
-			// A higher-precedence source still enables the bridge — .env
-			// alone cannot clear it. Name the true blocker: a DB overlay
-			// row beats the file just written (ADR-0019), so blaming the
-			// environment then would send the operator to the wrong place.
-			restoreEnvFile(old, oldErr)
-			if a.overlayShadows("BRIDGE_ENABLED") {
-				a.dash.RenderConfigResult(w, r, false, "Could not switch to pooled mode: BRIDGE_ENABLED is still set by the DB settings overlay, which overrides .env (DELETE /admin/api/settings/BRIDGE_ENABLED to reset), then retry.")
+			var blocked errBridgeStillEnabled
+			if errors.As(err, &blocked) {
+				// A higher-precedence source still enables the bridge — the
+				// file just written cannot clear it. Name the true blocker:
+				// a DB overlay row beats the file (ADR-0019), so blaming
+				// the environment then would send the operator to the
+				// wrong place.
+				if a.overlayShadows("BRIDGE_ENABLED") {
+					a.dash.RenderConfigResult(w, r, false, "Could not switch to pooled mode: BRIDGE_ENABLED is still set by the DB settings overlay, which overrides .env (DELETE /admin/api/settings/BRIDGE_ENABLED to reset), then retry.")
+					return
+				}
+				a.dash.RenderConfigResult(w, r, false, "Could not switch to pooled mode: BRIDGE_ENABLED is still set by a -config JSON file or the environment, which overrides .env. Clear it there, then retry.")
 				return
 			}
-			a.dash.RenderConfigResult(w, r, false, "Could not switch to pooled mode: BRIDGE_ENABLED is still set by a -config JSON file or the environment, which overrides .env. Clear it there, then retry.")
+			a.dash.RenderConfigResult(w, r, false, dualPersistMessage(err))
 			return
 		}
 		a.applyReloadedConfig(&newCfg)
@@ -307,26 +315,32 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		// Pure pooled → hybrid: enable the bridge relay alongside the pool.
+		// Dual-layer persist like the pooled branch above.
 		a.adminSaveMu.Lock()
 		defer a.adminSaveMu.Unlock()
-		old, oldErr := os.ReadFile(config.EnvFileForWrite())
-		if _, err := updateEnvKeys([]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "1"}}); err != nil {
-			a.dash.RenderConfigResult(w, r, false, "Failed to persist .env: "+err.Error())
-			return
-		}
-		newCfg, err := a.loadConfig()
+		set, del := tokenMarkerDelta(cfg.AuthTokens)
+		set[config.OverlayRowKey("BRIDGE_ENABLED")] = "1"
+		newCfg, err := a.dualWrite(
+			[]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(cfg.AuthTokens, ",")}, {Key: "BRIDGE_ENABLED", Value: "1"}},
+			set, del,
+			func(newCfg config.Config) error {
+				if !newCfg.HybridBridgeMode() {
+					return errBridgeStillEnabled{pooled: false}
+				}
+				return nil
+			},
+		)
 		if err != nil {
-			restoreEnvFile(old, oldErr)
-			a.dash.RenderConfigResult(w, r, false, "Reload rejected: "+err.Error())
-			return
-		}
-		if !newCfg.HybridBridgeMode() {
-			restoreEnvFile(old, oldErr)
-			if a.overlayShadows("BRIDGE_ENABLED") {
-				a.dash.RenderConfigResult(w, r, false, "Could not switch to hybrid mode: BRIDGE_ENABLED is still set to 0 by the DB settings overlay, which overrides .env (DELETE /admin/api/settings/BRIDGE_ENABLED to reset), then retry.")
+			var blocked errBridgeStillEnabled
+			if errors.As(err, &blocked) {
+				if a.overlayShadows("BRIDGE_ENABLED") {
+					a.dash.RenderConfigResult(w, r, false, "Could not switch to hybrid mode: BRIDGE_ENABLED is still set to 0 by the DB settings overlay, which overrides .env (DELETE /admin/api/settings/BRIDGE_ENABLED to reset), then retry.")
+					return
+				}
+				a.dash.RenderConfigResult(w, r, false, "Could not switch to hybrid mode: BRIDGE_ENABLED is still set to 0 by a -config JSON file or the environment, which overrides .env. Clear it there, then retry.")
 				return
 			}
-			a.dash.RenderConfigResult(w, r, false, "Could not switch to hybrid mode: BRIDGE_ENABLED is still set to 0 by a -config JSON file or the environment, which overrides .env. Clear it there, then retry.")
+			a.dash.RenderConfigResult(w, r, false, dualPersistMessage(err))
 			return
 		}
 		a.applyReloadedConfig(&newCfg)

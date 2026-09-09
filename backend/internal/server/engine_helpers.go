@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"freebuff-proxy/backend/internal/phasetiming"
 	"freebuff-proxy/backend/internal/pool"
+	"freebuff-proxy/backend/internal/store"
 )
 
 // traceChat records a structured "chat trace" entry for the dashboard
@@ -56,6 +58,40 @@ func (s *Server) traceChat(lease *pool.Lease, model string, ms int64, status, er
 		}
 	}
 	s.logger.Info("chat trace", attrs...)
+	s.recordRequestOutcome(lease, model, status, errClass, phases, st)
+}
+
+// recordRequestOutcome persists one /v1 inference outcome to the history
+// store for the Logs console view. It runs on the chat path but performs a
+// single indexed upsert and never fails the request: a nil store skips the
+// write (live-only), a missing req_id skips it (the PRIMARY KEY cannot
+// distinguish pre-attempt refusals — the ring log still carries them), and
+// insert errors only warn. Raw client tokens never reach the store: the
+// lease's token index (bridge = -1) is the only token signal recorded.
+func (s *Server) recordRequestOutcome(lease *pool.Lease, model string, status, errClass string, phases map[string]int64, st *chatTraceState) {
+	if s.hist == nil || st == nil || st.reqID == "" {
+		return
+	}
+	tokenIdx := -1
+	if lease != nil {
+		tokenIdx = lease.Token
+	}
+	var ttfb int64
+	if phases != nil {
+		ttfb = phases[phasetiming.UpstreamTTFBMS]
+	}
+	if err := s.hist.RecordRequest(store.RequestRecord{
+		ReqID:    st.reqID,
+		TS:       store.Millis(time.Now()),
+		Endpoint: "/v1/chat/completions",
+		Model:    model,
+		TokenIdx: tokenIdx,
+		Status:   status,
+		TTFBms:   ttfb,
+		Err:      errClass,
+	}); err != nil {
+		s.logger.Warn("request record failed", "err", err, "req_id", st.reqID)
+	}
 }
 
 // chatDoneAttrs builds the structured log attributes for a completed chat,
