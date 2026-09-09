@@ -211,7 +211,12 @@ func migrateUp(db *sql.DB, legacy int) error {
 			return fmt.Errorf("store: goose version count: %w", err)
 		}
 		if n == 0 {
-			for v := 1; v <= base; v++ {
+			// Seed 0..base: goose's own convention inserts a zero version
+			// on creation, and its sqlite ensure falls back to reading
+			// version 0 when the table-exists check is unsupported — the
+			// row keeps that fallback from attempting a CREATE over the
+			// table just made above.
+			for v := 0; v <= base; v++ {
 				if _, err := db.Exec(`INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, 1)`, v); err != nil {
 					return fmt.Errorf("store: baseline goose v%d: %w", v, err)
 				}
