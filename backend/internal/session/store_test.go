@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -35,7 +34,8 @@ func newTestManagerWithStore(t *testing.T, mock *testutil.MockUpstream, store *S
 func TestStoreRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
-	store := NewStore(path)
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(path, fb)
 
 	if got := store.Load("key"); got != nil {
 		t.Fatalf("Load on empty store = %+v, want nil", got)
@@ -51,8 +51,8 @@ func TestStoreRoundtrip(t *testing.T) {
 		countryCode:       "US",
 	})
 
-	// A second Store instance over the same file must see the write.
-	store2 := NewStore(path)
+	// A second Store instance over the same backend (restart) must see the write.
+	store2 := NewStoreWithBackend(path, fb)
 	got := store2.Load("key")
 	if got == nil {
 		t.Fatal("Load after Save = nil")
@@ -65,7 +65,7 @@ func TestStoreRoundtrip(t *testing.T) {
 	}
 
 	store.Remove("key", "")
-	if got := NewStore(path).Load("key"); got != nil {
+	if got := NewStoreWithBackend(path, fb).Load("key"); got != nil {
 		t.Errorf("Load after Remove = %+v, want nil", got)
 	}
 }
@@ -133,9 +133,11 @@ func TestResumePersistedOnRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 
 	// First process: create a session and shut down. Shutdown DELETEs the
-	// upstream slot but keeps the store entry, so a restart can
-	// still probe it via pollPersisted.
-	mgr1 := newTestManagerWithStore(t, mock, NewStore(path))
+	// upstream slot but keeps the backend entry, so a restart can
+	// still probe it via pollPersisted. Both processes share one backend
+	// (sessions_persist); the legacy file path is import-only.
+	fb := newFakeSessionBackend()
+	mgr1 := newTestManagerWithStore(t, mock, NewStoreWithBackend(path, fb))
 	if _, err := mgr1.EnsureSession(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +152,7 @@ func TestResumePersistedOnRestart(t *testing.T) {
 	// persisted slot. This mock's DELETE is stateless (the instance still
 	// answers active), so the slot is resumed and no new quota is burned —
 	// the same path that re-POSTs fresh when the DELETE took effect upstream.
-	mgr2 := newTestManagerWithStore(t, mock, NewStore(path))
+	mgr2 := newTestManagerWithStore(t, mock, NewStoreWithBackend(path, fb))
 	instance, err := mgr2.EnsureSession(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -207,27 +209,29 @@ func TestResumeSkipsDeadPersistedSession(t *testing.T) {
 	}
 }
 
-func TestStoreFileMode(t *testing.T) {
+// TestStoreSaveCreatesNoFile pins the DB-unified contract: the legacy JSON
+// path is import-only — Save/SaveRun/Remove never create or modify the file,
+// with or without a backend.
+func TestStoreSaveCreatesNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	store := NewStore(path)
-	store.Save("key", &cachedState{status: "active", instanceID: "i", expiresAt: time.Now().Add(time.Hour)})
-
-	fi, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Unix enforces 0600; Windows ignores the perm bits (only the read-only
-	// attribute is honored), so the mode assertion is Unix-only.
-	if runtime.GOOS != "windows" {
-		if perm := fi.Mode().Perm(); perm != 0o600 {
-			t.Errorf("state file mode = %o, want 600", perm)
+	stores := []*Store{NewStore(path), NewStoreWithBackend(path, newFakeSessionBackend())}
+	for i, store := range stores {
+		store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
+		store.SaveRun("key", "agent-x", PersistedRun{RunID: "run-1", AgentID: "agent-x"})
+		store.Remove("key", "")
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("store %d created the session file, want import-only: %v", i, err)
+		}
+		if got := store.Load("key"); got != nil {
+			t.Fatalf("store %d Load after Remove = %+v, want nil", i, got)
 		}
 	}
 }
 
 func TestStoreRemoveCAS(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	store := NewStore(path)
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(path, fb)
 	expiry := time.Now().Add(time.Hour).UTC()
 	store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: expiry})
 
@@ -236,8 +240,8 @@ func TestStoreRemoveCAS(t *testing.T) {
 	if got := store.Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("Remove with wrong instance = %+v, want inst-1", got)
 	}
-	// A fresh store over the same file must agree (no-op must not flush).
-	if got := NewStore(path).Load("key"); got == nil || got.instanceID != "inst-1" {
+	// A fresh store over the same backend must agree (no-op persists nothing new).
+	if got := NewStoreWithBackend(path, fb).Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("fresh Load after wrong-instance Remove = %+v, want inst-1", got)
 	}
 
@@ -246,7 +250,7 @@ func TestStoreRemoveCAS(t *testing.T) {
 	if got := store.Load("key"); got != nil {
 		t.Fatalf("Remove with matching instance = %+v, want nil", got)
 	}
-	if got := NewStore(path).Load("key"); got != nil {
+	if got := NewStoreWithBackend(path, fb).Load("key"); got != nil {
 		t.Fatalf("fresh Load after matching Remove = %+v, want nil", got)
 	}
 
@@ -263,9 +267,9 @@ func TestStoreRemoveCAS(t *testing.T) {
 
 func TestStoreConcurrentSaveLoadRemove(t *testing.T) {
 	dir := t.TempDir()
-	// The store hammers hundreds of atomic temp+rename writes into this
-	// directory; on Windows a transient handle (AV/indexer scan) can make a
-	// single-pass RemoveAll fail with "directory is not empty". Retry the
+	// The memory-only store issues no file writes here, but TempDir cleanup
+	// on Windows can still hit a transient handle (AV/indexer scan) and fail
+	// a single-pass RemoveAll with "directory is not empty". Retry the
 	// removal so the flake cannot fail the suite.
 	t.Cleanup(func() {
 		for attempt := range 5 {
@@ -279,7 +283,8 @@ func TestStoreConcurrentSaveLoadRemove(t *testing.T) {
 		}
 	})
 	path := filepath.Join(dir, "state.json")
-	store := NewStore(path)
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(path, fb)
 
 	const workers = 16
 	const keysPerWorker = 8
@@ -312,9 +317,9 @@ func TestStoreConcurrentSaveLoadRemove(t *testing.T) {
 	}
 	wg.Wait()
 
-	// A fresh store over the final file must see exactly the keys that were
+	// A fresh store over the same backend must see exactly the keys that were
 	// saved but not removed: the odd keys of every worker.
-	fresh := NewStore(path)
+	fresh := NewStoreWithBackend(path, fb)
 	for w := 0; w < workers; w++ {
 		for k := 0; k < keysPerWorker; k++ {
 			key := fmt.Sprintf("w%d-k%d", w, k)
@@ -330,9 +335,13 @@ func TestStoreConcurrentSaveLoadRemove(t *testing.T) {
 	}
 }
 
-func TestStoreCorruptFileLoadAndOverwrite(t *testing.T) {
+func TestStoreCorruptLegacyFileIgnoredNeverRewritten(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path, []byte("{not valid json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -341,268 +350,53 @@ func TestStoreCorruptFileLoadAndOverwrite(t *testing.T) {
 		t.Fatalf("Load on corrupt file = %+v, want nil", got)
 	}
 
-	// A Save after a corrupt read must succeed and replace the broken file
-	// with a valid one carrying the new entry.
-	store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: time.Now().Add(time.Hour)})
-	if got := NewStore(path).Load("key"); got == nil || got.instanceID != "inst-1" {
+	// A Save after a corrupt read succeeds in memory and never touches the
+	// broken file: the legacy path is import-only.
+	store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
+	if got := store.Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("Load after Save over corrupt file = %+v, want inst-1", got)
 	}
-}
-
-func TestStoreReadErrorDoesNotClobberFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits are not enforced on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses permission bits")
-	}
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "state.json")
-	seed := NewStore(path)
-	seed.Save("a", &cachedState{status: "active", instanceID: "inst-a", expiresAt: time.Now().Add(time.Hour)})
-	before, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Block access to the directory so both the read and the later write
-	// fail: a Save must not clobber a file it could not read.
-	if err := os.Chmod(dir, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chmod(dir, 0o700); err != nil {
-			t.Errorf("restoring dir perms: %v", err)
-		}
-	}()
-
-	store := NewStore(path)
-	if got := store.Load("a"); got != nil {
-		t.Fatalf("Load on unreadable store = %+v, want nil", got)
-	}
-	// The Save fails gracefully (temp creation is blocked) and leaves the
-	// on-disk file untouched instead of replacing it with an empty view.
-	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour)})
-
-	// Restore access before reading the file back (the deferred restore is
-	// only a safety net for temp-dir cleanup).
-	if err := os.Chmod(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-
 	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(after, before) {
-		t.Fatalf("Save clobbered an unreadable file: got %d bytes, want %d", len(after), len(before))
-	}
-
-	// Once access is restored the store must re-read the file (the failed
-	// read must not have been cached as an empty store) and see the seed.
-	if got := store.Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("Load after perms restored = %+v, want inst-a", got)
+		t.Fatal("Save rewrote the corrupt legacy file, want import-only (byte-identical)")
 	}
 }
 
-// TestStoreReadErrorDoesNotClobberFileUnreadableFile is the read-failure regression:
-// the on-disk file itself is unreadable (chmod 000) while the DIRECTORY stays
-// writable, so a Save could silently replace the file with the in-memory
-// partial view — destroying every OTHER token's persisted entries. The store
-// must skip the flush while the file is unreadable (keep the in-memory
-// update only), leaving the on-disk file byte-identical, and re-read it once
-// access is restored.
-func TestStoreReadErrorDoesNotClobberFileUnreadableFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits are not enforced on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses permission bits")
-	}
-
+// TestStoreUnreadableLegacyFileStaysUsable: the legacy file is only a
+// fallback seed — when it cannot be read (here a directory at the path, so
+// the failure holds portably on every platform) the store stays fully
+// usable on memory + backend, and nothing is ever written to the file path.
+// The old read-failure/pending-merge machinery is gone with the file write
+// target: there is no partial view left that a save could clobber.
+func TestStoreUnreadableLegacyFileStaysUsable(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
-	seed := NewStore(path)
-	seed.Save("a", &cachedState{status: "active", instanceID: "inst-a", expiresAt: time.Now().Add(time.Hour)})
-	seed.Save("other", &cachedState{status: "active", instanceID: "inst-other", expiresAt: time.Now().Add(time.Hour)})
-	before, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Make the FILE unreadable but leave the directory writable: this is the
-	// dangerous window where the old code flushed the partial view over the
-	// file (the both-fail dir test never hit it).
-	if err := os.Chmod(path, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chmod(path, 0o600); err != nil {
-			t.Errorf("restoring file perms: %v", err)
-		}
-	}()
-
-	store := NewStore(path)
-	if got := store.Load("a"); got != nil {
-		t.Fatalf("Load on unreadable store = %+v, want nil", got)
-	}
-	// Save during the failure window must NOT replace the file.
-	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour)})
-	store.Remove("a", "") // remove must also not flush the partial view
-
-	// Restore access before reading the file back (the deferred restore is
-	// only a safety net for temp-dir cleanup).
-	if err := os.Chmod(path, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	after, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(after, before) {
-		t.Fatalf("Save/Remove clobbered an unreadable file: got %d bytes, want %d (other tokens' entries destroyed)", len(after), len(before))
-	}
-
-	// Once access is restored the store re-reads the file (the failed read
-	// must not have been cached as an empty store) and sees the seeds.
-	if got := store.Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("Load('a') after perms restored = %+v, want inst-a", got)
-	}
-	if got := store.Load("other"); got == nil || got.instanceID != "inst-other" {
-		t.Fatalf("Load('other') after perms restored = %+v, want inst-other (other token survived)", got)
-	}
-
-	// A healed Save must now flush the merged map and work normally.
-	store.Save("c", &cachedState{status: "active", instanceID: "inst-c", expiresAt: time.Now().Add(time.Hour)})
-	if got := NewStore(path).Load("c"); got == nil || got.instanceID != "inst-c" {
-		t.Fatalf("Load('c') after healed Save = %+v, want inst-c", got)
-	}
-	if got := NewStore(path).Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("Load('a') after healed Save = %+v, want inst-a (existing entry preserved on flush)", got)
-	}
-}
-
-// TestStorePendingMutationSurvivesReadFailure is the read-failure regression: a
-// Save/Remove made while the file was unreadable was kept in memory but
-// never flushed; when the file became readable again the reload rebuilt
-// s.data from disk, silently discarding the in-window update — the
-// following flush persisted WITHOUT it, so a restart could not resume that
-// session and burned a daily slot. Pending mutations must be merged back
-// over the disk content on the successful reload and flushed.
-func TestStorePendingMutationSurvivesReadFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits are not enforced on Windows")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses permission bits")
-	}
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "state.json")
-	seed := NewStore(path)
-	seed.Save("a", &cachedState{status: "active", instanceID: "inst-a", expiresAt: time.Now().Add(time.Hour)})
-
-	// Make the FILE unreadable but leave the directory writable.
-	if err := os.Chmod(path, 0o000); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chmod(path, 0o600); err != nil {
-			t.Errorf("restoring file perms: %v", err)
-		}
-	}()
-
-	store := NewStore(path)
-	if got := store.Load("a"); got != nil {
-		t.Fatalf("Load on unreadable store = %+v, want nil", got)
-	}
-	// A mutation made while the file is unreadable cannot flush.
-	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour)})
-
-	// Restore access before reloading.
-	if err := os.Chmod(path, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	// The successful reload must merge the in-window mutation back over the
-	// disk content: 'b' survives alongside the pre-existing 'a'.
-	if got := store.Load("b"); got == nil || got.instanceID != "inst-b" {
-		t.Fatalf("Load('b') after reload = %+v, want inst-b (in-window update lost)", got)
-	}
-	if got := store.Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("Load('a') after reload = %+v, want inst-a (disk content preserved)", got)
-	}
-
-	// The merged map is flushed: a fresh store over the same file resumes
-	// 'b' — a restart would not have burned a daily slot.
-	if got := NewStore(path).Load("b"); got == nil || got.instanceID != "inst-b" {
-		t.Fatalf("fresh Load('b') = %+v, want inst-b (merge not persisted)", got)
-	}
-	if got := NewStore(path).Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("fresh Load('a') = %+v, want inst-a", got)
-	}
-}
-
-// TestStorePendingMutationSurvivesReadFailurePortable is the same read-failure
-// regression as TestStorePendingMutationSurvivesReadFailure but forces the
-// read failure PORTABLY — the store file is replaced by a directory, so
-// os.ReadFile fails with a non-ErrNotExist error on every platform (chmod
-// 000 is not enforced on Windows). This keeps the pending-merge path
-// exercised on Windows boxes where the chmod-based test skips.
-func TestStorePendingMutationSurvivesReadFailurePortable(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "state.json")
-	seed := NewStore(path)
-	seed.Save("a", &cachedState{status: "active", instanceID: "inst-a", expiresAt: time.Now().Add(time.Hour)})
-	before, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Replace the file with a directory: reads fail, and a flush would also
-	// fail (temp creation is blocked by the path being a directory), so the
-	// read-failure window holds on every platform.
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.Mkdir(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
-
-	store := NewStore(path)
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(path, fb)
 	if got := store.Load("a"); got != nil {
-		t.Fatalf("Load on unreadable store = %+v, want nil", got)
+		t.Fatalf("Load on unreadable legacy file = %+v, want nil", got)
 	}
-	// A mutation made while the store is unreadable cannot flush.
-	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour)})
-
-	// Restore the original file.
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, before, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	// The successful reload must merge the in-window mutation back over the
-	// disk content, and the merged map must be flushed (fresh store sees it).
+	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
 	if got := store.Load("b"); got == nil || got.instanceID != "inst-b" {
-		t.Fatalf("Load('b') after reload = %+v, want inst-b (in-window update lost)", got)
+		t.Fatalf("Load('b') = %+v, want inst-b (memory + backend usable despite unreadable file)", got)
 	}
-	if got := store.Load("a"); got == nil || got.instanceID != "inst-a" {
-		t.Fatalf("Load('a') after reload = %+v, want inst-a (disk content preserved)", got)
-	}
-	if got := NewStore(path).Load("b"); got == nil || got.instanceID != "inst-b" {
-		t.Fatalf("fresh Load('b') = %+v, want inst-b (merge not persisted)", got)
+	// A fresh store over the same backend resumes 'b' without the file.
+	if got := NewStoreWithBackend(path, fb).Load("b"); got == nil || got.instanceID != "inst-b" {
+		t.Fatalf("fresh Load('b') = %+v, want inst-b", got)
 	}
 }
 
-// TestStoreVersionMismatchIgnoredThenReplaced is the version-mismatch case: a store file with a
-// version other than storeVersion is ignored (empty view), and the next Save
-// replaces it wholesale with the current version.
-func TestStoreVersionMismatchIgnoredThenReplaced(t *testing.T) {
+// TestStoreVersionMismatchIgnoredNeverReplaced is the version-mismatch case:
+// a legacy file with a version other than storeVersion is ignored (empty
+// view), and the next Save leaves it byte-identical: the legacy path is
+// import-only, never replaced wholesale.
+func TestStoreVersionMismatchIgnoredNeverReplaced(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	file := storeFile{
 		Version: storeVersion + 1,
@@ -623,13 +417,25 @@ func TestStoreVersionMismatchIgnoredThenReplaced(t *testing.T) {
 		t.Fatalf("Load of version-mismatched entry = %+v, want nil (ignored)", got)
 	}
 
-	store.Save("new", &cachedState{status: "active", instanceID: "inst-new", expiresAt: time.Now().Add(time.Hour)})
+	store.Save("new", &cachedState{status: "active", instanceID: "inst-new", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
+	if got := store.Load("new"); got == nil || got.instanceID != "inst-new" {
+		t.Fatalf("Load('new') after Save = %+v, want inst-new (memory)", got)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, data) {
+		t.Fatal("Save replaced the version-mismatched legacy file, want import-only (byte-identical)")
+	}
+	// Without a backend there is no cross-instance durability: a fresh
+	// memory-only store over the same path sees neither entry.
 	fresh := NewStore(path)
-	if got := fresh.Load("new"); got == nil || got.instanceID != "inst-new" {
-		t.Fatalf("Load('new') after Save = %+v, want inst-new", got)
+	if got := fresh.Load("new"); got != nil {
+		t.Errorf("fresh Load('new') = %+v, want nil (no backend, no durability)", got)
 	}
 	if got := fresh.Load("old"); got != nil {
-		t.Errorf("Load('old') after Save = %+v, want nil (version-mismatched file replaced wholesale)", got)
+		t.Errorf("fresh Load('old') = %+v, want nil (version-mismatched file stays ignored)", got)
 	}
 }
 

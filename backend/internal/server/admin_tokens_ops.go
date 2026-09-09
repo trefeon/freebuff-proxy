@@ -7,7 +7,6 @@ import (
 	"freebuff-proxy/backend/internal/config"
 	"io"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -65,23 +64,40 @@ func shortFlowID(fp string) string {
 }
 
 func (a *adminHandlers) syncTokensAfterMutation(tokens []string) error {
-	// Snapshot the .env before writing so a reload-verification failure can
-	// restore it byte-exact (mirrors handleModeSwitch's persist → verify →
+	// Dual-layer persist (DB-unified storage): AUTH_TOKENS itself stays
+	// .env-only (raw tokens never reach the store), while the
+	// auth/tokens_configured presence marker goes write-through to the
+	// settings table — zero secret material. A reload-verification failure
+	// restores BOTH layers (mirrors handleModeSwitch's persist → verify →
 	// rollback). Otherwise the failed add leaves AUTH_TOKENS=<new> in .env
 	// while the live pool holds the old list — the very divergence the
 	// caller is trying to avoid.
-	old, oldErr := os.ReadFile(config.EnvFileForWrite())
-	if _, err := updateAuthTokensEnv(tokens); err != nil {
-		return fmt.Errorf("persist AUTH_TOKENS: %w", err)
+	for i, tok := range tokens {
+		if strings.Contains(tok, ",") {
+			return fmt.Errorf("persist AUTH_TOKENS: AUTH_TOKENS entry %d contains a comma (AUTH_TOKENS is comma-separated in .env)", i+1)
+		}
 	}
-	newCfg, err := a.loadConfig()
+	set, del := tokenMarkerDelta(tokens)
+	newCfg, err := a.dualWrite(
+		[]config.EnvUpdate{{Key: "AUTH_TOKENS", Value: strings.Join(tokens, ",")}},
+		set, del,
+		func(newCfg config.Config) error {
+			if !reflect.DeepEqual(newCfg.AuthTokens, tokens) {
+				return fmt.Errorf("AUTH_TOKENS overridden by environment or -config JSON (%d effective vs %d requested) — persisted to .env but NOT activated; clear it there or restart without env_file, then retry", len(newCfg.AuthTokens), len(tokens))
+			}
+			return nil
+		},
+	)
 	if err != nil {
-		restoreEnvFile(old, oldErr)
-		return fmt.Errorf("reload config: %w", err)
-	}
-	if !reflect.DeepEqual(newCfg.AuthTokens, tokens) {
-		restoreEnvFile(old, oldErr)
-		return fmt.Errorf("AUTH_TOKENS overridden by environment or -config JSON (%d effective vs %d requested) — persisted to .env but NOT activated; clear it there or restart without env_file, then retry", len(newCfg.AuthTokens), len(tokens))
+		if phase, ok := dualPhaseOf(err); ok {
+			switch phase {
+			case dualPersistPhase:
+				return fmt.Errorf("persist AUTH_TOKENS: %w", err)
+			default:
+				return fmt.Errorf("reload config: %w", err)
+			}
+		}
+		return err
 	}
 	a.applyReloadedConfig(&newCfg)
 	return nil

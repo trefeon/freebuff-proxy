@@ -90,6 +90,7 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		p.admissionsMu.Lock()
 		p.admissions[model] = -1 // sentinel: "leader, target unknown"
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 		// Ensure the gate is closed and cleaned up on every exit path.
 		defer func() {
 			p.modelAdmissionGateMu.Lock()
@@ -350,6 +351,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// Update the pre-registered leader slot with the actual token index.
 		p.admissions[model] = idx
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 
 		permit, err := p.gate.acquire(ctx, model)
 		if err != nil {
@@ -358,6 +360,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				delete(p.admissions, model)
 			}
 			p.admissionsMu.Unlock()
+			p.markPersistDirty()
 			return nil, err
 		}
 		// Re-validate the entry is still current BEFORE the admission POST:
@@ -367,12 +370,12 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// post-admission check below stays: the removal can still land
 		// during the create.
 		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
-			permit.Release()
 			p.admissionsMu.Lock()
 			if p.admissions != nil && (p.admissions[model] == idx || p.admissions[model] == -1) {
 				delete(p.admissions, model)
 			}
 			p.admissionsMu.Unlock()
+			p.markPersistDirty()
 			continue
 		}
 		sessionStart := time.Now()
@@ -392,6 +395,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			delete(p.admissions, model)
 		}
 		p.admissionsMu.Unlock()
+		p.markPersistDirty()
 		phasetiming.FromContext(ctx).Since(phasetiming.SessionRefreshMS, sessionStart)
 		if err != nil {
 			c := p.classifyAndCooldown(tok.runs, err)

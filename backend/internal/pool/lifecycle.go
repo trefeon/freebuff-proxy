@@ -409,6 +409,10 @@ func (p *Pool) Shutdown(ctx context.Context) {
 		p.cancel()
 	}
 	p.wg.Wait()
+	// Best-effort runtime persist flush: the maintain loop is stopped, so
+	// the counters are stable. A DB failure stays live-only (warned
+	// inside the flush) and never fails the shutdown.
+	_ = p.FlushPoolPersist()
 
 	var errs []string
 	toks := p.roster.Load()

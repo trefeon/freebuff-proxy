@@ -126,7 +126,10 @@ func (p *Pool) recordChat(token int) { p.roster.recordChat(token) }
 // window. The entry is the authoritative owner of its ledger, so after a
 // concurrent RemoveLastToken+AddToken a lease's Token index is never used
 // to locate the ledger — the pointer stays immune to index reuse.
-func (p *Pool) recordChatEntry(entry *tokenEntry) { p.roster.recordChatEntry(entry) }
+func (p *Pool) recordChatEntry(entry *tokenEntry) {
+	p.roster.recordChatEntry(entry)
+	p.markPersistDirty()
+}
 
 // usageCount returns how many successful chats token sent within the last
 // usageWindow, pruning expired timestamps.
@@ -221,6 +224,7 @@ func (p *Pool) bridgeRecordChat(entry *bridgeEntry) {
 	entry.ledger.recordChat(now)
 	entry.ledger.recordDayRequest(now)
 	p.bridgeDailyUsage++
+	p.markPersistDirty()
 }
 
 // bridgeTryAdmitRequest atomically checks and records one ADMITTED chat

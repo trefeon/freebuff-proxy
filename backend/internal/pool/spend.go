@@ -346,6 +346,7 @@ func (p *Pool) logSpendBuckets(tokens int64) {
 func (p *Pool) recordSpendEntry(entry *tokenEntry, tokens int64) {
 	p.roster.recordSpendEntry(entry, tokens)
 	p.logSpendBuckets(tokens)
+	p.markPersistDirty()
 }
 
 // bridgeRecordSpend adds tokens to a bridge entry's ledger.
@@ -357,6 +358,7 @@ func (p *Pool) bridgeRecordSpend(entry *bridgeEntry, tokens int64) {
 	defer p.bridgeMu.Unlock()
 	entry.ledger.recordSpend(tokens, time.Now())
 	p.logSpendBuckets(tokens)
+	p.markPersistDirty()
 }
 
 // spendView is one ledger's snapshot for healthz (issue #87).
@@ -404,10 +406,9 @@ func ledgerView(l *spendLedger) spendView {
 	}
 }
 
-// recordSpendLimited marks one upstream spend_limited refusal on the entry
-// at token's ledger (issue #122). The roster's single mutex guards it.
 func (p *Pool) recordSpendLimited(token int) {
 	p.roster.recordSpendLimited(token)
+	p.markPersistDirty()
 }
 
 // bridgeRecordSpendLimited marks one upstream spend_limited refusal on a
@@ -417,6 +418,7 @@ func (p *Pool) bridgeRecordSpendLimited(entry *bridgeEntry) {
 		return
 	}
 	entry.ledger.recordSpendLimited()
+	p.markPersistDirty()
 }
 
 func unixToTime(sec int64) time.Time { return time.Unix(sec, 0) }

@@ -22,6 +22,19 @@ const (
 	spillShutdownWait = 5 * time.Second
 )
 
+// History retention: the background consumer purges rows older than these
+// ages on retentionEvery. Logs and request outcomes are high-volume display
+// data (30d); quota and maturity are sparse change points (90d). Purge runs
+// on the spill goroutine only — never on a request path.
+var retentionEvery = time.Hour
+
+const (
+	retentionLogsDays     = 30
+	retentionRequestsDays = 30
+	retentionQuotaDays    = 90
+	retentionMaturityDays = 90
+)
+
 // WithHistory attaches the history store and starts the log spill consumer.
 // A nil store is a no-op: the dashboard runs live-only. The caller owns the
 // store handle; Close stops the consumer (flushing first) and closes it.
@@ -67,6 +80,8 @@ func (d *Dashboard) spillLoop() {
 	}
 	tick := time.NewTicker(spillFlushEvery)
 	defer tick.Stop()
+	retention := time.NewTicker(retentionEvery)
+	defer retention.Stop()
 	for {
 		select {
 		case e, ok := <-d.spillCh:
@@ -80,6 +95,9 @@ func (d *Dashboard) spillLoop() {
 			}
 		case <-tick.C:
 			flush()
+		case <-retention.C:
+			flush()
+			d.purgeHistory()
 		case <-d.spillDone:
 			for {
 				select {
@@ -94,6 +112,25 @@ func (d *Dashboard) spillLoop() {
 				}
 			}
 		}
+	}
+}
+
+// purgeHistory deletes history rows older than the retention ages. Called
+// from the spill goroutine on retentionEvery — never from request handlers.
+// Failures only warn: history is display data, and the next tick retries.
+func (d *Dashboard) purgeHistory() {
+	if d.hist == nil {
+		return
+	}
+	now := store.Millis(time.Now())
+	day := int64(24 * time.Hour / time.Millisecond)
+	if err := d.hist.Purge(
+		now-retentionLogsDays*day,
+		now-retentionQuotaDays*day,
+		now-retentionMaturityDays*day,
+		now-retentionRequestsDays*day,
+	); err != nil {
+		d.logger.Warn("history purge failed", "err", err)
 	}
 }
 

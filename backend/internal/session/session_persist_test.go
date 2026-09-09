@@ -633,7 +633,8 @@ func TestPersistStoreNotConsultedOnLiveRefresh(t *testing.T) {
 }
 
 func TestPersistQuotaByModelRoundTrip(t *testing.T) {
-	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(filepath.Join(t.TempDir(), "state.json"), fb)
 	key := "test-token-key"
 
 	resetAt := time.Now().Add(12 * time.Hour).Truncate(time.Second)
@@ -651,8 +652,8 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 
 	store.Save(key, slot)
 
-	// Fresh store load from disk
-	store2 := NewStore(store.path)
+	// Fresh store over the same backend (restart)
+	store2 := NewStoreWithBackend(store.path, fb)
 	loaded := store2.Load(key)
 	if loaded == nil {
 		t.Fatal("loaded state is nil")
@@ -679,7 +680,8 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 // (with schedule), windows, subscription and standing survive a restart so
 // the dashboard keeps its banner/cards until the next full admission.
 func TestPersistAccountBlocksRoundTrip(t *testing.T) {
-	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	fb := newFakeSessionBackend()
+	store := NewStoreWithBackend(filepath.Join(t.TempDir(), "state.json"), fb)
 	key := "test-token-key"
 
 	slot := activeSlot("inst-acct-1", "openai/gpt-5.6-luna")
@@ -697,8 +699,7 @@ func TestPersistAccountBlocksRoundTrip(t *testing.T) {
 	slot.standing = &upstream.SessionStanding{Level: "trusted", NextSteps: []upstream.StandingNextStep{{ID: "a", Label: "b"}}}
 
 	store.Save(key, slot)
-
-	store2 := NewStore(store.path)
+	store2 := NewStoreWithBackend(store.path, fb)
 	loaded := store2.Load(key)
 	if loaded == nil {
 		t.Fatal("loaded state is nil")

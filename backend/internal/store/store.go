@@ -21,10 +21,13 @@ import (
 // (log_entries, quota_snapshots, maturity_events, request_records); v2 adds
 // the persistence tables (settings, pages_state, sessions_persist, tokens).
 // v3 adds the maturity columns (maturity_json, streak_blob) to tokens.
+// v4 adds the pool runtime table (pool_state: opaque blobs keyed by stable
+// string keys for ledger counters, admissions, bridge usage/survivors and
+// burst hits — see pool_persist.go).
 // Open migrates older files in place; anything else non-zero is rejected so
 // a stale file is ignored instead of mis-parsed (mirrors
 // session.storeVersion).
-const schemaVersion = 3
+const schemaVersion = 4
 
 const schema = `
 CREATE TABLE IF NOT EXISTS log_entries(
@@ -97,6 +100,16 @@ CREATE TABLE IF NOT EXISTS tokens(
   maturity_json TEXT NOT NULL DEFAULT '',
   streak_blob BLOB,
   created_at INTEGER NOT NULL DEFAULT 0
+);
+-- v4 pool runtime table (pool_persist.go): opaque blobs keyed by stable
+-- string keys (pool/ledger/<sha256hex>, pool/admissions, pool/burst,
+-- pool/bridge/usage, pool/bridge/survivors). Value columns hold raw
+-- JSON/bytes the pool marshals itself; the store never interprets them
+-- (leaf package: stdlib + the sqlite driver only, zero internal imports).
+CREATE TABLE IF NOT EXISTS pool_state(
+  key TEXT PRIMARY KEY,
+  value BLOB NOT NULL DEFAULT x'',
+  updated_at INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -180,11 +193,11 @@ func DBPathFromEnv() string {
 }
 
 // Open creates the parent dir, opens (or creates) the SQLite file at path,
-// and applies pragmas + schema. Older files migrate in place (v1 gains the
-// v2 persistence tables via the IF NOT EXISTS schema; v2 gains the v3
-// maturity columns via ALTER); any other version mismatch or unusable file
-// returns an error and the caller runs live-only. Open never fails the boot
-// itself.
+// and applies pragmas + schema. Older files migrate in place (v1/v3 gain
+// their missing tables via the IF NOT EXISTS schema; v2 additionally gains
+// the v3 maturity columns via ALTER); any other version mismatch or
+// unusable file returns an error and the caller runs live-only. Open never
+// fails the boot itself.
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -214,13 +227,14 @@ func Open(path string) (*Store, error) {
 	switch v {
 	case 0, schemaVersion:
 		// Fresh file or current: apply the schema as-is.
-	case 1:
-		// v1 -> v2: the schema below is IF NOT EXISTS, so it only adds
-		// the persistence tables and keeps every v1 history row. The
-		// tokens table is created fresh by that same schema, already
-		// carrying the v3 maturity columns.
+	case 1, 3:
+		// v1 -> v4 / v3 -> v4: the schema below is IF NOT EXISTS, so it
+		// only adds the missing tables (persistence tables for v1,
+		// pool_state for v3) and keeps every existing row. A v1 tokens
+		// table is created fresh by that same schema, already carrying
+		// the v3 maturity columns.
 	case 2:
-		// v2 -> v3: tokens exists without the maturity columns.
+		// v2 -> v4: tokens exists without the maturity columns.
 		migrate = true
 	default:
 		_ = db.Close()

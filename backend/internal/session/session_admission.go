@@ -635,13 +635,9 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 
 	if snap != nil {
 		m.store.Save(m.key, snap)
-		// Surface a failed flush: without the persisted entry a restart
-		// cannot resume the slot, so a write/rename failure must not be
-		// silent. Re-read the FILE through a fresh Store — the in-memory
-		// map is updated before the flush attempt and cannot verify disk.
-		if persisted := NewStore(m.store.path).Load(m.key); persisted == nil || persisted.instanceID != instanceID {
-			slog.Warn("session: shutdown persist failed", "instance_id", shortInstance(instanceID))
-		}
+		// A failed backend write already warns inside Save (persistLocked)
+		// and the in-memory update is kept; there is no durability
+		// re-read — Load serves the sessions_persist row on restart.
 		m.persistMu.Unlock()
 	}
 

@@ -1,11 +1,9 @@
 package session
 
 // Wave-3 store tests: run persistence (issue #40) — SaveRun/LoadRun/
-// RemoveRun round-trip through the atomic on-disk store.
+// RemoveRun round-trip through the sessions_persist backend.
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +12,8 @@ import (
 func TestStoreRunPersistenceRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.json")
-	s := NewStore(path)
+	fb := newFakeSessionBackend()
+	s := NewStoreWithBackend(path, fb)
 
 	pr := PersistedRun{
 		RunID:          "run-abc",
@@ -31,8 +30,8 @@ func TestStoreRunPersistenceRoundTrip(t *testing.T) {
 		t.Fatalf("LoadRun(other agent) = %+v, want nil", got)
 	}
 
-	// A fresh store over the same file (restart) sees the run.
-	s2 := NewStore(path)
+	// A fresh store over the same backend (restart) sees the run.
+	s2 := NewStoreWithBackend(path, fb)
 	if got := s2.LoadRun("tokhash", "agent-x"); got == nil || got.RunID != "run-abc" {
 		t.Fatalf("restart LoadRun = %+v, want run-abc", got)
 	}
@@ -41,19 +40,13 @@ func TestStoreRunPersistenceRoundTrip(t *testing.T) {
 	if got := s2.LoadRun("tokhash", "agent-x"); got != nil {
 		t.Fatalf("LoadRun after RemoveRun = %+v, want nil", got)
 	}
-	// Removing the last agent drops the token's run map (no empty residue).
-	var file struct {
-		Runs map[string]map[string]PersistedRun `json:"runs"`
+	// Removing the last agent drops the token's run map (no empty residue):
+	// with no session blob either, the backend row is gone entirely.
+	if _, _, found := fb.lookup(t, "tokhash"); found {
+		t.Error("backend row survives last-agent RemoveRun with no session, want row deleted")
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(data, &file); err != nil {
-		t.Fatal(err)
-	}
-	if len(file.Runs) != 0 {
-		t.Errorf("runs residue after RemoveRun = %+v, want empty", file.Runs)
+	if cs := s2.Load("tokhash"); cs != nil {
+		t.Errorf("Load after last-agent RemoveRun = %+v, want nil", cs)
 	}
 }
 
@@ -67,15 +60,16 @@ func TestStoreRunRejectsEmptyRunID(t *testing.T) {
 
 func TestStoreRunAndSessionCoexist(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	s := NewStore(path)
+	fb := newFakeSessionBackend()
+	s := NewStoreWithBackend(path, fb)
 	s.Save("tokhash", &cachedState{status: "active", instanceID: "inst-1", model: "m", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
 	s.SaveRun("tokhash", "agent-x", PersistedRun{RunID: "run-1", AgentID: "agent-x", TraceSessionID: "t", StartedAt: time.Now()})
 
-	s2 := NewStore(path)
+	s2 := NewStoreWithBackend(path, fb)
 	if cs := s2.Load("tokhash"); cs == nil || cs.instanceID != "inst-1" {
-		t.Fatalf("session lost with runs in file: %+v", cs)
+		t.Fatalf("session lost with runs in backend: %+v", cs)
 	}
 	if pr := s2.LoadRun("tokhash", "agent-x"); pr == nil || pr.RunID != "run-1" {
-		t.Fatalf("run lost with session in file: %+v", pr)
+		t.Fatalf("run lost with session in backend: %+v", pr)
 	}
 }
