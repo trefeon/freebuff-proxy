@@ -1,8 +1,8 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
-  "upstream_sha": "6f11e5edd36afd05ce40e662c5cf2ca99e0c6d4f",
-  "checked_at": "2026-09-09T11:25:00Z",
-  "wiregen_sha": "cc9069e251e8fedd5784c688ce78ccfecd76815f",
+  "upstream_sha": "654587ac2ea327f9fa0b01710e044d915542c228",
+  "checked_at": "2026-09-09T13:06:09Z",
+  "wiregen_sha": "654587ac2ea327f9fa0b01710e044d915542c228",
   "vendor_version": "0.0.172",
   "vendor_version_pinned": "0.0.172",
   "files": [
