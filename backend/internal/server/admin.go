@@ -140,7 +140,10 @@ func (a *adminHandlers) handlePlaygroundChat(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var req dashboard.PlaygroundRequest
-	req.Model = strings.TrimSpace(req.Model)
+	if err := json.Unmarshal(body, &req); err != nil {
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "request must be a JSON object", "invalid_json")
+		return
+	}
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Model == "" {
 		if m := probeModel(a.reg); m != "" {
