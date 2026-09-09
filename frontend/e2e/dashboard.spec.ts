@@ -159,7 +159,7 @@ test.describe("dashboard hermetic mocks", () => {
     );
   });
 
-  test("Quota Tracker shows shared pool bar and Freebucks empty state", async ({
+  test("Quota Tracker shows Freebucks empty state, no session quota bars", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -192,14 +192,11 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByRole("heading", { name: "Account #5" }),
     ).toBeVisible();
-    // Account 1 fixture carries premium_quota → Shared pool bar renders
-    await expect(page.getByText("Shared pool").first()).toBeVisible();
-    await expect(page.getByText("4/day pacific_day")).toBeVisible();
-    // The 2026-08-30 reset window has passed: the bar reads "Reset <local
-    // date>" (formatLocalDate), never raw ISO or "Resets in now".
-    await expect(page.getByText(/Reset Aug 30/).first()).toBeVisible();
-    await expect(page.getByText("Resets in now")).toHaveCount(0);
-    await expect(page.getByText("2026-08-30T07:00:00Z")).toHaveCount(0);
+    // Session/premium quota bars are gone: no Shared pool bar even though
+    // the Account 1 fixture still carries a premium_quota field.
+    await expect(page.getByText("Shared pool")).toHaveCount(0);
+    await expect(page.getByText("4/day pacific_day")).toHaveCount(0);
+    await expect(page.getByText(/Reset Aug 30/)).toHaveCount(0);
     // Tokens without Freebucks or premium data show the empty-state hint
     await expect(
       page
@@ -275,11 +272,11 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
     ).toBeVisible();
-    // Stale note renders; the token keeps its shared bar (no empty state
-    // for a token that carries last-seen quota). Legacy per-model rows
-    // are gone, so no model ids render from quota rows.
+    // Stale note renders; session/premium bars are gone so the token shows
+    // the Freebucks empty-state hint. Legacy per-model rows are gone, so
+    // no model ids render from quota rows.
     await expect(page.getByText("before restart").first()).toBeVisible();
-    await expect(page.getByText("Shared pool").first()).toBeVisible();
+    await expect(page.getByText("Shared pool")).toHaveCount(0);
   });
   test("Quota Tracker header carries the reset countdown when given a clock", async ({
     page,

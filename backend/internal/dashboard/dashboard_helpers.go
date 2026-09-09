@@ -75,12 +75,6 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 	if t.Freebucks != nil {
 		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
 	}
-	if t.FreeWindows != nil {
-		card.FreeWindows = freeWindowsCardFromInfo(t.FreeWindows)
-	}
-	if t.Subscription != nil {
-		card.Subscription = subscriptionCardFromInfo(t.Subscription)
-	}
 	if t.Streak > 0 {
 		card.Streak = t.Streak
 		card.TodayUsed = t.TodayUsed
@@ -126,8 +120,8 @@ func maturityCardFromSnapshot(m *pool.MaturitySnapshot) *maturityCard {
 // tokenLiveCard is the hot-poll subset of tokenCard (issue #322): live
 // counters and status only. Account-stable fields (email, account_id,
 // daily_limit, standing_*, referral_*) ride the once-per-mount full fetch;
-// the SPA merges them back by index. Quota-adjacent cards (freebucks, free
-// windows, subscription) stay live: they change mid-session.
+// the SPA merges them back by index. The Freebucks card stays live: it
+// changes mid-session.
 type tokenLiveCard struct {
 	Index         int    `json:"index"`
 	SessionStatus string `json:"session_status"`
@@ -156,15 +150,13 @@ type tokenLiveCard struct {
 	TransientRetries       int64  `json:"transient_retries"`
 	// AllowlistSkips is live (like TransientRetries): every poll refreshes
 	// it, so it stays out of the SPA's static cache.
-	AllowlistSkips  int64             `json:"allowlist_skips,omitempty"`
-	Freebucks       *freebucksCard    `json:"freebucks,omitempty"`
-	FreeWindows     *freeWindowsCard  `json:"free_windows,omitempty"`
-	Subscription    *subscriptionCard `json:"subscription,omitempty"`
-	Streak          int               `json:"streak,omitempty"`
-	TodayUsed       bool              `json:"today_used,omitempty"`
-	LastUsage       string            `json:"last_usage,omitempty"`
-	StreakUpdatedAt string            `json:"streak_updated_at,omitempty"`
-	Maturity        *maturityCard     `json:"maturity,omitempty"`
+	AllowlistSkips  int64          `json:"allowlist_skips,omitempty"`
+	Freebucks       *freebucksCard `json:"freebucks,omitempty"`
+	Streak          int            `json:"streak,omitempty"`
+	TodayUsed       bool           `json:"today_used,omitempty"`
+	LastUsage       string         `json:"last_usage,omitempty"`
+	StreakUpdatedAt string         `json:"streak_updated_at,omitempty"`
+	Maturity        *maturityCard  `json:"maturity,omitempty"`
 }
 
 // liveCardFromSnapshot builds the hot-poll card for one token snapshot.
@@ -202,12 +194,6 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	if t.Freebucks != nil {
 		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
 	}
-	if t.FreeWindows != nil {
-		card.FreeWindows = freeWindowsCardFromInfo(t.FreeWindows)
-	}
-	if t.Subscription != nil {
-		card.Subscription = subscriptionCardFromInfo(t.Subscription)
-	}
 	if t.Streak > 0 {
 		card.Streak = t.Streak
 		card.TodayUsed = t.TodayUsed
@@ -218,53 +204,6 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	}
 	if t.Maturity != nil {
 		card.Maturity = maturityCardFromSnapshot(t.Maturity)
-	}
-	return card
-}
-func freeWindowsCardFromInfo(info *upstream.FreeWindowsInfo) *freeWindowsCard {
-	if info == nil {
-		return nil
-	}
-	card := &freeWindowsCard{
-		DayUsed:    info.DayUsed,
-		DayLimit:   info.DayLimit,
-		WeekUsed:   info.WeekUsed,
-		WeekLimit:  info.WeekLimit,
-		MonthUsed:  info.MonthUsed,
-		MonthLimit: info.MonthLimit,
-	}
-	if !info.DayResetAt.IsZero() {
-		card.DayResetAt = info.DayResetAt.Format(time.RFC3339)
-	}
-	if !info.MonthResetAt.IsZero() {
-		card.MonthResetAt = info.MonthResetAt.Format(time.RFC3339)
-	}
-	return card
-}
-
-func subscriptionCardFromInfo(info *upstream.SubscriptionInfo) *subscriptionCard {
-	if info == nil {
-		return nil
-	}
-	card := &subscriptionCard{
-		DayUsed:            info.DayUsed,
-		DayLimit:           info.DayLimit,
-		FiveDayUsed:        info.FiveDayUsed,
-		FiveDayLimit:       info.FiveDayLimit,
-		MonthUsed:          info.MonthUsed,
-		MonthLimit:         info.MonthLimit,
-		DayPremiumUsed:     info.DayPremiumUsed,
-		DayPremiumLimit:    info.DayPremiumLimit,
-		MonthSpendUsd:      info.MonthSpendUsd,
-		MonthSpendLimitUsd: info.MonthSpendLimitUsd,
-		FreeDayUsed:        info.FreeDayUsed,
-		FreeDayLimit:       info.FreeDayLimit,
-	}
-	if !info.DayResetAt.IsZero() {
-		card.DayResetAt = info.DayResetAt.Format(time.RFC3339)
-	}
-	if !info.PeriodEndsAt.IsZero() {
-		card.PeriodEndsAt = info.PeriodEndsAt.Format(time.RFC3339)
 	}
 	return card
 }

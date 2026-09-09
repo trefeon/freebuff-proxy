@@ -183,12 +183,6 @@ type TokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil until
 	// the session reports it.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
-	// FreeWindows is the upstream free-tier pool windows block
-	// (day/week/month; issue #319). Display-only; nil until reported.
-	FreeWindows *upstream.FreeWindowsInfo `json:"free_windows,omitempty"`
-	// Subscription is the upstream subscription usage block (issue #319);
-	// rollout-audience only; nil until reported.
-	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
 	// UpgradeHint is the upstream upgradeHint block ({url, message})
 	// broadcast by the session server; nil when absent.
 	UpgradeHint *upstream.SessionUpgradeHint `json:"upgrade_hint,omitempty"`

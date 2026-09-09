@@ -41,15 +41,13 @@ type persistedState struct {
 	// endsAt}); "" when absent (issue #178).
 	GlmPromo string `json:"glm_promo,omitempty"`
 	// Account blocks persisted so a restart keeps the dashboard's
-	// referral banner, Freebucks card, windows, subscription and standing
-	// until the next full admission refreshes them (rework 2026-09-05):
-	// compact polls never carry them, so without this the UI goes blank
-	// on every restart. All optional — old files load with nils.
-	Referral     *upstream.SessionReferral  `json:"referral,omitempty"`
-	Freebucks    *upstream.FreebucksInfo    `json:"freebucks,omitempty"`
-	FreeWindows  *upstream.FreeWindowsInfo  `json:"free_windows,omitempty"`
-	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
-	Standing     *upstream.SessionStanding  `json:"standing,omitempty"`
+	// referral banner, Freebucks card and standing until the next full
+	// admission refreshes them (rework 2026-09-05): compact polls never
+	// carry them, so without this the UI goes blank on every restart.
+	// All optional — old files load with nils.
+	Referral  *upstream.SessionReferral `json:"referral,omitempty"`
+	Freebucks *upstream.FreebucksInfo   `json:"freebucks,omitempty"`
+	Standing  *upstream.SessionStanding `json:"standing,omitempty"`
 }
 
 // persistedQuota is one model's live session quota persisted on disk.
@@ -439,8 +437,6 @@ func (s *Store) Load(key string) *cachedState {
 		glmPromo:           ps.GlmPromo,
 		referral:           ps.Referral,
 		freebucks:          ps.Freebucks,
-		freeWindows:        ps.FreeWindows,
-		subscription:       ps.Subscription,
 		standing:           ps.Standing,
 	}
 	if len(ps.QuotaByModel) > 0 {
@@ -530,18 +526,6 @@ func (s *Store) Save(key string, cs *cachedState) {
 	if cs.freebucks != nil {
 		ps := s.data[key]
 		ps.Freebucks = cloneFreebucksInfo(cs.freebucks)
-		s.data[key] = ps
-	}
-	if cs.freeWindows != nil {
-		ps := s.data[key]
-		w := *cs.freeWindows
-		ps.FreeWindows = &w
-		s.data[key] = ps
-	}
-	if cs.subscription != nil {
-		ps := s.data[key]
-		sub := *cs.subscription
-		ps.Subscription = &sub
 		s.data[key] = ps
 	}
 	if cs.standing != nil {

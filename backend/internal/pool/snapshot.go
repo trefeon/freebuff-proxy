@@ -23,14 +23,8 @@ type BridgeTokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil
 	// when the bridge entry has no Freebucks quota.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
-	// FreeWindows is the upstream free-tier pool windows block
-	// (issue #319); nil when absent.
-	FreeWindows *upstream.FreeWindowsInfo `json:"free_windows,omitempty"`
-	// Subscription is the upstream subscription usage block (issue #319);
-	// rollout-audience only; nil otherwise.
-	Subscription *upstream.SubscriptionInfo `json:"subscription,omitempty"`
-	SpendDay     float64                    `json:"spend_day"`
-	SpendPct     int                        `json:"spend_pct"`
+	SpendDay  float64                 `json:"spend_day"`
+	SpendPct  int                     `json:"spend_pct"`
 	// RequestsPerMinute / RequestsPerDay mirror TokenSnapshot's local
 	// request counters (MAX_REQUESTS_PER_MINUTE rolling 60s admitted;
 	// MAX_REQUESTS_PER_DAY successful chats in the current Pacific day).
@@ -230,8 +224,6 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Standing:                ss.Standing,
 			Referral:                ss.Referral,
 			Freebucks:               ss.Freebucks,
-			FreeWindows:             ss.FreeWindows,
-			Subscription:            ss.Subscription,
 			Streak:                  streak,
 			TodayUsed:               todayUsed,
 			LastUsageDate:           lastUsage,

@@ -66,15 +66,6 @@ type SessionState struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232),
 	// parsed from the session response's "freebucks" field; nil when omitted.
 	Freebucks *FreebucksInfo
-	// FreeWindows is the upstream free-tier session-pool windows block
-	// (day/week/month; issue #319). Display-only upstream (nothing refuses
-	// on the week or month yet); nil when the response omits it — quota-
-	// exempt accounts, limited access, or older servers.
-	FreeWindows *FreeWindowsInfo
-	// Subscription is the upstream subscription usage block (day / fiveDay /
-	// month windows plus provider spend USD; issue #319). Sent only to
-	// callers in the rollout audience; nil otherwise.
-	Subscription *SubscriptionInfo
 	// UpgradeHint carries the upstream promotional or upgrade broadcast
 	// hint ({url, message}) if provided by the session server; nil otherwise.
 	UpgradeHint *SessionUpgradeHint
@@ -132,8 +123,6 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		Standing               *rawStanding             `json:"standing"`
 		Referral               *rawReferral             `json:"referral"`
 		Freebucks              *rawFreebucks            `json:"freebucks"`
-		FreeWindows            *rawFreeWindows          `json:"freeWindows"`
-		Subscription           *rawSubscription         `json:"subscription"`
 		UpgradeHint            *struct {
 			URL     string `json:"url"`
 			Message string `json:"message"`
@@ -251,46 +240,6 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				fb.Monthly = m
 			}
 			state.Freebucks = fb
-		}
-		if raw.FreeWindows != nil {
-			fw := &FreeWindowsInfo{
-				DayUsed:    raw.FreeWindows.DayUsed,
-				DayLimit:   raw.FreeWindows.DayLimit,
-				WeekUsed:   raw.FreeWindows.WeekUsed,
-				WeekLimit:  raw.FreeWindows.WeekLimit,
-				MonthUsed:  raw.FreeWindows.MonthUsed,
-				MonthLimit: raw.FreeWindows.MonthLimit,
-			}
-			if t, err := parseFlexTime(raw.FreeWindows.DayResetAt); err == nil {
-				fw.DayResetAt = t
-			}
-			if t, err := parseFlexTime(raw.FreeWindows.MonthResetAt); err == nil {
-				fw.MonthResetAt = t
-			}
-			state.FreeWindows = fw
-		}
-		if raw.Subscription != nil {
-			sub := &SubscriptionInfo{
-				DayUsed:            raw.Subscription.DayUsed,
-				DayLimit:           raw.Subscription.DayLimit,
-				FiveDayUsed:        raw.Subscription.FiveDayUsed,
-				FiveDayLimit:       raw.Subscription.FiveDayLimit,
-				MonthUsed:          raw.Subscription.MonthUsed,
-				MonthLimit:         raw.Subscription.MonthLimit,
-				DayPremiumUsed:     raw.Subscription.DayPremiumUsed,
-				DayPremiumLimit:    raw.Subscription.DayPremiumLimit,
-				MonthSpendUsd:      raw.Subscription.MonthSpendUsd,
-				MonthSpendLimitUsd: raw.Subscription.MonthSpendLimitUsd,
-				FreeDayUsed:        raw.Subscription.FreeDayUsed,
-				FreeDayLimit:       raw.Subscription.FreeDayLimit,
-			}
-			if t, err := parseFlexTime(raw.Subscription.DayResetAt); err == nil {
-				sub.DayResetAt = t
-			}
-			if t, err := parseFlexTime(raw.Subscription.PeriodEndsAt); err == nil {
-				sub.PeriodEndsAt = t
-			}
-			state.Subscription = sub
 		}
 		if state.ExpiresAt, err = parseFlexTime(raw.ExpiresAt); err != nil {
 			state.ExpiresAt = time.Time{}

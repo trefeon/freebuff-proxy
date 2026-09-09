@@ -381,8 +381,6 @@ func (p *Pool) BridgeSnapshot() []BridgeTokenSnapshot {
 			RequestsPerMinute: ke.rpm,
 			RequestsPerDay:    ke.rpd,
 			Freebucks:         sess.Freebucks,
-			FreeWindows:       sess.FreeWindows,
-			Subscription:      sess.Subscription,
 			BanType:           banType,
 			BannedUntil:       bannedUntil,
 		})

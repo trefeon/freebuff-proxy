@@ -13,7 +13,7 @@
   import PageShell from "../components/PageShell.svelte";
   import Card from "../components/Card.svelte";
   import Button from "../components/Button.svelte";
-  import PremiumQuotaBar from "../components/PremiumQuotaBar.svelte";
+  import FreebucksQuotaBar from "../components/FreebucksQuotaBar.svelte";
   import Sparkline from "../components/Sparkline.svelte";
   import Pips from "../components/Pips.svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -39,7 +39,7 @@
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
-  // Countdown tick: refetches nothing on its own; PremiumQuotaBar and the
+  // Countdown tick: refetches nothing on its own; FreebucksQuotaBar and the
   // reset cells re-render "resets in" against this clock every second.
   let now = $state(Date.now());
   // IDs the gateway can actually admit (live /admin/api/models rows with
@@ -174,11 +174,9 @@
   });
 
   // Bridge entries are owned by the Tokens page; this page only reports the
-  // count that currently report premium quota or freebucks (no bridge cards here).
+  // count that currently report freebucks (no bridge cards here).
   const bridgeQuotaCount = $derived(
-    (data?.bridge_token_cards ?? []).filter(
-      (c) => c.premium_quota || c.freebucks,
-    ).length,
+    (data?.bridge_token_cards ?? []).filter((c) => c.freebucks).length,
   );
 
   // resetInLabel renders a seconds countdown (e.g. the time until the next
@@ -356,19 +354,7 @@
               >
                 {freebucksHeaderLine(token.freebucks, now, $tr)}
               </p>
-              <PremiumQuotaBar
-                freebucks={token.freebucks}
-                freeWindows={token.free_windows}
-                subscription={token.subscription}
-                {now}
-              />
-            {:else if token.premium_quota}
-              <PremiumQuotaBar
-                quota={token.premium_quota}
-                freeWindows={token.free_windows}
-                subscription={token.subscription}
-                {now}
-              />
+              <FreebucksQuotaBar freebucks={token.freebucks} {now} />
             {/if}
             {#if sparkByIdx[idx]?.snapshots?.length > 1}
               {@const spark = sparkByIdx[idx]}
@@ -473,7 +459,7 @@
               {/if}
             {/if}
 
-            {#if !token.freebucks && !token.premium_quota}
+            {#if !token.freebucks}
               <p class="text-xs text-[var(--fp-dim)] italic">
                 {$tr(
                   "No Freebucks data — run a request or Probe all to populate.",

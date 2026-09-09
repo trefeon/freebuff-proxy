@@ -677,8 +677,8 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 }
 
 // TestPersistAccountBlocksRoundTrip pins the rework: referral, freebucks
-// (with schedule), windows, subscription and standing survive a restart so
-// the dashboard keeps its banner/cards until the next full admission.
+// (with schedule) and standing survive a restart so the dashboard keeps
+// its banner/cards until the next full admission.
 func TestPersistAccountBlocksRoundTrip(t *testing.T) {
 	fb := newFakeSessionBackend()
 	store := NewStoreWithBackend(filepath.Join(t.TempDir(), "state.json"), fb)
@@ -694,8 +694,6 @@ func TestPersistAccountBlocksRoundTrip(t *testing.T) {
 			{At: "2999-01-01T00:00:00Z", ModelID: "openai/gpt-5.6-luna", Price: 9, Tagline: "future"},
 		},
 	}
-	slot.freeWindows = &upstream.FreeWindowsInfo{DayUsed: 1, DayLimit: 6}
-	slot.subscription = &upstream.SubscriptionInfo{DayUsed: 0, DayLimit: 0}
 	slot.standing = &upstream.SessionStanding{Level: "trusted", NextSteps: []upstream.StandingNextStep{{ID: "a", Label: "b"}}}
 
 	store.Save(key, slot)
@@ -712,12 +710,6 @@ func TestPersistAccountBlocksRoundTrip(t *testing.T) {
 	}
 	if len(loaded.freebucks.PriceChanges) != 1 {
 		t.Errorf("priceChanges = %+v, want 1 future change kept", loaded.freebucks.PriceChanges)
-	}
-	if loaded.freeWindows == nil || loaded.freeWindows.DayLimit != 6 {
-		t.Errorf("freeWindows = %+v, want day limit 6", loaded.freeWindows)
-	}
-	if loaded.subscription == nil {
-		t.Error("subscription = nil, want persisted block")
 	}
 	if loaded.standing == nil || loaded.standing.Level != "trusted" || len(loaded.standing.NextSteps) != 1 {
 		t.Errorf("standing = %+v, want trusted + 1 step", loaded.standing)
