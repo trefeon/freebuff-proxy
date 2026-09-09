@@ -168,16 +168,21 @@ func (c *Client) GetStreak(ctx context.Context) (*StreakInfo, error) {
 }
 
 // EndSession DELETE /api/v1/freebuff/session; 404 is tolerated. The DELETE
-// is keyed on the user, not the instance: the CLI releases its slot with
-// Authorization only, no x-freebuff-instance-id header (#120,
-// reference/freebuff freebuff-session-api.ts releaseFreebuffSlot → DELETE).
-func (c *Client) EndSession(ctx context.Context) error {
+// carries x-freebuff-instance-id when the caller holds one (vendor parity:
+// cli/src/utils/freebuff-session-api.ts callFreebuffSession sends the
+// instance header on GET/DELETE when known; the session POST carries
+// x-freebuff-model and never the instance id). An empty instanceID omits
+// the header (the caller genuinely holds no slot).
+func (c *Client) EndSession(ctx context.Context, instanceID string) error {
 	if c.mock != nil {
-		return c.mock.EndSession(c.token)
+		return c.mock.EndSession(c.token, instanceID)
 	}
 	req, err := c.newRequest(ctx, http.MethodDelete, "/api/v1/freebuff/session", nil)
 	if err != nil {
 		return err
+	}
+	if instanceID != "" {
+		req.Header.Set("x-freebuff-instance-id", instanceID)
 	}
 
 	resp, cancel, classErr := c.do(req, c.sessionCallTimeout)

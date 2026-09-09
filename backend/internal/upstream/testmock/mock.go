@@ -42,7 +42,7 @@ func (m *mockUpstream) Probe(token string) (*upstream.SessionState, error) {
 	return mockSessionState(token, "", false), nil
 }
 
-func (m *mockUpstream) EndSession(token string) error { return nil }
+func (m *mockUpstream) EndSession(token, instanceID string) error { return nil }
 
 func (m *mockUpstream) StartRun(token, agentID string) (string, error) {
 	return fmt.Sprintf("run-%s-%d", token, time.Now().UnixMilli()), nil

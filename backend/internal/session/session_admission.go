@@ -359,7 +359,7 @@ func (m *Manager) releaseHeldSlotForTarget(ctx context.Context, targetModel stri
 	// DELETE first; only clear the cache when it actually succeeded — a
 	// failed release (401/transport) must keep the cached state so the
 	// caller's error path (dead-token/cleanup) can still end the session.
-	if err := m.client.EndSession(ctx); err != nil {
+	if err := m.client.EndSession(ctx, oldID); err != nil {
 		slog.Warn("session: EndSession failed on model switch (state kept)", "instance_id", oldID, "held_model", heldModel, "err", err)
 		return
 	}
@@ -551,13 +551,24 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			return statusError(status, st)
 		case "model_locked":
 			// Previous session is locked to a different model.
-			// Release the old slot and retry with the desired model.
+			// Release the old slot and retry with the desired model. The
+			// DELETE carries the locked refusal's instance id when present,
+			// else the held cached id (empty only when neither exists, in
+			// which case the header is omitted).
 			m.mu.Lock()
+			heldID := ""
+			if m.state != nil {
+				heldID = m.state.instanceID
+			}
 			m.commit(nil)
 			m.mu.Unlock()
 			m.recordInvalidation(reasonModelLock)
 			m.recordModelLock(st.CurrentModel, targetModel)
-			_ = m.client.EndSession(ctx)
+			releaseID := st.InstanceID
+			if releaseID == "" {
+				releaseID = heldID
+			}
+			_ = m.client.EndSession(ctx, releaseID)
 			slog.Debug("session released on model lock, retrying", "reason", reasonModelLock, "current", st.CurrentModel, "target", targetModel)
 		case "model_unavailable":
 			// Requested model is not available; fall back to default model.
@@ -595,8 +606,7 @@ func (m *Manager) EndSession(ctx context.Context) error {
 	slog.Debug("session ended", "instance_id", instanceID, "reason", reasonEnded)
 	// A superseded DELETE is the same "slot already gone" case as
 	// session-invalid (#119): swallow both so teardown never errors on a
-	// slot another instance took over.
-	if err := m.client.EndSession(ctx); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
+	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
 	return nil
@@ -654,12 +664,11 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	}
 	// Release the upstream slot directly (not EndSession): EndSession's CAS
 	// commit(nil) would remove the store entry we just flushed, and the
-	// DELETE is keyed on the user, not the instance (reference/freebuff
-	// session wire: DELETE = Bearer only, #120 — EndSession never sends the
-	// instance header). The cached state is kept in-memory so the store
-	// entry stays; the process is exiting.
+	// DELETE carries the held x-freebuff-instance-id (vendor parity:
+	// callFreebuffSession sends it on DELETE when known). The cached state
+	// is kept in-memory so the store entry stays; the process is exiting.
 	slog.Debug("session ended on shutdown", "instance_id", shortInstance(instanceID), "reason", reasonShutdown)
-	if err := m.client.EndSession(ctx); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
+	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
 	return nil

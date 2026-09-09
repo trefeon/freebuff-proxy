@@ -20,8 +20,9 @@ type MockUpstream interface {
 	GetSession(token, instanceID string) (*SessionState, error)
 	// Probe simulates the zero-cost token probe.
 	Probe(token string) (*SessionState, error)
-	// EndSession simulates the session DELETE.
-	EndSession(token string) error
+	// EndSession simulates the session DELETE for the instance ("" = no
+	// instance header, the caller holds no slot).
+	EndSession(token, instanceID string) error
 	// StartRun simulates an agent-run START.
 	StartRun(token, agentID string) (string, error)
 	// FinishRun simulates an agent-run FINISH.

@@ -121,7 +121,7 @@ func TestSignalGuardNoProxySignalHeaders(t *testing.T) {
 	if _, err := client.ProbeAccount(ctx); err != nil {
 		t.Fatalf("ProbeAccount: %v", err)
 	}
-	if err := client.EndSession(ctx); err != nil {
+	if err := client.EndSession(ctx, "inst-1"); err != nil {
 		t.Fatalf("EndSession: %v", err)
 	}
 	if _, err := client.StartRun(ctx, "agent-1"); err != nil {

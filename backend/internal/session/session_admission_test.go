@@ -423,6 +423,7 @@ func TestModelLockedReleasesOldSlot(t *testing.T) {
 
 	var creates, ends atomic.Int32
 	var mu sync.Mutex
+	var deleteIDs []string
 	bAttempts := 0
 	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -446,6 +447,9 @@ func TestModelLockedReleasesOldSlot(t *testing.T) {
 			_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-B","model":"model/B","expiresAt":"2030-01-01T00:00:00Z"}`)
 		case http.MethodDelete:
 			ends.Add(1)
+			mu.Lock()
+			deleteIDs = append(deleteIDs, r.Header.Get("x-freebuff-instance-id"))
+			mu.Unlock()
 			w.WriteHeader(200)
 			_, _ = io.WriteString(w, `{"status":"ended"}`)
 		default:
@@ -466,6 +470,15 @@ func TestModelLockedReleasesOldSlot(t *testing.T) {
 	}
 	if got := ends.Load(); got != 2 {
 		t.Errorf("ends = %d, want 2 (live-switch pre-release + model_locked branch release, both idempotent DELETEs)", got)
+	}
+	mu.Lock()
+	ids := append([]string(nil), deleteIDs...)
+	mu.Unlock()
+	if len(ids) != 2 {
+		t.Fatalf("DELETEs = %d, want 2", len(ids))
+	}
+	if ids[0] != "inst-A" {
+		t.Errorf("first DELETE x-freebuff-instance-id = %q, want inst-A (live-switch pre-release carries the held slot id)", ids[0])
 	}
 	if snap := mgr.Snapshot(); snap.InstanceID != "inst-B" {
 		t.Errorf("final instance = %q, want inst-B", snap.InstanceID)
@@ -865,8 +878,9 @@ func TestModelLockedFallbackInstance(t *testing.T) {
 			_, _ = io.WriteString(w, `{"status":"active","instanceId":"active-inst-456","model":"model/new"}`)
 		case http.MethodDelete:
 			mu.Lock()
-			// #120: the CLI DELETEs with Bearer only — no instance header
-			// (reference/freebuff freebuff-session-api.ts releaseFreebuffSlot).
+			// The DELETE releases the locked slot, so it carries the
+			// refusal's instance id (vendor parity: DELETE sends
+			// x-freebuff-instance-id when known).
 			deleteInstanceIDs = append(deleteInstanceIDs, r.Header.Get("x-freebuff-instance-id"))
 			mu.Unlock()
 			w.WriteHeader(http.StatusOK)
@@ -890,7 +904,7 @@ func TestModelLockedFallbackInstance(t *testing.T) {
 	if len(deleteInstanceIDs) != 1 {
 		t.Fatalf("EndSession calls = %d, want 1", len(deleteInstanceIDs))
 	}
-	if deleteInstanceIDs[0] != "" {
-		t.Errorf("DELETE x-freebuff-instance-id = %q, want absent (#120: session DELETE is Bearer-only)", deleteInstanceIDs[0])
+	if deleteInstanceIDs[0] != "locked-inst-123" {
+		t.Errorf("DELETE x-freebuff-instance-id = %q, want locked-inst-123 (model-lock release carries the refused slot id)", deleteInstanceIDs[0])
 	}
 }
