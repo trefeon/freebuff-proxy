@@ -796,9 +796,9 @@ func (d *Dashboard) quotaFor(id string) string {
 		}
 	}
 	if modelcat.IsPremium(id) {
-		return "metered"
+		return "Premium"
 	}
-	return "unmetered"
+	return "Free"
 }
 
 // freebucksPriceLabel renders one wire price as "<n> Freebucks/hr" (0 reads

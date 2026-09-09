@@ -8,33 +8,33 @@ import { adminApi } from "./api/paths.js";
 export const fallbackModelOptions = [
   {
     id: "openai/gpt-5.6-luna",
-    label: "openai/gpt-5.6-luna (metered)",
-    tag: "metered",
+    label: "openai/gpt-5.6-luna (Premium)",
+    tag: "premium",
   },
   {
     id: "meta/muse-spark-1.2-contributor",
-    label: "meta/muse-spark-1.2-contributor (metered)",
-    tag: "metered",
+    label: "meta/muse-spark-1.2-contributor (Premium)",
+    tag: "premium",
   },
   {
     id: "upstage/solar-pro4",
-    label: "upstage/solar-pro4 (metered)",
-    tag: "metered",
+    label: "upstage/solar-pro4 (Free)",
+    tag: "free",
   },
   {
     id: "mimo/mimo-v2.5",
-    label: "mimo/mimo-v2.5 (metered)",
-    tag: "metered",
+    label: "mimo/mimo-v2.5 (Free)",
+    tag: "free",
   },
   {
     id: "z-ai/glm-5.3-flash",
-    label: "z-ai/glm-5.3-flash (metered)",
-    tag: "metered",
+    label: "z-ai/glm-5.3-flash (Free)",
+    tag: "free",
   },
   {
     id: "deepseek/deepseek-v4-flash",
-    label: "deepseek/deepseek-v4-flash (metered)",
-    tag: "metered",
+    label: "deepseek/deepseek-v4-flash (Free)",
+    tag: "free",
   },
   {
     id: "z-ai/glm-5.2",
@@ -51,7 +51,7 @@ function tagFor(m) {
   if (/referral/i.test(label)) return "referral";
   if (!label) return "";
   if (/^0\b/.test(label)) return "free";
-  return "metered";
+  return "premium";
 }
 
 // fetchModelOptions returns {id, label, tag} rows from /admin/api/models

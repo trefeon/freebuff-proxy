@@ -165,7 +165,7 @@ test.describe("real-world data", () => {
     ).toBeVisible();
   });
 
-  test("quota: served rows carry the metered vs unmetered word", async ({
+  test("quota: served rows carry the Premium vs Free word", async ({
     page,
   }) => {
     const f = loadFixtures(RW);
@@ -179,8 +179,8 @@ test.describe("real-world data", () => {
     await mockDashboard(page, f, { tokens });
     await page.goto(admin("quota"));
     await expect(page.getByText("Served models").first()).toBeVisible();
-    await expect(page.getByText("Unmetered").first()).toBeVisible();
-    await expect(page.getByText("Metered").first()).toBeVisible();
+    await expect(page.getByText("Free", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Premium", { exact: true }).first()).toBeVisible();
   });
   test("models/logs/traces/metrics render production rows", async ({
     page,

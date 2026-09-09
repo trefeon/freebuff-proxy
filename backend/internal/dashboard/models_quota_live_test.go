@@ -85,7 +85,7 @@ func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	if got, want := quotaBy["deepseek/deepseek-v4-flash"], "0 Freebucks/hr"; got != want {
 		t.Errorf("live quota label = %q, want %q (zero wire price)", got, want)
 	}
-	if q, ok := quotaBy["mimo/mimo-v2.5"]; ok && q != "unmetered" {
-		t.Errorf("unpriced quota label = %q, want unmetered", q)
+	if q, ok := quotaBy["mimo/mimo-v2.5"]; ok && q != "Free" {
+		t.Errorf("unpriced quota label = %q, want Free", q)
 	}
 }

@@ -441,8 +441,8 @@
                                 ? 'bg-emerald-500/10 text-emerald-400'
                                 : 'bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]'}"
                               >{m.unmetered
-                                ? $tr("Unmetered")
-                                : $tr("Metered")}</span
+                                ? $tr("Free")
+                                : $tr("Premium")}</span
                             >
                           </span>
                           <span
