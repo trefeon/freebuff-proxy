@@ -64,7 +64,7 @@ var Catalog = []ModelInfo{
 		ContextWindow: 1000000,
 		Efforts:       []string{"low", "medium", "high", "xhigh", "max"}},
 	{ID: "upstage/solar-pro4", DisplayName: "Solar Pro 4",
-		Tagline:       "Limited-time trial",
+		Tagline:       "0 Freebucks",
 		Served:        true,
 		ContextWindow: 500000},
 	{ID: "google/gemini-3.8-flash", DisplayName: "Gemini 3.8 Flash",

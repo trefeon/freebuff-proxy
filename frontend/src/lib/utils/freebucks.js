@@ -55,7 +55,7 @@ export function intentAskLine(intent, activeModel) {
 export const MODEL_METADATA = {
   "upstage/solar-pro4": {
     displayName: "Solar Pro 4",
-    tagline: "Limited-time trial",
+    tagline: "0 Freebucks",
     badges: [],
   },
   "z-ai/glm-5.3-flash": {

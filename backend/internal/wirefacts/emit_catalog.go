@@ -241,7 +241,7 @@ var catalogDisplayTrimmed = map[string]bool{
 // Pinned copy the snapshots only reference indirectly (asserted at build).
 const (
 	pinnedTrainingNotice = "May use data for AI training"
-	pinnedSolarTagline   = "Limited-time trial"
+	pinnedSolarTagline   = "0 Freebucks"
 	pinnedSolarNotice    = ""
 	pinnedGlm52Tagline   = "Referral reward"
 	pinnedGlm52Notice    = "Unlocked via referral code"
