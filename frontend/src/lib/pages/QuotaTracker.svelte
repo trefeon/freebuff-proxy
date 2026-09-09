@@ -46,6 +46,9 @@
   // no binding for — those rows are unusable and stay hidden. Null until
   // the catalog loads, in which case nothing is filtered.
   let usableIds = $state(null);
+  // Modelcat display names keyed by model id (same rows, display_name).
+  // Row names prefer these over the static MODEL_METADATA table.
+  let modelNames = $state({});
 
   // Probe-all status: the button POSTs /admin/tokens/test-all (zero-cost
   // upstream GET per token, no session claimed) then refetches the store.
@@ -124,6 +127,11 @@
       .then((res) => {
         const rows = res?.models ?? [];
         usableIds = new Set(rows.filter((m) => m.agent).map((m) => m.id));
+        const names = {};
+        for (const m of rows) {
+          if (m?.id && m.display_name) names[m.id] = m.display_name;
+        }
+        modelNames = names;
       })
       .catch(() => {
         usableIds = null;
@@ -377,12 +385,19 @@
               </div>
             {/if}
             {#if token.freebucks?.prices && Object.keys(token.freebucks.prices).length > 0}
+              {@const unmeteredIds = new Set(
+                (data.unmetered_models ?? []).map((r) => r.id),
+              )}
               {@const servedModels = sortModelsByPrice(
                 Object.keys(token.freebucks.prices).filter(
                   (id) => usableIds == null || usableIds.has(id),
                 ),
                 token.freebucks,
-              ).map((id) => modelDisplayInfo(id, token.freebucks))}
+                modelNames,
+              ).map((id) => ({
+                ...modelDisplayInfo(id, token.freebucks, modelNames),
+                unmetered: unmeteredIds.has(id),
+              }))}
               {@const fullAccess =
                 servedModels.length > 0 && servedModels.length >= maxServed}
               {#if servedModels.length > 0}
@@ -420,6 +435,14 @@
                             <span
                               class="font-bold text-[var(--fp-text)] truncate"
                               >{m.displayName}</span
+                            >
+                            <span
+                              class="text-[9px] uppercase tracking-wider font-semibold px-1 py-px rounded font-mono shrink-0 {m.unmetered
+                                ? 'bg-emerald-500/10 text-emerald-400'
+                                : 'bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]'}"
+                              >{m.unmetered
+                                ? $tr("Unmetered")
+                                : $tr("Metered")}</span
                             >
                           </span>
                           <span

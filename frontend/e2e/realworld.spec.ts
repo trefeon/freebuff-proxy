@@ -165,6 +165,23 @@ test.describe("real-world data", () => {
     ).toBeVisible();
   });
 
+  test("quota: served rows carry the metered vs unmetered word", async ({
+    page,
+  }) => {
+    const f = loadFixtures(RW);
+    const tokens = JSON.parse(JSON.stringify(f.tokens));
+    const list = tokens.tokens ?? tokens;
+    const first = Array.isArray(list) ? list[0] : tokens;
+    first.freebucks.prices["upstage/solar-pro4"] = 0;
+    tokens.unmetered_models = [
+      { id: "upstage/solar-pro4", name: "Solar Pro 4" },
+    ];
+    await mockDashboard(page, f, { tokens });
+    await page.goto(admin("quota"));
+    await expect(page.getByText("Served models").first()).toBeVisible();
+    await expect(page.getByText("Unmetered").first()).toBeVisible();
+    await expect(page.getByText("Metered").first()).toBeVisible();
+  });
   test("models/logs/traces/metrics render production rows", async ({
     page,
   }) => {
