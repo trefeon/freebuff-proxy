@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/dashboard"
 	"io"
 	"net/http"
 	"reflect"
@@ -107,9 +108,7 @@ func (a *adminHandlers) handleTokenAdd(w http.ResponseWriter, r *http.Request) {
 	// Cap the body before FormValue: ParseForm would otherwise slurp the
 	// entire request into memory before the JSON fallback's 8KB cap applies.
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	var req struct {
-		Token string `json:"token"`
-	}
+	var req dashboard.TokenAddRequest
 	req.Token = strings.TrimSpace(r.FormValue("token"))
 	if req.Token == "" {
 		// JSON fallback for programmatic clients.
@@ -276,15 +275,7 @@ func (a *adminHandlers) handleTokenSwap(w http.ResponseWriter, r *http.Request) 
 	fromIdx := -1
 	toIdx := -1
 
-	var req struct {
-		I      *int   `json:"i"`
-		J      *int   `json:"j"`
-		From   *int   `json:"from"`
-		To     *int   `json:"to"`
-		Idx    *int   `json:"index"`
-		Dir    string `json:"direction"`
-		Action string `json:"action"`
-	}
+	var req dashboard.TokenSwapRequest
 	body, _ := io.ReadAll(r.Body)
 	if len(body) > 0 {
 		_ = json.Unmarshal(body, &req)

@@ -52,10 +52,13 @@ var dotenvKeys = map[string]bool{
 }
 
 // catalogExtras are documented keys the catalog may hold beyond the
-// applyDotenv set: env-only knobs the loader reads straight from the
-// process environment (never from .env).
+// applyDotenv set: knobs the loader does not apply to rawConfig because
+// they are read straight from the environment at use time (AUTO_DISCOVER_TOKEN
+// never reads .env; ADMIN_FORCE_SECURE_COOKIES additionally falls back to a
+// .env line on every request in isSecureCookie).
 var catalogExtras = map[string]bool{
-	"AUTO_DISCOVER_TOKEN": true,
+	"AUTO_DISCOVER_TOKEN":        true,
+	"ADMIN_FORCE_SECURE_COOKIES": true,
 }
 
 // secretKeys is the exact set of keys whose effective value the dashboard

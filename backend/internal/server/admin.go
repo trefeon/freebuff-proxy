@@ -16,11 +16,7 @@ import (
 	"time"
 )
 
-type smokeRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Token  string `json:"token"` // bridge mode: client token to relay upstream
-}
+type smokeRequest = dashboard.SmokeRequest
 
 const maxSmokeBytes = 32 << 10
 
@@ -32,8 +28,7 @@ func (a *adminHandlers) handleSmoke(w http.ResponseWriter, r *http.Request) {
 	if !cfg.DevToolsEnabled {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": "Dev tools are disabled — set DEVTOOLS_ENABLED=true to enable the smoke test."})
-		return
+		_ = json.NewEncoder(w).Encode(dashboard.SmokeDisabledResponse{Message: "Dev tools are disabled — set DEVTOOLS_ENABLED=true to enable the smoke test."})
 	}
 	var req smokeRequest
 	// The dashboard form posts urlencoded model=&prompt=&token=; read those
@@ -144,15 +139,7 @@ func (a *adminHandlers) handlePlaygroundChat(w http.ResponseWriter, r *http.Requ
 		a.dash.RenderResult(w, http.StatusBadRequest, false, "failed to read request: "+err.Error(), "invalid_json")
 		return
 	}
-	var req struct {
-		Model  string `json:"model"`
-		Prompt string `json:"prompt"`
-		Stream bool   `json:"stream"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		a.dash.RenderResult(w, http.StatusBadRequest, false, "request must be a JSON object", "invalid_json")
-		return
-	}
+	var req dashboard.PlaygroundRequest
 	req.Model = strings.TrimSpace(req.Model)
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Model == "" {
@@ -205,11 +192,11 @@ func (a *adminHandlers) handleLoginStart(w http.ResponseWriter, r *http.Request)
 	a.loginMu.Unlock()
 	a.logfunc().Info("login wizard: started", "flow", flowID)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"flow_id":     flowID,
-		"fingerprint": code.FingerprintID, // full id: the status poll key
-		"login_url":   code.LoginURL,
-		"expires_at":  code.ExpiresAt.UTC().Format(time.RFC3339),
+	_ = json.NewEncoder(w).Encode(dashboard.LoginStartResponse{
+		ExpiresAt:   code.ExpiresAt.UTC().Format(time.RFC3339),
+		Fingerprint: code.FingerprintID, // full id: the status poll key
+		FlowID:      flowID,
+		LoginURL:    code.LoginURL,
 	})
 }
 
@@ -238,14 +225,14 @@ func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request
 	a.loginMu.Unlock()
 	if done {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "token_index": flow.Index})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginCompletedResponse{Status: "completed", TokenIndex: flow.Index})
 		return
 	}
 	if completing {
 		// Another poll is mid-completion; report pending so the client
 		// re-polls instead of double-adding.
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginPendingResponse{Status: "pending"})
 		return
 	}
 	status, err := a.authClientFunc().PollCLILogin(r.Context(), flow.Code)
@@ -257,7 +244,7 @@ func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request
 		a.loginMu.Unlock()
 		a.logfunc().Debug("login wizard: poll failed", "flow", flow.ID, "err", err)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginPendingResponse{Status: "pending"})
 		return
 	}
 	if !status.Done {
@@ -265,7 +252,7 @@ func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request
 		flow.Completing = false
 		a.loginMu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "pending"})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginPendingResponse{Status: "pending"})
 		return
 	}
 	// Completed: add to the pool + persist to .env (mirrors handleTokenAdd).
@@ -284,7 +271,7 @@ func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request
 		a.loginMu.Unlock()
 		a.logfunc().Warn("login wizard: token persist failed", "flow", flow.ID, "err", addErr)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "error", "message": addErr.Error()})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginErrorResponse{Message: addErr.Error(), Status: "error"})
 		return
 	}
 	flow.Index = index
@@ -293,7 +280,7 @@ func (a *adminHandlers) handleLoginStatus(w http.ResponseWriter, r *http.Request
 	}
 	a.logfunc().Info("login wizard: completed", "flow", flow.ID, "token_index", index, "user", status.User.Name)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "token_index": index, "user": status.User.Name})
+	_ = json.NewEncoder(w).Encode(dashboard.LoginCompletedResponse{Status: "completed", TokenIndex: index, User: status.User.Name})
 }
 
 func (a *adminHandlers) pruneLoginFlows() {

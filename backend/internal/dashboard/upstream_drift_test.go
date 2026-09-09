@@ -63,9 +63,10 @@ func TestParseUpstreamSyncMalformed(t *testing.T) {
 	}
 }
 
-// TestUpstreamEndpointJSON: the /admin/api/upstream-drift route returns the
-// raw embedded JSON under the `drift` key, round-tripped as
-// json.RawMessage so the client can parse it.
+// TestUpstreamEndpointJSON: upstreamData returns the raw embedded JSON under
+// the `drift` key, round-tripped as json.RawMessage so the client can parse
+// it. The standalone /admin/api/upstream-drift route is gone; Overview
+// carries the same payload via overviewData's upstream_sync embed.
 func TestUpstreamEndpointJSON(t *testing.T) {
 	d := &Dashboard{}
 	out := d.upstreamData()

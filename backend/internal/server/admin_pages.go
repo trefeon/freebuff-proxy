@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"freebuff-proxy/backend/internal/dashboard"
 )
 
 const maxPageStateBytes = 64 << 10
@@ -84,9 +86,7 @@ func (a *adminHandlers) handlePageStatePut(w http.ResponseWriter, r *http.Reques
 	// Envelope slack above the 64KB data cap: the cap applies to data, not
 	// the {"data":...} wrapper.
 	r.Body = http.MaxBytesReader(w, r.Body, (maxPageStateBytes + 8<<10))
-	var req struct {
-		Data json.RawMessage `json:"data"`
-	}
+	var req dashboard.PageStateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		// An envelope over the 72KB body limiter trips MaxBytesReader: the
 		// client blew past even the wrapper slack, so it keys truncation

@@ -237,7 +237,7 @@ func (a *adminHandlers) handleConfigSave(w http.ResponseWriter, r *http.Request)
 		message := fmt.Sprintf("saved, but these keys are overridden by the process environment and will only apply after restart: %s",
 			strings.Join(keys, ", "))
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "message": message})
+		_ = json.NewEncoder(w).Encode(dashboard.ConfigSaveResponse{Message: message})
 		return
 	}
 	// Restart-only knobs: the save succeeded and the reload re-applied
@@ -250,7 +250,7 @@ func (a *adminHandlers) handleConfigSave(w http.ResponseWriter, r *http.Request)
 		message := fmt.Sprintf("Saved and reloaded. These keys apply after restart only: %s."+a.settingsOverlayNote(),
 			strings.Join(restartOnly, ", "))
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "message": message, "restart_only": restartOnly})
+		_ = json.NewEncoder(w).Encode(dashboard.ConfigSaveResponse{Message: message, OK: true, RestartOnly: restartOnly})
 		return
 	}
 	// A DB overlay (ADR-0019) still beats the just-saved file until its row

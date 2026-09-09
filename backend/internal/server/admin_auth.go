@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/dashboard"
 	"freebuff-proxy/backend/internal/upstream"
 	"io"
 	"net"
@@ -514,7 +515,7 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 		a.logfunc().Warn("admin login rejected", "remote", remoteHost(r), "reason", "busy")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": "Login service is busy — try again shortly."})
+		_ = json.NewEncoder(w).Encode(dashboard.LoginBusyResponse{Error: "Login service is busy — try again shortly."})
 		return
 	}
 	defer a.adminAuth.releaseLogin()
@@ -567,35 +568,30 @@ func (a *adminHandlers) handleAdminLogin(w http.ResponseWriter, r *http.Request)
 }
 
 // handleAdminLogout clears the fb_admin session cookie (MaxAge=-1, same
-// name/Path/SameSite as the login cookie) and answers: 302 → /admin/login
-// on GET, JSON {"ok":true} on POST. It does NOT require a valid cookie —
-// logging out an already-expired session must work — and it is not wrapped
-// in adminSensitive because it exposes nothing.
+// name/Path/SameSite as the login cookie) and answers JSON {"ok":true} on
+// POST. It does NOT require a valid cookie — logging out an already-expired
+// session must work — and it is not wrapped in adminSensitive because it
+// exposes nothing.
 func (a *adminHandlers) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 	// The clearing cookie carries Secure matching the session cookie:
 	// a non-Secure cookie cannot overwrite a Secure one.
 	http.SetCookie(w, &http.Cookie{Name: adminCookieName, Value: "", Path: "/admin", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: isSecureCookie(r), MaxAge: -1})
 	if r.Method == http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		_ = json.NewEncoder(w).Encode(dashboard.LogoutResponse{OK: true})
 		return
 	}
 	http.Redirect(w, r, "/admin/login", http.StatusFound)
 }
 
-type changePasswordRequest struct {
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password"`
-}
-
 func (a *adminHandlers) handleAdminAuthStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := a.cfgLoad()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"authenticated":          true,
-		"is_default_admin_token": cfg.IsDefaultAdminToken(),
-		"require_login":          cfg.RequireLogin(),
-		"has_password":           cfg.AdminToken != "",
+	_ = json.NewEncoder(w).Encode(dashboard.AuthStatusResponse{
+		Authenticated:       true,
+		HasPassword:         cfg.AdminToken != "",
+		IsDefaultAdminToken: cfg.IsDefaultAdminToken(),
+		RequireLogin:        cfg.RequireLogin(),
 	})
 }
 
@@ -604,7 +600,7 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req changePasswordRequest
+	var req dashboard.ChangePasswordRequest
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "application/json") {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
@@ -720,9 +716,9 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 	a.logfunc().Info("admin password changed successfully", "remote", remoteHost(r))
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"message": "Admin password updated successfully.",
+	_ = json.NewEncoder(w).Encode(dashboard.ChangePasswordResponse{
+		Message: "Admin password updated successfully.",
+		OK:      true,
 	})
 }
 
@@ -731,10 +727,7 @@ func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.R
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct {
-		RequireLogin *bool `json:"require_login"`
-		Enabled      *bool `json:"enabled"`
-	}
+	var req dashboard.RequireLoginRequest
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "application/json") {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
@@ -836,9 +829,9 @@ func (a *adminHandlers) handleAdminRequireLogin(w http.ResponseWriter, r *http.R
 	a.logfunc().Info("admin require login updated", "require_login", newCfg.RequireLogin(), "remote", remoteHost(r))
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":            true,
-		"require_login": newCfg.RequireLogin(),
-		"message":       msg,
+	_ = json.NewEncoder(w).Encode(dashboard.RequireLoginResponse{
+		Message:      msg,
+		OK:           true,
+		RequireLogin: newCfg.RequireLogin(),
 	})
 }

@@ -373,18 +373,38 @@ func TestDashboardConfigSaveEnvOverrideReported(t *testing.T) {
 	}
 }
 
-// TestDashboardLogoutClearsCookie: GET /admin/logout clears the fb_admin
-// cookie (MaxAge<0) and bounces to the login page; a session-less client is
-// then back behind the cookie gate; POST /admin/logout answers JSON
-// ok:true. Logout must work without a valid cookie (expired sessions).
+// TestDashboardLogoutClearsCookie: POST /admin/logout clears the fb_admin
+// cookie (MaxAge<0) and answers JSON ok:true; a session-less client is then
+// back behind the cookie gate. GET /admin/logout is unregistered (405):
+// the SPA logs out via POST (Sidebar.svelte handleLogout). Logout must work
+// without a valid cookie (expired sessions).
 func TestDashboardLogoutClearsCookie(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)
 
-	resp := get(t, ts.URL+"/admin/logout", cookie)
+	// GET /admin/logout is unregistered: the mux answers 405.
+	getResp := get(t, ts.URL+"/admin/logout", cookie)
+	func() { _ = getResp.Body.Close() }()
+	if getResp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("logout GET status = %d, want 405 (route removed, POST only)", getResp.StatusCode)
+	}
+
+	// POST logout clears the cookie and answers JSON ok:true.
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/logout", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(cookie)
+	resp, err := noRedirectClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("logout GET status = %d, want 302", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("logout POST status = %d, want 200", resp.StatusCode)
+	}
+	if b := bodyOf(t, resp); !strings.Contains(b, `"ok":true`) {
+		t.Errorf("logout POST body = %q, want ok:true JSON", b)
 	}
 	cleared := false
 	for _, c := range resp.Cookies() {
@@ -400,9 +420,9 @@ func TestDashboardLogoutClearsCookie(t *testing.T) {
 	}
 
 	// Without the cookie the sensitive API is behind the gate again.
-	req := httptest.NewRequest(http.MethodGet, "/admin/api/config", nil)
+	gateReq := httptest.NewRequest(http.MethodGet, "/admin/api/config", nil)
 	rec := httptest.NewRecorder()
-	ts.Config.Handler.ServeHTTP(rec, req)
+	ts.Config.Handler.ServeHTTP(rec, gateReq)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("config after logout status = %d, want 302 login redirect", rec.Code)
 	}
@@ -410,7 +430,7 @@ func TestDashboardLogoutClearsCookie(t *testing.T) {
 		t.Errorf("config-after-logout Location = %q, want /admin/login", loc)
 	}
 
-	// POST logout clears the cookie too and answers JSON ok:true.
+	// POST logout without a cookie (expired session) still answers ok:true.
 	req2, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/logout", nil)
 	if err != nil {
 		t.Fatal(err)

@@ -801,6 +801,17 @@
     "description": "Upstream API endpoint (codebuff.com is normalized to www.codebuff.com)."
   },
   {
+    "key": "ADMIN_FORCE_SECURE_COOKIES",
+    "group": "security",
+    "kind": "bool",
+    "default": "false",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Force Secure on the admin session and CSRF cookies even over plain HTTP (true/1/yes). Environment-only: read straight from the process environment with a .env fallback on every request, so a dashboard-saved value applies live unless the process env overrides it. Set it when terminating TLS at a reverse proxy that talks HTTP to the gateway."
+  },
+  {
     "key": "ADMIN_TOKEN",
     "group": "security",
     "kind": "secret",

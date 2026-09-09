@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/dashboard"
 )
 
 // DB settings overlay endpoints (ADR-0019): per-key UI-persisted knobs that
@@ -24,16 +25,9 @@ import (
 // .env editor use, never a fork. RestartOnly catalog keys report
 // restart_only so the UI can say "saved, needs a restart" honestly.
 
-// settingsEntry is one GET /admin/api/settings row: the effective display
-// value (catalog rendering, secrets redacted like the config view) plus the
-// precedence tier that provides it.
-type settingsEntry struct {
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	Source      string `json:"source"` // env|db|file|default
-	RestartOnly bool   `json:"restart_only"`
-	Secret      bool   `json:"secret"`
-}
+// settingsEntry is one GET /admin/api/settings row (dashboard.SettingsEntry):
+// the effective display value plus the precedence tier that provides it.
+type settingsEntry = dashboard.SettingsEntry
 
 // settingsOverlay reads the live DB overlay (canonical key -> raw value).
 // A nil store or a read failure degrades to empty (file/env/default only);
@@ -86,7 +80,7 @@ func (a *adminHandlers) handleSettingsGet(w http.ResponseWriter, r *http.Request
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"settings": entries, "degraded": degraded})
+	_ = json.NewEncoder(w).Encode(dashboard.SettingsListResponse{Degraded: degraded, Settings: entries})
 }
 
 func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
@@ -96,10 +90,7 @@ func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	var req struct {
-		Key   string `json:"key"`
-		Value any    `json:"value"`
-	}
+	var req dashboard.SettingsPostRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		a.dash.RenderResult(w, http.StatusBadRequest, false, "Invalid JSON body (want {key, value}).", "bad_request")
 		return
@@ -170,11 +161,11 @@ func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Reques
 		code = "setting_restart_only"
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":           true,
-		"message":      message,
-		"code":         code,
-		"restart_only": restartOnly,
+	_ = json.NewEncoder(w).Encode(dashboard.SettingsPostResponse{
+		Code:        code,
+		Message:     message,
+		OK:          true,
+		RestartOnly: restartOnly,
 	})
 }
 

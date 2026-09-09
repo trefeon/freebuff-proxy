@@ -299,6 +299,9 @@ var keyCatalog = []KeyDef{
 		Description: `Upstream API endpoint (codebuff.com is normalized to www.codebuff.com).`},
 
 	// ── security ─────────────────────────────────────────────────────────
+	{Key: "ADMIN_FORCE_SECURE_COOKIES", Group: GroupSecurity, Kind: "bool", Hidden: true,
+		Default:     "false",
+		Description: `Force Secure on the admin session and CSRF cookies even over plain HTTP (true/1/yes). Environment-only: read straight from the process environment with a .env fallback on every request, so a dashboard-saved value applies live unless the process env overrides it. Set it when terminating TLS at a reverse proxy that talks HTTP to the gateway.`},
 	{Key: "ADMIN_TOKEN", Group: GroupSecurity, Kind: "secret", Secret: true, Hidden: true,
 		Default:     "123456",
 		Description: `Login password for the admin dashboard and the bearer token POST /admin/reload requires. Managed via the Security settings card.`},

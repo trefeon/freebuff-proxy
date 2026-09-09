@@ -1,19 +1,23 @@
 // Package store is the dashboard history backend (ADR-0016): one pure-Go
 // SQLite file holding log entries, quota snapshots, maturity events, and
 // request records. Leaf package by construction: stdlib + the modernc driver
-// only, zero internal imports (see archtest matrix). History is display and
-// debug data, never control state: a missing or corrupt file degrades to
-// live-only views, and retention runs off the request path.
+// + pressly/goose for migrations only, zero internal imports (see archtest
+// matrix). History is display and debug data, never control state: a missing
+// or corrupt file degrades to live-only views, and retention runs off the
+// request path.
 package store
 
 import (
+	"context"
 	"database/sql"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -24,94 +28,31 @@ import (
 // v4 adds the pool runtime table (pool_state: opaque blobs keyed by stable
 // string keys for ledger counters, admissions, bridge usage/survivors and
 // burst hits — see pool_persist.go).
-// Open migrates older files in place; anything else non-zero is rejected so
-// a stale file is ignored instead of mis-parsed (mirrors
-// session.storeVersion).
+// Open migrates older files in place via the embedded goose migrations
+// (migrations/00001..00004, one version per legacy user_version stamp);
+// anything else non-zero is rejected so a stale file is ignored instead of
+// mis-parsed (mirrors session.storeVersion).
 const schemaVersion = 4
 
-const schema = `
-CREATE TABLE IF NOT EXISTS log_entries(
-  id INTEGER PRIMARY KEY,
-  ts INTEGER NOT NULL,
-  level TEXT NOT NULL,
-  msg TEXT NOT NULL,
-  fields TEXT NOT NULL DEFAULT '',
-  req_id TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS idx_log_ts ON log_entries(ts);
-CREATE INDEX IF NOT EXISTS idx_log_level_ts ON log_entries(level, ts);
-CREATE TABLE IF NOT EXISTS quota_snapshots(
-  id INTEGER PRIMARY KEY,
-  ts INTEGER NOT NULL,
-  token_idx INTEGER NOT NULL,
-  model TEXT NOT NULL,
-  quota_limit REAL NOT NULL,
-  recent_count REAL NOT NULL,
-  reset_at INTEGER NOT NULL DEFAULT 0,
-  entitlements TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS idx_quota_lookup ON quota_snapshots(token_idx, model, ts);
-CREATE TABLE IF NOT EXISTS maturity_events(
-  id INTEGER PRIMARY KEY,
-  ts INTEGER NOT NULL,
-  token_idx INTEGER NOT NULL,
-  kind TEXT NOT NULL,
-  detail TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS idx_maturity_lookup ON maturity_events(token_idx, ts);
-CREATE TABLE IF NOT EXISTS request_records(
-  req_id TEXT PRIMARY KEY,
-  ts INTEGER NOT NULL,
-  endpoint TEXT NOT NULL,
-  model TEXT NOT NULL DEFAULT '',
-  token_idx INTEGER NOT NULL DEFAULT -1,
-  status TEXT NOT NULL DEFAULT '',
-  ttfb_ms INTEGER NOT NULL DEFAULT 0,
-  error TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS idx_req_ts ON request_records(ts);
--- v2 persistence tables (settings, page snapshots, sessions, token meta).
--- Value columns hold raw JSON; the store never interprets them (leaf
--- package: stdlib + the sqlite driver only, zero internal imports).
-CREATE TABLE IF NOT EXISTS settings(
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL DEFAULT '',
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS pages_state(
-  page_id TEXT PRIMARY KEY,
-  data TEXT NOT NULL DEFAULT '',
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS sessions_persist(
-  id INTEGER PRIMARY KEY,
-  token_hash TEXT NOT NULL UNIQUE,
-  session_data TEXT NOT NULL DEFAULT '',
-  runs_data TEXT NOT NULL DEFAULT '',
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions_persist(token_hash);
-CREATE TABLE IF NOT EXISTS tokens(
-  id INTEGER PRIMARY KEY,
-  value_hash TEXT NOT NULL UNIQUE,
-  label TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT '',
-  quota_data TEXT NOT NULL DEFAULT '',
-  maturity_json TEXT NOT NULL DEFAULT '',
-  streak_blob BLOB,
-  created_at INTEGER NOT NULL DEFAULT 0
-);
--- v4 pool runtime table (pool_persist.go): opaque blobs keyed by stable
--- string keys (pool/ledger/<sha256hex>, pool/admissions, pool/burst,
--- pool/bridge/usage, pool/bridge/survivors). Value columns hold raw
--- JSON/bytes the pool marshals itself; the store never interprets them
--- (leaf package: stdlib + the sqlite driver only, zero internal imports).
-CREATE TABLE IF NOT EXISTS pool_state(
-  key TEXT PRIMARY KEY,
-  value BLOB NOT NULL DEFAULT x'',
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-`
+// migrationsFS embeds the goose migration chain. Versions are sequential
+// 1..schemaVersion on purpose: a legacy file stamped with PRAGMA
+// user_version=N baselines migrations 1..N as applied (its objects already
+// exist) and runs only the remainder, so every pre-goose file converges
+// with zero data change.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// gooseVersionDDL is pressly/goose v3.28.0's sqlite version-table DDL
+// (internal/dialects/sqlite3.go CreateTable): the legacy baseline path
+// creates it before seeding stamps so goose's own ensure sees the identical
+// table it would have created itself.
+const gooseVersionDDL = `CREATE TABLE IF NOT EXISTS goose_db_version (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	version_id INTEGER NOT NULL,
+	is_applied INTEGER NOT NULL,
+	tstamp TIMESTAMP DEFAULT (datetime('now'))
+)`
 
 // LogEntry is one persisted log record. TS is Unix millis UTC; Fields carries
 // the flattened "key=value" pairs exactly as logring renders them.
@@ -193,11 +134,11 @@ func DBPathFromEnv() string {
 }
 
 // Open creates the parent dir, opens (or creates) the SQLite file at path,
-// and applies pragmas + schema. Older files migrate in place (v1/v3 gain
-// their missing tables via the IF NOT EXISTS schema; v2 additionally gains
-// the v3 maturity columns via ALTER); any other version mismatch or
-// unusable file returns an error and the caller runs live-only. Open never
-// fails the boot itself.
+// and applies pragmas + the goose migration chain. Older files migrate in
+// place with zero data change (a legacy user_version stamp baselines the
+// matching migrations as applied; only the remainder runs); any other
+// version mismatch or unusable file returns an error and the caller runs
+// live-only. Open never fails the boot itself.
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -223,32 +164,16 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: user_version: %w", err)
 	}
-	migrate := false
 	switch v {
-	case 0, schemaVersion:
-		// Fresh file or current: apply the schema as-is.
-	case 1, 3:
-		// v1 -> v4 / v3 -> v4: the schema below is IF NOT EXISTS, so it
-		// only adds the missing tables (persistence tables for v1,
-		// pool_state for v3) and keeps every existing row. A v1 tokens
-		// table is created fresh by that same schema, already carrying
-		// the v3 maturity columns.
-	case 2:
-		// v2 -> v4: tokens exists without the maturity columns.
-		migrate = true
+	case 0, 1, 2, 3, schemaVersion:
+		// Fresh file or a supported legacy stamp: goose converges it.
 	default:
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema v%d unsupported (want v%d)", v, schemaVersion)
 	}
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrateUp(db, v); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("store: schema: %w", err)
-	}
-	if migrate {
-		if err := migrateV2ToV3(db); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
+		return nil, err
 	}
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 		_ = db.Close()
@@ -257,47 +182,93 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// migrateV2ToV3 adds the maturity columns to an existing v2 tokens table.
-// Column presence is probed first so a half-migrated file stays idempotent.
-func migrateV2ToV3(db *sql.DB) error {
-	cols := map[string]bool{}
-	rows, err := db.Query(`PRAGMA table_info(tokens)`)
+// migrateUp brings any supported file to the latest schema via the embedded
+// goose migrations. Pre-goose files (user_version 1..4) carry no version
+// rows, so versions at or below the baseline are recorded as applied without
+// running — their objects already exist — and only the remainder executes.
+// Every row is preserved; only DDL runs.
+func migrateUp(db *sql.DB, legacy int) error {
+	sub, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
-		return fmt.Errorf("store: migrate v2->v3 table_info: %w", err)
+		return fmt.Errorf("store: migrations fs: %w", err)
+	}
+	provider, err := goose.NewProvider(
+		goose.DialectSQLite3,
+		db,
+		sub,
+		goose.WithDisableGlobalRegistry(true),
+		goose.WithLogger(goose.NopLogger()),
+	)
+	if err != nil {
+		return fmt.Errorf("store: goose provider: %w", err)
+	}
+	if base := baselineVersion(db, legacy); base > 0 {
+		if _, err := db.Exec(gooseVersionDDL); err != nil {
+			return fmt.Errorf("store: goose version table: %w", err)
+		}
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM goose_db_version`).Scan(&n); err != nil {
+			return fmt.Errorf("store: goose version count: %w", err)
+		}
+		if n == 0 {
+			for v := 1; v <= base; v++ {
+				if _, err := db.Exec(`INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, 1)`, v); err != nil {
+					return fmt.Errorf("store: baseline goose v%d: %w", v, err)
+				}
+			}
+		}
+	}
+	if _, err := provider.Up(context.Background()); err != nil {
+		return fmt.Errorf("store: migrate up: %w", err)
+	}
+	return nil
+}
+
+// baselineVersion maps a legacy PRAGMA user_version stamp to the goose
+// baseline: versions at or below it are recorded as applied without running.
+// Probes lift the baseline when the file already carries later objects — a
+// half-migrated v2 file whose ALTER landed before the old chain stamped, or
+// a hand-made unstamped file — so Up never replays a DDL the file has.
+func baselineVersion(db *sql.DB, legacy int) int {
+	base := legacy
+	if base < 3 && hasColumn(db, "tokens", "maturity_json") {
+		base = 3
+	}
+	if base < 4 && hasTable(db, "pool_state") {
+		base = 4
+	}
+	return base
+}
+
+// hasTable reports whether a table exists in the file.
+func hasTable(db *sql.DB, table string) bool {
+	var one int
+	return db.QueryRow(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&one) == nil
+}
+
+// hasColumn reports whether a table carries a column (false when the table
+// itself is missing: table_info on a missing table returns zero rows).
+func hasColumn(db *sql.DB, table, column string) bool {
+	rows, err := db.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return false
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cid int
 		var name, typ string
 		var notnull int
-		var dflt interface{}
+		var dflt any
 		var pk int
 		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
-			return fmt.Errorf("store: migrate v2->v3 scan: %w", err)
+			return false
 		}
-		cols[name] = true
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("store: migrate v2->v3 rows: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("store: migrate v2->v3 close: %w", err)
-	}
-	for _, alter := range []struct {
-		col string
-		ddl string
-	}{
-		{"maturity_json", `ALTER TABLE tokens ADD COLUMN maturity_json TEXT NOT NULL DEFAULT ''`},
-		{"streak_blob", `ALTER TABLE tokens ADD COLUMN streak_blob BLOB`},
-	} {
-		if cols[alter.col] {
-			continue
-		}
-		if _, err := db.Exec(alter.ddl); err != nil {
-			return fmt.Errorf("store: migrate v2->v3 add %s: %w", alter.col, err)
+		if name == column {
+			_ = rows.Close()
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 // Close releases the database handle.

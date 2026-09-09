@@ -128,9 +128,10 @@ func TestPoolStateEmptyKey(t *testing.T) {
 	}
 }
 
-// TestOpenMigratesV3ToV4 crafts a v3 file (current schema minus pool_state,
-// stamped 3) and proves Open migrates it in place: rows preserved, version
-// stamped to 4, pool_state usable — and that a second Open is idempotent.
+// TestOpenMigratesV3ToV4 crafts a pre-goose v3 file (current schema minus
+// pool_state and goose rows, stamped 3) and proves Open migrates it in
+// place: rows preserved, version stamped to 4, pool_state usable — and that
+// a second Open is idempotent.
 func TestOpenMigratesV3ToV4(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v3.db")
 	s, err := Open(path)
@@ -146,13 +147,17 @@ func TestOpenMigratesV3ToV4(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	// Downgrade to a faithful v3: drop the v4 table, keep every other row.
+	// Downgrade to a faithful pre-goose v3: drop the v4 table and the goose
+	// version rows (real v3 files predate goose), keep every other row.
 	raw, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("raw open: %v", err)
 	}
 	if _, err := raw.Exec(`DROP TABLE pool_state`); err != nil {
 		t.Fatalf("drop pool_state: %v", err)
+	}
+	if _, err := raw.Exec(`DROP TABLE IF EXISTS goose_db_version`); err != nil {
+		t.Fatalf("drop goose rows: %v", err)
 	}
 	if _, err := raw.Exec(`PRAGMA user_version=3`); err != nil {
 		t.Fatalf("v3 stamp: %v", err)

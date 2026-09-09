@@ -132,20 +132,18 @@ func (d *Dashboard) APIConfigMeta(w http.ResponseWriter, r *http.Request) {
 // APIVersion returns the running version and update check result as JSON.
 func (d *Dashboard) APIVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]any{
-		"current_version": d.version,
-		"has_update":      false,
-		"latest_version":  "",
-		"update_url":      releaseURL,
+	resp := VersionResponse{
+		CurrentVersion: d.version,
+		UpdateURL:      releaseURL,
 	}
 	if d.version != "" && d.updates != nil && r.Context() != nil {
 		if r.URL != nil && r.URL.Query().Get("force") == "true" {
 			d.updates.Invalidate()
 		}
 		if latest, err := d.updates.Latest(r.Context()); err == nil && latest != "" {
-			resp["latest_version"] = latest
+			resp.LatestVersion = latest
 			if updatecheck.UpdateAvailable(d.version, latest) {
-				resp["has_update"] = true
+				resp.HasUpdate = true
 			}
 		}
 	}

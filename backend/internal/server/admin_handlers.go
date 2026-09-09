@@ -67,9 +67,8 @@ func (a *adminHandlers) handleAdminRestart(w http.ResponseWriter, r *http.Reques
 	if _, err := a.loadConfig(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok":      false,
-			"message": "Config validation failed — aborting restart: " + err.Error(),
+		_ = json.NewEncoder(w).Encode(dashboard.RestartResponse{
+			Message: "Config validation failed — aborting restart: " + err.Error(),
 		})
 		return
 	}
@@ -77,9 +76,9 @@ func (a *adminHandlers) handleAdminRestart(w http.ResponseWriter, r *http.Reques
 	a.logfunc().Info("admin restart initiated via dashboard", "remote", remoteHost(r))
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"message": "Gateway process restart initiated.",
+	_ = json.NewEncoder(w).Encode(dashboard.RestartResponse{
+		Message: "Gateway process restart initiated.",
+		OK:      true,
 	})
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()

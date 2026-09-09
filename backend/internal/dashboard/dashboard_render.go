@@ -99,19 +99,19 @@ func PhaseList(phases map[string]int64) []PhaseKV {
 // RenderSmokeResult renders the smoke-test outcome.
 func (d *Dashboard) RenderSmokeResult(w http.ResponseWriter, r *http.Request, model, token string, ms int64, preview []byte, phases []PhaseKV) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":      true,
-		"model":   model,
-		"token":   token,
-		"ms":      ms,
-		"preview": string(preview),
-		"phases":  phases,
+	_ = json.NewEncoder(w).Encode(SmokeResponse{
+		Model:   model,
+		Ms:      ms,
+		OK:      true,
+		Phases:  phases,
+		Preview: string(preview),
+		Token:   token,
 	})
 }
 
 func (d *Dashboard) RenderDiag(w http.ResponseWriter, r *http.Request, checks []DiagCheck) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"checks": checks})
+	_ = json.NewEncoder(w).Encode(DiagResponse{Checks: checks})
 }
 
 type DiagCheck struct {
