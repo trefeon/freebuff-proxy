@@ -12,13 +12,13 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"github.com/pressly/goose/v3"
 	"io/fs"
+	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"github.com/pressly/goose/v3"
-	_ "modernc.org/sqlite"
 )
 
 // schemaVersion guards the on-disk format. v1 held the history tables only
