@@ -97,12 +97,12 @@ func requireAuthThenSwap(t *testing.T, s *Server, authHeader string, swap func(*
 	s.requireAuth(next)(httptest.NewRecorder(), r)
 	if stamped == nil {
 		t.Fatal("requireAuth did not pass the request through")
-		return
+		return nil, nil
 	}
 	pinned := cfgSnapshotFrom(stamped.Context())
 	if pinned == nil {
 		t.Fatal("requireAuth left no config snapshot in the request context")
-		return
+		return nil, nil
 	}
 	swap(pinned)
 	return stamped, pinned
