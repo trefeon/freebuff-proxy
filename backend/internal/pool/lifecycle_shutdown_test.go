@@ -106,6 +106,7 @@ func TestShutdownBridgeInflightRunFinishedOnRelease(t *testing.T) {
 	entry := p.bridgeToken("inflight-tok")
 	if entry == nil {
 		t.Fatal("bridge entry missing after shutdown")
+		return
 	}
 	// The run was drained by shutdown, not orphaned: FINISH must land with
 	// a completed status.

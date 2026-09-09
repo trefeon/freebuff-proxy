@@ -71,6 +71,7 @@ func TestMaturityRestartRestoresState(t *testing.T) {
 	snap := p2.Snapshot()[0].Maturity
 	if snap == nil {
 		t.Fatal("restored snapshot is nil, want enabled automation")
+		return
 	}
 	if !snap.Enabled || snap.Target != 14 || snap.Mode != MaturityModeUnmetered || snap.TouchModel != modelB {
 		t.Errorf("restored identity = %+v, want enabled/14/unmetered/%s", snap, modelB)
@@ -115,6 +116,7 @@ func TestMaturityDisabledTouchDraftSurvives(t *testing.T) {
 	snap := p1.Snapshot()[0].Maturity
 	if snap == nil {
 		t.Fatal("disabled draft snapshot is nil, want the drafted touch model")
+		return
 	}
 	if snap.TouchModel != draft {
 		t.Errorf("snapshot touch = %q, want %q", snap.TouchModel, draft)
