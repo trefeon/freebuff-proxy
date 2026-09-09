@@ -196,6 +196,11 @@ type VersionResponse struct {
 	UpdateURL      string `json:"update_url"`
 }
 
+// TokenAddRequest is the POST /admin/tokens/add body (raw upstream token).
+type TokenAddRequest struct {
+	Token string `json:"token"`
+}
+
 // TokenSwapRequest is the POST /admin/tokens/swap body: index pairs in any
 // of the accepted key shapes (i/j, from/to, index) plus the passthrough
 // action/direction strings the route handler forwards.
@@ -271,6 +276,13 @@ type SmokeResponse struct {
 	Phases  []PhaseKV `json:"phases"`
 	Preview string    `json:"preview"`
 	Token   string    `json:"token"`
+}
+
+// SmokeDisabledResponse is the POST /admin/smoke 404 answer when the
+// DEVTOOLS_ENABLED gate is off.
+type SmokeDisabledResponse struct {
+	Message string `json:"message"`
+	OK      bool   `json:"ok"`
 }
 
 // PlaygroundRequest is the POST /admin/playground/chat body: a prompt run
