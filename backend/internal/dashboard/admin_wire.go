@@ -11,6 +11,9 @@ package dashboard
 // byte-identical to the map it replaced (Go sorts map keys on marshal).
 //
 //go:generate go run ../../cmd/openapi-emit -manifest admin_manifest.json -out data/openapi.json
+//
+// Frontend types: npx -y openapi-typescript@7.13.0 backend/internal/dashboard/data/openapi.json -o frontend/src/lib/api/openapi.d.ts
+// (pinned version keeps the check-in byte-reproducible; types file only, no component changes).
 
 import (
 	"encoding/json"

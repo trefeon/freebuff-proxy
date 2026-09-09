@@ -1,0 +1,4255 @@
+{
+  "components": {
+    "schemas": {
+      "AuthStatusResponse": {
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
+          "is_default_admin_token": {
+            "type": "boolean"
+          },
+          "require_login": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authenticated",
+          "has_password",
+          "is_default_admin_token",
+          "require_login"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordRequest": {
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "ConfigSaveResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "restart_only": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "message",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "DiagResponse": {
+        "properties": {
+          "checks": {
+            "items": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "warn": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "message",
+                "name",
+                "ok",
+                "warn"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks"
+        ],
+        "type": "object"
+      },
+      "LoginCompletedResponse": {
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "token_index": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "token_index"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "LoginStartResponse": {
+        "properties": {
+          "expires_at": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "flow_id": {
+            "type": "string"
+          },
+          "login_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expires_at",
+          "fingerprint",
+          "flow_id",
+          "login_url"
+        ],
+        "type": "object"
+      },
+      "LogoutResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "MaturityUpdateRequest": {
+        "properties": {
+          "enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "target": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "touch_model": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ModeSwitchRequest": {
+        "properties": {
+          "mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "NoticesResponse": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "notices": {
+            "items": {
+              "properties": {
+                "badge": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "token_index": {
+                  "nullable": true,
+                  "type": "integer"
+                },
+                "tone": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "message",
+                "title",
+                "tone",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "peak_hours": {
+            "properties": {
+              "current_utc": {
+                "type": "string"
+              },
+              "is_peak": {
+                "type": "boolean"
+              },
+              "next_window_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "next_window_in": {
+                "type": "string"
+              },
+              "window_end_utc": {
+                "type": "string"
+              },
+              "window_start_utc": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "current_utc",
+              "is_peak",
+              "next_window_at",
+              "next_window_in",
+              "window_end_utc",
+              "window_start_utc"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "count",
+          "notices",
+          "peak_hours"
+        ],
+        "type": "object"
+      },
+      "PageStateRequest": {
+        "properties": {
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PageStateResponse": {
+        "properties": {
+          "data": {}
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "ReloadResponse": {
+        "properties": {
+          "auth_tokens": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auth_tokens",
+          "message",
+          "status"
+        ],
+        "type": "object"
+      },
+      "RequireLoginRequest": {
+        "properties": {
+          "enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "require_login": {
+            "nullable": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "RequireLoginResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "require_login": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "ok",
+          "require_login"
+        ],
+        "type": "object"
+      },
+      "RestartResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "ResultEnvelope": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "SettingsListResponse": {
+        "properties": {
+          "degraded": {
+            "type": "boolean"
+          },
+          "settings": {
+            "items": {
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "restart_only": {
+                  "type": "boolean"
+                },
+                "secret": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "restart_only",
+                "secret",
+                "source",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "degraded",
+          "settings"
+        ],
+        "type": "object"
+      },
+      "SettingsPostRequest": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "SettingsPostResponse": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "restart_only": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "ok",
+          "restart_only"
+        ],
+        "type": "object"
+      },
+      "SmokeRequest": {
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "prompt",
+          "token"
+        ],
+        "type": "object"
+      },
+      "SmokeResponse": {
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "ms": {
+            "type": "integer"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "phases": {
+            "items": {
+              "properties": {
+                "ms": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ms",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "ms",
+          "ok",
+          "phases",
+          "preview",
+          "token"
+        ],
+        "type": "object"
+      },
+      "SpawnSessionRequest": {
+        "properties": {
+          "model": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TokenAddRequest": {
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "TokenRemoveRequest": {
+        "properties": {
+          "index": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "token": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "TokenSwapRequest": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "from": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "i": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "index": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "j": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "to": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "VersionResponse": {
+        "properties": {
+          "current_version": {
+            "type": "string"
+          },
+          "has_update": {
+            "type": "boolean"
+          },
+          "latest_version": {
+            "type": "string"
+          },
+          "update_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_version",
+          "has_update",
+          "latest_version",
+          "update_url"
+        ],
+        "type": "object"
+      },
+      "configData": {
+        "properties": {
+          "effective": {
+            "items": {
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "secret": {
+                  "type": "boolean"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "secret",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "env_content": {
+            "type": "string"
+          },
+          "has_env_file": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "effective",
+          "env_content",
+          "has_env_file"
+        ],
+        "type": "object"
+      },
+      "getConfigMetaResponse": {
+        "items": {
+          "properties": {
+            "default": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "enum": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "essential": {
+              "type": "boolean"
+            },
+            "group": {
+              "type": "string"
+            },
+            "hidden": {
+              "type": "boolean"
+            },
+            "key": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "restart_only": {
+              "type": "boolean"
+            },
+            "secret": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "default",
+            "description",
+            "essential",
+            "group",
+            "key",
+            "kind",
+            "restart_only",
+            "secret"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "logsData": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "properties": {
+                "fields": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "time": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fields",
+                "level",
+                "message",
+                "time"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "has_filter": {
+            "type": "boolean"
+          },
+          "level": {
+            "type": "string"
+          },
+          "msg": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "entries",
+          "has_filter",
+          "level",
+          "msg"
+        ],
+        "type": "object"
+      },
+      "logsHistoryData": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "properties": {
+                "fields": {
+                  "type": "string"
+                },
+                "level": {
+                  "type": "string"
+                },
+                "msg": {
+                  "type": "string"
+                },
+                "req_id": {
+                  "type": "string"
+                },
+                "ts": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "fields",
+                "level",
+                "msg",
+                "ts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "maturityHistoryData": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "ts": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "detail",
+                "kind",
+                "ts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "token": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "events",
+          "token"
+        ],
+        "type": "object"
+      },
+      "metricsData": {
+        "properties": {
+          "fingerprint_rotations": {
+            "type": "integer"
+          },
+          "models": {
+            "type": "integer"
+          },
+          "per_tokens": {
+            "items": {
+              "properties": {
+                "fingerprint_rotations": {
+                  "type": "integer"
+                },
+                "requests_24h": {
+                  "type": "integer"
+                },
+                "risk_level": {
+                  "type": "string"
+                },
+                "spend_day": {
+                  "type": "integer"
+                },
+                "token": {
+                  "type": "integer"
+                },
+                "transient_retries": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "fingerprint_rotations",
+                "requests_24h",
+                "risk_level",
+                "spend_day",
+                "token",
+                "transient_retries"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "requests_spark": {
+            "type": "string"
+          },
+          "requests_total": {
+            "type": "integer"
+          },
+          "requests_trend": {
+            "properties": {
+              "direction": {
+                "type": "string"
+              },
+              "percentage": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "direction",
+              "percentage"
+            ],
+            "type": "object"
+          },
+          "retries_spark": {
+            "type": "string"
+          },
+          "retries_trend": {
+            "properties": {
+              "direction": {
+                "type": "string"
+              },
+              "percentage": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "direction",
+              "percentage"
+            ],
+            "type": "object"
+          },
+          "sample_count": {
+            "type": "integer"
+          },
+          "transient_retries": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fingerprint_rotations",
+          "models",
+          "per_tokens",
+          "requests_spark",
+          "requests_total",
+          "requests_trend",
+          "retries_spark",
+          "retries_trend",
+          "sample_count",
+          "transient_retries"
+        ],
+        "type": "object"
+      },
+      "modelsData": {
+        "properties": {
+          "agents": {
+            "type": "integer"
+          },
+          "aliases": {
+            "items": {
+              "properties": {
+                "alias": {
+                  "type": "string"
+                },
+                "real": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "alias",
+                "real"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "has_aliases": {
+            "type": "boolean"
+          },
+          "models": {
+            "items": {
+              "properties": {
+                "agent": {
+                  "type": "string"
+                },
+                "badges": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "efforts": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "notice": {
+                  "type": "string"
+                },
+                "pool": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "number"
+                },
+                "price_label": {
+                  "type": "string"
+                },
+                "quota": {
+                  "type": "string"
+                },
+                "served": {
+                  "type": "boolean"
+                },
+                "tagline": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "agent",
+                "id",
+                "price",
+                "quota",
+                "served"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "agents",
+          "aliases",
+          "count",
+          "has_aliases",
+          "models"
+        ],
+        "type": "object"
+      },
+      "overviewData": {
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "bridge_token_cards": {
+            "items": {
+              "properties": {
+                "active_runs": {
+                  "type": "integer"
+                },
+                "ban_type": {
+                  "type": "string"
+                },
+                "banned_until": {
+                  "type": "string"
+                },
+                "cooldown_until": {
+                  "type": "string"
+                },
+                "freebucks": {
+                  "nullable": true,
+                  "properties": {
+                    "balance": {
+                      "type": "number"
+                    },
+                    "daily": {
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "monthly": {
+                      "nullable": true,
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "plan_id": {
+                      "type": "string"
+                    },
+                    "price_notices": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "prices": {
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "type": "object"
+                    },
+                    "quota_exempt": {
+                      "type": "boolean"
+                    },
+                    "spend": {
+                      "properties": {
+                        "limit_usd": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "limit_usd"
+                      ],
+                      "type": "object"
+                    },
+                    "wallet": {
+                      "properties": {
+                        "balance": {
+                          "type": "number"
+                        },
+                        "monthly_bonus": {
+                          "type": "number"
+                        },
+                        "next_bonus_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "balance",
+                        "monthly_bonus"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "balance",
+                    "daily",
+                    "spend",
+                    "wallet"
+                  ],
+                  "type": "object"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "session_active": {
+                  "type": "boolean"
+                },
+                "spend_day": {
+                  "type": "number"
+                },
+                "spend_pct": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "active_runs",
+                "cooldown_until",
+                "key",
+                "locked",
+                "model",
+                "requests",
+                "session_active",
+                "spend_day",
+                "spend_pct",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bridge_tokens": {
+            "type": "integer"
+          },
+          "fingerprint_rotations": {
+            "type": "integer"
+          },
+          "has_tokens": {
+            "type": "boolean"
+          },
+          "in_bridge": {
+            "type": "boolean"
+          },
+          "is_default_admin_token": {
+            "type": "boolean"
+          },
+          "max_messages_per_day": {
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "model_count": {
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "require_login": {
+            "type": "boolean"
+          },
+          "safe_mode": {
+            "type": "boolean"
+          },
+          "show_bridge": {
+            "type": "boolean"
+          },
+          "tokens": {
+            "items": {
+              "properties": {
+                "access_tier": {
+                  "type": "string"
+                },
+                "account_id": {
+                  "type": "string"
+                },
+                "active_runs": {
+                  "type": "integer"
+                },
+                "allowed_models": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "allowlist_skips": {
+                  "type": "integer"
+                },
+                "ban_type": {
+                  "type": "string"
+                },
+                "banned_until": {
+                  "type": "string"
+                },
+                "cooldown_active": {
+                  "type": "boolean"
+                },
+                "cooldown_until": {
+                  "type": "string"
+                },
+                "daily_limit": {
+                  "type": "integer"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "freebucks": {
+                  "nullable": true,
+                  "properties": {
+                    "balance": {
+                      "type": "number"
+                    },
+                    "daily": {
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "monthly": {
+                      "nullable": true,
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "plan_id": {
+                      "type": "string"
+                    },
+                    "price_notices": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "prices": {
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "type": "object"
+                    },
+                    "quota_exempt": {
+                      "type": "boolean"
+                    },
+                    "spend": {
+                      "properties": {
+                        "limit_usd": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "limit_usd"
+                      ],
+                      "type": "object"
+                    },
+                    "wallet": {
+                      "properties": {
+                        "balance": {
+                          "type": "number"
+                        },
+                        "monthly_bonus": {
+                          "type": "number"
+                        },
+                        "next_bonus_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "balance",
+                        "monthly_bonus"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "balance",
+                    "daily",
+                    "spend",
+                    "wallet"
+                  ],
+                  "type": "object"
+                },
+                "has_referral": {
+                  "type": "boolean"
+                },
+                "has_standing": {
+                  "type": "boolean"
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "last_usage": {
+                  "type": "string"
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "maturity": {
+                  "nullable": true,
+                  "properties": {
+                    "badge": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "last_action": {
+                      "type": "string"
+                    },
+                    "last_advanced": {
+                      "type": "string"
+                    },
+                    "last_result": {
+                      "type": "string"
+                    },
+                    "last_touch": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "no_advance_days": {
+                      "type": "integer"
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "integer"
+                    },
+                    "touch_model": {
+                      "type": "string"
+                    },
+                    "warn": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "mode",
+                    "target"
+                  ],
+                  "type": "object"
+                },
+                "messages_24h": {
+                  "type": "integer"
+                },
+                "queue_depth": {
+                  "type": "integer"
+                },
+                "queue_position": {
+                  "type": "integer"
+                },
+                "referral_code": {
+                  "type": "string"
+                },
+                "referral_github_linked": {
+                  "type": "boolean"
+                },
+                "referral_qualified_count": {
+                  "type": "integer"
+                },
+                "referral_reset_at": {
+                  "type": "string"
+                },
+                "referral_sessions_left": {
+                  "type": "integer"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "requests_per_day": {
+                  "type": "integer"
+                },
+                "requests_per_day_limit": {
+                  "type": "integer"
+                },
+                "requests_per_day_reset_in": {
+                  "type": "integer"
+                },
+                "requests_per_minute": {
+                  "type": "integer"
+                },
+                "requests_per_minute_limit": {
+                  "type": "integer"
+                },
+                "risk_level": {
+                  "type": "string"
+                },
+                "session_status": {
+                  "type": "string"
+                },
+                "standing_blurb": {
+                  "type": "string"
+                },
+                "standing_capped_by": {
+                  "type": "string"
+                },
+                "standing_capped_reason": {
+                  "type": "string"
+                },
+                "standing_label": {
+                  "type": "string"
+                },
+                "standing_level": {
+                  "type": "string"
+                },
+                "standing_next_level": {
+                  "type": "string"
+                },
+                "standing_next_level_at": {
+                  "type": "string"
+                },
+                "standing_next_steps": {
+                  "items": {
+                    "properties": {
+                      "detail": {
+                        "type": "string"
+                      },
+                      "href": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "points": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "points"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "standing_score": {
+                  "type": "number"
+                },
+                "streak": {
+                  "type": "integer"
+                },
+                "streak_updated_at": {
+                  "type": "string"
+                },
+                "today_used": {
+                  "type": "boolean"
+                },
+                "transient_retries": {
+                  "type": "integer"
+                },
+                "usage_pct": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "active_runs",
+                "cooldown_active",
+                "cooldown_until",
+                "daily_limit",
+                "has_referral",
+                "has_standing",
+                "index",
+                "locked",
+                "messages_24h",
+                "queue_depth",
+                "queue_position",
+                "referral_github_linked",
+                "referral_qualified_count",
+                "referral_sessions_left",
+                "requests",
+                "requests_per_day",
+                "requests_per_day_limit",
+                "requests_per_day_reset_in",
+                "requests_per_minute",
+                "requests_per_minute_limit",
+                "risk_level",
+                "session_status",
+                "standing_label",
+                "standing_level",
+                "standing_next_level",
+                "standing_next_level_at",
+                "standing_score",
+                "transient_retries",
+                "usage_pct"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "transient_retries": {
+            "type": "integer"
+          },
+          "upstream_sync": {
+            "nullable": true,
+            "properties": {
+              "checked_at": {
+                "type": "string"
+              },
+              "drifted_files": {
+                "items": {
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "string"
+                    },
+                    "pinned_sha": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "vendor_sha": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "group",
+                    "pinned_sha",
+                    "status",
+                    "vendor_sha"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "has_drift": {
+                "type": "boolean"
+              },
+              "has_registry_drift": {
+                "type": "boolean"
+              },
+              "has_wire_drift": {
+                "type": "boolean"
+              },
+              "releases_url": {
+                "type": "string"
+              },
+              "upstream_sha": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "checked_at",
+              "has_drift",
+              "has_registry_drift",
+              "has_wire_drift",
+              "releases_url",
+              "upstream_sha"
+            ],
+            "type": "object"
+          },
+          "uptime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url",
+          "bridge_tokens",
+          "fingerprint_rotations",
+          "has_tokens",
+          "in_bridge",
+          "is_default_admin_token",
+          "max_messages_per_day",
+          "mode",
+          "model_count",
+          "models",
+          "require_login",
+          "safe_mode",
+          "show_bridge",
+          "tokens",
+          "transient_retries",
+          "uptime"
+        ],
+        "type": "object"
+      },
+      "quotaHistoryData": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "snapshots": {
+            "items": {
+              "properties": {
+                "entitlements": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "recent": {
+                  "type": "number"
+                },
+                "reset_at": {
+                  "type": "integer"
+                },
+                "ts": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "limit",
+                "recent",
+                "reset_at",
+                "ts"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "token": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "model",
+          "snapshots",
+          "token"
+        ],
+        "type": "object"
+      },
+      "setupData": {
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "bridge": {
+            "type": "boolean"
+          },
+          "bridge_tokens": {
+            "type": "integer"
+          },
+          "has_tokens": {
+            "type": "boolean"
+          },
+          "key_hint": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "token_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base_url",
+          "bridge",
+          "bridge_tokens",
+          "has_tokens",
+          "key_hint",
+          "mode",
+          "model",
+          "models",
+          "token_count"
+        ],
+        "type": "object"
+      },
+      "tokenTestAllResponse": {
+        "items": {
+          "properties": {
+            "instance_id": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "token": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "instance_id",
+            "message",
+            "ok",
+            "token"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "tokensData": {
+        "properties": {
+          "bridge_token_cards": {
+            "items": {
+              "properties": {
+                "active_runs": {
+                  "type": "integer"
+                },
+                "ban_type": {
+                  "type": "string"
+                },
+                "banned_until": {
+                  "type": "string"
+                },
+                "cooldown_until": {
+                  "type": "string"
+                },
+                "freebucks": {
+                  "nullable": true,
+                  "properties": {
+                    "balance": {
+                      "type": "number"
+                    },
+                    "daily": {
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "monthly": {
+                      "nullable": true,
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        },
+                        "spent": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "limit",
+                        "percent_used",
+                        "remaining",
+                        "spent"
+                      ],
+                      "type": "object"
+                    },
+                    "plan_id": {
+                      "type": "string"
+                    },
+                    "price_notices": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "prices": {
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "type": "object"
+                    },
+                    "quota_exempt": {
+                      "type": "boolean"
+                    },
+                    "spend": {
+                      "properties": {
+                        "limit_usd": {
+                          "type": "number"
+                        },
+                        "reset_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "limit_usd"
+                      ],
+                      "type": "object"
+                    },
+                    "wallet": {
+                      "properties": {
+                        "balance": {
+                          "type": "number"
+                        },
+                        "monthly_bonus": {
+                          "type": "number"
+                        },
+                        "next_bonus_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "balance",
+                        "monthly_bonus"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "balance",
+                    "daily",
+                    "spend",
+                    "wallet"
+                  ],
+                  "type": "object"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "locked": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "session_active": {
+                  "type": "boolean"
+                },
+                "spend_day": {
+                  "type": "number"
+                },
+                "spend_pct": {
+                  "type": "integer"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "active_runs",
+                "cooldown_until",
+                "key",
+                "locked",
+                "model",
+                "requests",
+                "session_active",
+                "spend_day",
+                "spend_pct",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bridge_tokens": {
+            "type": "integer"
+          },
+          "burst_balance_enabled": {
+            "type": "boolean"
+          },
+          "chat_max_inflight_metered": {
+            "type": "integer"
+          },
+          "chat_max_inflight_unmetered": {
+            "type": "integer"
+          },
+          "has_tokens": {
+            "type": "boolean"
+          },
+          "in_bridge": {
+            "type": "boolean"
+          },
+          "maturity_enabled": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "rate_limit_failover": {
+            "type": "boolean"
+          },
+          "show_bridge": {
+            "type": "boolean"
+          },
+          "token_count": {
+            "type": "integer"
+          },
+          "token_rotation": {
+            "type": "string"
+          },
+          "tokens": {
+            "items": {
+              "properties": {},
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "unmetered_models": {
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "bridge_tokens",
+          "burst_balance_enabled",
+          "chat_max_inflight_metered",
+          "chat_max_inflight_unmetered",
+          "has_tokens",
+          "in_bridge",
+          "maturity_enabled",
+          "mode",
+          "rate_limit_failover",
+          "show_bridge",
+          "token_count",
+          "tokens"
+        ],
+        "type": "object"
+      },
+      "tracesData": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "traces": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "ms": {
+                  "type": "string"
+                },
+                "phases": {
+                  "items": {
+                    "properties": {
+                      "ms": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "ms",
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "time": {
+                  "type": "string"
+                },
+                "token": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "error",
+                "model",
+                "ms",
+                "status",
+                "time",
+                "token"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "traces"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "cookieAuth": {
+        "in": "cookie",
+        "name": "fb_admin",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Dashboard admin surface. Generated by backend/cmd/openapi-emit from admin_manifest.json + dashboard.AdminAPIPaths — do not edit by hand.",
+    "title": "freebuff-proxy admin API",
+    "version": "dev"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/admin": {
+      "get": {
+        "operationId": "spaRoot",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/": {
+      "get": {
+        "operationId": "spaRootSlash",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/auth/status": {
+      "get": {
+        "operationId": "getAuthStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusResponse"
+                }
+              }
+            },
+            "description": "Dashboard auth state (login mode, factory-default check)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Dashboard auth state (login mode, factory-default check)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/api/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponse"
+                }
+              }
+            },
+            "description": "Rotate the admin dashboard password"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Rotate the admin dashboard password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/api/config": {
+      "get": {
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/configData"
+                }
+              }
+            },
+            "description": "Effective config (sensitive: raw .env read)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Effective config (sensitive: raw .env read)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/api/config/meta": {
+      "get": {
+        "operationId": "getConfigMeta",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getConfigMetaResponse"
+                }
+              }
+            },
+            "description": "Configuration catalog (the settings form schema)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Configuration catalog (the settings form schema)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/api/events": {
+      "get": {
+        "operationId": "events",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent event stream (dashboard live updates)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Server-sent event stream (dashboard live updates)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/logs": {
+      "get": {
+        "operationId": "getLogs",
+        "parameters": [
+          {
+            "description": "Log level filter",
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Message substring filter",
+            "in": "query",
+            "name": "msg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/logsData"
+                }
+              }
+            },
+            "description": "Recent log ring view model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Recent log ring view model",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/logs/history": {
+      "get": {
+        "operationId": "getLogsHistory",
+        "parameters": [
+          {
+            "description": "Log level filter",
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Message substring filter",
+            "in": "query",
+            "name": "msg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Request id filter",
+            "in": "query",
+            "name": "req_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix-millis lower bound",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix-millis upper bound",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max records (default 500)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/logsHistoryData"
+                }
+              }
+            },
+            "description": "Persisted log records"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Persisted log records",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/maturity/history": {
+      "get": {
+        "operationId": "getMaturityHistory",
+        "parameters": [
+          {
+            "description": "Pool token index",
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix-millis lower bound",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max events (default 200)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/maturityHistoryData"
+                }
+              }
+            },
+            "description": "Streak/standing transitions"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Streak/standing transitions",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/metricsData"
+                }
+              }
+            },
+            "description": "Latency and throughput view model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Latency and throughput view model",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/models": {
+      "get": {
+        "operationId": "getModels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/modelsData"
+                }
+              }
+            },
+            "description": "Served-model catalog view model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Served-model catalog view model",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/notices": {
+      "get": {
+        "operationId": "getNotices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticesResponse"
+                }
+              }
+            },
+            "description": "Upstream announcements and live broadcasts"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Upstream announcements and live broadcasts",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "parameters": [
+          {
+            "description": "view=live returns the hot-poll subset (live numbers only); absent returns the full shape",
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/overviewData"
+                }
+              }
+            },
+            "description": "Overview view model (pool, models, quota, upstream sync)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Overview view model (pool, models, quota, upstream sync)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/pages/{id}": {
+      "get": {
+        "operationId": "getPageState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageStateResponse"
+                }
+              }
+            },
+            "description": "Per-page UI snapshot (absent row reads back empty, never 404)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Per-page UI snapshot (absent row reads back empty, never 404)",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "putPageState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Upsert one per-page UI snapshot (data must be a JSON object)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Upsert one per-page UI snapshot (data must be a JSON object)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/api/quota/history": {
+      "get": {
+        "operationId": "getQuotaHistory",
+        "parameters": [
+          {
+            "description": "Pool token index (-1 disables)",
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Model id",
+            "in": "query",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix-millis lower bound",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Max samples (default 500)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/quotaHistoryData"
+                }
+              }
+            },
+            "description": "Per-model quota samples"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Per-model quota samples",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/require-login": {
+      "post": {
+        "operationId": "requireLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequireLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequireLoginResponse"
+                }
+              }
+            },
+            "description": "Enable/disable dashboard login (open mode is loopback-only)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Enable/disable dashboard login (open mode is loopback-only)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/api/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsListResponse"
+                }
+              }
+            },
+            "description": "DB settings overlay: effective values plus source tiers"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DB settings overlay: effective values plus source tiers",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "operationId": "saveSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPostRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsPostResponse"
+                }
+              }
+            },
+            "description": "Validate, persist and hot-apply one overlay knob"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Validate, persist and hot-apply one overlay knob",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/api/settings/{key}": {
+      "delete": {
+        "operationId": "resetSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Drop one overlay row (falls back to .env/env/default)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Drop one overlay row (falls back to .env/env/default)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/api/setup": {
+      "get": {
+        "operationId": "getSetup",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/setupData"
+                }
+              }
+            },
+            "description": "Setup wizard view model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Setup wizard view model",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/tokens": {
+      "get": {
+        "operationId": "getTokens",
+        "parameters": [
+          {
+            "description": "view=live returns the hot-poll subset (live numbers only); absent returns the full shape",
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tokensData"
+                }
+              }
+            },
+            "description": "Token cards view model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Token cards view model",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/traces": {
+      "get": {
+        "operationId": "getTraces",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tracesData"
+                }
+              }
+            },
+            "description": "Recent chat traces"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Recent chat traces",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/api/version": {
+      "get": {
+        "operationId": "getVersion",
+        "parameters": [
+          {
+            "description": "force=true invalidates the cached update check",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Running version plus update check"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Running version plus update check",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/assets/": {
+      "get": {
+        "operationId": "assets",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Static dashboard assets"
+          }
+        },
+        "summary": "Static dashboard assets",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/bridge-tokens/{key}/lock": {
+      "post": {
+        "operationId": "bridgeTokenLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Lock one bridge-mode entry"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Lock one bridge-mode entry",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/bridge-tokens/{key}/unlock": {
+      "post": {
+        "operationId": "bridgeTokenUnlock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Unlock one bridge-mode entry"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Unlock one bridge-mode entry",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/config": {
+      "get": {
+        "operationId": "spaConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "settings"
+        ]
+      },
+      "post": {
+        "operationId": "saveConfig",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigSaveResponse"
+                }
+              }
+            },
+            "description": "Write the raw .env text, reload and report restart-only/overridden keys"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Write the raw .env text, reload and report restart-only/overridden keys",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/admin/diag": {
+      "post": {
+        "operationId": "diag",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagResponse"
+                }
+              }
+            },
+            "description": "Configuration and upstream reachability checks"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Configuration and upstream reachability checks",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/login": {
+      "get": {
+        "operationId": "loginPage",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Login page shell (HTML)"
+          }
+        },
+        "summary": "Login page shell (HTML)",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Dashboard login (sets the fb_admin session cookie; 302 to /admin on success)"
+          }
+        },
+        "summary": "Dashboard login (sets the fb_admin session cookie; 302 to /admin on success)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/login/start": {
+      "post": {
+        "operationId": "loginStart",
+        "parameters": [
+          {
+            "description": "isolated=false requests the stable machine fingerprint",
+            "in": "query",
+            "name": "isolated",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginStartResponse"
+                }
+              }
+            },
+            "description": "Start a device-login browser flow (?isolated=false for the stable fingerprint)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Start a device-login browser flow (?isolated=false for the stable fingerprint)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/login/status": {
+      "get": {
+        "operationId": "loginStatus",
+        "parameters": [
+          {
+            "description": "Full fingerprint id from login/start",
+            "in": "query",
+            "name": "fingerprint",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginCompletedResponse"
+                }
+              }
+            },
+            "description": "Poll one device-login flow (pending: status alone; completed: token_index plus user)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Poll one device-login flow (pending: status alone; completed: token_index plus user)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            },
+            "description": "Dashboard logout (clears the fb_admin session cookie)"
+          }
+        },
+        "summary": "Dashboard logout (clears the fb_admin session cookie)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/logs": {
+      "get": {
+        "operationId": "spaLogs",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/metrics": {
+      "get": {
+        "operationId": "spaMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/mode": {
+      "post": {
+        "operationId": "modeSwitch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Switch bridge/pooled mode (loopback rules apply)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Switch bridge/pooled mode (loopback rules apply)",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/models": {
+      "get": {
+        "operationId": "spaModels",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/playground": {
+      "get": {
+        "operationId": "spaPlayground",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/playground/chat": {
+      "post": {
+        "operationId": "playgroundChat",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Prompt through the real chat handler with streaming forced (SSE answer)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Prompt through the real chat handler with streaming forced (SSE answer)",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/reload": {
+      "post": {
+        "operationId": "reload",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloadResponse"
+                }
+              }
+            },
+            "description": "Reload configuration from disk and apply live (Bearer ADMIN_TOKEN)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reload configuration from disk and apply live (Bearer ADMIN_TOKEN)",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/restart": {
+      "post": {
+        "operationId": "restart",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestartResponse"
+                }
+              }
+            },
+            "description": "Validate config and restart the gateway process"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Validate config and restart the gateway process",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/setup": {
+      "get": {
+        "operationId": "spaSetup",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    },
+    "/admin/smoke": {
+      "post": {
+        "operationId": "smoke",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmokeResponse"
+                }
+              }
+            },
+            "description": "Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate)",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/admin/tokens": {
+      "get": {
+        "operationId": "spaTokens",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/add": {
+      "post": {
+        "operationId": "tokenAdd",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Add one upstream token to the pool and persist to .env"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Add one upstream token to the pool and persist to .env",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/remove": {
+      "post": {
+        "operationId": "tokenRemove",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRemoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Remove one pool token (absent index removes the last)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Remove one pool token (absent index removes the last)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/swap": {
+      "post": {
+        "operationId": "tokenSwap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Swap two pool positions"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Swap two pool positions",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/test-all": {
+      "post": {
+        "operationId": "tokenTestAll",
+        "parameters": [
+          {
+            "description": "auto=1 serves the throttled quota snapshot without probing",
+            "in": "query",
+            "name": "auto",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/tokenTestAllResponse"
+                }
+              }
+            },
+            "description": "Probe every pooled token (?auto=1 returns the throttled snapshot)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Probe every pooled token (?auto=1 returns the throttled snapshot)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/drop-session": {
+      "post": {
+        "operationId": "tokenDropSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Drop one token's upstream session"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Drop one token's upstream session",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/finish": {
+      "post": {
+        "operationId": "tokenFinish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "FINISH one token's upstream runs"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "FINISH one token's upstream runs",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/lock": {
+      "post": {
+        "operationId": "tokenLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Take one token out of rotation"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Take one token out of rotation",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/maturity": {
+      "post": {
+        "operationId": "tokenMaturity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaturityUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Set per-token streak-maturity automation"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Set per-token streak-maturity automation",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/maturity/touch": {
+      "post": {
+        "operationId": "tokenMaturityTouch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Fire one manual maturity touch outside the daily slot"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Fire one manual maturity touch outside the daily slot",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/maturity/warn-reset": {
+      "post": {
+        "operationId": "tokenMaturityWarnReset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Clear one token's non-advance warning (re-arms the daily loop)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Clear one token's non-advance warning (re-arms the daily loop)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/session": {
+      "post": {
+        "operationId": "tokenSpawnSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpawnSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Ensure one token's upstream session for a model"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Ensure one token's upstream session for a model",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/test": {
+      "post": {
+        "operationId": "tokenTest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Zero-cost upstream probe of one token"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Zero-cost upstream probe of one token",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/unlock": {
+      "post": {
+        "operationId": "tokenUnlock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Return one token to rotation"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Return one token to rotation",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/tokens/{id}/unlock-lock": {
+      "post": {
+        "operationId": "tokenUnlockLock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Unlock then immediately re-lock (cooldown reset)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Unlock then immediately re-lock (cooldown reset)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/admin/traces": {
+      "get": {
+        "operationId": "spaTraces",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "SPA shell (HTML)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "SPA shell (HTML)",
+        "tags": [
+          "views"
+        ]
+      }
+    }
+  }
+}
