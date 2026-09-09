@@ -118,7 +118,7 @@ func run(manifestPath, outPath, version string) error {
 		}
 		switch p.Kind {
 		case dashboard.AdminAPIKindJSON:
-			schema := map[string]any{"type": "string"}
+			var schema any = map[string]any{"type": "string"}
 			if p.Response != nil {
 				schema = gen.ref(p, p.Response, false)
 			}
