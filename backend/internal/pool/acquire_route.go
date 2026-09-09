@@ -539,8 +539,26 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
+		// Per-(token,model) in-flight chat lease cap (burst queue): at most cap
+		// concurrent leases may hold this token+model lane; excess waiters park
+		// until a slot frees or their context expires (wait-or-503, mirroring
+		// the create gate). Metered vs unmetered follows the Freebucks price
+		// table (nil price = unmetered). The permit rides the lease and is
+		// released through the entry pointer (LeaseRelease/LeaseAbandon), never
+		// by index. A removal racing the wait skips the token (the retired
+		// entry drains on its last release) instead of leasing a dead account.
+		chatPermit, _, err := p.chatGate.acquire(ctx, tok, effectiveModel, chatCap(cfg, chatMetered(tok, effectiveModel)))
+		if err != nil {
+			tok.runs.Release(run)
+			return nil, err
+		}
+		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
+			tok.runs.Release(run)
+			chatPermit.Release()
+			continue
+		}
 		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			entry: tok, AcquiredAt: time.Now()}
+			entry: tok, chat: chatPermit, AcquiredAt: time.Now()}
 		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
 		// lease grant. The pre-filter above only reads the rolling window;
 		// recording later (in Chat) raced it — a concurrent burst (agent

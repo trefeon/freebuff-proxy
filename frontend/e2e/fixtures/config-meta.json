@@ -221,11 +221,11 @@
     "key": "BURST_BALANCE_ENABLED",
     "group": "pool",
     "kind": "bool",
-    "default": "false",
+    "default": "true",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Spread one model's request burst across up to BURST_MAX_TOKENS accounts once BURST_THRESHOLD same-model admissions land inside BURST_WINDOW (ADR-0023, opt-in). Applies live on reload; false restores drain-only selection. ANTI-BAN TRADEOFF: spreading looks less like single-user traffic than drain — keep off unless one model's bursts throttle a single account while siblings with the same model sit idle."
+    "description": "Spread one model's request burst across up to BURST_MAX_TOKENS accounts once BURST_THRESHOLD same-model admissions land inside BURST_WINDOW. Applies live on reload; false restores drain-only selection. ANTI-BAN TRADEOFF: spreading looks less like single-user traffic than drain — set false only when strict single-account sequencing matters more than burst throughput."
   },
   {
     "key": "BURST_MAX_TOKENS",
@@ -256,6 +256,28 @@
     "secret": false,
     "essential": false,
     "description": "Sliding window for counting same-model admissions toward BURST_THRESHOLD (Go duration, e.g. 30s, 1m, 5m). Applies live on reload. Shorter windows trip on sharper spikes; longer windows ride sustained load."
+  },
+  {
+    "key": "CHAT_MAX_INFLIGHT_METERED",
+    "group": "pool",
+    "kind": "int",
+    "default": "1",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Cap on concurrent in-flight chat requests per token on metered (priced Freebucks) models (0 = unlimited)."
+  },
+  {
+    "key": "CHAT_MAX_INFLIGHT_UNMETERED",
+    "group": "pool",
+    "kind": "int",
+    "default": "3",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "hidden": true,
+    "description": "Cap on concurrent in-flight chat requests per token on unmetered (unpriced) models (0 = unlimited)."
   },
   {
     "key": "IDLE_ROTATION_TIMEOUT",

@@ -78,6 +78,11 @@ type Lease struct {
 	// reused by a later AddToken), and a bounds-checked release would leak
 	// the run's inflight or hit an unrelated manager.
 	entry *tokenEntry
+	// chat is the per-(token,model) in-flight chat slot held for this lease
+	// (burst queue). Set at grant time; released through the lease by
+	// LeaseRelease/LeaseAbandon via the entry pointer, never by index. Nil
+	// when the caps are off (unlimited) or the lease is synthetic.
+	chat *chatPermit
 	// AcquiredAt is when this lease was handed out (per acquire attempt,
 	// not per run — a chat retry re-acquires and gets a fresh timestamp).
 	// The chat success path uses it to clear unfit marks that PREDATE this
@@ -290,6 +295,12 @@ type Pool struct {
 	// and global in-flight create counters with wait-or-503, wired from
 	// SESSION_CREATE_MAX_PARALLEL_GLOBAL/PER_MODEL.
 	gate *createGate
+	// chatGate bounds concurrent in-flight chat leases per (token, model)
+	// lane (burst queue): per-lane in-flight counters with wait-or-503,
+	// wired from CHAT_MAX_INFLIGHT_METERED/UNMETERED. Caps ride the
+	// per-request config load, so the gate stores no limits and needs no
+	// reload wiring.
+	chatGate *chatGate
 
 	// Idle rotation (IDLE_ROTATION_TIMEOUT): last successful Acquire and
 	// whether the maintain loop already FINISHed all runs for the current
@@ -634,6 +645,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]*admissionGate), burstHits: make(map[string][]burstHit), burstOn: make(map[string]bool)}
 	p.cfg.Store(cfg)
 	p.gate = newCreateGate(cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
+	p.chatGate = newChatGate()
 	toks := make([]*tokenEntry, 0, len(cfg.AuthTokens))
 	for i := range cfg.AuthTokens {
 		if sessions[i] == nil || clients[i] == nil {
