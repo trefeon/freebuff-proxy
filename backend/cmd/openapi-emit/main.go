@@ -297,8 +297,11 @@ func componentName(t reflect.Type) (string, bool) {
 
 // schema builds an inline JSON Schema for any Go type.
 func (g *generator) schema(t reflect.Type, visiting map[reflect.Type]bool) any {
-	for t.Kind() == reflect.Pointer {
-		s := g.schema(t.Elem(), visiting)
+	if t.Kind() == reflect.Pointer {
+		for t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		s := g.schema(t, visiting)
 		if m, ok := s.(map[string]any); ok {
 			m["nullable"] = true
 		}
