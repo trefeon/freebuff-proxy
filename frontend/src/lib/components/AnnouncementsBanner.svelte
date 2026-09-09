@@ -21,8 +21,11 @@
   let peakHours = $state(null);
   let loaded = $state(false);
   let folded = new SvelteSet();
+  // Ticks the peak badge once a second; the backend seeds next_window_in
+  // once per fetch, so rendering that string verbatim froze the label.
+  let nowMs = $state(Date.now());
 
-  onMount(async () => {
+  async function loadNotices() {
     try {
       const res = await fetchAPI(adminApi.notices);
       if (res) {
@@ -34,6 +37,47 @@
     } finally {
       loaded = true;
     }
+  }
+
+  // ms until next_window_at; NaN when absent/unparseable so static
+  // fixture-style rows keep their next_window_in string.
+  function peakMsLeft(p) {
+    const at = Date.parse(p?.next_window_at);
+    return Number.isNaN(at) ? NaN : at - nowMs;
+  }
+
+  function fmtCompact(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return (h > 0 ? `${h}h` : "") + `${m}m${s % 60}s`;
+  }
+
+  // Live remainder from the absolute timestamp; past/missing timestamps
+  // fall back to the static string (keeps mocked e2e rows stable).
+  const peakLeft = $derived.by(() => {
+    if (!peakHours?.is_peak) return "";
+    const ms = peakMsLeft(peakHours);
+    if (Number.isNaN(ms) || ms <= 0) return peakHours.next_window_in ?? "";
+    return fmtCompact(ms);
+  });
+
+  onMount(() => {
+    loadNotices();
+    let lastFetch = Date.now();
+    const t = setInterval(() => {
+      nowMs = Date.now();
+      // Window just lapsed: re-fetch so the badge flips peak/off-peak.
+      if (
+        peakHours?.is_peak &&
+        peakMsLeft(peakHours) <= 0 &&
+        nowMs - lastFetch > 30_000
+      ) {
+        lastFetch = nowMs;
+        loadNotices();
+      }
+    }, 1000);
+    return () => clearInterval(t);
   });
 
   // Fold state per notice: X folds the item into a slim bar (title +
@@ -87,7 +131,7 @@
             <span>
               {peakHours.is_peak
                 ? $tr("Peak Window ({in} left)", {
-                    in: peakHours.next_window_in,
+                    in: peakLeft,
                   })
                 : $tr("Off-Peak Window")}
             </span>
