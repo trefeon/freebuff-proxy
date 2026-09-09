@@ -332,13 +332,10 @@ func installLedger(l *AccountLedger, blob poolLedgerBlob, now time.Time) {
 			l.requests = append(l.requests, t)
 		}
 	}
-	// Pacific-day bucket: keep the count only when the stored bucket is
-	// still today (dayRequestCount would roll it on read anyway; dropping
-	// early keeps the restore honest).
+	// Pacific-day bucket: dayRequestCount rolls a stale bucket on read as a
+	// side effect, so discard the return and keep the normalized state.
 	l.reqDayStart, l.reqDayCount = blob.ReqDayStart, blob.ReqDayCount
-	if l.dayRequestCount(now); l.reqDayCount != blob.ReqDayCount {
-		// Bucket rolled on read — installLedger already normalized it.
-	}
+	_ = l.dayRequestCount(now)
 	if l.spend == nil {
 		l.spend = newSpendLedger()
 	}
