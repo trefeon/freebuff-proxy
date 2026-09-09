@@ -7,6 +7,10 @@
 // explicitly (file plus the upstream commit) instead of emitting a
 // half-read table.
 //
+// Mapping rule: only models the CLI client serves are mapped. Web/god-only
+// rows (crof/kimi-k3-eco, openai/gpt-5.6-luna-es) never become catalog rows,
+// no matter what prices the upstream ledger quotes them.
+//
 // What flows from the snapshots: SUPPORTED order and row ids, Served
 // (FREEBUFF_MODELS membership), Paused (FREEBUFF_PAUSED_FREE_MODEL_IDS),
 // Premium (served rows mirror the resolved row flag; paused rows never are),
