@@ -291,6 +291,7 @@ func TestReplayCodexResponsesSse(t *testing.T) {
 	usage, _ := completedResp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("response.completed missing usage (codex parses usage from it)")
+		return
 	}
 	if usage["input_tokens"] != float64(1234) || usage["output_tokens"] != float64(56) {
 		t.Errorf("usage tokens = %v, want input 1234 output 56", usage)

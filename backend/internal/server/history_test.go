@@ -22,6 +22,7 @@ func TestServerHistoryLifecycle(t *testing.T) {
 	srv, _ := newTestServerStack(t, nil, nil, nil, slog.Default(), ring, WithHistory(st))
 	if srv.dash == nil {
 		t.Fatalf("dashboard not built")
+		return
 	}
 	slog.New(ring).Info("history lifecycle probe")
 	deadline := time.Now().Add(10 * time.Second)

@@ -216,6 +216,7 @@ func TestServer_ReasoningCacheReplayAcrossTurns(t *testing.T) {
 	// Verify server reasoningCache recorded the tool call reasoning
 	if srv.reasoningCache == nil {
 		t.Fatalf("srv.reasoningCache is nil")
+		return
 	}
 	rCached, _, ok := srv.reasoningCache.GetByToolID(toolCallID)
 	if !ok || rCached != reasoningText {

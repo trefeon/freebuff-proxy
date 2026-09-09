@@ -338,6 +338,7 @@ func TestReplayOpencodeChatStream(t *testing.T) {
 	details, _ := usage["completion_tokens_details"].(map[string]any)
 	if details == nil {
 		t.Fatalf("usage missing completion_tokens_details: %v", usage)
+		return
 	}
 	if rt, _ := details["reasoning_tokens"].(float64); rt != 21 {
 		t.Errorf("usage.completion_tokens_details.reasoning_tokens = %v, want 21", details["reasoning_tokens"])

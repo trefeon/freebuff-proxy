@@ -38,6 +38,7 @@ func TestRandomRotationMode(t *testing.T) {
 		}
 		if lease == nil {
 			t.Fatalf("iteration %d: nil lease", i)
+			return
 		}
 		if lease.Token < 0 || lease.Token >= 4 {
 			t.Errorf("iteration %d: token index %d out of range [0,4)", i, lease.Token)

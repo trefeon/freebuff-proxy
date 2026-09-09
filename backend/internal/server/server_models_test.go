@@ -576,6 +576,7 @@ func TestModelsAnnotationWithQuota(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatalf("model %q not in /v1/models", modelA)
+		return
 	}
 	if !found.Available {
 		t.Errorf("available = false, want true")

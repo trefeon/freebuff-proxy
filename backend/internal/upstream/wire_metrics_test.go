@@ -57,6 +57,7 @@ func TestDoUpstreamResponseLogsAndPreservesBody(t *testing.T) {
 	resp, cancel, cerr := client.do(req, 5*time.Second)
 	if cerr == nil {
 		t.Fatal("expected a classified error from do() on >=400 (issue #305)")
+		return
 	}
 	defer cancel()
 	_ = resp.Body.Close()
@@ -78,6 +79,7 @@ func TestDoUpstreamResponseLogsAndPreservesBody(t *testing.T) {
 	fields := entryFields(entries, "upstream response")
 	if fields == nil {
 		t.Fatalf("no `upstream response` line captured")
+		return
 	}
 	joined := strings.Join(fields, " ")
 	for _, want := range []string{
@@ -100,6 +102,7 @@ func TestDoUpstreamResponseLogsAndPreservesBody(t *testing.T) {
 	fields = entryFields(entries, "upstream rate limit classified")
 	if fields == nil {
 		t.Fatalf("no `upstream rate limit classified` line captured")
+		return
 	}
 	joined = strings.Join(fields, " ")
 	for _, want := range []string{
