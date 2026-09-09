@@ -58,7 +58,7 @@ var maxIpCappedReAdmitsPerDay = 3
 
 // ipCappedCooldownJitter is the Â±fraction of retryAfterMs applied to the
 // ip_capped re-admission window so concurrent tokens do not re-admit in
-// lockstep (mirrors the CLI's 30sÂ±20% poll jitter; reference/freebuff
+// lockstep (mirrors the CLI's 30sÂ±20% poll jitter; upstream/freebuff
 // cli/src/hooks/use-freebuff-session.ts).
 const ipCappedCooldownJitter = 0.2
 
@@ -204,7 +204,7 @@ func (m *RunManager) CooldownIpCapped(ice *upstream.IpCappedError) {
 // ipCappedJitter returns a one-sided jitter of up to
 // ipCappedCooldownJitter (20%) of base, crypto/rand-seeded so concurrent
 // tokens never re-admit in lockstep (mirrors the CLI's 30sÂ±20% poll
-// jitter; reference/freebuff cli/src/hooks/use-freebuff-session.ts).
+// jitter; upstream/freebuff cli/src/hooks/use-freebuff-session.ts).
 func ipCappedJitter(base time.Duration) time.Duration {
 	if base <= 0 {
 		return 0

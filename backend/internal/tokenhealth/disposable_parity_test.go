@@ -10,7 +10,7 @@ import (
 
 // TestDisposableEmailDomainsParity pins the Go email-domain tables to the
 // pinned upstream snapshot (backend/internal/upstream/testdata/
-// disposable-email.ts, copied from reference/freebuff common/src/util/
+// disposable-email.ts, copied from upstream/freebuff common/src/util/
 // disposable-email.ts on every sync). The test re-reads the TS, extracts the
 // three string-literal arrays, and asserts the parsed sets equal the Go tables
 // entry-for-entry. An upstream sync that changes a domain WITHOUT updating the

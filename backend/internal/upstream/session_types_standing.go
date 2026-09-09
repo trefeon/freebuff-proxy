@@ -24,7 +24,7 @@ type SessionReferral struct {
 // parseFlexTime; zero when the server omits it.
 //
 // CappedBy/CappedReason name the trust cap holding the account at its level
-// (e.g. third_party_client, anonymous_network — reference/freebuff
+// (e.g. third_party_client, anonymous_network — upstream/freebuff
 // freebuff-trust.ts FreebuffStandingInfo), Blurb is the human explanation,
 // and NextSteps are the earn-back actions upstream suggests (issue #140).
 type SessionStanding struct {

@@ -432,7 +432,7 @@ func TestGetSessionWithOptsHeaders(t *testing.T) {
 		t.Errorf("headers: compact=%q, instance=%q (want 1 / inst-1)", gotCompact, gotInstance)
 	}
 	// Gap #2: the CLI never beats — x-freebuff-heartbeat is Desktop-only
-	// (reference/freebuff freebuff-models.ts:1212-1215), so a compact poll
+	// (upstream/freebuff freebuff-models.ts:1212-1215), so a compact poll
 	// must NOT carry it.
 	if gotHeartbeat != "" {
 		t.Errorf("x-freebuff-heartbeat = %q, want absent on compact polls", gotHeartbeat)

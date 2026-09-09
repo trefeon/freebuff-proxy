@@ -1,5 +1,5 @@
 // Package login holds the pure helpers behind the headless OAuth login flow:
-// the device fingerprint (mirroring reference/freebuff cli/src/utils/
+// the device fingerprint (mirroring upstream/freebuff cli/src/utils/
 // fingerprint.ts), the GitHub protocol HTML form parsers and the RFC 6238 TOTP
 // code generator. The transport-coupled Client methods (StartCLILogin,
 // PollCLILogin, ProtocolGitHubLogin) stay in the upstream wire package, which
@@ -23,7 +23,7 @@ import (
 )
 
 // The login fingerprint mirrors the official CLI's enhanced device
-// fingerprint (reference/freebuff cli/src/utils/fingerprint.ts:88-128):
+// fingerprint (upstream/freebuff cli/src/utils/fingerprint.ts:88-128):
 // sha256 over a deterministic machine JSON, base64url-encoded, prefixed
 // "enhanced-" — 43 chars total suffix. It is INTENTIONALLY stable across
 // restarts (anonymous-id.ts:20-24: anti-abuse determinism), so the id is

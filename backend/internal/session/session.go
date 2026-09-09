@@ -178,7 +178,7 @@ type cachedState struct {
 // an active session until expiresAt-5s (the reference safety margin), or any
 // state that still holds a live instance id within the 30-minute grace drain
 // after expiry (FREEBUFF_SESSION_GRACE_MS: within grace the row
-// stays alive and chat passes — reference/freebuff freebuff-session.ts). The
+// stays alive and chat passes — upstream/freebuff freebuff-session.ts). The
 // instance-id test guards the grace extension: an ended row whose instance id
 // is gone cannot be ridden, and an expired active cache is only reusable
 // while the session survives upstream.

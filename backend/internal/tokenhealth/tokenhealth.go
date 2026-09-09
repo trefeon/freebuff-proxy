@@ -1,7 +1,7 @@
 // Package tokenhealth holds the -validate-tokens report vocabulary and the
 // pure helpers that the upstream client's health probes use: the account-state
 // and email-domain-risk classifications, the email-domain lists mirroring
-// reference/freebuff common/src/util/disposable-email.ts, and the report
+// upstream/freebuff common/src/util/disposable-email.ts, and the report
 // formatting. The client-dependent probing (CheckTokenHealth/ValidateTokens/
 // FetchAccountInfo) stays in the upstream package, which imports this one for
 // the pure logic and keeps the exported symbols it needs.
@@ -125,7 +125,7 @@ func SessionStateFromStatus(status string) (TokenHealthState, string) {
 // --- email-domain classification (mirrors disposable-email.ts) ---
 
 // disposableDomains mirrors DISPOSABLE_EMAIL_DOMAINS in
-// reference/freebuff common/src/util/disposable-email.ts:31-219 — the
+// upstream/freebuff common/src/util/disposable-email.ts:31-219 — the
 // one-time inbox providers plus the farm-observed rings, exactly as curated
 // upstream (no lookalike that the upstream list deliberately excludes).
 var disposableDomains = newDomainSet(

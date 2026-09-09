@@ -16,7 +16,7 @@ func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 // CreateSessionForModel POSTs /api/v1/freebuff/session with the requested
 // model header. The POST carries NO body and therefore no Content-Type
 // (#120): the CLI's session POST is a bare fetch with Authorization + the
-// optional x-freebuff-model header only (reference/freebuff
+// optional x-freebuff-model header only (upstream/freebuff
 // freebuff-session-api.ts callFreebuffSession; codebuff-api.ts sets the
 // same request shape).
 
@@ -43,7 +43,7 @@ func (c *Client) GetSession(ctx context.Context, instanceID string) (*SessionSta
 
 // GetSessionWithOpts polls /api/v1/freebuff/session with an optional compact
 // response header. There is deliberately NO heartbeat option: the CLI never
-// sends x-freebuff-heartbeat (Desktop-only, reference/freebuff
+// sends x-freebuff-heartbeat (Desktop-only, upstream/freebuff
 // freebuff-models.ts:1212-1215); liveness comes from the recurring compact
 // GET itself.
 func (c *Client) GetSessionWithOpts(ctx context.Context, instanceID string, compact bool) (*SessionState, error) {
@@ -216,7 +216,7 @@ func (c *Client) StartRun(ctx context.Context, agentID string) (string, error) {
 	}
 	// Dual-auth parity (current vendor wire): the agent-runtime client sends
 	// BOTH Authorization and x-codebuff-api-key (the same raw token) on its
-	// agent-runs/run POSTs (reference/freebuff packages/agent-runtime/src/
+	// agent-runs/run POSTs (upstream/freebuff packages/agent-runtime/src/
 	// llm-api/codebuff-web-api.ts:70-71,301-302); the shipped CLI confirms
 	// it. Applied AFTER newRequest's scrub, so any relayed/downstream
 	// x-codebuff-api-key copy is overwritten by the authenticated token
@@ -254,7 +254,7 @@ func (c *Client) StartRun(ctx context.Context, agentID string) (string, error) {
 }
 
 // RunStep is one agent-run step, batched in memory and sent WITH FINISH
-// (issue #114, CLI parity: reference/freebuff/sdk/src/impl/database.ts
+// (issue #114, CLI parity: upstream/freebuff/sdk/src/impl/database.ts
 // pendingAgentStepSchema — the CLI has NO /steps endpoint, so steps ride
 // the FINISH payload). The proxy records one step per completed chat call.
 type RunStep struct {
@@ -279,7 +279,7 @@ type RunStep struct {
 
 // FinishRun POSTs /api/v1/agent-runs with action FINISH, reporting the
 // run's honest terminal status and its completed steps (issue #114, CLI
-// parity: reference/freebuff/sdk/src/impl/database.ts finishAgentRun — the
+// parity: upstream/freebuff/sdk/src/impl/database.ts finishAgentRun — the
 // full payload is sent in ONE request; there is no /steps endpoint).
 // totalSteps is the step count the manager reports (len(steps) preferred,
 // falling back to the request count when no steps were recorded);
@@ -314,7 +314,7 @@ func (c *Client) FinishRun(ctx context.Context, runID, status string, totalSteps
 	}
 	// Dual-auth parity (current vendor wire): agent-runs POSTs carry BOTH
 	// Authorization and x-codebuff-api-key (the same raw token), mirroring
-	// the agent-runtime's agent-runs/run POSTs (reference/freebuff
+	// the agent-runtime's agent-runs/run POSTs (upstream/freebuff
 	// packages/agent-runtime/src/llm-api/codebuff-web-api.ts:70-71,301-302)
 	// and the shipped CLI. Set after newRequest's scrub overwrites any
 	// relayed/downstream x-codebuff-api-key copy with the authenticated

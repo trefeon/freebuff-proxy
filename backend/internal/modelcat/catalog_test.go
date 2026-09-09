@@ -13,7 +13,7 @@ import (
 
 // The parity test below re-reads the pinned upstream snapshot
 // (backend/internal/registry/testdata/upstream/*.ts, copied from
-// reference/freebuff/common/src/constants on every sync) and asserts the
+// upstream/freebuff/common/src/constants on every sync) and asserts the
 // catalog table matches it constant-for-constant. An upstream sync that
 // changes a catalog fact WITHOUT updating this table fails here — that is
 // the drift tripwire the whole package exists to provide.

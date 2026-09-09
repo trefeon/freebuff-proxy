@@ -116,7 +116,7 @@ func TestFallbackMap(t *testing.T) {
 // TestFallbackParityWithPinnedUpstream guards issue #121 at the root: the
 // offline fallback must mirror the CURRENT upstream FREE_MODE_AGENT_MODELS.
 // testdata/upstream/ is a pinned snapshot of the six Codebuff source files
-// (copied from reference/freebuff/common/src/constants, the RE-verified
+// (copied from upstream/freebuff/common/src/constants, the RE-verified
 // installed CLI binary). This test parses that snapshot with the real parser
 // — the same code a live Refresh runs — and requires LoadFallback to produce
 // the identical model set, model→agent routing, and agent set. The fallback

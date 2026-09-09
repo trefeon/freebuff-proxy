@@ -96,7 +96,7 @@ func healthClient(t *testing.T, token string, index int, baseURL string) *Client
 }
 
 // TestClassifyEmailDomain pins the port of upstream's classifier
-// (reference/freebuff common/src/util/disposable-email.ts): exact-domain or
+// (upstream/freebuff common/src/util/disposable-email.ts): exact-domain or
 // any-subdomain match, case-insensitive, and — critically — no lookalike or
 // substring that upstream itself deliberately excludes.
 func TestClassifyEmailDomain(t *testing.T) {

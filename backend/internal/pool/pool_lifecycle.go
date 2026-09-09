@@ -24,7 +24,7 @@ import (
 // this coarse grid.
 const maintainInterval = time.Minute
 
-// Session-liveness poll cadence (reference/freebuff sdk
+// Session-liveness poll cadence (upstream/freebuff sdk
 // polling-backoff.ts): while active the CLI polls the compact session every
 // 30s ±20% (24–36s), capped to remaining+1s near expiry so the poll lands
 // just after expires_at; on failure it backs off 20s → 300s (×2 per
@@ -389,7 +389,7 @@ func (p *Pool) maintainTick(ctx context.Context) {
 // in-grace ended) session is compact-polled every ~30s ±20% — capped to
 // remaining+1s near expiry — with 20s→300s failure backoff honoring the
 // server's Retry-After, mirroring the CLI's liveness fingerprint
-// (reference/freebuff sdk polling-backoff.ts). Rotation and queued-session
+// (upstream/freebuff sdk polling-backoff.ts). Rotation and queued-session
 // advance stay on the coarse maintainInterval ticker (maintainTick). The
 // poll is skipped while a chat is in flight (the upstream allows one client
 // per account at a time; a poll landing mid-chat can kick the active
@@ -431,7 +431,7 @@ func (p *Pool) sessionPollTick(ctx context.Context) {
 // sessionPollSuccessDelay returns the delay before the next liveness poll
 // after a SUCCESSFUL poll: ~30s ±20% jitter, capped so a poll near expiry
 // lands ~1s after expires_at (the CLI observes the status flip then;
-// reference/freebuff sdk polling-backoff.ts). Sessions already inside the
+// upstream/freebuff sdk polling-backoff.ts). Sessions already inside the
 // grace drain poll at the plain jittered cadence.
 func sessionPollSuccessDelay(snap session.SessionSnapshot) time.Duration {
 	d := sessionPollJittered(sessionPollBaseInterval)

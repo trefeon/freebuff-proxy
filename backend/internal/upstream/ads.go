@@ -17,7 +17,7 @@ import (
 // official CLI binary the proxy emulates (reference
 // cli/src/hooks/use-gravity-ad.ts getCliAdRequestUserAgent:
 // "Freebuff-CLI/<CODEBUFF_CLI_VERSION>"; 1.0.0 = cli/package.json version
-// at reference/freebuff @19d905d).
+// at upstream/freebuff @19d905d).
 const freebuffCliUA = "Freebuff-CLI/1.0.0"
 
 const (

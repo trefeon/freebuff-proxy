@@ -1,6 +1,6 @@
 # ── third-party reference clones (CodebuffAI/freebuff, 9router, etc.) ──
 reference/
-specialize/
+/upstream/
 
 # ── stray vendor clone guard (an old arg-parser bug cloned upstream into ./main) ──
 /main/

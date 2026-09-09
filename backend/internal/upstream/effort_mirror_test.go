@@ -7,7 +7,7 @@ import (
 )
 
 // The upstream server's effort authority reads
-// codebuff_metadata.freebuff_reasoning_effort (reference/freebuff
+// codebuff_metadata.freebuff_reasoning_effort (upstream/freebuff
 // freebuff-models.ts resolveFreebuffReasoningEffort; the CLI carries its
 // /reasoning pick there per request — use-send-message.ts:602-608). The proxy
 // mirrors the normalized top-level reasoning_effort into that field, and must

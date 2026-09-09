@@ -63,7 +63,7 @@ var (
 	// over its concurrent-tab budget; this session's row is fine
 	// (endsTheSession:false). Distinct from ErrSessionInvalid so the server
 	// surfaces 409 and never refreshes/recreates the session
-	// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
+	// (upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 	ErrSessionLimitReached = errors.New("upstream session limit reached")
 	// ErrWaitingRoomRequired: 428 waiting_room_required — the account must
 	// walk the reference pre-session flow (request_ad_chain + get_streak)
@@ -74,7 +74,7 @@ var (
 	// fires before the next create. Retryable with Retry-After honored, NO
 	// token cooldown, and deliberately DISTINCT from ErrSessionInvalid:
 	// the recovery is re-admit-once, never the invalidate+refresh loop
-	// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES,
+	// (upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES,
 	// send-message.ts handleFreebuffGateError).
 	ErrWaitingRoomRequired = errors.New("upstream waiting room required")
 	// ErrModelIPLimited: the egress IP cannot serve the requested model
@@ -90,7 +90,7 @@ var (
 	// NOT auto-reacquire within the same request (auto-takeover risks
 	// ping-pong with the other instance) — it drops the cached row so the
 	// NEXT request re-joins fresh and surfaces 409 session_superseded
-	// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES,
+	// (upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES,
 	// send-message.ts handleFreebuffGateError, use-freebuff-session.ts
 	// nextDelayMs returns null for superseded = stop polling).
 	ErrSessionSuperseded = errors.New("upstream session superseded")
@@ -323,7 +323,7 @@ func (e *CapacityDeferredError) Unwrap() error {
 // hold an active free session on this egress IP. Admission-only — existing
 // sessions on the IP keep running, and the request succeeds once one of them
 // ends — so unlike RateLimitError it is NOT tied to a quota reset upstream.
-// RetryAfter comes from the body's retryAfterMs only (reference/freebuff
+// RetryAfter comes from the body's retryAfterMs only (upstream/freebuff
 // freebuff-session.ts). The proxy's CooldownIpCapped applies the bounded
 // re-admission policy (#118): full retryAfter + jitter per hit, with a
 // per-token daily cap that locks until the Pacific-midnight reset.

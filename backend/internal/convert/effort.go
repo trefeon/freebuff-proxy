@@ -88,7 +88,7 @@ const defaultReasoningEffort = "high"
 // kimi-k3-eco accept but ignore reasoning_effort, so no clamp.
 //
 // Clamping mirrors upstream's resolveFreebuffReasoningEffort
-// (reference/freebuff/common/src/constants/freebuff-models.ts): clamp-DOWN,
+// (upstream/freebuff/common/src/constants/freebuff-models.ts): clamp-DOWN,
 // keyed on the actually-served model, medium→high on DeepSeek V4 and Ox
 // Alpha. For rows with no ladder upstream returns null and passes the client
 // value through untouched (MIMO/MiniMax treat any rung as thinking-on;

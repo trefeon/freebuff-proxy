@@ -270,7 +270,7 @@ func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byt
 		case errors.Is(err, upstream.ErrWaitingRoomRequired):
 			// #116: 428 waiting_room_required is session-ENDING
 			// (endsTheSession:true — the seat is gone mid-chat;
-			// reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
+			// upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 			// Drop the cached session and re-admit ONCE for this request
 			// (mirror the ErrSessionInvalid budget: attempts > 1 surfaces
 			// the error; the WAITING_ROOM_CHAIN fires before the next
@@ -367,7 +367,7 @@ func (s *Server) chatAttempt(ctx context.Context, model string, normalized []byt
 			return nil, nil, err
 		case errors.Is(err, upstream.ErrCredits):
 			// #117: 402 is NEVER retried — the CLI throws immediately and
-			// 402 is NOT in RETRYABLE_STATUS_CODES (reference/freebuff sdk
+			// 402 is NOT in RETRYABLE_STATUS_CODES (upstream/freebuff sdk
 			// error-utils.ts line 16; run-agent-step.ts throws on 402). A
 			// blind retry would burn a fresh lease against the same quota
 			// wall (2 upstream chat POSTs). Surface for writeError, which

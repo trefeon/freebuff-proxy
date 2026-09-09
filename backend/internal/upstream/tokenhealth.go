@@ -12,7 +12,7 @@
 // find dead or risky tokens before the pool burns requests on them.
 //
 // Email-domain lists mirror @codebuff/common/src/util/disposable-email.ts
-// (reference/freebuff common/src/util/disposable-email.ts): exact-domain or
+// (upstream/freebuff common/src/util/disposable-email.ts): exact-domain or
 // any-subdomain match, case-insensitive. Lists are deliberately curated —
 // lookalikes/substrings that are not exact entries (gmisel.com,
 // mailinator.com.evil.com) are never flagged, exactly like upstream.
@@ -401,7 +401,7 @@ func rateLimitResetHint(rle *RateLimitError) string {
 // --- email-domain classification (mirrors disposable-email.ts) ---
 
 // disposableDomains mirrors DISPOSABLE_EMAIL_DOMAINS in
-// reference/freebuff common/src/util/disposable-email.ts:31-219 — the
+// upstream/freebuff common/src/util/disposable-email.ts:31-219 — the
 // one-time inbox providers plus the farm-observed rings, exactly as curated
 // upstream (no lookalike that the upstream list deliberately excludes).
 var disposableDomains = newDomainSet(

@@ -69,7 +69,7 @@ func statusError(status string, st *upstream.SessionState) error {
 		// Distinct error: ip_capped is admission-only (too many distinct
 		// users on the egress IP) and NOT tied to a quota reset, so the
 		// cooldown is bounded to retryAfterMs only — never the
-		// Pacific-midnight lock (reference/freebuff freebuff-session.ts).
+		// Pacific-midnight lock (upstream/freebuff freebuff-session.ts).
 		retryAfter := upstream.CooldownFromMillis(float64(st.RetryAfterMs))
 		if retryAfter <= 0 {
 			retryAfter = time.Minute
@@ -174,7 +174,7 @@ func (m *Manager) pollPersisted(ctx context.Context, requestedModel string) (*up
 
 // Poll runs the periodic session-liveness poll: a compact GET with NO
 // heartbeat header — the CLI never beats (x-freebuff-heartbeat is
-// Desktop-only, reference/freebuff freebuff-models.ts:1212-1215); liveness
+// Desktop-only, upstream/freebuff freebuff-models.ts:1212-1215); liveness
 // comes from the recurring compact GET itself. It refreshes the
 // cached state the way the CLI's 30s compact poll does: statusError
 // mappings, drop-on-ban, invalidate on superseded/none, and — within the
@@ -203,7 +203,7 @@ func (m *Manager) Poll(ctx context.Context) error {
 	if err != nil {
 		// #116: 428 waiting_room_required is session-ENDING
 		// (endsTheSession:true per FREEBUFF_GATE_CODES — the seat is gone;
-		// reference/freebuff freebuff-session.ts). Drop the cached admission
+		// upstream/freebuff freebuff-session.ts). Drop the cached admission
 		// so the next EnsureSession re-admits fresh (the pool's
 		// WAITING_ROOM_CHAIN fires before the create). Any other poll error
 		// is left for the pool's failure backoff.

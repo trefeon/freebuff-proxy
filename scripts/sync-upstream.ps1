@@ -52,8 +52,8 @@ if (-not $CloneDir) {
     if ($env:FREEBUFF_REFERENCE_DIR) {
         $CloneDir = $env:FREEBUFF_REFERENCE_DIR
     }
-    elseif (Test-Path (Join-Path $RepoRoot "reference\freebuff\.git")) {
-        $CloneDir = Join-Path $RepoRoot "reference\freebuff"
+    elseif (Test-Path (Join-Path $RepoRoot "upstream\freebuff\.git")) {
+        $CloneDir = Join-Path $RepoRoot "upstream\freebuff"
     }
     else {
         $CloneDir = Join-Path $RepoRoot "..\freebuff-reference"

@@ -57,7 +57,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 		req.Header.Del("Authorization")
 	}
 	// Content-Type only when a body is present (#120): the CLI sets it iff
-	// body !== undefined (reference/freebuff codebuff-api.ts:344-346), so a
+	// body !== undefined (upstream/freebuff codebuff-api.ts:344-346), so a
 	// bodyless session POST must not carry it. Chat always has a body.
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

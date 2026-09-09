@@ -4,7 +4,7 @@ package pool
 // wall-clock boundaries (America/Los_Angeles), DST-correct — 07:00 UTC
 // during PDT (summer) and 08:00 UTC during PST (winter) — mirroring the
 // CLI's getZonedDayBounds / getZonedWeekBounds
-// (reference/freebuff/common/src/util/zoned-time.ts:78-92, weekStartsOn =
+// (upstream/freebuff/common/src/util/zoned-time.ts:78-92, weekStartsOn =
 // Monday) and the upstream wire periods pacific_day / pacific_week with
 // resetTimeZone America/Los_Angeles. July dates exercise PDT, January
 // dates exercise PST.

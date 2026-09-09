@@ -110,7 +110,7 @@ func (c *Client) TokenKey() string {
 
 // cliUserAgent mirrors the official CLI chat user agent: the pinned
 // @codebuff/llm-providers version, NOT the CLI_VERSION knob
-// (reference/freebuff model-provider.ts:150; llm-providers package.json
+// (upstream/freebuff model-provider.ts:150; llm-providers package.json
 // 1.0.0). The upstream free-tier gate (403 free_mode_cli_required) keys on
 // the CLI request envelope (x-freebuff-* headers, codebuff_metadata, forced
 // streaming and the JSON-quoted "cb_easp" stop sentinel — see the package
@@ -125,7 +125,7 @@ const cliUserAgent = "ai-sdk/openai-compatible/1.0.0/codebuff"
 // calls carry: session POST/GET/probe/DELETE, agent-runs START/FINISH,
 // auth login code/status and usage all use bare fetch() with no UA override,
 // so Bun sends its own default `Bun/<version>`. 1.3.14 matches the pinned
-// reference/freebuff/.bun-version and the live probe.
+// upstream/freebuff/.bun-version and the live probe.
 const bunUserAgent = "Bun/1.3.14"
 
 const (

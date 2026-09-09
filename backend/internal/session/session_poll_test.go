@@ -85,7 +85,7 @@ func TestPoll(t *testing.T) {
 			t.Fatalf("Poll: %v", err)
 		}
 		// Gap #2: the CLI never beats — x-freebuff-heartbeat is
-		// Desktop-only (reference/freebuff freebuff-models.ts:1212-1215);
+		// Desktop-only (upstream/freebuff freebuff-models.ts:1212-1215);
 		// liveness comes from the recurring compact GET.
 		if gotCompact != "1" {
 			t.Errorf("x-freebuff-compact-session = %q, want 1", gotCompact)

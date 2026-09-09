@@ -41,7 +41,7 @@ type ChatOptions struct {
 	AgentID string
 	// StepNumber is the 1-based per-run agent step counter (CLI parity:
 	// llm_step_number is merged on every chat call, String(n);
-	// reference/freebuff agent-runtime run-agent-step.ts:1175-1177).
+	// upstream/freebuff agent-runtime run-agent-step.ts:1175-1177).
 	// Injected as codebuff_metadata["llm_step_number"] when > 0; the run
 	// manager sets it per chat call at the server construction sites.
 	StepNumber int
@@ -120,17 +120,17 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 		// The chat POST carries NO x-freebuff-model / x-freebuff-instance-id
 		// headers (#106): the official CLI sends exactly Authorization + the
 		// ai-sdk UA (+ optional acting-user-id) on chat
-		// (reference/freebuff model-provider.ts:146-152); the model and
+		// (upstream/freebuff model-provider.ts:146-152); the model and
 		// instance id ride only in the body metadata (injectEnvelope).
 		if c.userID != "" {
 			// The official CLI sends x-freebuff-acting-user-id on every
 			// chat call with the account's OWN id, derived from
-			// GET /api/v1/me (reference/freebuff sdk/src/run.ts:649-658;
+			// GET /api/v1/me (upstream/freebuff sdk/src/run.ts:649-658;
 			// sdk/src/impl/model-provider.ts:148-153 — agent-runs
 			// START/FINISH carry it too, database.ts:318-320/396-398).
 			// The server treats it as a trusted server-to-server header
 			// honored only when the request authenticates as the FreeBuff
-			// Web service account (reference/freebuff
+			// Web service account (upstream/freebuff
 			// common/src/constants/freebuff-models.ts:1180-1183).
 			// ACTING_USER_ID is therefore only safe when it equals the
 			// token's own account id; any other value impersonates a
@@ -158,7 +158,7 @@ func (c *Client) ChatCompletions(ctx context.Context, opts ChatOptions, body []b
 				// #105: the free-tier capacity queue asks the client to WAIT
 				// before retrying — the AI SDK absorbs the deferral silently,
 				// honoring retry-after with a 10s default
-				// (reference/freebuff sdk model-provider.ts:41-49,62-81). Sleep
+				// (upstream/freebuff sdk model-provider.ts:41-49,62-81). Sleep
 				// the parsed retry-after (floor 10s) so the same-session retry
 				// does not re-POST immediately (amplification); ctx
 				// cancellation aborts the sleep like every other upstream wait.
@@ -369,7 +369,7 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 		metadata["freebuff_instance_id"] = opts.SessionInstanceID
 	}
 	// llm_step_number is the 1-based per-run agent step, String(n) on the
-	// wire (#113; reference/freebuff run-agent-step.ts:1175-1177).
+	// wire (#113; upstream/freebuff run-agent-step.ts:1175-1177).
 	if opts.StepNumber > 0 {
 		metadata["llm_step_number"] = strconv.Itoa(opts.StepNumber)
 	}
@@ -385,7 +385,7 @@ func injectEnvelope(body []byte, costMode string, opts ChatOptions) ([]byte, err
 	// freebuff_reasoning_effort mirrors the normalized top-level
 	// reasoning_effort the convert layer already clamped to the model's
 	// ladder. This is the field the upstream server's effort authority
-	// actually reads (reference/freebuff freebuff-models.ts
+	// actually reads (upstream/freebuff freebuff-models.ts
 	// resolveFreebuffReasoningEffort, carried per request by the CLI as
 	// codebuff_metadata.freebuff_reasoning_effort — use-send-message.ts
 	// :602-608); a top-level reasoning_effort alone may never reach it.

@@ -21,7 +21,7 @@ import (
 // in-memory append (issue #114: steps are batched and sent WITH FINISH —
 // the CLI has no /steps endpoint). The context-pruner child-run job (#91)
 // was removed because the newest CLI UNTRACKS pruner runs entirely
-// (reference/freebuff packages/agent-runtime/src/run-agent-step.ts:785-795
+// (upstream/freebuff packages/agent-runtime/src/run-agent-step.ts:785-795
 // mints a local untracked run id, zero ledger POSTs).
 type asyncJobKind uint8
 

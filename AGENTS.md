@@ -28,8 +28,7 @@ Machine-readable rules for agents working in this repo. Human overview lives in
   `modelcat`, `registry`, `wirefacts`.
 - `frontend/` — Svelte 5 SPA. Committed bundle
   `backend/internal/dashboard/dist` is what the binary serves.
-- `reference/freebuff` — gitignored upstream vendor clone (pinned 2e57674fc).
-  Never commit it.
+- `upstream/freebuff` — gitignored live vendor clone of `CodebuffAI/freebuff`, never commit. Source of truth for all wire/registry/model work. Keep freshly fetched to `origin/main` before starting; pins live in `backend/internal/wirefacts/testdata/wire/snapshots.json` (`upstream_sha`) + `scripts/vendor-version.txt`, verified by `scripts/check-upstream.sh`.
 - `scripts/` — `sync-upstream.sh`, `check-upstream.sh` (canonical parity check),
   `review-wire-drift.sh`.
 - `.github/workflows/` — `ci.yml` (jobs `test`, `frontend`), `lint.yml` (job
@@ -73,6 +72,7 @@ dotenv → static → live → SSE hash → store refresh.
    `review-wire-drift.sh` reports all-SAME against the new anchors and hides
    FUNCTIONAL rows. LF-normalize `snapshots.json` comparisons (CRLF checkouts
    fake drift). Merge drift PRs serially wire → registry → dashboard.
+7. Upstream-first: start any wire/registry/model work by updating `upstream/freebuff` to latest `origin/main` (`git -C upstream/freebuff fetch origin main`, checkout `origin/main`). Nothing gates or pre-approves this update. If it moved past the recorded pins, classify with `check-upstream.sh` + `review-wire-drift.sh` and carry any port/re-pin through the drift PR flow.
 
 ## 5. Budgets and freezes (as observed)
 

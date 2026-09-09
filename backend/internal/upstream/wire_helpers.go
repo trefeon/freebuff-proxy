@@ -90,7 +90,7 @@ func truncate(s string, n int) string {
 
 // truncateRunes truncates s to at most max runes without an ellipsis. The
 // CLI's FINISH errorMessage cap is 5000 chars (truncateString in
-// reference/freebuff/sdk/src/impl/database.ts), applied on the whole
+// upstream/freebuff/sdk/src/impl/database.ts), applied on the whole
 // payload — a full Go stack trace must not blow the cap.
 func truncateRunes(s string, max int) string {
 	if max <= 0 {

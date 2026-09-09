@@ -4,9 +4,9 @@
 # Usage:
 #   scripts/repin-all.sh [--dry-run] <vendor-sha> [clone-dir]
 #
-#   vendor-sha  full 40-char upstream commit SHA in specialize/freebuff
+#   vendor-sha  full 40-char upstream commit SHA in upstream/freebuff
 #   clone-dir   local reference clone (default: $FREEBUFF_REFERENCE_DIR,
-#               else <repo>/specialize/freebuff)
+#               else <repo>/upstream/freebuff)
 #   --dry-run   classify drift and print the planned refresh plus the exact
 #               gh commands for the three PRs; write nothing
 #
@@ -39,7 +39,7 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   shift
 fi
 VENDOR_SHA="${1:-}"
-CLONE_DIR="${2:-${FREEBUFF_REFERENCE_DIR:-$REPO_ROOT/specialize/freebuff}}"
+CLONE_DIR="${2:-${FREEBUFF_REFERENCE_DIR:-$REPO_ROOT/upstream/freebuff}}"
 WIRE_DIR="$REPO_ROOT/backend/internal/wirefacts/testdata/wire"
 SNAPSHOTS="$WIRE_DIR/snapshots.json"
 

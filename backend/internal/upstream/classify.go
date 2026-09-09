@@ -28,14 +28,14 @@ func classifyError(status int, body string, hdr http.Header) error {
 	switch {
 	case status == http.StatusForbidden && strings.Contains(lower, `"status":"banned"`):
 		// The canonical ban body is {"status":"banned"} (the free-session
-		// status wire shape, reference/freebuff freebuff-session.ts). Match
+		// status wire shape, upstream/freebuff freebuff-session.ts). Match
 		// the marker exactly: any 403 whose body merely mentions the word
 		// "banned" (e.g. {"error":"model temporarily banned..."}) must stay
 		// a generic 403, not trigger the ban cooldown.
 		return parseBan(body)
 	case status == http.StatusForbidden && strings.Contains(lower, `"error":"`+string(WireCodeAccountSuspended)+`"`):
 		// Hard-ban shape: 403 {"error":"account_suspended","message":"...
-		// suspended due to billing issues."} (reference/freebuff
+		// suspended due to billing issues."} (upstream/freebuff
 		// sdk run-cancellation.test.ts:314-359, api/_post.ts:298-307).
 		// Same ban class as "status":"banned": the body carries no
 		// resumes_at, so BanError.ResumesAt stays zero and CooldownBan
@@ -91,7 +91,7 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// budget, but this session's row is fine (endsTheSession:false).
 		// Distinct non-invalid error: the server surfaces 409 and never
 		// refreshes/recreates the session
-		// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
+		// (upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 		return &SessionLimitError{Status: status, Body: truncate(body, 200)}
 	case status == http.StatusForbidden && strings.Contains(lower, string(WireCodeFreeModeCLIRequired)):
 		return fmt.Errorf("%w: %d %s", ErrFreeModeCLIRequired, status, truncate(body, 200))
@@ -103,7 +103,7 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// rate_limited this is NOT tied to a quota reset. Cooldown is
 		// bounded by the proxy to retryAfterMs + jitter, with a per-token
 		// daily re-admission cap (3rd hit in a rolling window locks until
-		// Pacific midnight — #118) (reference/freebuff freebuff-session.ts).
+		// Pacific midnight — #118) (upstream/freebuff freebuff-session.ts).
 		return parseIpCapped(body, retryAfter)
 	case containsAny(lower, string(WireCodeWaitingRoomQueued)):
 		// 429 waiting_room_queued: transient admission race — the session
@@ -111,7 +111,7 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// invalid: the row is fine, so the cached session must not be
 		// invalidated or refreshed. Surfaced as 503 waiting_room_queued +
 		// Retry-After via the shared WaitingRoomError
-		// (reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
+		// (upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 		return &WaitingRoomError{RetryAfter: retryAfter, Detail: truncate(body, 200)}
 	case containsAny(lower, string(WireCodeWaitingRoomRequired)):
 		// 428 waiting_room_required (issue #94): the account must walk the
@@ -151,7 +151,7 @@ func classifyError(status int, body string, hdr http.Header) error {
 	case containsAny(lower, string(WireCodeSessionSuperseded)):
 		// #119: 409 session_superseded is a TERMINAL gate rejection
 		// (endsTheSession:true — another instance took over the account;
-		// reference/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
+		// upstream/freebuff freebuff-session.ts FREEBUFF_GATE_CODES).
 		// Deliberately NOT ErrSessionInvalid: the server must never
 		// auto-reacquire in-request (auto-takeover risks ping-pong) — it
 		// surfaces 409 session_superseded and lets the NEXT request re-join

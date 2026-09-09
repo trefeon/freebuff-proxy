@@ -5,7 +5,7 @@ package pool
 // #122: all period boundaries are America/Los_Angeles wall-clock — 00:00
 // Pacific, Monday 00:00 Pacific, 1st 00:00 Pacific — resolving to
 // 07:00/08:00 UTC by DST, matching the CLI's getZonedDayBounds /
-// getZonedWeekBounds, reference/freebuff/common/src/util/zoned-time.ts:78-92,
+// getZonedWeekBounds, upstream/freebuff/common/src/util/zoned-time.ts:78-92,
 // and the upstream wire periods pacific_day / pacific_week), mirroring the
 // reference account quota bookkeeping (reference/freebuff-reverse
 // internal/accounts/record.go QuotaUsed/QuotaPeriodStart and
@@ -13,7 +13,7 @@ package pool
 // usage (pool.RecordSpend, fed by the server's parsed usage blocks) and
 // surfaced next to Messages24h in the healthz token snapshot.
 //
-// The account's daily spend ceilings (reference/freebuff
+// The account's daily spend ceilings (upstream/freebuff
 // freebuff-spend-ceilings.ts: $15 full / $5 limited / $1 elevated [SG/CN cohort since 2026-09: was $5] / $0.50 restricted, plus $7 full / $3 limited paid floor for flagged reasons since 6341ef3) are SERVER-enforced at Pacific midnight, and
 // the proxy cannot know which cohort (full/limited/restricted) a token's
 // account sits in — so this ledger is a token-count heuristic, not an exact
@@ -104,7 +104,7 @@ func rollBucket(used, start int64, period string, now time.Time, tokens int64) (
 // wall-clock (America/Los_Angeles): day = 00:00 Pacific, week = Monday
 // 00:00 Pacific, month = 1st 00:00 Pacific. All resolve to 07:00 UTC during
 // PDT and 08:00 UTC during PST, mirroring the CLI's getZonedDayBounds /
-// getZonedWeekBounds (reference/freebuff/common/src/util/zoned-time.ts:78-92,
+// getZonedWeekBounds (upstream/freebuff/common/src/util/zoned-time.ts:78-92,
 // weekStartsOn = Monday) and the upstream wire periods pacific_day /
 // pacific_week with resetTimeZone America/Los_Angeles. Month has no CLI
 // equivalent and uses the Pacific calendar month for consistency. time.Date
@@ -171,7 +171,7 @@ func pacificDate(t time.Time) (int, time.Month, int) {
 // boundary: midnight+1 day, Monday+7 days, 1st+1 month — calendar arithmetic
 // via AddDate, which shifts the UTC instant across DST transitions exactly
 // like the CLI's getZonedDayBounds / getZonedWeekBounds
-// (reference/freebuff/common/src/util/zoned-time.ts:78-92; AddDate
+// (upstream/freebuff/common/src/util/zoned-time.ts:78-92; AddDate
 // normalizes like Date, go/src/time/time.go). Without tzdata the boundaries
 // are derived from the exact US DST rule in Pacific wall-clock (the same
 // derivation as bucketStartFallback): a fixed-UTC AddDate window would be
@@ -231,7 +231,7 @@ func fallbackNextBoundary(start time.Time, months, days int) time.Time {
 // derives the boundary from the US DST rule (PDT = UTC-7 from the second
 // Sunday of March 09:00Z to the first Sunday of November 08:00Z; PST = UTC-8
 // otherwise) — never a fixed UTC hour, so the 07:00Z/08:00Z midnight is
-// DST-aware (#122, reference/freebuff zoned-time.ts getZonedDayBounds).
+// DST-aware (#122, upstream/freebuff zoned-time.ts getZonedDayBounds).
 func pacificDayStart(now time.Time) time.Time {
 	if loc := pacificLoc(); loc != nil {
 		y, m, d := now.In(loc).Date()

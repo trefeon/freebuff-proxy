@@ -230,7 +230,7 @@ func TestClassifyBan(t *testing.T) {
 
 // TestClassifyAccountSuspended verifies the ban-class shape: the newest
 // CLI's hard ban is 403 {"error":"account_suspended","message":"...suspended
-// due to billing issues."} (reference/freebuff sdk run-cancellation.test.ts
+// due to billing issues."} (upstream/freebuff sdk run-cancellation.test.ts
 // :314-359). It must route into the same parseBan path as "status":"banned"
 // with NO resumes_at (the permanent hard-ban shape), while near-misses stay
 // generic.

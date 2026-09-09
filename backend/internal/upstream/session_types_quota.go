@@ -4,7 +4,7 @@ import "time"
 
 // ModelQuota is one model's live session quota from the upstream
 // rateLimitsByModel map, per the official CLI wire shape
-// (reference/freebuff/common/src/types/freebuff-session.ts).
+// (upstream/freebuff/common/src/types/freebuff-session.ts).
 // Entitlement holds the per-period breakdown (base/referral/streak/promo;
 // promo is omitted by default) that sums to Limit when the server emits it.
 type ModelQuota struct {

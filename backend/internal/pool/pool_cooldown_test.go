@@ -587,7 +587,7 @@ func TestSessionPollSkipsWhileChatInFlight(t *testing.T) {
 }
 
 // TestSessionPollSchedule pins the liveness-poll cadence helpers
-// (reference/freebuff sdk polling-backoff.ts): the success interval is ~30s
+// (upstream/freebuff sdk polling-backoff.ts): the success interval is ~30s
 // ±20% jitter capped to remaining+1s near expiry, and the failure backoff
 // grows 20s→300s while never scheduling a retry before the server's
 // Retry-After floor.
