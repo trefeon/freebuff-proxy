@@ -409,7 +409,7 @@ func TestLifecycleFullJourney(t *testing.T) {
 		if md.Count != 7 || len(md.Models) != 7 {
 			t.Fatalf("models API count = %d/%d, want 7", md.Count, len(md.Models))
 		}
-		allowed := map[string]bool{"Free": true, "Premium": true, "referral +1/day": true}
+		allowed := map[string]bool{"": true, "referral +1/day": true}
 		for _, m := range md.Models {
 			if m.ID == "" || m.Agent == "" || (!allowed[m.Quota] && !strings.HasSuffix(m.Quota, " Freebucks/hr")) {
 				t.Errorf("model row %+v: id/agent/quota must be populated from the catalog", m)

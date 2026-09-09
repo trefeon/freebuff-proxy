@@ -198,7 +198,7 @@
   );
   let resetLabel = $derived(formatLocalDate(resetRaw) || resetRaw || "—");
   let resetPassed = $derived(rel === "now");
-  let label = $derived(title ?? $tr("Premium pool"));
+  let label = $derived(title ?? $tr("Shared pool"));
 </script>
 
 {#if hasFreebucks}

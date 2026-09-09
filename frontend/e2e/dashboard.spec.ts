@@ -159,7 +159,7 @@ test.describe("dashboard hermetic mocks", () => {
     );
   });
 
-  test("Quota Tracker shows premium pool bar and Freebucks empty state", async ({
+  test("Quota Tracker shows shared pool bar and Freebucks empty state", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -192,8 +192,8 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByRole("heading", { name: "Account #5" }),
     ).toBeVisible();
-    // Account 1 fixture carries premium_quota → Premium pool bar renders
-    await expect(page.getByText("Premium pool").first()).toBeVisible();
+    // Account 1 fixture carries premium_quota → Shared pool bar renders
+    await expect(page.getByText("Shared pool").first()).toBeVisible();
     await expect(page.getByText("4/day pacific_day")).toBeVisible();
     // The 2026-08-30 reset window has passed: the bar reads "Reset <local
     // date>" (formatLocalDate), never raw ISO or "Resets in now".
@@ -275,11 +275,11 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
     ).toBeVisible();
-    // Stale note renders; the token keeps its premium bar (no empty state
+    // Stale note renders; the token keeps its shared bar (no empty state
     // for a token that carries last-seen quota). Legacy per-model rows
     // are gone, so no model ids render from quota rows.
     await expect(page.getByText("before restart").first()).toBeVisible();
-    await expect(page.getByText("Premium pool").first()).toBeVisible();
+    await expect(page.getByText("Shared pool").first()).toBeVisible();
   });
   test("Quota Tracker header carries the reset countdown when given a clock", async ({
     page,

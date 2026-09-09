@@ -165,7 +165,7 @@ test.describe("real-world data", () => {
     ).toBeVisible();
   });
 
-  test("quota: served rows carry the Premium vs Free word", async ({
+  test("quota: served rows show bare ids plus priced Freebucks suffix", async ({
     page,
   }) => {
     const f = loadFixtures(RW);
@@ -179,10 +179,12 @@ test.describe("real-world data", () => {
     await mockDashboard(page, f, { tokens });
     await page.goto(admin("quota"));
     await expect(page.getByText("Served models").first()).toBeVisible();
-    await expect(page.getByText("Free", { exact: true }).first()).toBeVisible();
-    await expect(
-      page.getByText("Premium", { exact: true }).first(),
-    ).toBeVisible();
+    // Cost-class badge is gone: no Free/Premium word renders on served rows.
+    await expect(page.getByText("Free", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Premium", { exact: true })).toHaveCount(0);
+    // Bare ids render with the priced Freebucks suffix where a price exists.
+    await expect(page.getByText("upstage/solar-pro4").first()).toBeVisible();
+    await expect(page.getByText("0 Freebucks/hr").first()).toBeVisible();
   });
   test("models/logs/traces/metrics render production rows", async ({
     page,

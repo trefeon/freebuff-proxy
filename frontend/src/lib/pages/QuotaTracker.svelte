@@ -385,19 +385,13 @@
               </div>
             {/if}
             {#if token.freebucks?.prices && Object.keys(token.freebucks.prices).length > 0}
-              {@const unmeteredIds = new Set(
-                (data.unmetered_models ?? []).map((r) => r.id),
-              )}
               {@const servedModels = sortModelsByPrice(
                 Object.keys(token.freebucks.prices).filter(
                   (id) => usableIds == null || usableIds.has(id),
                 ),
                 token.freebucks,
                 modelNames,
-              ).map((id) => ({
-                ...modelDisplayInfo(id, token.freebucks, modelNames),
-                unmetered: unmeteredIds.has(id),
-              }))}
+              ).map((id) => modelDisplayInfo(id, token.freebucks, modelNames))}
               {@const fullAccess =
                 servedModels.length > 0 && servedModels.length >= maxServed}
               {#if servedModels.length > 0}
@@ -435,14 +429,6 @@
                             <span
                               class="font-bold text-[var(--fp-text)] truncate"
                               >{m.displayName}</span
-                            >
-                            <span
-                              class="text-[9px] uppercase tracking-wider font-semibold px-1 py-px rounded font-mono shrink-0 {m.unmetered
-                                ? 'bg-emerald-500/10 text-emerald-400'
-                                : 'bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]'}"
-                              >{m.unmetered
-                                ? $tr("Free")
-                                : $tr("Premium")}</span
                             >
                           </span>
                           <span
