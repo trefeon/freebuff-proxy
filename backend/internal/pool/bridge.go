@@ -400,6 +400,25 @@ sessionReady:
 		return nil, err
 	}
 
+	// Per-(entry,model) in-flight chat lease cap (burst queue), mirroring
+	// the pooled grant: park until a slot frees or the context expires
+	// (wait-or-503). Metering follows the entry's Freebucks prices. An
+	// eviction racing the wait aborts retryable instead of leasing a dead
+	// entry. The permit rides the lease (released via LeaseRelease/
+	// LeaseAbandon through the entry pointer).
+	chatPermit, _, err := p.chatGate.acquire(ctx, entry, effectiveModel, chatCap(cfg, chatBridgeMetered(ss, effectiveModel)))
+	if err != nil {
+		entry.runs.Release(run)
+		return nil, err
+	}
+	p.bridgeMu.RLock()
+	evictedDuringWait := p.bridge[tokenKey(clientToken)] != entry
+	p.bridgeMu.RUnlock()
+	if evictedDuringWait {
+		entry.runs.Release(run)
+		chatPermit.Release()
+		return nil, fmt.Errorf("bridge: entry evicted during admission; retry the request")
+	}
 	p.logger.Debug("pool: bridge lease acquired", "model", effectiveModel, "agent", effectiveAgentID, "instance_id", ss.InstanceID,
 		"country", ss.CountryCode)
 	// MAX_REQUESTS_PER_MINUTE admission enforced atomically at grant time,
@@ -409,7 +428,7 @@ sessionReady:
 	// bridge snapshot counters stay meaningful.
 	if !p.bridgeTryAdmitRequest(entry) {
 		p.LeaseRelease(&Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-			Bridge: entry, AcquiredAt: time.Now()})
+			Bridge: entry, chat: chatPermit, AcquiredAt: time.Now()})
 		return nil, p.bridgeRpmLimitError(entry)
 	}
 	// Track the activity and end any idle-maintenance pause, mirroring
@@ -423,7 +442,7 @@ sessionReady:
 	p.sessionsEnded = false
 	p.lastActiveMu.Unlock()
 	return &Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-		Bridge: entry, AcquiredAt: time.Now()}, nil
+		Bridge: entry, chat: chatPermit, AcquiredAt: time.Now()}, nil
 }
 
 // ProbeNewToken validates a NOT-yet-added token against upstream with a

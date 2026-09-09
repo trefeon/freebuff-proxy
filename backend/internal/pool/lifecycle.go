@@ -20,6 +20,10 @@ func (p *Pool) LeaseRelease(lease *Lease) {
 		return // synthetic lease without a backing entry or bridge
 	}
 	t.runs.Release(lease.Run)
+	// Release the burst-queue lane slot through the lease (entry-pointer
+	// discipline, never by index — mirrors the run release above). Nil-safe:
+	// unlimited caps and synthetic leases carry no permit.
+	lease.chat.Release()
 	// A lease on a removed token (RemoveLastToken swapped the snapshot out
 	// from under a concurrent Acquire) releases through its own entry — the
 	// bounds-checked index path would no-op and leak the run's inflight, or
@@ -51,6 +55,10 @@ func (p *Pool) LeaseAbandon(lease *Lease) {
 		return
 	}
 	t.runs.ReleaseAbandoned(lease.Run)
+	// A cancelled chat frees its burst-queue lane too, or the slot leaks
+	// until process restart (the waiter parks on gate release, not on run
+	// teardown).
+	lease.chat.Release()
 }
 
 // RecordRunStep records a completed chat step on the lease's run (issue

@@ -119,6 +119,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.HTTP2Upstream, "HTTP2_UPSTREAM")
 	overrideInt(&raw.SessionCreateMaxParallelGlobal, "SESSION_CREATE_MAX_PARALLEL_GLOBAL")
 	overrideInt(&raw.SessionCreateMaxParallelPerModel, "SESSION_CREATE_MAX_PARALLEL_PER_MODEL")
+	overrideInt(&raw.ChatMaxInflightMetered, "CHAT_MAX_INFLIGHT_METERED")
+	overrideInt(&raw.ChatMaxInflightUnmetered, "CHAT_MAX_INFLIGHT_UNMETERED")
 	overrideInt(&raw.RunFinishQueueSize, "RUN_FINISH_QUEUE_SIZE")
 	overrideString(&raw.RunFinishInlineTimeout, "RUN_FINISH_INLINE_TIMEOUT")
 	overrideInt(&raw.RunsDrainQueueCap, "RUNS_DRAIN_QUEUE_CAP")
@@ -248,6 +250,18 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	sessionCreateMaxPerModel := 32
 	if raw.SessionCreateMaxParallelPerModel != nil {
 		sessionCreateMaxPerModel = *raw.SessionCreateMaxParallelPerModel
+	}
+	// CHAT_MAX_INFLIGHT_METERED defaults to 1 (metered models spend
+	// Freebucks, so one in-flight chat per token); _UNMETERED defaults to
+	// 3 (unpriced rows are free, so more parallelism is safe). 0 =
+	// unlimited; explicit values always win.
+	chatMaxInflightMetered := 1
+	if raw.ChatMaxInflightMetered != nil {
+		chatMaxInflightMetered = *raw.ChatMaxInflightMetered
+	}
+	chatMaxInflightUnmetered := 3
+	if raw.ChatMaxInflightUnmetered != nil {
+		chatMaxInflightUnmetered = *raw.ChatMaxInflightUnmetered
 	}
 	runFinishQueueSize := 64
 	if raw.RunFinishQueueSize != nil {
@@ -533,6 +547,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		SessionStateFile:                 strings.TrimSpace(raw.SessionStateFile),
 		SessionCreateMaxParallelGlobal:   sessionCreateMaxGlobal,
 		SessionCreateMaxParallelPerModel: sessionCreateMaxPerModel,
+		ChatMaxInflightMetered:           chatMaxInflightMetered,
+		ChatMaxInflightUnmetered:         chatMaxInflightUnmetered,
 		RunFinishQueueSize:               runFinishQueueSize,
 		RunFinishInlineTimeout:           runFinishInlineTimeout,
 		RunsDrainQueueCap:                runsDrainQueueCap,
@@ -728,6 +744,8 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideBoolFrom(&raw.HTTP2Upstream, get, "HTTP2_UPSTREAM")
 	overrideIntFrom(&raw.SessionCreateMaxParallelGlobal, get, "SESSION_CREATE_MAX_PARALLEL_GLOBAL")
 	overrideIntFrom(&raw.SessionCreateMaxParallelPerModel, get, "SESSION_CREATE_MAX_PARALLEL_PER_MODEL")
+	overrideIntFrom(&raw.ChatMaxInflightMetered, get, "CHAT_MAX_INFLIGHT_METERED")
+	overrideIntFrom(&raw.ChatMaxInflightUnmetered, get, "CHAT_MAX_INFLIGHT_UNMETERED")
 	overrideIntFrom(&raw.RunFinishQueueSize, get, "RUN_FINISH_QUEUE_SIZE")
 	overrideStringFrom(&raw.RunFinishInlineTimeout, get, "RUN_FINISH_INLINE_TIMEOUT")
 	overrideIntFrom(&raw.RunsDrainQueueCap, get, "RUNS_DRAIN_QUEUE_CAP")

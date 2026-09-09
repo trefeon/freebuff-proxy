@@ -23,6 +23,25 @@ test.describe("real-world data", () => {
     await expect(page.getByText("http://127.0.0.1:3457/v1")).toBeVisible();
   });
 
+  test("peak badge ticks live instead of freezing at the fetch value", async ({
+    page,
+  }) => {
+    const f = loadFixtures(RW);
+    const notices = JSON.parse(JSON.stringify(f.notices));
+    // Live-shaped row: window ends 75s out so the badge must count down.
+    notices.peak_hours.next_window_at = new Date(
+      Date.now() + 75_000,
+    ).toISOString();
+    await mockDashboard(page, f, { notices });
+    await page.goto(admin("overview"));
+    const badge = page.getByText(/Peak Window \(.+ left\)/);
+    await expect(badge).toBeVisible();
+    const first = await badge.textContent();
+    await page.waitForTimeout(2200);
+    const second = await badge.textContent();
+    expect(second).not.toEqual(first);
+  });
+
   test("tokens: every account state + bridge clients", async ({ page }) => {
     const f = loadFixtures(RW);
     // Pin the banned account's cooldown 30d out: the static fixture date
