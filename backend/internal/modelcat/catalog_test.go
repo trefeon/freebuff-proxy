@@ -104,7 +104,7 @@ func parseList(t *testing.T, src, name string) []string {
 	m := re.FindStringIndex(src)
 	if m == nil {
 		t.Fatalf("constant %s not found in pinned snapshot", name)
-		return
+		return nil
 	}
 	// Balance brackets to find the matching closing ]. Scan from the
 	// opening bracket itself so depth 0 lands on the real closing one.
