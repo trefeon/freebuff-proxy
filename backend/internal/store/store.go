@@ -15,8 +15,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
-
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
