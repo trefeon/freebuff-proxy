@@ -8,7 +8,7 @@
 #   scripts/review-wire-drift.sh [baseline.tsv] [end_ref]
 #
 # Environment:
-#   FREEBUFF_REFERENCE_DIR  upstream clone (default reference/freebuff);
+#   FREEBUFF_REFERENCE_DIR  upstream clone (default specialize/freebuff);
 #                           must have the end_ref fetched
 #   FREEBUFF_REVIEW_END_REF explicit ref/SHA to classify against (default
 #                           origin/main); a positional end_ref wins
@@ -29,7 +29,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="${1:-$REPO_ROOT/scripts/wire-baseline.tsv}"
-CLONE_DIR="${FREEBUFF_REFERENCE_DIR:-$REPO_ROOT/reference/freebuff}"
+CLONE_DIR="${FREEBUFF_REFERENCE_DIR:-$REPO_ROOT/specialize/freebuff}"
 
 [[ -f "$BASELINE_FILE" ]] || { echo "baseline file not found: $BASELINE_FILE" >&2; exit 2; }
 if [[ -n "${2:-}" ]]; then

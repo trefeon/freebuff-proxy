@@ -18,7 +18,7 @@
 #
 # Arguments:
 #   ref                       Upstream branch or commit SHA (default: main)
-#   clone-dir                 Local reference clone directory (default: reference/freebuff,
+#   clone-dir                 Local reference clone directory (default: specialize/freebuff,
 #                             $FREEBUFF_REFERENCE_DIR, or ../freebuff-reference)
 #
 # Examples:
@@ -100,8 +100,8 @@ done
 if [[ -z "$CLONE_DIR" ]]; then
 	if [[ -n "${FREEBUFF_REFERENCE_DIR:-}" ]]; then
 		CLONE_DIR="$FREEBUFF_REFERENCE_DIR"
-	elif [[ -d "$REPO_ROOT/reference/freebuff/.git" ]]; then
-		CLONE_DIR="$REPO_ROOT/reference/freebuff"
+	elif [[ -d "$REPO_ROOT/specialize/freebuff/.git" ]]; then
+		CLONE_DIR="$REPO_ROOT/specialize/freebuff"
 	else
 		CLONE_DIR="$REPO_ROOT/../freebuff-reference"
 	fi
