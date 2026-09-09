@@ -394,7 +394,7 @@ func TestDashboardLogoutClearsCookie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.AddCookie(cookie)
+	req.Header.Set("Cookie", cookie)
 	resp, err := noRedirectClient().Do(req)
 	if err != nil {
 		t.Fatal(err)
