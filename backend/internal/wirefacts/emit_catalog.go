@@ -873,10 +873,28 @@ const FallbackModelID = %q
 // deliberately, never on sync.
 const LimitedModelID = %q
 
+// DeepSeekV4FlashModelID mirrors upstream FREEBUFF_DEEPSEEK_V4_FLASH_MODEL_ID.
+const DeepSeekV4FlashModelID = "deepseek/deepseek-v4-flash"
+
+// LimitedTierModelIDs mirrors upstream LIMITED_FREEBUFF_MODEL_IDS: the four models
+// available to limited-access tier accounts (GLM 5.3 Flash, DeepSeek V4 Flash,
+// MiMo 2.5, Solar Pro 4).
+var LimitedTierModelIDs = []string{
+	Glm53ModelID,
+	DeepSeekV4FlashModelID,
+	LimitedModelID,
+	SolarPro4ModelID,
+}
+
 // IsLimitedTierAllowed reports whether the model is available on the limited tier
-// without requiring special referral grants.
+// without requiring special referral grants (matches upstream LIMITED_FREEBUFF_MODEL_IDS).
 func IsLimitedTierAllowed(id string) bool {
-	return id == LimitedModelID
+	switch id {
+	case Glm53ModelID, DeepSeekV4FlashModelID, LimitedModelID, SolarPro4ModelID:
+		return true
+	default:
+		return false
+	}
 }
 
 // Glm52ModelID is the referral-reward model, metered by its own promo pool

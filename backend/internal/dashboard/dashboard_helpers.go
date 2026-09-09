@@ -16,6 +16,7 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 		Email:                  t.Email,
 		AccountID:              t.AccountID,
 		SessionStatus:          t.SessionStatus,
+		AccessTier:             t.AccessTier,
 		QueuePosition:          t.SessionQueuePosition,
 		QueueDepth:             t.SessionQueueDepth,
 		ActiveRuns:             t.ActiveRuns,
@@ -130,6 +131,7 @@ func maturityCardFromSnapshot(m *pool.MaturitySnapshot) *maturityCard {
 type tokenLiveCard struct {
 	Index         int    `json:"index"`
 	SessionStatus string `json:"session_status"`
+	AccessTier    string `json:"access_tier,omitempty"`
 	QueuePosition int    `json:"queue_position"`
 	QueueDepth    int    `json:"queue_depth"`
 	ActiveRuns    int    `json:"active_runs"`
@@ -170,6 +172,7 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	card := tokenLiveCard{
 		Index:                  t.Token,
 		SessionStatus:          t.SessionStatus,
+		AccessTier:             t.AccessTier,
 		QueuePosition:          t.SessionQueuePosition,
 		QueueDepth:             t.SessionQueueDepth,
 		ActiveRuns:             t.ActiveRuns,

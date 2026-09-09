@@ -35,6 +35,7 @@ const STATIC_TOP_KEYS = [
 const STATIC_TOKEN_KEYS = [
   "email",
   "account_id",
+  "access_tier",
   "daily_limit",
   "has_standing",
   "standing_level",

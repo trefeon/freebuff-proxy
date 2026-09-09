@@ -68,6 +68,7 @@ type tokenCard struct {
 	Email         string `json:"email,omitempty"`
 	AccountID     string `json:"account_id,omitempty"`
 	SessionStatus string `json:"session_status"`
+	AccessTier    string `json:"access_tier,omitempty"`
 	QueuePosition int    `json:"queue_position"`
 	QueueDepth    int    `json:"queue_depth"`
 	ActiveRuns    int    `json:"active_runs"`

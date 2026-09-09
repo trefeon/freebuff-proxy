@@ -424,3 +424,27 @@ func TestCatalogFactsPinned(t *testing.T) {
 		}
 	}
 }
+
+func TestLimitedTierModelsPinned(t *testing.T) {
+	wantAllowed := []string{
+		"z-ai/glm-5.3-flash",
+		"deepseek/deepseek-v4-flash",
+		"mimo/mimo-v2.5",
+		"upstage/solar-pro4",
+	}
+	for _, id := range wantAllowed {
+		if !IsLimitedTierAllowed(id) {
+			t.Errorf("IsLimitedTierAllowed(%q) = false, want true", id)
+		}
+	}
+	wantDisallowed := []string{
+		"openai/gpt-5.6-luna",
+		"meta/muse-spark-1.2-contributor",
+		"z-ai/glm-5.2",
+	}
+	for _, id := range wantDisallowed {
+		if IsLimitedTierAllowed(id) {
+			t.Errorf("IsLimitedTierAllowed(%q) = true, want false", id)
+		}
+	}
+}

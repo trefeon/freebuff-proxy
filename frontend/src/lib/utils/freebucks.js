@@ -9,6 +9,13 @@
  *   live session, or wallet Freebucks): enrich the confirm dialog.
  * - allow — everything else, including every row on an unmetered account.
  */
+/** Upstream LIMITED_FREEBUFF_MODEL_IDS: models allowed on limited-access tier accounts. */
+export const LIMITED_TIER_MODEL_IDS = new Set([
+  "z-ai/glm-5.3-flash",
+  "deepseek/deepseek-v4-flash",
+  "mimo/mimo-v2.5",
+  "upstage/solar-pro4",
+]);
 
 export function freebucksOf(token) {
   return token?.freebucks ?? null;

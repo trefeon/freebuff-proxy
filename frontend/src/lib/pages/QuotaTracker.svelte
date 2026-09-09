@@ -30,6 +30,7 @@
   import { tr } from "../i18n.js";
   import { formatLocalDate } from "../utils/format.js";
   import {
+    LIMITED_TIER_MODEL_IDS,
     freebucksHeaderLine,
     modelDisplayInfo,
     sortModelsByPrice,
@@ -90,7 +91,9 @@
       ...(data?.tokens ?? []).map(
         (t) =>
           Object.keys(t.freebucks?.prices ?? {}).filter(
-            (id) => usableIds == null || usableIds.has(id),
+            (id) =>
+              (usableIds == null || usableIds.has(id)) &&
+              (t.access_tier !== "limited" || LIMITED_TIER_MODEL_IDS.has(id)),
           ).length,
       ),
     ),
@@ -385,15 +388,20 @@
               </div>
             {/if}
             {#if token.freebucks?.prices && Object.keys(token.freebucks.prices).length > 0}
+              {@const allowedByTier =
+                token.access_tier === "limited" ? LIMITED_TIER_MODEL_IDS : null}
               {@const servedModels = sortModelsByPrice(
                 Object.keys(token.freebucks.prices).filter(
-                  (id) => usableIds == null || usableIds.has(id),
+                  (id) =>
+                    (usableIds == null || usableIds.has(id)) &&
+                    (allowedByTier == null || allowedByTier.has(id)),
                 ),
                 token.freebucks,
                 modelNames,
               ).map((id) => modelDisplayInfo(id, token.freebucks, modelNames))}
-              {@const fullAccess =
-                servedModels.length > 0 && servedModels.length >= maxServed}
+              {@const fullAccess = token.access_tier
+                ? token.access_tier === "full"
+                : servedModels.length > 0 && servedModels.length >= maxServed}
               {#if servedModels.length > 0}
                 <div class="space-y-2">
                   <div class="flex items-center justify-between gap-2">
