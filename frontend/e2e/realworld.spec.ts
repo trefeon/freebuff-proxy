@@ -77,7 +77,8 @@ test.describe("real-world data", () => {
     ).toBeVisible();
     await expect(page.getByText("Requests 37")).toBeVisible();
     await expect(page.getByText("SPEND TODAY")).toHaveCount(2);
-    await expect(page.getByText("Used 2 / Limit 4")).toBeVisible();
+    // Bridge cards render the Freebucks bar now (session quota bars gone).
+    await expect(page.getByText("Daily").first()).toBeVisible();
     await expect(page.getByText("Banned — TEMPORARY")).toBeVisible();
     // Drawer: standing + session + pinned models for the trusted account.
     await page.locator("table tbody tr button[aria-expanded]").first().click();
