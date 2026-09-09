@@ -1,0 +1,405 @@
+// Command openapi-emit generates the admin API's OpenAPI document from the
+// two sources of truth that already pin the contract: admin_manifest.json
+// (method/path/auth rows) and dashboard.AdminAPIPaths (typed request/response
+// shapes). It fails on any manifest row missing a registry entry (and vice
+// versa), so the emitted openapi.json cannot drift from the gateway.
+//
+// Reproduce: go generate ./backend/internal/dashboard/ (writes
+// backend/internal/dashboard/data/openapi.json).
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
+	"freebuff-proxy/backend/internal/dashboard"
+)
+
+type manifestRow struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Auth   string `json:"auth"`
+}
+
+func main() {
+	manifest := flag.String("manifest", "admin_manifest.json", "path to admin_manifest.json")
+	out := flag.String("out", "data/openapi.json", "output path for openapi.json")
+	version := flag.String("version", "dev", "info.version for the emitted document")
+	flag.Parse()
+	if err := run(*manifest, *out, *version); err != nil {
+		fmt.Fprintln(os.Stderr, "openapi-emit:", err)
+		os.Exit(1)
+	}
+}
+
+func run(manifestPath, outPath, version string) error {
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+	var rows []manifestRow
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return fmt.Errorf("parse manifest: %w", err)
+	}
+	reg := map[string]dashboard.AdminAPIPath{}
+	for _, p := range dashboard.AdminAPIPaths() {
+		k := p.Method + " " + p.Path
+		if _, dup := reg[k]; dup {
+			return fmt.Errorf("duplicate registry entry %s", k)
+		}
+		reg[k] = p
+	}
+	for _, r := range rows {
+		if _, ok := reg[r.Method+" "+r.Path]; !ok {
+			return fmt.Errorf("manifest row %s %s has no AdminAPIPaths entry", r.Method, r.Path)
+		}
+	}
+	for k := range reg {
+		found := false
+		for _, r := range rows {
+			if r.Method+" "+r.Path == k {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("registry entry %s has no manifest row", k)
+		}
+	}
+
+	gen := &generator{schemas: map[string]any{}}
+	paths := map[string]any{}
+	for _, r := range rows {
+		p := reg[r.Method+" "+r.Path]
+		if p.Auth != r.Auth {
+			return fmt.Errorf("auth mismatch on %s %s: manifest %q, registry %q", r.Method, r.Path, r.Auth, p.Auth)
+		}
+		item, ok := paths[p.Path]
+		if !ok {
+			item = map[string]any{}
+			paths[p.Path] = item
+		}
+		op := map[string]any{
+			"operationId": p.OperationID,
+			"summary":     p.Summary,
+			"tags":        []string{tagFor(p.Path)},
+		}
+		if sec := securityFor(p.Auth); sec != nil {
+			op["security"] = sec
+		}
+		params := []any{}
+		for _, seg := range pathParams(p.Path) {
+			params = append(params, map[string]any{
+				"name": seg, "in": "path", "required": true,
+				"schema": map[string]any{"type": "string"},
+			})
+		}
+		for _, q := range p.Query {
+			params = append(params, map[string]any{
+				"name": q.Name, "in": "query", "required": q.Required,
+				"description": q.Description,
+				"schema":      map[string]any{"type": "string"},
+			})
+		}
+		if len(params) > 0 {
+			op["parameters"] = params
+		}
+		if p.Kind == dashboard.AdminAPIKindJSON && p.Request != nil {
+			op["requestBody"] = map[string]any{
+				"required": true,
+				"content":  contentFor(gen, p, p.Request, true),
+			}
+		}
+		switch p.Kind {
+		case dashboard.AdminAPIKindJSON:
+			schema := map[string]any{"type": "string"}
+			if p.Response != nil {
+				schema = gen.ref(p, p.Response, false)
+			}
+			op["responses"] = map[string]any{
+				"200": map[string]any{
+					"description": p.Summary,
+					"content": map[string]any{
+						"application/json": map[string]any{"schema": schema},
+					},
+				},
+			}
+		case dashboard.AdminAPIKindSSE:
+			op["responses"] = map[string]any{
+				"200": map[string]any{
+					"description": p.Summary,
+					"content": map[string]any{
+						"text/event-stream": map[string]any{"schema": map[string]any{"type": "string"}},
+					},
+				},
+			}
+		case dashboard.AdminAPIKindPage:
+			op["responses"] = map[string]any{
+				"200": map[string]any{
+					"description": p.Summary,
+					"content": map[string]any{
+						"text/html": map[string]any{"schema": map[string]any{"type": "string"}},
+					},
+				},
+			}
+		default:
+			return fmt.Errorf("unknown kind %q on %s %s", p.Kind, r.Method, r.Path)
+		}
+		item.(map[string]any)[strings.ToLower(r.Method)] = op
+	}
+
+	components := map[string]any{
+		"schemas": gen.schemas,
+		"securitySchemes": map[string]any{
+			"cookieAuth": map[string]any{"type": "apiKey", "in": "cookie", "name": "fb_admin"},
+			"bearerAuth": map[string]any{"type": "http", "scheme": "bearer"},
+		},
+	}
+	doc := map[string]any{
+		"openapi": "3.0.3",
+		"info": map[string]any{
+			"title":   "freebuff-proxy admin API",
+			"version": version,
+			"description": "Dashboard admin surface. Generated by backend/cmd/openapi-emit from " +
+				"admin_manifest.json + dashboard.AdminAPIPaths — do not edit by hand.",
+		},
+		"paths":      paths,
+		"components": components,
+	}
+	enc, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	enc = append(enc, '\n')
+	if err := os.WriteFile(outPath, enc, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", outPath, err)
+	}
+	return nil
+}
+
+// contentFor selects the request body media type: raw-string bodies (the
+// .env editor) ride text/plain, every other documented body is JSON.
+func contentFor(gen *generator, p dashboard.AdminAPIPath, v any, req bool) map[string]any {
+	_ = req
+	if _, ok := v.(string); ok {
+		return map[string]any{"text/plain": map[string]any{"schema": map[string]any{"type": "string"}}}
+	}
+	return map[string]any{"application/json": map[string]any{"schema": gen.ref(p, v, true)}}
+}
+
+// tagFor groups operations by admin area for docs navigation.
+func tagFor(path string) string {
+	rest := strings.TrimPrefix(path, "/admin/")
+	switch {
+	case strings.HasPrefix(rest, "tokens") || strings.HasPrefix(rest, "bridge-tokens"):
+		return "tokens"
+	case strings.HasPrefix(rest, "api/settings") || strings.HasPrefix(rest, "api/pages") || strings.HasPrefix(rest, "api/config") || rest == "config":
+		return "settings"
+	case rest == "login" || rest == "logout" || strings.HasPrefix(rest, "login/") || strings.HasPrefix(rest, "api/auth") || strings.HasPrefix(rest, "api/change-password") || strings.HasPrefix(rest, "api/require-login"):
+		return "auth"
+	case rest == "mode" || rest == "diag" || rest == "restart" || rest == "reload" || rest == "smoke" || strings.HasPrefix(rest, "playground"):
+		return "system"
+	default:
+		return "views"
+	}
+}
+
+// securityFor maps the manifest auth level to an OpenAPI security requirement.
+func securityFor(auth string) []any {
+	switch auth {
+	case "dashboard", "sensitive":
+		return []any{map[string]any{"cookieAuth": []any{}}}
+	case "adminToken":
+		return []any{map[string]any{"bearerAuth": []any{}}}
+	default:
+		return nil
+	}
+}
+
+// pathParams extracts {name} template segments in order.
+func pathParams(path string) []string {
+	var out []string
+	for {
+		i := strings.IndexByte(path, '{')
+		if i < 0 {
+			return out
+		}
+		j := strings.IndexByte(path[i:], '}')
+		if j < 0 {
+			return out
+		}
+		out = append(out, path[i+1:i+j])
+		path = path[i+j+1:]
+	}
+}
+
+// generator walks Go types via reflect into JSON Schema (OpenAPI 3.0).
+// Top-level named structs become components.schemas entries (keyed by Go
+// type name, or OperationID+Request/Response for unnamed types); nested
+// structs inline with a cycle guard.
+type generator struct {
+	schemas map[string]any
+}
+
+var (
+	timeType     = reflect.TypeOf(time.Time{})
+	rawMsgType   = reflect.TypeOf(json.RawMessage{})
+	anySliceType = reflect.TypeOf([]any(nil))
+)
+
+// ref returns the schema for a top-level request/response value: a $ref to
+// components for named types, an inline schema otherwise.
+func (g *generator) ref(p dashboard.AdminAPIPath, v any, isReq bool) any {
+	t := reflect.TypeOf(v)
+	if t == nil {
+		return map[string]any{}
+	}
+	if name, ok := componentName(t); ok {
+		if _, done := g.schemas[name]; !done {
+			g.schemas[name] = g.schema(t, map[reflect.Type]bool{})
+		}
+		return map[string]any{"$ref": "#/components/schemas/" + name}
+	}
+	suffix := "Response"
+	if isReq {
+		suffix = "Request"
+	}
+	name := p.OperationID + suffix
+	if _, done := g.schemas[name]; !done {
+		g.schemas[name] = g.schema(t, map[reflect.Type]bool{})
+	}
+	return map[string]any{"$ref": "#/components/schemas/" + name}
+}
+
+// componentName reports the components key for a named struct type.
+func componentName(t reflect.Type) (string, bool) {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return "", false
+	}
+	name := t.Name()
+	if name == "" {
+		return "", false
+	}
+	if name == "resultEnvelope" {
+		name = "ResultEnvelope"
+	}
+	return name, true
+}
+
+// schema builds an inline JSON Schema for any Go type.
+func (g *generator) schema(t reflect.Type, visiting map[reflect.Type]bool) any {
+	for t.Kind() == reflect.Pointer {
+		s := g.schema(t.Elem(), visiting)
+		if m, ok := s.(map[string]any); ok {
+			m["nullable"] = true
+		}
+		return s
+	}
+	switch t {
+	case timeType:
+		return map[string]any{"type": "string", "format": "date-time"}
+	case rawMsgType:
+		return map[string]any{"type": "object"}
+	}
+	switch t.Kind() {
+	case reflect.Bool:
+		return map[string]any{"type": "boolean"}
+	case reflect.String:
+		return map[string]any{"type": "string"}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return map[string]any{"type": "integer"}
+	case reflect.Float32, reflect.Float64:
+		return map[string]any{"type": "number"}
+	case reflect.Interface, reflect.UnsafePointer:
+		return map[string]any{}
+	case reflect.Slice, reflect.Array:
+		if t == anySliceType || t.Elem().Kind() == reflect.Interface {
+			return map[string]any{"type": "array", "items": map[string]any{}}
+		}
+		return map[string]any{"type": "array", "items": g.schema(t.Elem(), visiting)}
+	case reflect.Map:
+		if t.Key().Kind() != reflect.String {
+			return map[string]any{"type": "object"}
+		}
+		if t.Elem().Kind() == reflect.Interface {
+			return map[string]any{"type": "object"}
+		}
+		return map[string]any{"type": "object", "additionalProperties": g.schema(t.Elem(), visiting)}
+	case reflect.Struct:
+		if visiting[t] {
+			return map[string]any{"type": "object"}
+		}
+		visiting[t] = true
+		defer delete(visiting, t)
+		props := map[string]any{}
+		var required []string
+		for i := range t.NumField() {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			name, omit, skip := jsonName(f)
+			if skip {
+				continue
+			}
+			if f.Anonymous && f.Type.Kind() == reflect.Struct && name == "" {
+				sub := g.schema(f.Type, visiting)
+				if m, ok := sub.(map[string]any); ok {
+					if sp, ok := m["properties"].(map[string]any); ok {
+						for k, v := range sp {
+							props[k] = v
+						}
+					}
+					if sr, ok := m["required"].([]string); ok {
+						required = append(required, sr...)
+					}
+				}
+				continue
+			}
+			props[name] = g.schema(f.Type, visiting)
+			if !omit {
+				required = append(required, name)
+			}
+		}
+		out := map[string]any{"type": "object", "properties": props}
+		if len(required) > 0 {
+			sort.Strings(required)
+			out["required"] = required
+		}
+		return out
+	default:
+		return map[string]any{}
+	}
+}
+
+// jsonName parses the field's json tag: wire name, omitempty presence, skip.
+func jsonName(f reflect.StructField) (name string, omitempty, skip bool) {
+	tag := f.Tag.Get("json")
+	if tag == "-" {
+		return "", false, true
+	}
+	if tag == "" {
+		return f.Name, false, false
+	}
+	parts := strings.Split(tag, ",")
+	name = parts[0]
+	if name == "" {
+		name = f.Name
+	}
+	for _, o := range parts[1:] {
+		if o == "omitempty" {
+			omitempty = true
+		}
+	}
+	return name, omitempty, false
+}

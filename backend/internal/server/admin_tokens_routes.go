@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"freebuff-proxy/backend/internal/config"
+	"freebuff-proxy/backend/internal/dashboard"
 	"freebuff-proxy/backend/internal/modelcat"
 	"io"
 	"net/http"
@@ -162,9 +163,7 @@ func spawnModelFromRequest(r *http.Request) string {
 	if model != "" {
 		return model
 	}
-	var req struct {
-		Model string `json:"model"`
-	}
+	var req dashboard.SpawnSessionRequest
 	if body, err := io.ReadAll(r.Body); err == nil {
 		_ = json.Unmarshal(body, &req)
 	}
@@ -200,9 +199,7 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 	// Cap the body before FormValue: ParseForm would otherwise slurp the
 	// entire request into memory before the JSON fallback's 4KB cap applies.
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	var req struct {
-		Mode string `json:"mode"`
-	}
+	var req dashboard.ModeSwitchRequest
 	req.Mode = r.FormValue("mode")
 	if req.Mode == "" {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<10))
