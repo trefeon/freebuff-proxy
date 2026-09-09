@@ -119,14 +119,14 @@ type LoginStartResponse struct {
 	LoginURL    string `json:"login_url"`
 }
 
-// Login status answers: pending reports status alone; completed always
-// carries token_index (even index 0 — no omitempty) plus the upstream user
-// name on the final poll.
+// LoginPendingResponse is the pending login/status answer: status alone.
 type LoginPendingResponse struct {
 	Status string `json:"status"`
 }
 
-// LoginCompletedResponse is the completed login/status answer.
+// LoginCompletedResponse is the completed login/status answer: it always
+// carries token_index (even index 0 — no omitempty) plus the upstream user
+// name on the final poll.
 type LoginCompletedResponse struct {
 	Status     string `json:"status"`
 	TokenIndex int    `json:"token_index"`

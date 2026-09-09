@@ -122,6 +122,7 @@ func TestBridgeSnapshotSpendConcurrent(t *testing.T) {
 	}
 	if row == nil {
 		t.Fatal("BridgeSnapshot is missing the spend-race entry")
+		return
 	}
 	if row.SpendDay != float64(view.Day) {
 		t.Errorf("snapshot SpendDay = %v, want %v (BridgeSnapshot must copy the spend view under bridgeMu)",

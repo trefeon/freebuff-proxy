@@ -12,6 +12,7 @@ func TestParseUpstreamSyncEmpty(t *testing.T) {
 	got := parseUpstreamSync([]byte(`{"upstream_sha":"(not yet reported)","files":[]}`))
 	if got == nil {
 		t.Fatal("parseUpstreamSync returned nil")
+		return
 	}
 	if got.HasDrift || got.HasRegistry || got.HasWire {
 		t.Errorf("empty JSON should report no drift: %+v", got)
@@ -57,6 +58,7 @@ func TestParseUpstreamSyncMalformed(t *testing.T) {
 	got := parseUpstreamSync([]byte(`{not json`))
 	if got == nil {
 		t.Fatal("malformed JSON must not return nil")
+		return
 	}
 	if got.UpstreamSHA != "(parse error)" {
 		t.Errorf("UpstreamSHA = %q, want (parse error)", got.UpstreamSHA)
