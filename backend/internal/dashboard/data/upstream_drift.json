@@ -1,14 +1,14 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
-  "upstream_sha": "f5dedead553e3bdb4526db049ee4ab527070a6f0",
-  "checked_at": "2026-09-08T21:10:47Z",
+  "upstream_sha": "cc9069e251e8fedd5784c688ce78ccfecd76815f",
+  "checked_at": "2026-09-09T04:44:20Z",
   "wiregen_sha": "2e57674fc24e8f857cd9e4f8c690f10e6e5342d1",
   "vendor_version": "0.0.172",
   "vendor_version_pinned": "0.0.171",
   "files": [
     {"group":"registry","file":"common/src/constants/free-agents.ts","pinned_sha":"e2077f92c632","vendor_sha":"e2077f92c632","status":"SAME"},
     {"group":"registry","file":"common/src/constants/freebuff-model-ids.ts","pinned_sha":"b4a0f2aca8ea","vendor_sha":"b4a0f2aca8ea","status":"SAME"},
-    {"group":"registry","file":"common/src/constants/freebuff-models.ts","pinned_sha":"44bdaf31305a","vendor_sha":"44bdaf31305a","status":"SAME"},
+    {"group":"registry","file":"common/src/constants/freebuff-models.ts","pinned_sha":"44bdaf31305a","vendor_sha":"c6de9c49f7ce","status":"DRIFT"},
     {"group":"registry","file":"common/src/constants/gemini.ts","pinned_sha":"5de5784f9633","vendor_sha":"5de5784f9633","status":"SAME"},
     {"group":"registry","file":"common/src/constants/model-config.ts","pinned_sha":"210f9bbfe1ac","vendor_sha":"210f9bbfe1ac","status":"SAME"},
     {"group":"registry","file":"common/src/constants/freebuff-model-entitlements.ts","pinned_sha":"695bf9dd0c8d","vendor_sha":"695bf9dd0c8d","status":"SAME"},
