@@ -375,18 +375,28 @@ func TestDashboardConfigSaveEnvOverrideReported(t *testing.T) {
 
 // TestDashboardLogoutClearsCookie: POST /admin/logout clears the fb_admin
 // cookie (MaxAge<0) and answers JSON ok:true; a session-less client is then
-// back behind the cookie gate. GET /admin/logout is unregistered (405):
-// the SPA logs out via POST (Sidebar.svelte handleLogout). Logout must work
-// without a valid cookie (expired sessions).
+// back behind the cookie gate. GET /admin/logout is unregistered (SPA
+// fallthrough, clears nothing): the SPA logs out via POST
+// (Sidebar.svelte handleLogout). Logout must work without a valid cookie
+// (expired sessions).
 func TestDashboardLogoutClearsCookie(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)
 
-	// GET /admin/logout is unregistered: the mux answers 405.
+	// GET /admin/logout is unregistered: it falls through to the SPA shell
+	// like any other unknown /admin/* path — and, crucially, clears no
+	// cookie (the logout handler is POST-only now).
 	getResp := get(t, ts.URL+"/admin/logout", cookie)
 	func() { _ = getResp.Body.Close() }()
-	if getResp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("logout GET status = %d, want 405 (route removed, POST only)", getResp.StatusCode)
+	unknownResp := get(t, ts.URL+"/admin/definitely-not-a-route", cookie)
+	func() { _ = unknownResp.Body.Close() }()
+	if getResp.StatusCode != unknownResp.StatusCode {
+		t.Fatalf("logout GET status = %d, want the SPA-fallthrough status %d", getResp.StatusCode, unknownResp.StatusCode)
+	}
+	for _, c := range getResp.Cookies() {
+		if c.Name == "fb_admin" && c.MaxAge < 0 {
+			t.Fatal("logout GET cleared the fb_admin cookie (GET must not log out)")
+		}
 	}
 
 	// POST logout clears the cookie and answers JSON ok:true.
