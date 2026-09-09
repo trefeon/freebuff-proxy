@@ -49,8 +49,6 @@ archives:
         dst: install.ps1
       - src: scripts/install.cmd
         dst: install.cmd
-      - src: scripts/README.md
-        dst: README.md
 checksum:
   name_template: "checksums.txt"
 
