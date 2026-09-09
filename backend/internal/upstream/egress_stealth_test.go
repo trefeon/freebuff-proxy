@@ -41,7 +41,7 @@ func TestHTTP2UpstreamWiring(t *testing.T) {
 		_, err = c.http.Transport.RoundTrip(req)
 		if err == nil {
 			t.Fatal("RoundTrip to a refused port succeeded")
-			return
+			return ""
 		}
 		return err.Error()
 	}
