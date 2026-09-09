@@ -249,6 +249,7 @@ func TestReplayCodexResponsesSse(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	id, _ := completedResp["id"].(string)
 	if !strings.HasPrefix(id, "resp_") || len(id) < 6 {
@@ -405,10 +406,12 @@ func TestReplayCodexResponsesReasoning(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	usage, _ := completedResp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("response.completed missing usage")
+		return
 	}
 	if usage["input_tokens"] != float64(90) || usage["output_tokens"] != float64(40) {
 		t.Errorf("usage = %v, want input 90 output 40", usage)
@@ -546,6 +549,7 @@ func TestResponsesIncludeIgnoredContract(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	if id, _ := completedResp["id"].(string); !strings.HasPrefix(id, "resp_") || len(id) < 6 {
 		t.Errorf("completed response id = %q, want resp_<random>", id)

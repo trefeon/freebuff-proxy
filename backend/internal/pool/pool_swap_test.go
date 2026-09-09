@@ -67,6 +67,7 @@ func TestPoolSwapTokens(t *testing.T) {
 	origIdx := lease.Token
 	if origEntry == nil {
 		t.Fatal("lease has no backing entry")
+		return
 	}
 	other := (origIdx + 1) % 4
 	otherEntry := (*p.roster.Load())[other]

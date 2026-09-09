@@ -103,6 +103,7 @@ func runChatAttemptRetry(t *testing.T, firstLease, retryLease *pool.Lease, failF
 	}
 	if up == nil {
 		t.Fatal("chatAttempt returned nil body on success")
+		return
 	}
 	_ = up.Close()
 	if acquires != 2 {

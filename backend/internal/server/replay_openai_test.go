@@ -179,6 +179,7 @@ func assertUsageTotals(t *testing.T, usage map[string]any) {
 	t.Helper()
 	if usage == nil {
 		t.Fatal("usage object missing")
+		return
 	}
 	for _, k := range []string{"prompt_tokens", "completion_tokens", "total_tokens"} {
 		v, ok := usage[k].(float64)
@@ -270,6 +271,7 @@ func TestReplayOpencodeChatStream(t *testing.T) {
 	firstDelta := openAIDelta(frames[0])
 	if firstDelta == nil {
 		t.Fatal("first frame has no delta")
+		return
 	}
 	if r, _ := firstDelta["role"].(string); r != "assistant" {
 		t.Errorf("first frame delta.role = %q, want assistant", r)

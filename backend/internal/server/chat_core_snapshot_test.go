@@ -97,10 +97,12 @@ func requireAuthThenSwap(t *testing.T, s *Server, authHeader string, swap func(*
 	s.requireAuth(next)(httptest.NewRecorder(), r)
 	if stamped == nil {
 		t.Fatal("requireAuth did not pass the request through")
+		return
 	}
 	pinned := cfgSnapshotFrom(stamped.Context())
 	if pinned == nil {
 		t.Fatal("requireAuth left no config snapshot in the request context")
+		return
 	}
 	swap(pinned)
 	return stamped, pinned
@@ -237,6 +239,7 @@ func TestChatCorePaddedAPIKeyStaysPooled(t *testing.T) {
 			s.requireAuth(func(w http.ResponseWriter, req *http.Request) { stamped = req })(httptest.NewRecorder(), r)
 			if stamped == nil {
 				t.Fatal("requireAuth did not pass the request through")
+				return
 			}
 
 			w := httptest.NewRecorder()

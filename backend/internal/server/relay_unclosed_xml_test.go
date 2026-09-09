@@ -344,6 +344,7 @@ func TestRelayReviewFixResponsesStreamEndTurnContinuation(t *testing.T) {
 		}
 		if completed == nil {
 			t.Fatal("response.completed missing")
+			return
 		}
 		out, _ := completed["output"].([]any)
 		var calls []map[string]any
@@ -378,6 +379,7 @@ func TestRelayReviewFixResponsesStreamEndTurnContinuation(t *testing.T) {
 		}
 		if completed == nil {
 			t.Fatal("response.completed missing")
+			return
 		}
 		out, _ := completed["output"].([]any)
 		for _, raw := range out {
@@ -482,6 +484,7 @@ func TestRelayReviewFixRateLimitedLogLevel(t *testing.T) {
 		e := logEntry(t, "rate_limited")
 		if e == nil {
 			t.Fatal("request failed entry missing for rate_limited")
+			return
 		}
 		if e.Level != "INFO" {
 			t.Errorf("rate_limited log level = %s, want INFO (routine client-caused 429)", e.Level)
@@ -491,6 +494,7 @@ func TestRelayReviewFixRateLimitedLogLevel(t *testing.T) {
 		e := logEntry(t, "account_banned")
 		if e == nil {
 			t.Fatal("request failed entry missing for account_banned")
+			return
 		}
 		if e.Level != "WARN" {
 			t.Errorf("account_banned log level = %s, want WARN (upstream-class failure)", e.Level)

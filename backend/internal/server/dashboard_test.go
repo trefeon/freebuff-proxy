@@ -104,6 +104,7 @@ func TestDashboardCookieDynamicProtocol(t *testing.T) {
 	}
 	if admin == nil {
 		t.Fatal("plain-HTTP login did not set fb_admin")
+		return
 	}
 	if admin.Secure {
 		t.Error("plain-HTTP login must set Secure=false for zero-friction self-hosted VPS login")

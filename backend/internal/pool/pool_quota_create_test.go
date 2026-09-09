@@ -211,6 +211,7 @@ func TestCreateGateBlocksAtCapAndReleases(t *testing.T) {
 	case got := <-blocked:
 		if got == nil {
 			t.Fatal("waiter got nil permit")
+			return
 		}
 		got.Release()
 	case <-time.After(2 * time.Second):

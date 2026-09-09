@@ -657,6 +657,7 @@ func TestPersistQuotaByModelRoundTrip(t *testing.T) {
 	loaded := store2.Load(key)
 	if loaded == nil {
 		t.Fatal("loaded state is nil")
+		return
 	}
 	if loaded.instanceID != "inst-quota-123" {
 		t.Errorf("loaded instanceID = %q, want inst-quota-123", loaded.instanceID)
@@ -701,6 +702,7 @@ func TestPersistAccountBlocksRoundTrip(t *testing.T) {
 	loaded := store2.Load(key)
 	if loaded == nil {
 		t.Fatal("loaded state is nil")
+		return
 	}
 	if loaded.referral == nil || loaded.referral.Code != "FREE-abc" {
 		t.Errorf("referral = %+v, want code FREE-abc", loaded.referral)

@@ -159,6 +159,7 @@ func normalizeEcho(t *testing.T, payload map[string]any, opts ...Options) map[st
 	m, _ := msgs[0].(map[string]any)
 	if m == nil {
 		t.Fatal("expected assistant message object")
+		return
 	}
 	return m
 }

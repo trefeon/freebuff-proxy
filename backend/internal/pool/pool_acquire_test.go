@@ -491,6 +491,7 @@ func TestChatDispatchesThroughLeaseEntry(t *testing.T) {
 	origEntry := lease.entry
 	if origEntry == nil {
 		t.Fatal("acquired lease has no backing entry")
+		return
 	}
 	opts := upstream.ChatOptions{Model: modelA, RunID: lease.Run.RunID, SessionInstanceID: lease.SessionInstanceID}
 	body := []byte(`{"model":"` + modelA + `","messages":[{"role":"user","content":"ping"}]}`)

@@ -33,6 +33,7 @@ func TestAdminRequireLoginToggleFlow(t *testing.T) {
 	}
 	if cookie == nil {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	// 2. Check auth status initially: require_login=true, has_password=true
@@ -139,6 +140,7 @@ func TestAdminRequireLoginRemoteRejected(t *testing.T) {
 	}
 	if cookie == nil {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	// Make remote request (simulate remote client with non-loopback Host or RemoteAddr)

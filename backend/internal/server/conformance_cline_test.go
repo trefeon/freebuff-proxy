@@ -176,10 +176,12 @@ func TestConformanceClineResponsesMaxOutputTokens(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	usage, _ := completedResp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("response.completed missing usage")
+		return
 	}
 	for _, k := range []string{"input_tokens", "output_tokens", "total_tokens"} {
 		if v, ok := usage[k].(float64); !ok || v <= 0 {

@@ -370,6 +370,7 @@ func TestAdminChangePasswordUnsafeCharset(t *testing.T) {
 	}
 	if cookie == nil {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	envBefore, err := os.ReadFile(".env")

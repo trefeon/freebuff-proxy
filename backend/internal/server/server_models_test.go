@@ -1493,6 +1493,7 @@ func TestChatRoutingLogsServedModelOnCoercion(t *testing.T) {
 	}
 	if routingEntry == nil {
 		t.Fatal("missing 'chat routing' entry in log ring")
+		return
 	}
 	if gotModel := entryField(*routingEntry, "model"); gotModel != "z-ai/glm-5.3-flash" {
 		t.Errorf("routing model = %q, want z-ai/glm-5.3-flash", gotModel)

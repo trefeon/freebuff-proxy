@@ -195,6 +195,7 @@ func TestConformanceCodexResponsesTurn(t *testing.T) {
 	completedResp, _ := completedEv["response"].(map[string]any)
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	if cid, _ := completedResp["id"].(string); !strings.HasPrefix(cid, "resp_") || len(cid) <= len("resp_") {
 		t.Errorf("completed response id = %q, want resp_<random> (codex requires it, WIRE-NOTES.md §5)", cid)
@@ -208,6 +209,7 @@ func TestConformanceCodexResponsesTurn(t *testing.T) {
 	usage, _ := completedResp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("response.completed missing usage")
+		return
 	}
 	for _, key := range []string{"input_tokens", "output_tokens", "total_tokens"} {
 		if _, ok := usage[key]; !ok {

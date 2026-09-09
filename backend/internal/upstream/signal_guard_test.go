@@ -213,12 +213,14 @@ func TestSignalGuardSessionPostsModelHeader(t *testing.T) {
 	}
 	if withModel == nil {
 		t.Fatal("no session POST carrying x-freebuff-model recorded")
+		return
 	}
 	if got := withModel.header.Get("x-freebuff-model"); got != model {
 		t.Errorf("session x-freebuff-model = %q, want %q", got, model)
 	}
 	if withoutModel == nil {
 		t.Fatal("no session POST without x-freebuff-model recorded")
+		return
 	}
 	if got := withoutModel.header.Get("x-freebuff-model"); got != "" {
 		t.Errorf("CreateSession x-freebuff-model = %q, want absent", got)

@@ -35,6 +35,7 @@ func TestParseFreebucks(t *testing.T) {
 	}
 	if st.Freebucks == nil {
 		t.Fatal("Freebucks = nil, want parsed block")
+		return
 	}
 	fb := st.Freebucks
 	if fb.Balance != 17.5 {
@@ -69,6 +70,7 @@ func TestParseFreebucks(t *testing.T) {
 	}
 	if fb.Monthly == nil {
 		t.Fatal("Monthly = nil, want parsed allowance")
+		return
 	}
 	if fb.Monthly.LimitUsd != 50 || fb.Monthly.SpentUsd != 10 || fb.Monthly.RemainingUsd != 40 {
 		t.Errorf("Monthly = %+v, want limit 50 spent 10 remaining 40", fb.Monthly)
@@ -132,6 +134,7 @@ func TestParseFreebucksPriceDrift(t *testing.T) {
 	fb := st.Freebucks
 	if fb == nil {
 		t.Fatal("Freebucks = nil, want parsed block")
+		return
 	}
 	if !fb.QuotaExempt {
 		t.Error("QuotaExempt = false, want true")

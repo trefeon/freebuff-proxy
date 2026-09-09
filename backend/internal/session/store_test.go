@@ -56,6 +56,7 @@ func TestStoreRoundtrip(t *testing.T) {
 	got := store2.Load("key")
 	if got == nil {
 		t.Fatal("Load after Save = nil")
+		return
 	}
 	if got.instanceID != "inst-1" || got.status != "active" {
 		t.Errorf("Load = %+v, want inst-1/active", got)

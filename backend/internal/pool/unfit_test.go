@@ -60,6 +60,7 @@ func TestModelUnfitRegistry(t *testing.T) {
 	}
 	if got == nil {
 		t.Fatal("ModelUnfit lie = nil, want the marked error")
+		return
 	}
 	if got.Model != modelA {
 		t.Errorf("lie.Model = %q, want %q", got.Model, modelA)
@@ -168,6 +169,7 @@ func TestAcquireNotBlockedByUnfit(t *testing.T) {
 	}
 	if lease == nil {
 		t.Fatal("Acquire returned nil lease")
+		return
 	}
 	p.LeaseRelease(lease)
 

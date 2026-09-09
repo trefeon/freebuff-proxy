@@ -116,6 +116,7 @@ func TestDBBackedWriteReopenLoadIdentical(t *testing.T) {
 	got := s2.Load("key")
 	if got == nil {
 		t.Fatal("reopened Load = nil, want inst-reopen-1")
+		return
 	}
 	if got.instanceID != "inst-reopen-1" || got.model != "deepseek/deepseek-v4-flash" {
 		t.Errorf("reopened Load = %+v, want inst-reopen-1/flash", got)

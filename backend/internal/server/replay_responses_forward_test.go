@@ -167,6 +167,7 @@ func TestReplayResponsesForwardReasoning(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	out, _ := completedResp["output"].([]any)
 	if len(out) != 2 {

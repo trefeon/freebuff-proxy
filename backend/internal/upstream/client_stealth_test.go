@@ -91,6 +91,7 @@ func TestStealthProfileResolvedOncePerRequest(t *testing.T) {
 	stashed := stealthProfileFrom(req.Context())
 	if stashed == nil {
 		t.Fatal("no concrete profile stashed in the request context")
+		return
 	}
 	if stashed.ID == stealth.ProfileIDAuto || stashed.ID == stealth.ProfileIDRandom {
 		t.Fatalf("stashed profile %s is not concrete (auto must resolve once)", stashed.ID)

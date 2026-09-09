@@ -105,6 +105,7 @@ func TestRequestFailedStructuredFields(t *testing.T) {
 		fields := requestFailedFields(ring.Recent(100))
 		if fields == nil {
 			t.Fatal("no `request failed` WARN captured")
+			return
 		}
 		joined := strings.Join(fields, " ")
 		for _, want := range []string{
@@ -133,6 +134,7 @@ func TestRequestFailedStructuredFields(t *testing.T) {
 		fields := requestFailedFields(ring.Recent(100))
 		if fields == nil {
 			t.Fatal("no `request failed` WARN captured")
+			return
 		}
 		joined := strings.Join(fields, " ")
 		if want := "reset_at=" + future.Format(time.RFC3339); !strings.Contains(joined, want) {

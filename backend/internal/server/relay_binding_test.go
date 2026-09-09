@@ -59,6 +59,7 @@ func normalizeAssistantEcho(t *testing.T, content any, toolCalls []map[string]an
 	m, _ := msgs[0].(map[string]any)
 	if m == nil {
 		t.Fatal("expected assistant message object")
+		return
 	}
 	return m
 }

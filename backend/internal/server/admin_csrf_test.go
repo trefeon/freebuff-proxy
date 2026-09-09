@@ -170,6 +170,7 @@ func TestAdminCSRFNoCookieFallback(t *testing.T) {
 	_ = resp.Body.Close()
 	if admin == nil {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/diag", strings.NewReader(""))
@@ -306,6 +307,7 @@ func TestAdminCookieAlwaysSecureBehindSpoofedHeader(t *testing.T) {
 	}
 	if admin == nil {
 		t.Fatal("login did not set fb_admin")
+		return
 	}
 	if !admin.Secure {
 		t.Error("fb_admin Secure = false; Secure must be unconditional (#318)")

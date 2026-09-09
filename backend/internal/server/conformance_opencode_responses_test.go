@@ -203,6 +203,7 @@ func TestConformanceOpencodeResponsesStream(t *testing.T) {
 	}
 	if reasonDoneItem == nil {
 		t.Fatal("reasoning output_item.done never emitted")
+		return
 	}
 	if id, _ := reasonDoneItem["id"].(string); !strings.HasPrefix(id, "rs_") {
 		t.Errorf("reasoning output_item.done id = %q, want rs_<random>", id)
@@ -231,6 +232,7 @@ func TestConformanceOpencodeResponsesStream(t *testing.T) {
 	}
 	if completedResp == nil {
 		t.Fatal("response.completed missing response object")
+		return
 	}
 	if id, _ := completedResp["id"].(string); !strings.HasPrefix(id, "resp_") || len(id) < 6 {
 		t.Errorf("completed response id = %q, want resp_<random>", id)
@@ -244,6 +246,7 @@ func TestConformanceOpencodeResponsesStream(t *testing.T) {
 	usage, _ := completedResp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("response.completed missing usage")
+		return
 	}
 	if usage["input_tokens"] != float64(200) || usage["output_tokens"] != float64(50) || usage["total_tokens"] != float64(250) {
 		t.Errorf("usage tokens = %v, want input 200 output 50 total 250", usage)

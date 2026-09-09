@@ -83,6 +83,7 @@ func TestProbeErrorStatus(t *testing.T) {
 	res := Probe(context.Background(), DirectDialer(5*time.Second), 5*time.Second)
 	if res.Err == nil {
 		t.Fatal("Probe succeeded against a 500 response")
+		return
 	}
 	if !strings.Contains(res.Err.Error(), "500") {
 		t.Errorf("error %q does not mention the status", res.Err)
@@ -124,6 +125,7 @@ func TestProbeTimeout(t *testing.T) {
 	res := Probe(context.Background(), dialer, 50*time.Millisecond)
 	if res.Err == nil {
 		t.Fatal("blocked dial did not time out")
+		return
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("probe took %v, want bounded by the 50ms timeout", elapsed)
@@ -361,6 +363,7 @@ func TestProbeBodyAndCancelEdges(t *testing.T) {
 		res := Probe(context.Background(), DirectDialer(5*time.Second), 5*time.Second)
 		if res.Err == nil {
 			t.Fatal("oversized trace line did not fail the scanner")
+			return
 		}
 		if !strings.Contains(res.Err.Error(), "trace body") {
 			t.Errorf("Err = %v, want a trace-body read error", res.Err)

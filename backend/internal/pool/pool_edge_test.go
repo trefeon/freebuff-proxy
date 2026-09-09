@@ -371,6 +371,7 @@ func TestBridgeMaintainRunsOnIdlePass(t *testing.T) {
 	entry := p.bridgeToken("idle-bridge-tok")
 	if entry == nil {
 		t.Fatal("bridge entry missing")
+		return
 	}
 	entry.lastUsed = time.Now().Add(-defaultBridgeIdleEvict - time.Minute)
 
@@ -413,6 +414,7 @@ func TestBridgeIdleSweepSkipsBusy(t *testing.T) {
 	entry := p.bridgeToken("busy-tok")
 	if entry == nil {
 		t.Fatal("bridge entry missing")
+		return
 	}
 	entry.lastUsed = time.Now().Add(-defaultBridgeIdleEvict - time.Minute)
 
@@ -482,6 +484,7 @@ func TestBridgeDeadTokenEvictDefersWhenBusy(t *testing.T) {
 	entry := p.bridgeToken("dead-tok")
 	if entry == nil {
 		t.Fatal("deferred dead-token entry missing")
+		return
 	}
 	entry.lastUsed = time.Now().Add(-defaultBridgeIdleEvict - time.Minute)
 	p.bridgeMaintain(context.Background(), false)
@@ -831,6 +834,7 @@ func TestProbeToken(t *testing.T) {
 	}
 	if st == nil {
 		t.Fatal("ProbeToken returned nil state, want live session state")
+		return
 	}
 	// The probe is a GET with no instance header: it claims no session slot.
 	if mock.SessionCreates != 0 {

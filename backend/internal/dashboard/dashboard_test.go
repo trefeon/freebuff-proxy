@@ -646,6 +646,7 @@ func TestTokensDataGlmPromoSynthesis(t *testing.T) {
 	}
 	if glm == nil {
 		t.Fatal("no z-ai/glm-5.2 quota row")
+		return
 	}
 	if glm["limit"] != "2" {
 		t.Errorf("limit = %v, want 2", glm["limit"])

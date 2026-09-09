@@ -695,6 +695,7 @@ func TestSnapshotBannedUntil(t *testing.T) {
 	snap := mgr.Snapshot()
 	if snap.BanError == nil {
 		t.Fatal("Snapshot.BanError = nil, want non-nil during the ban window")
+		return
 	}
 	if !snap.BannedUntil.Equal(until) {
 		t.Errorf("Snapshot.BannedUntil = %v, want %v", snap.BannedUntil, until)

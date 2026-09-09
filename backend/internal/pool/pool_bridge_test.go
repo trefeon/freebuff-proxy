@@ -104,6 +104,7 @@ func TestBridgeAcquireReusesEntry(t *testing.T) {
 	}
 	if lease1.Bridge == nil {
 		t.Fatal("bridge lease missing Bridge entry")
+		return
 	}
 	if lease1.SessionInstanceID != "inst-abc-123" {
 		t.Errorf("instance = %q, want inst-abc-123", lease1.SessionInstanceID)
@@ -292,6 +293,7 @@ func TestBridgeMaintainEvictHonorsCtx(t *testing.T) {
 	entry := p.bridgeToken("idle-bridge-tok")
 	if entry == nil {
 		t.Fatal("bridge entry missing")
+		return
 	}
 	entry.lastUsed = time.Now().Add(-defaultBridgeIdleEvict - time.Minute)
 
@@ -695,6 +697,7 @@ func TestHardBannedBridgeEntrySkipsMaintainAndPoll(t *testing.T) {
 	entry := p.bridgeToken("client-tok")
 	if entry == nil {
 		t.Fatal("bridge entry missing")
+		return
 	}
 	entry.runs.CooldownBan(&upstream.BanError{Body: "banned"})
 	if entry.runs.BanError() == nil {

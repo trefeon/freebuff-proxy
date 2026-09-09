@@ -387,6 +387,7 @@ func TestResponsesJSONUsageCarriesDetails(t *testing.T) {
 	usage, _ := resp["usage"].(map[string]any)
 	if usage == nil {
 		t.Fatal("usage missing")
+		return
 	}
 	inDetails, _ := usage["input_tokens_details"].(map[string]any)
 	if inDetails == nil || inDetails["cached_tokens"].(float64) != 7 {

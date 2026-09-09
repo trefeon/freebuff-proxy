@@ -25,6 +25,7 @@ func TestMaturityCardFromSnapshot(t *testing.T) {
 	})
 	if card.Maturity == nil {
 		t.Fatal("card.Maturity = nil, want rendered card")
+		return
 	}
 	m := card.Maturity
 	if !m.Enabled || m.Target != 7 || m.Mode != "unmetered" || m.Badge != "Warming" {
@@ -65,6 +66,7 @@ func TestMaturityCardTouchModelRoundTrip(t *testing.T) {
 	card := cardFromSnapshot(snap)
 	if card.Maturity == nil {
 		t.Fatal("card.Maturity = nil, want rendered card")
+		return
 	}
 	if card.Maturity.TouchModel != "mimo/mimo-v2.5" {
 		t.Errorf("card touch_model = %q, want mimo/mimo-v2.5", card.Maturity.TouchModel)
@@ -72,6 +74,7 @@ func TestMaturityCardTouchModelRoundTrip(t *testing.T) {
 	live := liveCardFromSnapshot(snap)
 	if live.Maturity == nil {
 		t.Fatal("live.Maturity = nil, want rendered card")
+		return
 	}
 	if live.Maturity.TouchModel != "mimo/mimo-v2.5" {
 		t.Errorf("live touch_model = %q, want mimo/mimo-v2.5", live.Maturity.TouchModel)
