@@ -180,7 +180,9 @@ test.describe("real-world data", () => {
     await page.goto(admin("quota"));
     await expect(page.getByText("Served models").first()).toBeVisible();
     await expect(page.getByText("Free", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Premium", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Premium", { exact: true }).first(),
+    ).toBeVisible();
   });
   test("models/logs/traces/metrics render production rows", async ({
     page,
