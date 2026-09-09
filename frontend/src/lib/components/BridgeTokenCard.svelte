@@ -115,7 +115,7 @@
   {#if card.premium_quota}
     <PremiumQuotaBar
       quota={card.premium_quota}
-      title={$tr("Premium pool")}
+      title={$tr("Shared pool")}
       {now}
     />
   {/if}

@@ -48,7 +48,7 @@
     first
     label={$tr("Rate Limit per Client IP")}
     description={$tr(
-      "Maximum requests per second allowed from any single client IP address. Prevents rapid agent loops from depleting the pool. Set to 0 for unlimited.",
+      "Maximum requests per second allowed from any single client IP address. Prevents rapid agent loops from depleting the pool. Set to 0 for no cap.",
     )}
   >
     {#snippet badge()}
@@ -95,7 +95,7 @@
         >
       </div>
       <p class="text-[10px] text-[var(--fp-dim)] mt-1">
-        {$tr("0 = unlimited (recommended for a single-user gateway)")}
+        {$tr("0 = no cap (recommended for a single-user gateway)")}
       </p>
     </div>
   </SettingsRow>
@@ -104,7 +104,7 @@
   <SettingsRow
     label={$tr("Max Requests per Minute (per account)")}
     description={$tr(
-      "Per-token cap on admitted chat requests in a rolling 60s window. Throttles the request rate upstream actually observes — a runaway loop locks within a minute and the pool rolls to the next account. 0 = unlimited, empty = default (30).",
+      "Per-token cap on admitted chat requests in a rolling 60s window. Throttles the request rate upstream actually observes — a runaway loop locks within a minute and the pool rolls to the next account. 0 = no cap, empty = default (30).",
     )}
   >
     {#snippet badge()}
@@ -151,7 +151,7 @@
         >
       </div>
       <p class="text-[10px] text-[var(--fp-dim)] mt-1">
-        {$tr("0 = unlimited · recommended 30")}
+        {$tr("0 = no cap · recommended 30")}
       </p>
     </div>
   </SettingsRow>
@@ -161,7 +161,7 @@
     last
     label={$tr("Max Requests per Day (per account)")}
     description={$tr(
-      "Per-token cap on successful chat requests per Pacific day. A capped account is skipped and the pool rolls to the next one; all tokens unlock at Pacific midnight — the same instant upstream resets its daily quota windows. 0 = unlimited, empty = default (1500).",
+      "Per-token cap on successful chat requests per Pacific day. A capped account is skipped and the pool rolls to the next one; all tokens unlock at Pacific midnight — the same instant upstream resets its daily quota windows. 0 = no cap, empty = default (1500).",
     )}
   >
     {#snippet badge()}
@@ -208,7 +208,7 @@
         >
       </div>
       <p class="text-[10px] text-[var(--fp-dim)] mt-1">
-        {$tr("0 = unlimited · recommended 1500")}
+        {$tr("0 = no cap · recommended 1500")}
       </p>
     </div>
   </SettingsRow>

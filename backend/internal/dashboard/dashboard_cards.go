@@ -781,11 +781,13 @@ type aliasRow struct {
 	Real  string `json:"real"`
 }
 
-// quotaFor returns the meter label for a model row, Freebucks-based like the
+// quotaFor returns the price label for a model row, Freebucks-based like the
 // CLI picker (cli/src/utils/freebucks.ts): the wire prices map is the only
-// source of cost, unpriced rows are unmetered. Session-count caps are retired
-// upstream (see ADR-0027), so no label renders used/limit counts or the word
-// session. Referral GLM 5.2 keeps "referral +1/day".
+// source of cost. Priced rows render "<n> Freebucks/hr", referral GLM 5.2
+// keeps "referral +1/day", all other rows return "" so tables render the
+// existing em-dash fallback and pickers render bare ids. Session-count caps
+// are retired upstream (see ADR-0027), so no label renders used/limit counts
+// or the word session.
 func (d *Dashboard) quotaFor(id string) string {
 	if id == modelcat.Glm52ModelID {
 		return "referral +1/day"
@@ -795,10 +797,7 @@ func (d *Dashboard) quotaFor(id string) string {
 			return freebucksPriceLabel(p)
 		}
 	}
-	if modelcat.IsPremium(id) {
-		return "Premium"
-	}
-	return "Free"
+	return ""
 }
 
 // freebucksPriceLabel renders one wire price as "<n> Freebucks/hr" (0 reads

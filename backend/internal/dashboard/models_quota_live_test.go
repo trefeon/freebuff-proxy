@@ -16,9 +16,10 @@ import (
 )
 
 // quotaFor is Freebucks-based like the CLI picker: the wire prices map is
-// the only source of cost. A priced row renders "<n> Freebucks/hr", a
-// premium row with no live price renders "metered", other unpriced rows
-// render "unmetered". No label carries session counts or the word session.
+// the only source of cost. A priced row renders "<n> Freebucks/hr",
+// referral keeps "referral +1/day", all other rows render "" so tables show
+// the em-dash fallback and pickers show bare ids. No label carries session
+// counts or the word session.
 func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	cfg := &config.Config{
 		AuthTokens:         []string{"tok-0"},
@@ -85,7 +86,7 @@ func TestModelsPageLiveQuotaLabel(t *testing.T) {
 	if got, want := quotaBy["deepseek/deepseek-v4-flash"], "0 Freebucks/hr"; got != want {
 		t.Errorf("live quota label = %q, want %q (zero wire price)", got, want)
 	}
-	if q, ok := quotaBy["mimo/mimo-v2.5"]; ok && q != "Free" {
-		t.Errorf("unpriced quota label = %q, want Free", q)
+	if q, ok := quotaBy["mimo/mimo-v2.5"]; ok && q != "" {
+		t.Errorf("unpriced quota label = %q, want empty", q)
 	}
 }
