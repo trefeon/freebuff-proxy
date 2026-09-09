@@ -131,6 +131,7 @@ func TestSanitizeChunk(t *testing.T) {
 		choice := got["choices"].([]any)[0].(map[string]any)
 		if choice["index"] != float64(1) || choice["finish_reason"] != "stop" || choice["logprobs"] == nil {
 			t.Fatalf("choice fields mangle: %v", choice)
+			return
 		}
 	})
 
@@ -328,6 +329,7 @@ func TestAccumulator(t *testing.T) {
 		err := a.Add([]byte(`{"error":{"message":"token rate limit reached","type":"rate_limit"}}`))
 		if err == nil {
 			t.Fatal("expected error for error chunk")
+			return
 		}
 		if !strings.Contains(err.Error(), "token rate limit reached") {
 			t.Fatalf("error %v does not contain message", err)
@@ -337,6 +339,7 @@ func TestAccumulator(t *testing.T) {
 		err2 := a2.Add([]byte(`{"error":"context window exceeded"}`))
 		if err2 == nil {
 			t.Fatal("expected error for string error chunk")
+			return
 		}
 		if !strings.Contains(err2.Error(), "context window exceeded") {
 			t.Fatalf("error %v does not contain message", err2)
@@ -548,6 +551,7 @@ func TestSanitizeChunkFastPath(t *testing.T) {
 	out, drop := SanitizeChunk(line)
 	if drop || out == nil {
 		t.Fatal("canonical chunk dropped")
+		return
 	}
 	// The fast path emits the raw payload byte-for-byte (skipping the
 	// sanitize-map + marshal round trip).
@@ -561,12 +565,14 @@ func TestSanitizeChunkFastPath(t *testing.T) {
 	choice := got["choices"].([]any)[0].(map[string]any)
 	if choice["index"] != float64(0) || choice["finish_reason"] != nil || choice["logprobs"] == nil {
 		t.Fatalf("choice fields mangled: %v", choice)
+		return
 	}
 
 	// A chunk needing defaults still takes the sanitize path.
 	out, drop = SanitizeChunk([]byte(`data: {"choices":[{"delta":{"content":"hi"}}]}`))
 	if drop || out == nil {
 		t.Fatal("chunk dropped")
+		return
 	}
 	got = decode(t, out)
 	if id, _ := got["id"].(string); !strings.HasPrefix(id, "chatcmpl-") {
@@ -580,6 +586,7 @@ func TestSanitizeChunkFastPath(t *testing.T) {
 	out, drop = SanitizeChunk([]byte(`{"id":"c1","object":"chat.completion.chunk","created":1e20,"model":"m","choices":[{"index":0,"delta":{"content":"x"},"finish_reason":null}]}`))
 	if drop || out == nil {
 		t.Fatal("chunk dropped")
+		return
 	}
 	got = decode(t, out)
 	if c, ok := got["created"].(float64); !ok || c == 1e20 {
@@ -626,6 +633,7 @@ func TestReasoningInContent(t *testing.T) {
 		out, drop := SanitizeChunk([]byte(canonical))
 		if drop || out == nil {
 			t.Fatal("chunk dropped")
+			return
 		}
 		delta := deltaOf(out)
 		if delta["content"] != "" {
@@ -641,6 +649,7 @@ func TestReasoningInContent(t *testing.T) {
 		out, drop := SanitizeChunk([]byte(canonical))
 		if drop || out == nil {
 			t.Fatal("chunk dropped")
+			return
 		}
 		delta := deltaOf(out)
 		if delta["content"] != "<think>think step</think>" {
@@ -656,6 +665,7 @@ func TestReasoningInContent(t *testing.T) {
 		out, drop := SanitizeChunk([]byte(canonical))
 		if drop || out == nil {
 			t.Fatal("chunk dropped")
+			return
 		}
 		if c := deltaOf(out)["content"]; c != "<thinking>think step</thinking>" {
 			t.Errorf("content = %v, want the custom tag label", c)
@@ -668,6 +678,7 @@ func TestReasoningInContent(t *testing.T) {
 		out, drop := SanitizeChunk([]byte(line))
 		if drop || out == nil {
 			t.Fatal("chunk dropped")
+			return
 		}
 		if c := deltaOf(out)["content"]; c != "<think>r</think>answer" {
 			t.Errorf("content = %v, want reasoning before text", c)
@@ -680,6 +691,7 @@ func TestReasoningInContent(t *testing.T) {
 		out, drop := SanitizeChunk([]byte(line))
 		if drop || out == nil {
 			t.Fatal("chunk dropped")
+			return
 		}
 		delta := deltaOf(out)
 		if c := delta["content"]; c != "<think>r</think>" {

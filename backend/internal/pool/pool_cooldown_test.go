@@ -29,6 +29,7 @@ func TestCooldownToken(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("want error while the only token is cooling down")
+		return
 	}
 	if !strings.Contains(err.Error(), "cooling down") {
 		t.Errorf("error = %q, want cooldown message", err)
@@ -308,6 +309,7 @@ func TestAcquirePrecedenceBannedOverRateLimit(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil || !errors.Is(err, upstream.ErrBanned) {
 		t.Fatalf("banned + rate-limited = %v, want ban (highest precedence)", err)
+		return
 	}
 }
 
@@ -328,6 +330,7 @@ func TestAcquirePrecedenceCountryOverRateLimit(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil || !errors.Is(err, upstream.ErrCountryBlocked) {
 		t.Fatalf("country-blocked + rate-limited = %v, want country (precedence over rate)", err)
+		return
 	}
 }
 
@@ -347,6 +350,7 @@ func TestAcquirePrecedenceRateOverWaiting(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil || !errors.Is(err, upstream.ErrRateLimited) {
 		t.Fatalf("waiting + rate-limited = %v, want rate limit (precedence over waiting)", err)
+		return
 	}
 }
 
@@ -570,6 +574,7 @@ func TestSessionPollSkipsWhileChatInFlight(t *testing.T) {
 	}
 	if lease == nil || lease.Run == nil {
 		t.Fatal("nil lease/run")
+		return
 	}
 
 	before := mock.SessionPolls

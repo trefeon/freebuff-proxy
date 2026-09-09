@@ -1123,6 +1123,7 @@ func TestOmpMiMoSimulation(t *testing.T) {
 		}
 		if toolUseBlock1 == nil || toolUseBlock1["name"] != "glob" {
 			t.Fatalf("Anthropic Turn 1: expected glob tool_use, got %#v", contentBlocks1)
+			return
 		}
 
 		input1 := toolUseBlock1["input"].(map[string]any)
@@ -1180,6 +1181,7 @@ func TestOmpMiMoSimulation(t *testing.T) {
 		}
 		if toolUseBlock2 == nil || toolUseBlock2["name"] != "read" {
 			t.Fatalf("Anthropic Turn 2: expected read tool_use, got %#v", contentBlocks2)
+			return
 		}
 
 		input2 := toolUseBlock2["input"].(map[string]any)
@@ -1235,6 +1237,7 @@ func TestOmpMiMoSimulation(t *testing.T) {
 		}
 		if toolUseBlock3 == nil || toolUseBlock3["name"] != "edit" {
 			t.Fatalf("Anthropic Turn 3: expected edit tool_use, got %#v", contentBlocks3)
+			return
 		}
 
 		input3 := toolUseBlock3["input"].(map[string]any)

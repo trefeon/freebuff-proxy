@@ -41,6 +41,7 @@ func TestHTTP2UpstreamWiring(t *testing.T) {
 		_, err = c.http.Transport.RoundTrip(req)
 		if err == nil {
 			t.Fatal("RoundTrip to a refused port succeeded")
+			return
 		}
 		return err.Error()
 	}
@@ -146,6 +147,7 @@ func TestStealthH2NoBundledConfigureLog(t *testing.T) {
 	}
 	if _, err := c.http.Transport.RoundTrip(req); err == nil {
 		t.Fatal("RoundTrip to a refused port succeeded")
+		return
 	}
 	if got := buf.String(); strings.Contains(got, "protocol https already registered") {
 		t.Errorf("bundled h2 configure warning leaked to the log:\n%s", got)

@@ -349,6 +349,7 @@ func TestRestoreEnvFileUnreadable(t *testing.T) {
 	_, readErr := os.ReadFile(".env")
 	if readErr == nil || errors.Is(readErr, os.ErrNotExist) {
 		t.Fatalf("setup: ReadFile = %v, want a non-NotExist error", readErr)
+		return
 	}
 	restoreEnvFile(nil, readErr)
 	if _, statErr := os.Stat(".env"); statErr != nil {

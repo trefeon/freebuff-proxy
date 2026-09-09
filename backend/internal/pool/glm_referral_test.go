@@ -87,6 +87,7 @@ func TestUnentitledPoolTokenGlmRefusalWithoutFallback(t *testing.T) {
 	_, err := p.Acquire(context.Background(), "z-ai/glm-5.2")
 	if err == nil {
 		t.Fatal("Acquire(z-ai/glm-5.2) succeeded against a refusing upstream, want 429 rate-limit error")
+		return
 	}
 	var rle *upstream.RateLimitError
 	if !errors.As(err, &rle) {

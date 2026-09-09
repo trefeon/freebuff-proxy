@@ -354,6 +354,7 @@ func TestTransientRetries(t *testing.T) {
 	t.Setenv("TRANSIENT_RETRIES", "-1")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "TRANSIENT_RETRIES") {
 		t.Fatalf("Load (negative): err = %v, want error mentioning TRANSIENT_RETRIES", err)
+		return
 	}
 	t.Setenv("TRANSIENT_RETRIES", "")
 }
@@ -404,12 +405,14 @@ func TestLogRingSize(t *testing.T) {
 	t.Setenv("LOG_RING_SIZE", "49")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "LOG_RING_SIZE") {
 		t.Fatalf("Load (49): err = %v, want validation error mentioning LOG_RING_SIZE", err)
+		return
 	}
 
 	// above the cap fails validation
 	t.Setenv("LOG_RING_SIZE", "5001")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "LOG_RING_SIZE") {
 		t.Fatalf("Load (5001): err = %v, want validation error mentioning LOG_RING_SIZE", err)
+		return
 	}
 	t.Setenv("LOG_RING_SIZE", "")
 
@@ -441,6 +444,7 @@ func TestBadDuration(t *testing.T) {
 	t.Setenv("ROTATION_INTERVAL", "soon")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "ROTATION_INTERVAL") {
 		t.Fatalf("Load with bad duration: err = %v, want parse error mentioning ROTATION_INTERVAL", err)
+		return
 	}
 }
 
@@ -475,9 +479,11 @@ func TestLogLevel(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "bogus")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "LOG_LEVEL") {
 		t.Fatalf("Load (invalid level): err = %v, want error mentioning LOG_LEVEL", err)
+		return
 	}
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "debug, info, warn, error, trace") {
 		t.Fatalf("Load (invalid level): err = %v, want error listing trace", err)
+		return
 	}
 
 	// .env source
@@ -523,6 +529,7 @@ func TestLogFormat(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "xml")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "LOG_FORMAT") {
 		t.Fatalf("Load (invalid format): err = %v, want error mentioning LOG_FORMAT", err)
+		return
 	}
 
 	// JSON file source (weakest): env wins over it
@@ -633,6 +640,7 @@ func TestTLSFingerprint(t *testing.T) {
 	t.Setenv("TLS_FINGERPRINT", "bogus")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "TLS_FINGERPRINT") {
 		t.Fatalf("Load (invalid TLSFingerprint): err = %v, want error mentioning TLS_FINGERPRINT", err)
+		return
 	}
 }
 
@@ -692,6 +700,7 @@ func TestIdleRotationTimeout(t *testing.T) {
 	t.Setenv("IDLE_ROTATION_TIMEOUT", "soon")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "IDLE_ROTATION_TIMEOUT") {
 		t.Fatalf("Load (bad): err = %v, want parse error mentioning IDLE_ROTATION_TIMEOUT", err)
+		return
 	}
 }
 
@@ -728,6 +737,7 @@ func TestSessionIdleEnd(t *testing.T) {
 	t.Setenv("SESSION_IDLE_END", "soon")
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "SESSION_IDLE_END") {
 		t.Fatalf("Load (bad): err = %v, want parse error mentioning SESSION_IDLE_END", err)
+		return
 	}
 }
 
@@ -740,6 +750,7 @@ func TestRequestJitterNegative(t *testing.T) {
 
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "REQUEST_JITTER") {
 		t.Fatalf("Load (REQUEST_JITTER=-1s): err = %v, want validation error mentioning REQUEST_JITTER", err)
+		return
 	}
 }
 

@@ -35,6 +35,7 @@ func TestAdminCSRFCookieSetOnLogin(t *testing.T) {
 	csrf := findCookie(resp, "fb_csrf")
 	if csrf == nil || csrf.Value == "" {
 		t.Fatal("login did not set fb_csrf cookie")
+		return
 	}
 	if csrf.HttpOnly {
 		t.Error("fb_csrf is HttpOnly; the SPA must read it from document.cookie")
@@ -50,6 +51,7 @@ func TestAdminCSRFCookieSetOnLogin(t *testing.T) {
 	}
 	if findCookie(resp, "fb_admin") == nil {
 		t.Fatal("login did not set fb_admin session cookie")
+		return
 	}
 }
 
@@ -64,6 +66,7 @@ func TestAdminCSRFHeaderRequired(t *testing.T) {
 	_ = resp.Body.Close()
 	if csrf == nil || admin == nil {
 		t.Fatal("login did not set the expected cookies")
+		return
 	}
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/diag", strings.NewReader(""))
@@ -92,6 +95,7 @@ func TestAdminCSRFHeaderAccepted(t *testing.T) {
 	_ = resp.Body.Close()
 	if csrf == nil || admin == nil {
 		t.Fatal("login did not set the expected cookies")
+		return
 	}
 
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/admin/diag", strings.NewReader(""))

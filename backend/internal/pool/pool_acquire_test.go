@@ -22,6 +22,7 @@ func TestNewLengthMismatch(t *testing.T) {
 	cfg := &config.Config{AuthTokens: []string{"a", "b"}, RotationInterval: time.Hour}
 	if _, err := New(cfg, nil, nil, registry.New(cfg, nil)); err == nil {
 		t.Fatal("want error for client/session count mismatch")
+		return
 	}
 }
 
@@ -263,6 +264,7 @@ func TestAllFailedCombinedError(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("want combined error")
+		return
 	}
 	if !strings.Contains(err.Error(), "unable to acquire run from any token") {
 		t.Errorf("error = %q, want combined-error prefix", err)
@@ -300,6 +302,7 @@ func TestWaitingRoomSurfacesOnAnyQueuedToken(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("want error")
+		return
 	}
 	var wr *session.WaitingRoomError
 	if !errors.As(err, &wr) {

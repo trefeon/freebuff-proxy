@@ -66,6 +66,7 @@ func TestAcquireModelLocksFailFast(t *testing.T) {
 	_, err := p.Acquire(ctx, modelB)
 	if err == nil {
 		t.Fatalf("acquire %s with all slots locked away succeeded, want fail-fast", modelB)
+		return
 	}
 	if !strings.Contains(err.Error(), modelB) || !strings.Contains(err.Error(), "no account locked to model") {
 		t.Errorf("fail-fast error = %q, want it to name the model and the lock", err)
@@ -136,6 +137,7 @@ func TestAcquireModelLocksSkipsCounted(t *testing.T) {
 	// exercises the loop gate on both slots.
 	if _, err := p.Acquire(ctx, modelB); err == nil {
 		t.Fatalf("acquire %s with all slots locked away succeeded, want fail-fast", modelB)
+		return
 	}
 	snaps = p.Snapshot()
 	if snaps[0].AllowlistSkips == 0 || snaps[1].AllowlistSkips == 0 {

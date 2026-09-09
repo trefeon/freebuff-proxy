@@ -357,6 +357,7 @@ func TestPollTransportErrorKeepsCachedState(t *testing.T) {
 
 	if err := mgr.Poll(context.Background()); err == nil {
 		t.Fatal("poll transport error must surface, got nil")
+		return
 	}
 	snap := mgr.Snapshot()
 	if snap.Status != "active" {

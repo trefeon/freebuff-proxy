@@ -120,9 +120,11 @@ func TestBadFile(t *testing.T) {
 	}
 	if _, err := Load(path); err == nil {
 		t.Fatal("Load of malformed JSON succeeded, want error")
+		return
 	}
 	if _, err := Load(filepath.Join(t.TempDir(), "missing.json")); err == nil {
 		t.Fatal("Load of missing file succeeded, want error")
+		return
 	}
 }
 

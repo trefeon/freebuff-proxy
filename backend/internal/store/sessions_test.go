@@ -54,12 +54,15 @@ func TestSessionPersistRejectsEmptyHash(t *testing.T) {
 	s := openTest(t)
 	if err := s.SaveSession("", "a", "b"); err == nil {
 		t.Fatal("SaveSession(\"\") accepted, want an error")
+		return
 	}
 	if _, _, _, err := s.LoadSession(""); err == nil {
 		t.Fatal("LoadSession(\"\") accepted, want an error")
+		return
 	}
 	if err := s.SaveSessionRuns("", "b"); err == nil {
 		t.Fatal("SaveSessionRuns(\"\") accepted, want an error")
+		return
 	}
 }
 

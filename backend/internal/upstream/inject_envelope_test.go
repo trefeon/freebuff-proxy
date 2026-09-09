@@ -263,6 +263,7 @@ func TestClientClassifySetsWaitingRoomFlag(t *testing.T) {
 	_, err = client.ChatCompletions(context.Background(), ChatOptions{Model: "m", RunID: "r"}, []byte(`{"model":"m"}`))
 	if err == nil {
 		t.Fatal("expected 428 error")
+		return
 	}
 	if !errors.Is(err, ErrWaitingRoomRequired) {
 		t.Fatalf("err = %v, want ErrWaitingRoomRequired", err)
@@ -317,6 +318,7 @@ func TestStartCLILoginError(t *testing.T) {
 	}
 	if _, err := client.StartCLILogin(context.Background()); err == nil {
 		t.Fatal("StartCLILogin succeeded, want error on 500")
+		return
 	}
 }
 
@@ -524,6 +526,7 @@ func TestProtocolGitHubLoginFormNotFound(t *testing.T) {
 	_, err = client.ProtocolGitHubLogin(context.Background(), "user", "pass", "JBSWY3DPEHPK3PXP", nil)
 	if err == nil {
 		t.Fatal("ProtocolGitHubLogin succeeded, want form-not-found error")
+		return
 	}
 	if !strings.Contains(err.Error(), "login form not found") {
 		t.Errorf("err = %v, want login-form-not-found message", err)

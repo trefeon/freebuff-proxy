@@ -639,6 +639,7 @@ func TestTransientRetriesDisabledSingleAttempt(t *testing.T) {
 	_, err := client.ChatCompletions(context.Background(), ChatOptions{Model: "m", RunID: "r"}, body)
 	if err == nil {
 		t.Fatal("want error when every attempt fails")
+		return
 	}
 	if rt.calls.Load() != 1 {
 		t.Errorf("upstream attempts = %d, want exactly 1 (TRANSIENT_RETRIES=0)", rt.calls.Load())
@@ -900,6 +901,7 @@ func TestDoBackoffCancelAndDeadline(t *testing.T) {
 		_, _, err = client.do(req, 0)
 		if err == nil {
 			t.Fatal("expected an error after exhausting the retry budget")
+			return
 		}
 		if !strings.Contains(err.Error(), "upstream:") {
 			t.Errorf("err = %v, want an upstream-wrapped error", err)
@@ -1079,6 +1081,7 @@ func TestFailedReplayMetricsDisagreement(t *testing.T) {
 	_, cfn, err := client.do(req, 0)
 	if err == nil {
 		t.Fatal("expected the transient error to surface when the body cannot be replayed")
+		return
 	}
 	if cfn != nil {
 		defer cfn()

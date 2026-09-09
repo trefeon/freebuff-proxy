@@ -69,6 +69,7 @@ func TestRemoveTokenAtRefusesWhileBusy(t *testing.T) {
 	err = p.RemoveTokenAt(0)
 	if err == nil || !strings.Contains(err.Error(), "in flight") {
 		t.Fatalf("RemoveTokenAt while busy = %v, want in-flight refusal", err)
+		return
 	}
 	p.LeaseRelease(lease)
 	time.Sleep(10 * time.Millisecond) // let the release settle
@@ -90,8 +91,10 @@ func TestRemoveTokenAtOutOfRange(t *testing.T) {
 	}
 	if err := p.RemoveTokenAt(p.TokenCount() + 3); err == nil {
 		t.Fatal("RemoveTokenAt(too-large) succeeded, want out-of-range error")
+		return
 	}
 	if err := p.RemoveTokenAt(-1); err == nil {
 		t.Fatal("RemoveTokenAt(-1) succeeded, want out-of-range error")
+		return
 	}
 }

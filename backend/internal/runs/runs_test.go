@@ -208,6 +208,7 @@ func TestCooldownBlocksAcquire(t *testing.T) {
 	_, err := mgr.Acquire(context.Background(), agentA)
 	if err == nil {
 		t.Fatal("Acquire succeeded while cooling down")
+		return
 	}
 	if !strings.Contains(err.Error(), "cooling down until") {
 		t.Errorf("error = %v, want cooldown error", err)
@@ -516,6 +517,7 @@ func TestCountryBlockCooldown(t *testing.T) {
 
 	if got := mgr.CountryBlockedError(); got == nil || got.CountryCode != "CN" {
 		t.Fatalf("CountryBlockedError() = %v, want remembered CN block", got)
+		return
 	}
 	if until := mgr.CooldownUntil(); !time.Now().Before(until) || time.Until(until) > 16*time.Minute {
 		t.Errorf("cooldown until = %v, want ~15m country window", until)
@@ -710,11 +712,13 @@ func TestClearCooldowns(t *testing.T) {
 	m.CooldownRateLimit(&upstream.RateLimitError{RetryAfter: time.Hour})
 	if m.RateLimitError() == nil {
 		t.Fatal("expected rate-limit lock to be active")
+		return
 	}
 	// A ban supersedes the rate-limit lock (mutually exclusive by design).
 	m.CooldownBan(&upstream.BanError{ResumesAt: now.Add(2 * time.Hour)})
 	if m.RateLimitError() != nil || m.BanError() == nil {
 		t.Fatal("expected ban to supersede rate-limit lock")
+		return
 	}
 	m.ClearCooldowns()
 	if !m.CooldownUntil().IsZero() {
@@ -903,6 +907,7 @@ func TestSingleFlightRunAcquisition(t *testing.T) {
 		}
 		if runs[i] == nil {
 			t.Fatalf("goroutine %d returned nil run", i)
+			return
 		}
 		if runs[i].RunID != "run-0001" {
 			t.Errorf("goroutine %d RunID = %q, want run-0001", i, runs[i].RunID)
@@ -958,6 +963,7 @@ func TestSingleFlightRunRotation(t *testing.T) {
 		}
 		if runs[i] == nil {
 			t.Fatalf("goroutine %d returned nil run", i)
+			return
 		}
 		if runs[i].RunID != "run-0002" {
 			t.Errorf("goroutine %d RunID = %q, want run-0002", i, runs[i].RunID)

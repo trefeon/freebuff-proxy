@@ -222,6 +222,7 @@ func TestBannedSessionReturnsError(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil {
 		t.Fatal("want error for banned session")
+		return
 	}
 	if !strings.Contains(err.Error(), "banned") {
 		t.Errorf("error = %q, want banned message", err)
@@ -243,6 +244,7 @@ func TestCountryBlockedSessionReturnsTypedError(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
+		return
 	}
 	var cbe *upstream.CountryBlockedError
 	if !errors.As(err, &cbe) {
@@ -326,6 +328,7 @@ func TestRateLimitedError(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil {
 		t.Fatal("want error on rate limited session")
+		return
 	}
 	var rle *upstream.RateLimitError
 	if !errors.As(err, &rle) {
@@ -564,6 +567,7 @@ func TestRefreshBudgetExhaustedAlwaysNone(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "budget") {
 		t.Fatalf("err = %v, want refresh budget exhaustion error", err)
+		return
 	}
 	if mock.SessionCreates != maxRefreshIterations {
 		t.Errorf("creates = %d, want %d (exactly the iteration budget, no infinite loop)", mock.SessionCreates, maxRefreshIterations)
@@ -585,6 +589,7 @@ func TestEnsureSessionOuterBudgetExhausted(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "not ready after repeated refreshes") {
 		t.Fatalf("err = %v, want 'not ready after repeated refreshes'", err)
+		return
 	}
 	if mock.SessionCreates != 1 {
 		t.Errorf("creates = %d, want 1 (only the first refresh creates)", mock.SessionCreates)

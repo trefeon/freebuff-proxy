@@ -22,6 +22,7 @@ func TestHardBanNeverSelfHeals(t *testing.T) {
 	mgr.CooldownBan(&upstream.BanError{Body: "banned"})
 	if be := mgr.BanError(); be == nil {
 		t.Fatal("BanError() = nil for a hard ban, want remembered ban")
+		return
 	}
 	snap := mgr.Snapshot()
 	if snap.BanError == nil || !snap.BannedUntil.IsZero() {
@@ -49,6 +50,7 @@ func TestHardBanNeverSelfHeals(t *testing.T) {
 	mgr.CooldownBan(&upstream.BanError{Body: "banned", ResumesAt: time.Now().Add(time.Minute)})
 	if be := mgr.BanError(); be == nil {
 		t.Fatal("BanError() = nil for temporary ban, want remembered")
+		return
 	}
 	mgr.mu.Lock()
 	mgr.banUntil = time.Now().Add(-time.Second)

@@ -80,6 +80,7 @@ func TestEmitToolsFailsExplicit(t *testing.T) {
 		err := EmitTools(sha, wireDir, regDir, &out)
 		if err == nil {
 			t.Fatal("EmitTools succeeded on unknown session status, want explicit failure")
+			return
 		}
 		for _, want := range []string{sessionTypesPath, "time_travel", sha} {
 			if !strings.Contains(err.Error(), want) {
@@ -104,6 +105,7 @@ func TestEmitToolsFailsExplicit(t *testing.T) {
 		err := EmitTools(sha, wireDir, regDir, &out)
 		if err == nil {
 			t.Fatal("EmitTools succeeded on unknown union-arm session status, want explicit failure")
+			return
 		}
 		for _, want := range []string{sessionTypesPath, "zzz_unknown", sha} {
 			if !strings.Contains(err.Error(), want) {
@@ -125,6 +127,7 @@ func TestEmitToolsFailsExplicit(t *testing.T) {
 		err := EmitTools(sha, wireDir, regDir, &out)
 		if err == nil {
 			t.Fatal("EmitTools succeeded on missing toolNameParam, want explicit failure")
+			return
 		}
 		for _, want := range []string{toolsConstantsPath, "toolNameParam", sha} {
 			if !strings.Contains(err.Error(), want) {
@@ -141,6 +144,7 @@ func TestEmitToolsFailsExplicit(t *testing.T) {
 		err := EmitTools("ffffffffffffffffffffffffffffffffffffffff", testWireDir, testRegDir, &out)
 		if err == nil || !strings.Contains(err.Error(), "does not match manifest") {
 			t.Fatalf("EmitTools with wrong SHA = %v, want manifest-mismatch failure", err)
+			return
 		}
 	})
 }

@@ -105,6 +105,7 @@ func TestEventStreamHubLifecycle(t *testing.T) {
 	ch1, cancel1, first1 := h.subscribe(d)
 	if first1 == "" || ch1 == nil {
 		t.Fatal("subscribe returned nil channel or empty payload")
+		return
 	}
 
 	h.mu.Lock()

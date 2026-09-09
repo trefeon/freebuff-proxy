@@ -410,6 +410,7 @@ func TestEndSessionSurfacesServerError(t *testing.T) {
 
 	if err := mgr.EndSession(context.Background()); err == nil {
 		t.Fatal("EndSession with 500 = nil, want error surfaced")
+		return
 	}
 }
 

@@ -284,6 +284,7 @@ func TestPoolPersistDegradesLiveOnly(t *testing.T) {
 	}
 	if err := p.FlushPoolPersist(); err == nil {
 		t.Fatal("FlushPoolPersist with failing store: want error")
+		return
 	}
 	if !p.persistDirty.Load() {
 		t.Fatal("failed flush did not re-arm the dirty flag")

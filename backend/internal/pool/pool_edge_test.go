@@ -267,6 +267,7 @@ func TestBridgeDailyUsageCounter(t *testing.T) {
 	_, err = p.AcquireBridge(context.Background(), "counter-client", modelA)
 	if err == nil {
 		t.Fatal("expected error for bridge daily limit, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "daily limit") {
 		t.Fatalf("error = %q, want substring 'daily limit'", err)
@@ -466,6 +467,7 @@ func TestBridgeDeadTokenEvictDefersWhenBusy(t *testing.T) {
 	// is not FINISHed and the session is not ended.
 	if got := p.bridgeToken("dead-tok"); got == nil {
 		t.Fatal("busy dead-token entry evicted while its lease is outstanding")
+		return
 	}
 	if got := mock.FinishedRunsSnapshot(); len(got) != 0 {
 		t.Errorf("finished runs = %d, want 0 (busy run must not be finished)", len(got))
@@ -814,6 +816,7 @@ func TestEmptyPoolAcquire(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("want error for empty pool")
+		return
 	}
 	if !strings.Contains(err.Error(), "no auth tokens configured") {
 		t.Errorf("error = %q, want 'no auth tokens configured'", err)

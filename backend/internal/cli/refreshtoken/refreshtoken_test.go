@@ -67,5 +67,6 @@ func TestUpdateEnvKeysAtMissingFile(t *testing.T) {
 	_, err := updateEnvKeysAt(filepath.Join(dir, "no-such.env"), []envUpdate{{Key: "AUTH_TOKENS", Value: "x"}})
 	if err == nil {
 		t.Fatal("expected error for missing file, got nil")
+		return
 	}
 }

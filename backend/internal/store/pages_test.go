@@ -28,8 +28,10 @@ func TestPageStateRejectsEmptyID(t *testing.T) {
 	s := openTest(t)
 	if err := s.PutPageState("", "x"); err == nil {
 		t.Fatal("PutPageState(\"\") accepted, want an error")
+		return
 	}
 	if _, _, err := s.GetPageState(""); err == nil {
 		t.Fatal("GetPageState(\"\") accepted, want an error")
+		return
 	}
 }

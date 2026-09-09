@@ -61,6 +61,7 @@ func TestInstallUnixFailsWhenOldBinaryGone(t *testing.T) {
 
 	if err := installUnix(execPath, newPath); err == nil {
 		t.Fatal("expected error when current binary is missing")
+		return
 	}
 	// The temp file must survive a failed swap.
 	if _, err := os.Stat(newPath); err != nil {
@@ -260,6 +261,7 @@ func TestVerifyChecksumFetchFailureAborts(t *testing.T) {
 	err := verifyChecksum(context.Background(), &http.Client{Timeout: 5 * time.Second}, srv.URL+"/checksums.txt", "freebuff-proxy_linux_amd64.tar.gz", []byte("asset-bytes"))
 	if err == nil {
 		t.Fatal("verifyChecksum succeeded, want error when checksums.txt fetch fails")
+		return
 	}
 	if !strings.Contains(err.Error(), "checksums.txt") {
 		t.Errorf("verifyChecksum error = %v, want mention of checksums.txt", err)
@@ -284,6 +286,7 @@ func TestVerifyChecksumMatchAndMismatch(t *testing.T) {
 	}
 	if err := verifyChecksum(context.Background(), client, url, assetFilename, []byte("other-bytes")); err == nil {
 		t.Fatal("verifyChecksum(mismatch) = nil, want checksum mismatch error")
+		return
 	}
 }
 
@@ -336,6 +339,7 @@ func TestDownloadURLNon200(t *testing.T) {
 	_, err := downloadURL(context.Background(), &http.Client{Timeout: 5 * time.Second}, srv.URL)
 	if err == nil {
 		t.Fatal("downloadURL succeeded, want error on non-200")
+		return
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("downloadURL error = %v, want HTTP 500 mentioned", err)
@@ -362,6 +366,7 @@ func TestDownloadURLCtxCancel(t *testing.T) {
 	case err := <-done:
 		if err == nil {
 			t.Fatal("downloadURL succeeded, want context-canceled error")
+			return
 		}
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("downloadURL error = %v, want context.Canceled", err)
@@ -382,6 +387,7 @@ func TestDownloadURLOversizedBody(t *testing.T) {
 	_, err := downloadURL(context.Background(), &http.Client{Timeout: 30 * time.Second}, srv.URL)
 	if err == nil {
 		t.Fatal("downloadURL succeeded, want oversized-body error")
+		return
 	}
 	if !strings.Contains(err.Error(), "safety cap") {
 		t.Errorf("downloadURL error = %v, want mention of the safety cap", err)
@@ -486,6 +492,7 @@ func TestExtractBinaryFromArchive(t *testing.T) {
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatalf("extractBinaryFromArchive succeeded, want error containing %q", tt.wantErr)
+					return
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("extractBinaryFromArchive error = %v, want substring %q", err, tt.wantErr)
@@ -516,6 +523,7 @@ func TestExtractBinaryFromArchiveOversizedEntry(t *testing.T) {
 			_, err := extractBinaryFromArchive("https://example.com/release"+ext, archive, binaryName)
 			if err == nil {
 				t.Fatal("extractBinaryFromArchive succeeded, want entry-too-large error")
+				return
 			}
 			if !strings.Contains(err.Error(), "release archive entry too large") {
 				t.Errorf("extractBinaryFromArchive error = %v, want 'release archive entry too large'", err)
@@ -613,6 +621,7 @@ func TestIsUpToDate(t *testing.T) {
 func TestRequireChecksumsFailsClosed(t *testing.T) {
 	if err := requireChecksums(""); err == nil {
 		t.Fatal("requireChecksums(\"\") = nil, want error for a release without checksums.txt")
+		return
 	} else if !strings.Contains(err.Error(), "refusing to install unverified") {
 		t.Errorf("requireChecksums(\"\") error = %v, want 'refusing to install unverified'", err)
 	}
@@ -693,6 +702,7 @@ func TestVerifyChecksumFilenameBinding(t *testing.T) {
 			err := verifyChecksum(context.Background(), &http.Client{Timeout: 5 * time.Second}, srv.URL+"/checksums.txt", tt.assetFilename, assetBytes)
 			if tt.wantErr && err == nil {
 				t.Fatal("verifyChecksum succeeded, want error")
+				return
 			}
 			if !tt.wantErr && err != nil {
 				t.Fatalf("verifyChecksum = %v, want nil", err)
@@ -742,6 +752,7 @@ func TestInstallUnixRollback(t *testing.T) {
 
 	if err := installUnix(execPath, missingTemp); err == nil {
 		t.Fatal("installUnix succeeded, want error when the temp binary is missing")
+		return
 	}
 
 	got, err := os.ReadFile(execPath)

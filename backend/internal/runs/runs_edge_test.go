@@ -330,6 +330,7 @@ func TestCooldownClearsBanAndCountryWindows(t *testing.T) {
 	mgr.CooldownBan(&upstream.BanError{Body: "banned", ResumesAt: until})
 	if mgr.BanError() == nil {
 		t.Fatal("expected the ban to be live before Cooldown")
+		return
 	}
 	if snap := mgr.Snapshot(); snap.BannedUntil.IsZero() {
 		t.Fatal("BannedUntil not set during the ban window")
@@ -348,6 +349,7 @@ func TestCooldownClearsBanAndCountryWindows(t *testing.T) {
 	mgr.CooldownCountryBlocked(&upstream.CountryBlockedError{CountryCode: "CN", CountryBlockReason: "region_restricted"})
 	if mgr.CountryBlockedError() == nil {
 		t.Fatal("expected the country block to be live before Cooldown")
+		return
 	}
 	mgr.Cooldown(DefaultCooldown)
 	if mgr.CountryBlockedError() != nil {
@@ -371,6 +373,7 @@ func TestCooldownRateLimitClearsBanWindow(t *testing.T) {
 	mgr.CooldownBan(&upstream.BanError{Body: "banned", ResumesAt: time.Now().Add(time.Hour)})
 	if mgr.BanError() == nil {
 		t.Fatal("ban not live after CooldownBan")
+		return
 	}
 	if snap := mgr.Snapshot(); snap.BannedUntil.IsZero() {
 		t.Fatal("BannedUntil not set during the ban window")
@@ -398,6 +401,7 @@ func TestCooldownRateLimitClearsBanWindow(t *testing.T) {
 	mgr.CooldownBan(&upstream.BanError{Body: "banned"})
 	if mgr.BanError() == nil {
 		t.Fatal("hard ban not live")
+		return
 	}
 	mgr.CooldownRateLimit(&upstream.RateLimitError{Status: "rate_limited", RetryAfter: time.Minute})
 	mgr.mu.Lock()

@@ -180,6 +180,7 @@ func TestDashboardLoginFlow(t *testing.T) {
 	}
 	if c == nil || c.Value == "" {
 		t.Fatal("login did not set the fb_admin session cookie")
+		return
 	}
 	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
 		t.Errorf("cookie flags wrong: HttpOnly=%v SameSite=%v", c.HttpOnly, c.SameSite)
@@ -745,6 +746,7 @@ func TestDashboardConfigSaveRejectedUnreadableEnv(t *testing.T) {
 	}
 	if _, err := os.ReadFile(".env"); err == nil || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("setup: ReadFile = %v, want a non-NotExist error", err)
+		return
 	}
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)

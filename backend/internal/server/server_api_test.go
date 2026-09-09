@@ -1090,6 +1090,7 @@ func TestRequestCorrelationIDs(t *testing.T) {
 	for _, want := range []string{"access", "chat request", "chat routing", "chat done", "chat trace"} {
 		if byMsg[want] == nil {
 			t.Fatalf("missing %q entry in the log ring", want)
+			return
 		}
 	}
 	reqID := entryField(*byMsg["access"], "req_id")
@@ -1335,6 +1336,7 @@ func TestChatRetryTelemetry(t *testing.T) {
 	// on the server-side retry lines.
 	if ok1 == nil || ok2 == nil {
 		t.Fatal("expected two upstream attempt entries (one per chat attempt)")
+		return
 	}
 	if got := entryField(*ok1, "req_id"); got != reqID {
 		t.Errorf("first upstream attempt req_id = %q, want %q", got, reqID)

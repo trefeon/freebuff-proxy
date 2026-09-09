@@ -156,6 +156,7 @@ func TestLifecycleSetupDoctorVersion(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			t.Fatalf("-doctor exited 0, want non-zero (offline upstream reachability fails)\n%s", out)
+			return
 		}
 		s := string(out)
 		for _, want := range []string{

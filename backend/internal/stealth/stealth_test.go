@@ -549,6 +549,7 @@ func TestDialerInvalidAddr(t *testing.T) {
 	_, err := dialFN(context.Background(), "tcp", "missing-port")
 	if err == nil {
 		t.Fatal("dial with an invalid address succeeded")
+		return
 	}
 	if !strings.Contains(err.Error(), "invalid address") {
 		t.Errorf("err = %v, want mention of invalid address", err)
@@ -731,6 +732,7 @@ func TestProfileSelectionLogs(t *testing.T) {
 	sel := GetProfileForConnection(ProfileAuto)
 	if sel == nil || sel.ID == ProfileIDAuto {
 		t.Fatal("auto profile not resolved to a concrete profile")
+		return
 	}
 	after := sink.String()[before:]
 	if !strings.Contains(after, "stealth profile selected") || !strings.Contains(after, "profile=") {

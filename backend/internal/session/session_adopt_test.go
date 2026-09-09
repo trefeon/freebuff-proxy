@@ -66,6 +66,7 @@ func TestAdoptMissingOwnerFileRefuses(t *testing.T) {
 	_, err := mgr.EnsureSession(context.Background())
 	if err == nil {
 		t.Fatal("EnsureSession succeeded, want refusal")
+		return
 	}
 	if !strings.Contains(err.Error(), "refusing to create a competing session") {
 		t.Errorf("err = %v, want refusal message", err)
@@ -146,6 +147,7 @@ func TestAdoptModelMismatchRefuses(t *testing.T) {
 	_, err := mgr.EnsureSessionForModel(context.Background(), "z-ai/glm-5.2")
 	if err == nil {
 		t.Fatal("EnsureSessionForModel(glm) succeeded, want model-mismatch refusal")
+		return
 	}
 	if !strings.Contains(err.Error(), "refusing to create a competing session") {
 		t.Errorf("err = %v, want refusal message", err)

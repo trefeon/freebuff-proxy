@@ -58,6 +58,7 @@ func TestEnsureSessionForModelGlmGuardUnentitled(t *testing.T) {
 	_, err := mgr.EnsureSessionForModel(context.Background(), "z-ai/glm-5.2")
 	if err == nil {
 		t.Fatal("EnsureSessionForModel(z-ai/glm-5.2) succeeded, want 429 rate limit refusal")
+		return
 	}
 
 	var rle *upstream.RateLimitError

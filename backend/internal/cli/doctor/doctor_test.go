@@ -226,6 +226,7 @@ func TestRunDoctorBrokenConfigExits1(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("helper exited 0, want 1\n%s", out)
+		return
 	}
 	s := string(out)
 	for _, want := range []string{

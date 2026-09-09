@@ -72,6 +72,7 @@ func TestBasicPutAndGet(t *testing.T) {
 	entry, ok := c.GetEntryByToolID("call_1")
 	if !ok || entry == nil {
 		t.Fatalf("expected GetEntryByToolID to return entry")
+		return
 	}
 	if entry.Model != model || entry.ReasoningContent != reasoning || entry.Signature != signature {
 		t.Fatalf("unexpected entry: %+v", entry)

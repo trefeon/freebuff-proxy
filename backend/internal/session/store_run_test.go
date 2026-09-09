@@ -25,6 +25,7 @@ func TestStoreRunPersistenceRoundTrip(t *testing.T) {
 	s.SaveRun("tokhash", "agent-x", pr)
 	if got := s.LoadRun("tokhash", "agent-x"); got == nil || got.RunID != "run-abc" || got.TraceSessionID != "trace-1" || got.Requests != 3 {
 		t.Fatalf("LoadRun = %+v, want run-abc", got)
+		return
 	}
 	if got := s.LoadRun("tokhash", "other-agent"); got != nil {
 		t.Fatalf("LoadRun(other agent) = %+v, want nil", got)
@@ -34,6 +35,7 @@ func TestStoreRunPersistenceRoundTrip(t *testing.T) {
 	s2 := NewStoreWithBackend(path, fb)
 	if got := s2.LoadRun("tokhash", "agent-x"); got == nil || got.RunID != "run-abc" {
 		t.Fatalf("restart LoadRun = %+v, want run-abc", got)
+		return
 	}
 
 	s2.RemoveRun("tokhash", "agent-x")
@@ -68,8 +70,10 @@ func TestStoreRunAndSessionCoexist(t *testing.T) {
 	s2 := NewStoreWithBackend(path, fb)
 	if cs := s2.Load("tokhash"); cs == nil || cs.instanceID != "inst-1" {
 		t.Fatalf("session lost with runs in backend: %+v", cs)
+		return
 	}
 	if pr := s2.LoadRun("tokhash", "agent-x"); pr == nil || pr.RunID != "run-1" {
 		t.Fatalf("run lost with session in backend: %+v", pr)
+		return
 	}
 }

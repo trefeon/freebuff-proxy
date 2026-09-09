@@ -103,6 +103,7 @@ func TestLatestFetchFailureReturnsprev(t *testing.T) {
 
 	if latest, err := c.Latest(context.Background()); latest != "" || err == nil {
 		t.Fatalf("Latest = %q, %v; want empty + error on first failure", latest, err)
+		return
 	}
 }
 
@@ -123,6 +124,7 @@ func TestLatestFirstFetchFailureBacksOffForTTL(t *testing.T) {
 
 	if latest, err := c.Latest(context.Background()); latest != "" || err == nil {
 		t.Fatalf("first Latest = %q, %v; want empty + error", latest, err)
+		return
 	}
 	if hits != 1 {
 		t.Fatalf("network hits after first call = %d, want 1", hits)
@@ -195,6 +197,7 @@ func TestLatestLogsDecision(t *testing.T) {
 	c2.SetLogger(slog.New(slog.NewTextHandler(&sinkFail, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	if _, err := c2.Latest(context.Background()); err == nil {
 		t.Fatal("Latest against a 500 source succeeded, want error")
+		return
 	}
 	if !strings.Contains(sinkFail.String(), "decision=failed") {
 		t.Errorf("failed lookup log missing decision=failed: %s", sinkFail.String())

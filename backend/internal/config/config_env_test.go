@@ -307,6 +307,7 @@ func TestDotenvAsDirectoryFails(t *testing.T) {
 
 	if _, err := Load(""); err == nil {
 		t.Fatal("Load with .env as a directory succeeded, want error")
+		return
 	}
 }
 

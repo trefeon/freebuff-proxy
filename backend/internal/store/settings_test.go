@@ -28,9 +28,11 @@ func TestSettingsRejectsEmptyKey(t *testing.T) {
 	s := openTest(t)
 	if err := s.SetSetting("", "x"); err == nil {
 		t.Fatal("SetSetting(\"\") accepted, want an error")
+		return
 	}
 	if _, _, err := s.GetSetting(""); err == nil {
 		t.Fatal("GetSetting(\"\") accepted, want an error")
+		return
 	}
 }
 
@@ -61,5 +63,6 @@ func TestSettingsDeleteAndList(t *testing.T) {
 	}
 	if err := s.DeleteSetting(""); err == nil {
 		t.Fatal("DeleteSetting(\"\") accepted, want an error")
+		return
 	}
 }

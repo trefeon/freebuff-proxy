@@ -34,6 +34,7 @@ func TestAcquireSkipsHardBannedTokenBeforeUpstream(t *testing.T) {
 
 	if _, err := p.Acquire(context.Background(), modelA); err == nil {
 		t.Fatal("Acquire succeeded on a 403 banned session create, want error")
+		return
 	}
 	if creates != 1 {
 		t.Fatalf("session creates = %d, want 1", creates)
@@ -41,6 +42,7 @@ func TestAcquireSkipsHardBannedTokenBeforeUpstream(t *testing.T) {
 
 	if _, err := p.Acquire(context.Background(), modelA); err == nil {
 		t.Fatal("Acquire succeeded on a hard-banned token, want remembered ban error")
+		return
 	}
 	if creates != 1 {
 		t.Errorf("session creates after hard ban = %d, want 1 (no re-contact)", creates)

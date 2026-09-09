@@ -961,6 +961,7 @@ func TestAgenticMiMoE2E(t *testing.T) {
 		}
 		if toolUseBlock1 == nil || toolUseBlock1["name"] != "read_file" {
 			t.Fatalf("Anthropic Turn 1: expected read_file tool_use, got %#v", contentBlocks1)
+			return
 		}
 
 		input1 := toolUseBlock1["input"].(map[string]any)
@@ -1018,6 +1019,7 @@ func TestAgenticMiMoE2E(t *testing.T) {
 		}
 		if toolUseBlock2 == nil || toolUseBlock2["name"] != "write_file" {
 			t.Fatalf("Anthropic Turn 2: expected write_file tool_use, got %#v", contentBlocks2)
+			return
 		}
 
 		input2 := toolUseBlock2["input"].(map[string]any)

@@ -31,6 +31,7 @@ func TestProbeAccountBanMatchesClassify(t *testing.T) {
 	_, err = client.ProbeAccount(context.Background())
 	if err == nil {
 		t.Fatal("ProbeAccount succeeded, want ErrBanned")
+		return
 	}
 
 	var probeBan *BanError
@@ -74,6 +75,7 @@ func TestProbeAccountCountryBlockedMatchesClassify(t *testing.T) {
 	_, err = client.ProbeAccount(context.Background())
 	if err == nil {
 		t.Fatal("ProbeAccount succeeded, want ErrCountryBlocked")
+		return
 	}
 
 	var probeCB *CountryBlockedError

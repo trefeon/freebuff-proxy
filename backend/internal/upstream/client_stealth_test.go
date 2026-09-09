@@ -67,6 +67,7 @@ func TestNewTLSFingerprintInvalid(t *testing.T) {
 	_, err := New("tok", cfg)
 	if err == nil {
 		t.Fatal("New with bogus TLS_FINGERPRINT succeeded, want error")
+		return
 	}
 	if !strings.Contains(err.Error(), "TLS_FINGERPRINT") {
 		t.Errorf("error = %q, want mention of TLS_FINGERPRINT", err)

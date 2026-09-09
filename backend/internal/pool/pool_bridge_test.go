@@ -123,6 +123,7 @@ func TestBridgeAcquireReusesEntry(t *testing.T) {
 	}
 	if entry := p.bridgeToken(clientToken); entry == nil {
 		t.Fatal("bridge entry missing after two acquires")
+		return
 	}
 	// The shared entry started the run and created the session exactly once.
 	if got := mock.StartedRunsSnapshot(); len(got) != 1 {
@@ -266,9 +267,11 @@ func TestBridgeAcquireEmptyToken(t *testing.T) {
 
 	if _, err := p.AcquireBridge(context.Background(), "", modelA); err == nil {
 		t.Fatal("want error for empty client token")
+		return
 	}
 	if _, err := p.AcquireBridge(context.Background(), "   ", modelA); err == nil {
 		t.Fatal("want error for whitespace-only client token")
+		return
 	}
 	if got := p.bridgeLen(); got != 0 {
 		t.Errorf("bridge entries = %d, want 0 (no entry for empty token)", got)
@@ -357,6 +360,7 @@ func TestBridgeEvictionSkipsBusyEntry(t *testing.T) {
 
 	if e := p.bridgeToken("client-tok-00"); e == nil {
 		t.Fatal("busy bridge entry was evicted while its lease is outstanding")
+		return
 	}
 	finished := mock.FinishedRunsSnapshot()
 	if len(finished) != 1 {
@@ -452,6 +456,7 @@ func TestRuntimeTokenManagement(t *testing.T) {
 	}
 	if err := p.RemoveLastToken(); err == nil {
 		t.Fatal("RemoveLastToken succeeded with an in-flight lease, want refusal")
+		return
 	}
 	p.LeaseRelease(lease2)
 
@@ -520,6 +525,7 @@ func TestBridgeTokenLocking(t *testing.T) {
 	_, err = p.AcquireBridge(context.Background(), token, modelA)
 	if err == nil {
 		t.Fatal("AcquireBridge succeeded on locked entry, want error")
+		return
 	}
 
 	// Unlock the entry.
@@ -545,9 +551,11 @@ func TestBridgeLockNotFound(t *testing.T) {
 	fakeKey := "00000000000000000000000000000000" // 32 hex chars
 	if err := p.LockBridgeEntry(fakeKey); err == nil {
 		t.Fatal("LockBridgeEntry succeeded on nonexistent key, want error")
+		return
 	}
 	if err := p.UnlockBridgeEntry(fakeKey); err == nil {
 		t.Fatal("UnlockBridgeEntry succeeded on nonexistent key, want error")
+		return
 	}
 }
 
@@ -702,6 +710,7 @@ func TestHardBannedBridgeEntrySkipsMaintainAndPoll(t *testing.T) {
 	entry.runs.CooldownBan(&upstream.BanError{Body: "banned"})
 	if entry.runs.BanError() == nil {
 		t.Fatal("BanError() = nil after hard ban, want live ban")
+		return
 	}
 
 	before := mock.RequestCount()
@@ -741,6 +750,7 @@ func TestAcquireBridgeFallbackDepthGuard(t *testing.T) {
 	_, err := p.AcquireBridge(context.Background(), "depth-tok", "openai/gpt-5.6-luna")
 	if err == nil {
 		t.Fatal("want fallback-cycle error, got a lease")
+		return
 	}
 	if !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("err = %v, want QUOTA_FALLBACK_MODELS cycle detection", err)
@@ -764,6 +774,7 @@ func TestHybridPooledCredentialRefusedOnBridge(t *testing.T) {
 	_, err := p.AcquireBridge(context.Background(), "tok-0", modelA)
 	if err == nil {
 		t.Fatal("pooled credential bridged, want refusal")
+		return
 	}
 	if !strings.Contains(err.Error(), "pooled") {
 		t.Fatalf("err = %v, want pooled-token refusal", err)
@@ -862,10 +873,12 @@ func TestAcquireRejectedWhileDraining(t *testing.T) {
 	_, err = p.AcquireBridge(context.Background(), "drain-tok", modelA)
 	if err == nil || !strings.Contains(err.Error(), "shutting down") {
 		t.Fatalf("bridge acquire after drain = %v, want shutting-down error", err)
+		return
 	}
 	_, err = p.Acquire(context.Background(), modelA)
 	if err == nil || !strings.Contains(err.Error(), "shutting down") {
 		t.Fatalf("pooled acquire after drain = %v, want shutting-down error", err)
+		return
 	}
 	if after := mock.SessionCreates; after != before {
 		t.Errorf("session creates after drain = %d, want %d (no post-drain admission)", after, before)

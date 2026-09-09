@@ -133,6 +133,7 @@ func TestMaturityDisabledTouchDraftSurvives(t *testing.T) {
 	got := p2.Snapshot()[0].Maturity
 	if got == nil || got.TouchModel != draft {
 		t.Fatalf("restored snapshot = %+v, want touch %q", got, draft)
+		return
 	}
 
 	// No draft, no history, disabled: still nil (never-enrolled).
@@ -162,6 +163,7 @@ func TestMaturityRelockAfterTwoBelowDays(t *testing.T) {
 	p.maturityTickAt(context.Background(), day1)
 	if snap := p.Snapshot()[0]; snap.Maturity == nil || snap.Maturity.Enabled || snap.Locked {
 		t.Fatalf("day1 = %+v, want released (disabled+unlocked)", snap.Maturity)
+		return
 	}
 	belowDays := func() int {
 		toks := p.roster.Load()
@@ -186,6 +188,7 @@ func TestMaturityRelockAfterTwoBelowDays(t *testing.T) {
 	snap := p.Snapshot()[0]
 	if snap.Maturity == nil || !snap.Maturity.Enabled || !snap.Locked {
 		t.Fatalf("day3 = %+v, want re-enabled + locked", snap.Maturity)
+		return
 	}
 }
 
@@ -241,6 +244,7 @@ func TestClearMaturityWarnRearms(t *testing.T) {
 	snap := p.Snapshot()[0].Maturity
 	if snap == nil || snap.Warn || snap.NoAdvanceDays != 0 {
 		t.Fatalf("after reset = %+v, want warn cleared", snap)
+		return
 	}
 	if !snap.Enabled || snap.Target != 7 || snap.TouchModel != modelB {
 		t.Errorf("after reset identity = %+v, want enabled/7/%s kept", snap, modelB)

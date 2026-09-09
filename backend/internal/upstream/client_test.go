@@ -219,6 +219,7 @@ func TestWrapDecompress(t *testing.T) {
 			if tc.wantErrSub != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErrSub) {
 					t.Fatalf("wrapDecompress err = %v, want %q", err, tc.wantErrSub)
+					return
 				}
 				return
 			}
@@ -373,6 +374,7 @@ func TestRedirectMultihop(t *testing.T) {
 		_, err = client.http.Do(req)
 		if err == nil {
 			t.Fatal("3-redirect chain succeeded, want too-many-redirects error")
+			return
 		}
 		if !strings.Contains(err.Error(), "too many redirects") {
 			t.Errorf("err = %v, want too many redirects", err)

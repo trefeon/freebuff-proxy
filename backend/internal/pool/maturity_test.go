@@ -233,6 +233,7 @@ func TestMaturityAutoReleaseAtTarget(t *testing.T) {
 	}
 	if snap.Maturity == nil || snap.Maturity.Enabled {
 		t.Fatalf("maturity snapshot = %+v, want disabled after release", snap.Maturity)
+		return
 	}
 	if snap.Maturity.Badge != "Mature" {
 		t.Errorf("badge = %q, want Mature", snap.Maturity.Badge)
@@ -290,6 +291,7 @@ func TestMaturityNoAdvanceWarnStops(t *testing.T) {
 	snap := p.Snapshot()[0]
 	if snap.Maturity == nil || !snap.Maturity.Warn {
 		t.Fatalf("maturity snapshot = %+v, want warn after 3 flat days", snap.Maturity)
+		return
 	}
 	if snap.Maturity.NoAdvanceDays != 3 {
 		t.Errorf("NoAdvanceDays = %d, want 3", snap.Maturity.NoAdvanceDays)

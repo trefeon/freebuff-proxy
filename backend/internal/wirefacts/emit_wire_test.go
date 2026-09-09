@@ -134,6 +134,7 @@ func TestEmitWireFailsExplicit(t *testing.T) {
 		err := EmitWire(testUpstream, dir, &wireBuf, &noticesBuf)
 		if err == nil {
 			t.Fatalf("%s: EmitWire succeeded, want error containing %q", tc.name, tc.want)
+			return
 		}
 		if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), testUpstream) {
 			t.Fatalf("%s: error = %q, want %q plus the commit", tc.name, err, tc.want)

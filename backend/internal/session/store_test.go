@@ -240,10 +240,12 @@ func TestStoreRemoveCAS(t *testing.T) {
 	store.Remove("key", "inst-other")
 	if got := store.Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("Remove with wrong instance = %+v, want inst-1", got)
+		return
 	}
 	// A fresh store over the same backend must agree (no-op persists nothing new).
 	if got := NewStoreWithBackend(path, fb).Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("fresh Load after wrong-instance Remove = %+v, want inst-1", got)
+		return
 	}
 
 	// Matching instance id: the entry is removed.
@@ -356,6 +358,7 @@ func TestStoreCorruptLegacyFileIgnoredNeverRewritten(t *testing.T) {
 	store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
 	if got := store.Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("Load after Save over corrupt file = %+v, want inst-1", got)
+		return
 	}
 	after, err := os.ReadFile(path)
 	if err != nil {
@@ -386,10 +389,12 @@ func TestStoreUnreadableLegacyFileStaysUsable(t *testing.T) {
 	store.Save("b", &cachedState{status: "active", instanceID: "inst-b", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
 	if got := store.Load("b"); got == nil || got.instanceID != "inst-b" {
 		t.Fatalf("Load('b') = %+v, want inst-b (memory + backend usable despite unreadable file)", got)
+		return
 	}
 	// A fresh store over the same backend resumes 'b' without the file.
 	if got := NewStoreWithBackend(path, fb).Load("b"); got == nil || got.instanceID != "inst-b" {
 		t.Fatalf("fresh Load('b') = %+v, want inst-b", got)
+		return
 	}
 }
 
@@ -421,6 +426,7 @@ func TestStoreVersionMismatchIgnoredNeverReplaced(t *testing.T) {
 	store.Save("new", &cachedState{status: "active", instanceID: "inst-new", expiresAt: time.Now().Add(time.Hour), gracePeriodEndsAt: time.Now().Add(2 * time.Hour)})
 	if got := store.Load("new"); got == nil || got.instanceID != "inst-new" {
 		t.Fatalf("Load('new') after Save = %+v, want inst-new (memory)", got)
+		return
 	}
 	after, err := os.ReadFile(path)
 	if err != nil {
@@ -456,6 +462,7 @@ func TestStoreEmptyKeyNoop(t *testing.T) {
 	store.Save("key", &cachedState{status: "active", instanceID: "inst-1", expiresAt: time.Now().Add(time.Hour)})
 	if got := store.Load("key"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("Load('key') after Save = %+v, want inst-1", got)
+		return
 	}
 }
 

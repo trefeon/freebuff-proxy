@@ -281,6 +281,7 @@ func TestSetConfigAppendsNewTokens(t *testing.T) {
 	cur := (*p.roster.Load())[1]
 	if cur == nil || cur.token != "tok-1" {
 		t.Fatalf("appended entry = %+v, want tok-1", cur)
+		return
 	}
 	// The ledger travels with each entry, so the slate is the token count.
 	msgs := p.TokenCount()

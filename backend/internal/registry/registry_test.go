@@ -344,6 +344,7 @@ func TestRefreshFailureKeepsState(t *testing.T) {
 	r.SetSources([]string{fileSource(t, filepath.Join("testdata", "does-not-exist.ts"))})
 	if err := r.Refresh(context.Background()); err == nil {
 		t.Fatal("Refresh against missing source succeeded, want error")
+		return
 	}
 
 	if got := r.Models(); !reflect.DeepEqual(got, before) {
@@ -364,6 +365,7 @@ func TestRefreshEmptySource(t *testing.T) {
 	err := r.Refresh(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "no free agents") {
 		t.Fatalf("Refresh on empty source err = %v, want 'no free agents' error", err)
+		return
 	}
 }
 
@@ -388,6 +390,7 @@ func TestRefreshOverLimitSourceKeepsState(t *testing.T) {
 	err := r.Refresh(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("Refresh against over-limit source err = %v, want size-exceeded error", err)
+		return
 	}
 
 	if got := r.Models(); !reflect.DeepEqual(got, before) {
@@ -537,6 +540,7 @@ func TestRefreshNon200KeepsState(t *testing.T) {
 	err := r.Refresh(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "status 500") {
 		t.Fatalf("Refresh against 500 source err = %v, want 'status 500' error", err)
+		return
 	}
 	if got := r.Models(); !reflect.DeepEqual(got, before) {
 		t.Errorf("Models after failed refresh = %v, want unchanged %v", got, before)
@@ -564,6 +568,7 @@ func TestRefreshCanceledCtxKeepsState(t *testing.T) {
 	r.SetSources([]string{srv.URL})
 	if err := r.Refresh(ctx); err == nil {
 		t.Fatal("Refresh with canceled ctx succeeded, want error")
+		return
 	}
 	if got := r.Models(); !reflect.DeepEqual(got, before) {
 		t.Errorf("Models after canceled Refresh = %v, want unchanged %v", got, before)
@@ -592,6 +597,7 @@ func TestRefreshPartialMultiSourceFailureKeepsState(t *testing.T) {
 	})
 	if err := r.Refresh(context.Background()); err == nil {
 		t.Fatal("Refresh with one 404 source succeeded, want error")
+		return
 	}
 	if got := r.Models(); !reflect.DeepEqual(got, before) {
 		t.Errorf("Models after partially-failed Refresh = %v, want unchanged %v", got, before)
@@ -674,6 +680,7 @@ export const FREE_MODE_AGENT_MODELS = {
 	err := r.Refresh(context.Background())
 	if err == nil {
 		t.Fatal("Refresh with zero resolvable models succeeded, want error")
+		return
 	}
 	if !strings.Contains(err.Error(), "no free agents") {
 		t.Errorf("err = %v, want 'no free agents' (the 'no models resolved' branch is unreachable via the parser)", err)
@@ -774,6 +781,7 @@ func TestFetchSourceFallbackOrdering(t *testing.T) {
 	_, attempted, err = fetchSource(ctx, client, []string{srv.URL + "/raw", srv.URL + "/missing"})
 	if err == nil {
 		t.Fatal("fetchSource with all-failing candidates succeeded, want error")
+		return
 	}
 	if len(attempted) != 2 {
 		t.Errorf("attempted on total failure = %v, want both URLs", attempted)
@@ -804,6 +812,7 @@ func TestLastAttemptedSources(t *testing.T) {
 	r.SetSources([]string{missing})
 	if err := r.Refresh(context.Background()); err == nil {
 		t.Fatal("Refresh against missing source succeeded, want error")
+		return
 	}
 	if got := r.LastAttemptedSources(); !reflect.DeepEqual(got, []string{missing}) {
 		t.Errorf("LastAttemptedSources after failed refresh = %v, want [%s]", got, missing)

@@ -42,5 +42,6 @@ func TestStartRunEmptyRunIDWithCancelledCtx(t *testing.T) {
 
 	if _, err := client.StartRun(context.Background(), "agent-1"); err == nil || errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "missing runId") {
 		t.Fatalf("StartRun with live ctx = %v, want missing-runId failure", err)
+		return
 	}
 }

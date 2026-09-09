@@ -291,6 +291,7 @@ func TestHandleErrorStillRetains(t *testing.T) {
 	err := h.Handle(context.Background(), rec)
 	if err == nil {
 		t.Fatal("Handle returned nil, want the wrapped sink's error")
+		return
 	}
 	recent := h.Recent(1)
 	if len(recent) != 1 || recent[0].Message != "doomed" {

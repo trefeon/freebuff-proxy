@@ -41,6 +41,7 @@ func TestAcquireFiresPoolExhaustedWebhook(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("Acquire succeeded, want rate-limit error")
+		return
 	}
 	// The webhook POST is fire-and-forget: wait for it.
 	testutil.WaitFor(t, 3*time.Second, func() bool { return posts.Load() == 1 },
@@ -112,6 +113,7 @@ func TestCooldownTokenBanFiresWebhook(t *testing.T) {
 	_, err := p.Acquire(context.Background(), modelA)
 	if err == nil {
 		t.Fatal("Acquire succeeded, want ban error")
+		return
 	}
 	testutil.WaitFor(t, 3*time.Second, func() bool {
 		ev, ok := got.Load().(notify.Event)

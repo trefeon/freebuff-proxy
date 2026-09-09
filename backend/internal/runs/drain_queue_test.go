@@ -367,6 +367,7 @@ func TestRunPersistenceAdoptAndFinish(t *testing.T) {
 	pr := store.LoadRun(mgr1.key, agentA)
 	if pr == nil || pr.RunID != run.RunID {
 		t.Fatalf("run not persisted after START (got %+v)", pr)
+		return
 	}
 	mgr1.Release(run)
 	mgr1.Shutdown(context.Background())

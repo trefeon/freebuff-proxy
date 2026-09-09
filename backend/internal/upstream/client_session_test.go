@@ -193,6 +193,7 @@ func TestProbeAccount(t *testing.T) {
 		_, err := client.ProbeAccount(context.Background())
 		if err == nil {
 			t.Fatal("ProbeAccount returned nil error for closed server")
+			return
 		}
 	})
 }

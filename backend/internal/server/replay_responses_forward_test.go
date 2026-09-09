@@ -176,6 +176,7 @@ func TestReplayResponsesForwardReasoning(t *testing.T) {
 	first, _ := out[0].(map[string]any)
 	if first == nil || first["type"] != "reasoning" {
 		t.Fatalf("completed output[0] = %v, want reasoning item", first)
+		return
 	}
 	if summary, ok := first["summary"].([]any); !ok || len(summary) != 0 {
 		t.Errorf("reasoning item summary = %v, want empty array", first["summary"])
@@ -190,6 +191,7 @@ func TestReplayResponsesForwardReasoning(t *testing.T) {
 	second, _ := out[1].(map[string]any)
 	if second == nil || second["type"] != "message" {
 		t.Fatalf("completed output[1] = %v, want message item", second)
+		return
 	}
 	if mcontent, ok := second["content"].([]any); ok && len(mcontent) == 1 {
 		if cp, ok := mcontent[0].(map[string]any); ok && cp["text"] != "The answer is 42" {

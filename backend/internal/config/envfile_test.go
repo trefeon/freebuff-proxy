@@ -36,6 +36,7 @@ func TestWriteFileAtomicRestoresBackupOnRenameFailure(t *testing.T) {
 
 	if err := WriteFileAtomic(path, []byte("NEW\n")); err == nil {
 		t.Fatal("WriteFileAtomic succeeded under injected rename failures, want error")
+		return
 	}
 	got, err := os.ReadFile(path)
 	if err != nil {
@@ -69,6 +70,7 @@ func TestWriteFileAtomicPreservesBackupWhenRestoreFails(t *testing.T) {
 	err := WriteFileAtomic(path, []byte("NEW\n"))
 	if err == nil {
 		t.Fatal("WriteFileAtomic succeeded under injected rename failures, want error")
+		return
 	}
 	if !strings.Contains(err.Error(), "restore") {
 		t.Errorf("error = %v, want it to mention the .bak restore failure", err)
@@ -136,6 +138,7 @@ func TestWriteFileAtomicRefusesDirectoryTarget(t *testing.T) {
 	}
 	if err := WriteFileAtomic(path, []byte("NEW\n")); err == nil {
 		t.Fatal("WriteFileAtomic over a non-empty directory succeeded, want error")
+		return
 	}
 	if st, err := os.Stat(path); err != nil || !st.IsDir() {
 		t.Errorf("target dir missing or not a dir after failed write: %v", err)

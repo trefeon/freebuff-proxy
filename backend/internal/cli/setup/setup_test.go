@@ -738,6 +738,7 @@ func TestRunSetupHomeUnsetExits1(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("helper exited 0, want 1\n%s", out)
+		return
 	}
 	if !strings.Contains(string(out), "cannot determine user home directory") {
 		t.Errorf("helper output missing home error:\n%s", out)

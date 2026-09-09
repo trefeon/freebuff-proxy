@@ -94,6 +94,7 @@ func TestFallbackAfterInvalidFails(t *testing.T) {
 
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "FALLBACK_AFTER_MS") {
 		t.Fatalf("Load err = %v, want FALLBACK_AFTER_MS parse error", err)
+		return
 	}
 }
 
@@ -155,6 +156,7 @@ func TestWebhookURLInvalidFails(t *testing.T) {
 
 	if _, err := Load(""); err == nil || !strings.Contains(err.Error(), "WEBHOOK_URL") {
 		t.Fatalf("Load err = %v, want WEBHOOK_URL validation error", err)
+		return
 	}
 }
 

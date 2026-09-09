@@ -90,6 +90,7 @@ func TestNormalizeUpstreamBaseURL(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("normalizeUpstreamBaseURL(%q) = %q, want error", tt.raw, got)
+					return
 				}
 				return
 			}

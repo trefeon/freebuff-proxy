@@ -134,6 +134,7 @@ func TestDBBackedWriteReopenLoadIdentical(t *testing.T) {
 	pr := s2.LoadRun("key", "agent-x")
 	if pr == nil || pr.RunID != "run-1" || pr.TraceSessionID != "t" || pr.Requests != 2 {
 		t.Fatalf("reopened LoadRun = %+v, want run-1/t/2", pr)
+		return
 	}
 	if !pr.StartedAt.Equal(runAt) {
 		t.Errorf("reopened run StartedAt = %v, want %v", pr.StartedAt, runAt)
@@ -176,6 +177,7 @@ func TestLegacyFileImportsOnceThenArchives(t *testing.T) {
 	s := NewStoreWithBackend(path, fb)
 	if got := s.Load("file-new"); got == nil || got.instanceID != "inst-new" {
 		t.Fatalf("Load(file-new) after import = %+v, want inst-new", got)
+		return
 	}
 
 	// The source archives exactly once: original gone, .bak present.
@@ -189,19 +191,23 @@ func TestLegacyFileImportsOnceThenArchives(t *testing.T) {
 	// Collision: the backend row wins over the file entry.
 	if got := s.Load("db-wins"); got == nil || got.instanceID != "inst-db" {
 		t.Fatalf("Load(db-wins) = %+v, want inst-db (dashboard store wins)", got)
+		return
 	}
 	// Runs-only file entries import session-less.
 	if pr := s.LoadRun("runs-only", "agent-z"); pr == nil || pr.RunID != "run-z" {
 		t.Fatalf("LoadRun(runs-only) = %+v, want run-z", pr)
+		return
 	}
 
 	// A later store (restart) serves from the backend with no file present.
 	s2 := NewStoreWithBackend(path, fb)
 	if got := s2.Load("file-new"); got == nil || got.instanceID != "inst-new" {
 		t.Fatalf("reopened Load(file-new) = %+v, want inst-new", got)
+		return
 	}
 	if pr := s2.LoadRun("runs-only", "agent-z"); pr == nil || pr.RunID != "run-z" {
 		t.Fatalf("reopened LoadRun(runs-only) = %+v, want run-z", pr)
+		return
 	}
 
 	// The save path never recreates the JSON file.
@@ -211,6 +217,7 @@ func TestLegacyFileImportsOnceThenArchives(t *testing.T) {
 	}
 	if got := NewStoreWithBackend(path, fb).Load("file-new"); got == nil || got.instanceID != "inst-new2" {
 		t.Fatalf("Load after Save = %+v, want inst-new2 via backend", got)
+		return
 	}
 }
 
@@ -241,6 +248,7 @@ func TestLegacyImportIdenticalReimportSilent(t *testing.T) {
 	first := NewStoreWithBackend(path, fb)
 	if got := first.Load("k"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("first import Load = %+v, want inst-1", got)
+		return
 	}
 	sessBefore, runsBefore, found, _ := fb.LoadSession("k")
 	if !found {
@@ -252,6 +260,7 @@ func TestLegacyImportIdenticalReimportSilent(t *testing.T) {
 	second := NewStoreWithBackend(path+".bak", fb)
 	if got := second.Load("k"); got == nil || got.instanceID != "inst-1" {
 		t.Fatalf("archive re-import Load = %+v, want inst-1", got)
+		return
 	}
 	sessAfter, runsAfter, found, _ := fb.LoadSession("k")
 	if !found || sessAfter != sessBefore || runsAfter != runsBefore {

@@ -116,6 +116,7 @@ func TestBridgeSingleFlight_LeaderFailureResetsGate(t *testing.T) {
 	_, err := p.AcquireBridge(context.Background(), clientToken, modelA)
 	if err == nil {
 		t.Fatal("expected error on first acquire")
+		return
 	}
 
 	// Verify gate was reset (entry still cached, not evicted).
@@ -245,6 +246,7 @@ func TestBridgeValidation_InvalidTokenRejected(t *testing.T) {
 	_, err := p.AcquireBridge(context.Background(), "bad-token", modelA)
 	if err == nil {
 		t.Fatal("expected error for invalid token")
+		return
 	}
 
 	// Entry should NOT be cached.

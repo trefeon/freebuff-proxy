@@ -105,6 +105,7 @@ func TestNormalizeRequestInvalidBody(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if _, err := NormalizeRequest([]byte(body), ""); err == nil {
 				t.Fatalf("expected error for body %q", body)
+				return
 			}
 		})
 	}

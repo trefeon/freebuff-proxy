@@ -41,6 +41,7 @@ func TestOpenRejectsUnknownVersion(t *testing.T) {
 	// Reopen via a fresh handle: the file now claims a newer schema.
 	if _, err := Open(path); err == nil {
 		t.Fatal("Open accepted schema v99, want rejection")
+		return
 	}
 }
 
@@ -51,6 +52,7 @@ func TestOpenRejectsGarbageFile(t *testing.T) {
 	}
 	if _, err := Open(path); err == nil {
 		t.Fatal("Open accepted a garbage file, want an error (caller degrades to live-only)")
+		return
 	}
 }
 

@@ -107,6 +107,7 @@ func TestBridgeWaitingRoomChainFiresBeforeCreate(t *testing.T) {
 	_, err = p.AcquireBridge(context.Background(), "client-tok", modelA)
 	if err == nil {
 		t.Fatal("AcquireBridge succeeded, want 428 waiting_room_required")
+		return
 	}
 	if ads.Load() != 0 || streaks.Load() != 0 {
 		t.Fatalf("chain fired on first create: ads=%d streaks=%d, want 0/0", ads.Load(), streaks.Load())
@@ -116,6 +117,7 @@ func TestBridgeWaitingRoomChainFiresBeforeCreate(t *testing.T) {
 	_, err = p.AcquireBridge(context.Background(), "client-tok", modelA)
 	if err == nil {
 		t.Fatal("AcquireBridge succeeded, want 428")
+		return
 	}
 	if ads.Load() == 0 || streaks.Load() == 0 {
 		t.Errorf("waiting-room chain not fired before bridge session create: ads=%d streaks=%d (#94b)", ads.Load(), streaks.Load())
@@ -154,6 +156,7 @@ func TestBridgeAdmissionBanNotifies(t *testing.T) {
 	_, err := p.AcquireBridge(context.Background(), "client-tok", modelA)
 	if err == nil {
 		t.Fatal("AcquireBridge succeeded, want ban error")
+		return
 	}
 	testutil.WaitFor(t, 3*time.Second, func() bool { return posts.Load() == 1 },
 		fmt.Sprintf("token_banned webhook posts = %d, want 1", posts.Load()))

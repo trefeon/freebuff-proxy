@@ -79,6 +79,7 @@ func TestAdminDefaultPasswordAndChangeFlow(t *testing.T) {
 	}
 	if cookie == nil || cookie.Value == "" {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	// 4. Authenticated request to /admin/api/overview shows is_default_admin_token = true
@@ -291,6 +292,7 @@ func TestAdminChangePasswordEnvShadowed(t *testing.T) {
 	}
 	if cookie == nil || cookie.Value == "" {
 		t.Fatal("login did not set fb_admin cookie")
+		return
 	}
 
 	envBefore, err := os.ReadFile(".env")
