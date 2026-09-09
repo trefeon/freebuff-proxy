@@ -13,7 +13,8 @@ package dashboard
 //go:generate go run ../../cmd/openapi-emit -manifest admin_manifest.json -out data/openapi.json
 //
 // Frontend types: npx -y openapi-typescript@7.13.0 backend/internal/dashboard/data/openapi.json -o frontend/src/lib/api/openapi.d.ts
-// (pinned version keeps the check-in byte-reproducible; types file only, no component changes).
+// followed by npx -y prettier@3.9.6 --write frontend/src/lib/api/openapi.d.ts
+// (pinned versions keep the check-in byte-reproducible; types file only, no component changes).
 
 import (
 	"encoding/json"

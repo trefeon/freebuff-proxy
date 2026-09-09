@@ -4,2940 +4,2940 @@
  */
 
 export interface paths {
-    "/admin": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaRoot"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/admin": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaRootSlash"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaRoot"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/auth/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Dashboard auth state (login mode, factory-default check) */
-        get: operations["getAuthStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaRootSlash"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/auth/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rotate the admin dashboard password */
-        post: operations["changePassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Dashboard auth state (login mode, factory-default check) */
+    get: operations["getAuthStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/change-password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Effective config (sensitive: raw .env read) */
-        get: operations["getConfig"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Rotate the admin dashboard password */
+    post: operations["changePassword"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/config/meta": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Configuration catalog (the settings form schema) */
-        get: operations["getConfigMeta"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Effective config (sensitive: raw .env read) */
+    get: operations["getConfig"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/config/meta": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Server-sent event stream (dashboard live updates) */
-        get: operations["events"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Configuration catalog (the settings form schema) */
+    get: operations["getConfigMeta"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Recent log ring view model */
-        get: operations["getLogs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Server-sent event stream (dashboard live updates) */
+    get: operations["events"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/logs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/logs/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Persisted log records */
-        get: operations["getLogsHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Recent log ring view model */
+    get: operations["getLogs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/logs/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/maturity/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Streak/standing transitions */
-        get: operations["getMaturityHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Persisted log records */
+    get: operations["getLogsHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/maturity/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Latency and throughput view model */
-        get: operations["getMetrics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Streak/standing transitions */
+    get: operations["getMaturityHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/metrics": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Served-model catalog view model */
-        get: operations["getModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Latency and throughput view model */
+    get: operations["getMetrics"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/notices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Upstream announcements and live broadcasts */
-        get: operations["getNotices"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Served-model catalog view model */
+    get: operations["getModels"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/notices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Overview view model (pool, models, quota, upstream sync) */
-        get: operations["getOverview"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Upstream announcements and live broadcasts */
+    get: operations["getNotices"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/overview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/pages/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-page UI snapshot (absent row reads back empty, never 404) */
-        get: operations["getPageState"];
-        /** Upsert one per-page UI snapshot (data must be a JSON object) */
-        put: operations["putPageState"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Overview view model (pool, models, quota, upstream sync) */
+    get: operations["getOverview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/pages/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/quota/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Per-model quota samples */
-        get: operations["getQuotaHistory"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-page UI snapshot (absent row reads back empty, never 404) */
+    get: operations["getPageState"];
+    /** Upsert one per-page UI snapshot (data must be a JSON object) */
+    put: operations["putPageState"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/quota/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/require-login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enable/disable dashboard login (open mode is loopback-only) */
-        post: operations["requireLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Per-model quota samples */
+    get: operations["getQuotaHistory"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/require-login": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** DB settings overlay: effective values plus source tiers */
-        get: operations["getSettings"];
-        put?: never;
-        /** Validate, persist and hot-apply one overlay knob */
-        post: operations["saveSetting"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Enable/disable dashboard login (open mode is loopback-only) */
+    post: operations["requireLogin"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/settings/{key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Drop one overlay row (falls back to .env/env/default) */
-        delete: operations["resetSetting"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** DB settings overlay: effective values plus source tiers */
+    get: operations["getSettings"];
+    put?: never;
+    /** Validate, persist and hot-apply one overlay knob */
+    post: operations["saveSetting"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/settings/{key}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/setup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Setup wizard view model */
-        get: operations["getSetup"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Drop one overlay row (falls back to .env/env/default) */
+    delete: operations["resetSetting"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Token cards view model */
-        get: operations["getTokens"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Setup wizard view model */
+    get: operations["getSetup"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/tokens": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/traces": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Recent chat traces */
-        get: operations["getTraces"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Token cards view model */
+    get: operations["getTokens"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/traces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/api/version": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Running version plus update check */
-        get: operations["getVersion"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Recent chat traces */
+    get: operations["getTraces"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/api/version": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/assets/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Static dashboard assets */
-        get: operations["assets"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Running version plus update check */
+    get: operations["getVersion"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/assets/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/bridge-tokens/{key}/lock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Lock one bridge-mode entry */
-        post: operations["bridgeTokenLock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Static dashboard assets */
+    get: operations["assets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/bridge-tokens/{key}/lock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/bridge-tokens/{key}/unlock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Unlock one bridge-mode entry */
-        post: operations["bridgeTokenUnlock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Lock one bridge-mode entry */
+    post: operations["bridgeTokenLock"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/bridge-tokens/{key}/unlock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaConfig"];
-        put?: never;
-        /** Write the raw .env text, reload and report restart-only/overridden keys */
-        post: operations["saveConfig"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Unlock one bridge-mode entry */
+    post: operations["bridgeTokenUnlock"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/diag": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Configuration and upstream reachability checks */
-        post: operations["diag"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaConfig"];
+    put?: never;
+    /** Write the raw .env text, reload and report restart-only/overridden keys */
+    post: operations["saveConfig"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/diag": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Login page shell (HTML) */
-        get: operations["loginPage"];
-        put?: never;
-        /** Dashboard login (sets the fb_admin session cookie; 302 to /admin on success) */
-        post: operations["login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Configuration and upstream reachability checks */
+    post: operations["diag"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/login": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/login/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start a device-login browser flow (?isolated=false for the stable fingerprint) */
-        post: operations["loginStart"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Login page shell (HTML) */
+    get: operations["loginPage"];
+    put?: never;
+    /** Dashboard login (sets the fb_admin session cookie; 302 to /admin on success) */
+    post: operations["login"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/login/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/login/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Poll one device-login flow (pending: status alone; completed: token_index plus user) */
-        get: operations["loginStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Start a device-login browser flow (?isolated=false for the stable fingerprint) */
+    post: operations["loginStart"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/login/status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Dashboard logout (clears the fb_admin session cookie) */
-        post: operations["logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Poll one device-login flow (pending: status alone; completed: token_index plus user) */
+    get: operations["loginStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/logout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaLogs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Dashboard logout (clears the fb_admin session cookie) */
+    post: operations["logout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/logs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaMetrics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaLogs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/metrics": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Switch bridge/pooled mode (loopback rules apply) */
-        post: operations["modeSwitch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaMetrics"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/mode": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Switch bridge/pooled mode (loopback rules apply) */
+    post: operations["modeSwitch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/playground": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaPlayground"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaModels"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/playground": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/playground/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Prompt through the real chat handler with streaming forced (SSE answer) */
-        post: operations["playgroundChat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaPlayground"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/playground/chat": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/reload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reload configuration from disk and apply live (Bearer ADMIN_TOKEN) */
-        post: operations["reload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Prompt through the real chat handler with streaming forced (SSE answer) */
+    post: operations["playgroundChat"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/reload": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/restart": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Validate config and restart the gateway process */
-        post: operations["restart"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Reload configuration from disk and apply live (Bearer ADMIN_TOKEN) */
+    post: operations["reload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/restart": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/setup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaSetup"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Validate config and restart the gateway process */
+    post: operations["restart"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/smoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate) */
-        post: operations["smoke"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaSetup"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/smoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaTokens"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate) */
+    post: operations["smoke"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/add": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add one upstream token to the pool and persist to .env */
-        post: operations["tokenAdd"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** SPA shell (HTML) */
+    get: operations["spaTokens"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/add": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/remove": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Remove one pool token (absent index removes the last) */
-        post: operations["tokenRemove"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Add one upstream token to the pool and persist to .env */
+    post: operations["tokenAdd"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/remove": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/swap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Swap two pool positions */
-        post: operations["tokenSwap"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Remove one pool token (absent index removes the last) */
+    post: operations["tokenRemove"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/swap": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/test-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Probe every pooled token (?auto=1 returns the throttled snapshot) */
-        post: operations["tokenTestAll"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Swap two pool positions */
+    post: operations["tokenSwap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/test-all": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/drop-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Drop one token's upstream session */
-        post: operations["tokenDropSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Probe every pooled token (?auto=1 returns the throttled snapshot) */
+    post: operations["tokenTestAll"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/drop-session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/finish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** FINISH one token's upstream runs */
-        post: operations["tokenFinish"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Drop one token's upstream session */
+    post: operations["tokenDropSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/finish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/lock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Take one token out of rotation */
-        post: operations["tokenLock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** FINISH one token's upstream runs */
+    post: operations["tokenFinish"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/lock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/maturity": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Set per-token streak-maturity automation */
-        post: operations["tokenMaturity"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Take one token out of rotation */
+    post: operations["tokenLock"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/maturity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/maturity/touch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Fire one manual maturity touch outside the daily slot */
-        post: operations["tokenMaturityTouch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Set per-token streak-maturity automation */
+    post: operations["tokenMaturity"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/maturity/touch": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/maturity/warn-reset": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Clear one token's non-advance warning (re-arms the daily loop) */
-        post: operations["tokenMaturityWarnReset"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Fire one manual maturity touch outside the daily slot */
+    post: operations["tokenMaturityTouch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/maturity/warn-reset": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ensure one token's upstream session for a model */
-        post: operations["tokenSpawnSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Clear one token's non-advance warning (re-arms the daily loop) */
+    post: operations["tokenMaturityWarnReset"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Zero-cost upstream probe of one token */
-        post: operations["tokenTest"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Ensure one token's upstream session for a model */
+    post: operations["tokenSpawnSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/unlock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Return one token to rotation */
-        post: operations["tokenUnlock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Zero-cost upstream probe of one token */
+    post: operations["tokenTest"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/unlock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/tokens/{id}/unlock-lock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Unlock then immediately re-lock (cooldown reset) */
-        post: operations["tokenUnlockLock"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Return one token to rotation */
+    post: operations["tokenUnlock"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/tokens/{id}/unlock-lock": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/admin/traces": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** SPA shell (HTML) */
-        get: operations["spaTraces"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Unlock then immediately re-lock (cooldown reset) */
+    post: operations["tokenUnlockLock"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/admin/traces": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /** SPA shell (HTML) */
+    get: operations["spaTraces"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        AuthStatusResponse: {
-            authenticated: boolean;
-            has_password: boolean;
-            is_default_admin_token: boolean;
-            require_login: boolean;
-        };
-        ChangePasswordRequest: {
-            current_password: string;
-            new_password: string;
-        };
-        ChangePasswordResponse: {
-            message: string;
-            ok: boolean;
-        };
-        ConfigSaveResponse: {
-            message: string;
-            ok: boolean;
-            restart_only?: string[];
-        };
-        DiagResponse: {
-            checks: {
-                message: string;
-                name: string;
-                ok: boolean;
-                warn: boolean;
-            }[];
-        };
-        LoginCompletedResponse: {
-            status: string;
-            token_index: number;
-            user?: string;
-        };
-        LoginRequest: {
-            token: string;
-        };
-        LoginStartResponse: {
-            expires_at: string;
-            fingerprint: string;
-            flow_id: string;
-            login_url: string;
-        };
-        LogoutResponse: {
-            ok: boolean;
-        };
-        MaturityUpdateRequest: {
-            enabled?: boolean | null;
-            mode?: string;
-            target?: number | null;
-            touch_model?: string;
-        };
-        ModeSwitchRequest: {
-            mode: string;
-        };
-        NoticesResponse: {
-            count: number;
-            notices: {
-                badge?: string;
-                id: string;
-                message: string;
-                timestamp?: string;
-                title: string;
-                token_index?: number | null;
-                tone: string;
-                type: string;
-                url?: string;
-            }[];
-            peak_hours: {
-                current_utc: string;
-                is_peak: boolean;
-                /** Format: date-time */
-                next_window_at: string;
-                next_window_in: string;
-                window_end_utc: string;
-                window_start_utc: string;
-            };
-        };
-        PageStateRequest: {
-            data: Record<string, never>;
-        };
-        PageStateResponse: {
-            data: unknown;
-        };
-        ReloadResponse: {
-            auth_tokens: number;
-            message: string;
-            status: string;
-        };
-        RequireLoginRequest: {
-            enabled?: boolean | null;
-            require_login?: boolean | null;
-        };
-        RequireLoginResponse: {
-            message: string;
-            ok: boolean;
-            require_login: boolean;
-        };
-        RestartResponse: {
-            message: string;
-            ok: boolean;
-        };
-        ResultEnvelope: {
-            code?: string;
-            message: string;
-            ok: boolean;
-        };
-        SettingsListResponse: {
-            degraded: boolean;
-            settings: {
-                key: string;
-                restart_only: boolean;
-                secret: boolean;
-                source: string;
-                value: string;
-            }[];
-        };
-        SettingsPostRequest: {
-            key: string;
-            value: unknown;
-        };
-        SettingsPostResponse: {
-            code: string;
-            message: string;
-            ok: boolean;
-            restart_only: string[];
-        };
-        SmokeRequest: {
-            model: string;
-            prompt: string;
-            token: string;
-        };
-        SmokeResponse: {
-            model: string;
-            ms: number;
-            ok: boolean;
-            phases: {
-                ms: number;
-                name: string;
-            }[];
-            preview: string;
-            token: string;
-        };
-        SpawnSessionRequest: {
-            model?: string;
-        };
-        TokenAddRequest: {
-            token: string;
-        };
-        TokenRemoveRequest: {
-            index?: number | null;
-            token?: number | null;
-        };
-        TokenSwapRequest: {
-            action?: string;
-            direction?: string;
-            from?: number | null;
-            i?: number | null;
-            index?: number | null;
-            j?: number | null;
-            to?: number | null;
-        };
-        VersionResponse: {
-            current_version: string;
-            has_update: boolean;
-            latest_version: string;
-            update_url: string;
-        };
-        configData: {
-            effective: {
-                key: string;
-                secret: boolean;
-                value: string;
-            }[];
-            env_content: string;
-            has_env_file: boolean;
-        };
-        getConfigMetaResponse: {
-            default: string;
-            description: string;
-            enum?: string[];
-            essential: boolean;
-            group: string;
-            hidden?: boolean;
-            key: string;
-            kind: string;
-            restart_only: boolean;
-            secret: boolean;
-        }[];
-        logsData: {
-            enabled: boolean;
-            entries: {
-                fields: string;
-                level: string;
-                message: string;
-                time: string;
-            }[];
-            has_filter: boolean;
-            level: string;
-            msg: string;
-        };
-        logsHistoryData: {
-            enabled: boolean;
-            entries: {
-                fields: string;
-                level: string;
-                msg: string;
-                req_id?: string;
-                ts: number;
-            }[];
-        };
-        maturityHistoryData: {
-            enabled: boolean;
-            events: {
-                detail: string;
-                kind: string;
-                ts: number;
-            }[];
-            token: number;
-        };
-        metricsData: {
-            fingerprint_rotations: number;
-            models: number;
-            per_tokens: {
-                fingerprint_rotations: number;
-                requests_24h: number;
-                risk_level: string;
-                spend_day: number;
-                token: number;
-                transient_retries: number;
-            }[];
-            requests_spark: string;
-            requests_total: number;
-            requests_trend: {
-                direction: string;
-                percentage: number;
-            };
-            retries_spark: string;
-            retries_trend: {
-                direction: string;
-                percentage: number;
-            };
-            sample_count: number;
-            transient_retries: number;
-        };
-        modelsData: {
-            agents: number;
-            aliases: {
-                alias: string;
-                real: string;
-            }[];
-            count: number;
-            has_aliases: boolean;
-            models: {
-                agent: string;
-                badges?: string[];
-                display_name?: string;
-                efforts?: string[];
-                id: string;
-                notice?: string;
-                pool?: string;
-                price: number;
-                price_label?: string;
-                quota: string;
-                served: boolean;
-                tagline?: string;
-            }[];
-        };
-        overviewData: {
-            base_url: string;
-            bridge_token_cards?: {
-                active_runs: number;
-                ban_type?: string;
-                banned_until?: string;
-                cooldown_until: string;
-                freebucks?: {
-                    balance: number;
-                    daily: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    };
-                    monthly?: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    } | null;
-                    plan_id?: string;
-                    price_notices?: {
-                        [key: string]: string;
-                    };
-                    prices?: {
-                        [key: string]: number;
-                    };
-                    quota_exempt?: boolean;
-                    spend: {
-                        limit_usd: number;
-                        reset_at?: string;
-                    };
-                    wallet: {
-                        balance: number;
-                        monthly_bonus: number;
-                        next_bonus_at?: string;
-                    };
-                } | null;
-                key: string;
-                locked: boolean;
-                model: string;
-                requests: number;
-                session_active: boolean;
-                spend_day: number;
-                spend_pct: number;
-                status: string;
-            }[];
-            bridge_tokens: number;
-            fingerprint_rotations: number;
-            has_tokens: boolean;
-            in_bridge: boolean;
-            is_default_admin_token: boolean;
-            max_messages_per_day: number;
-            mode: string;
-            model_count: number;
-            models: string[];
-            require_login: boolean;
-            safe_mode: boolean;
-            show_bridge: boolean;
-            tokens: {
-                access_tier?: string;
-                account_id?: string;
-                active_runs: number;
-                allowed_models?: string[];
-                allowlist_skips?: number;
-                ban_type?: string;
-                banned_until?: string;
-                cooldown_active: boolean;
-                cooldown_until: string;
-                daily_limit: number;
-                email?: string;
-                freebucks?: {
-                    balance: number;
-                    daily: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    };
-                    monthly?: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    } | null;
-                    plan_id?: string;
-                    price_notices?: {
-                        [key: string]: string;
-                    };
-                    prices?: {
-                        [key: string]: number;
-                    };
-                    quota_exempt?: boolean;
-                    spend: {
-                        limit_usd: number;
-                        reset_at?: string;
-                    };
-                    wallet: {
-                        balance: number;
-                        monthly_bonus: number;
-                        next_bonus_at?: string;
-                    };
-                } | null;
-                has_referral: boolean;
-                has_standing: boolean;
-                index: number;
-                last_usage?: string;
-                locked: boolean;
-                maturity?: {
-                    badge?: string;
-                    enabled: boolean;
-                    last_action?: string;
-                    last_advanced?: string;
-                    last_result?: string;
-                    last_touch?: string;
-                    mode: string;
-                    no_advance_days?: number;
-                    slot?: string;
-                    target: number;
-                    touch_model?: string;
-                    warn?: boolean;
-                } | null;
-                messages_24h: number;
-                queue_depth: number;
-                queue_position: number;
-                referral_code?: string;
-                referral_github_linked: boolean;
-                referral_qualified_count: number;
-                referral_reset_at?: string;
-                referral_sessions_left: number;
-                requests: number;
-                requests_per_day: number;
-                requests_per_day_limit: number;
-                requests_per_day_reset_in: number;
-                requests_per_minute: number;
-                requests_per_minute_limit: number;
-                risk_level: string;
-                session_status: string;
-                standing_blurb?: string;
-                standing_capped_by?: string;
-                standing_capped_reason?: string;
-                standing_label: string;
-                standing_level: string;
-                standing_next_level: string;
-                standing_next_level_at: string;
-                standing_next_steps?: {
-                    detail?: string;
-                    href?: string;
-                    id: string;
-                    label: string;
-                    points: number;
-                }[];
-                standing_score: number;
-                streak?: number;
-                streak_updated_at?: string;
-                today_used?: boolean;
-                transient_retries: number;
-                usage_pct: number;
-            }[];
-            transient_retries: number;
-            upstream_sync?: {
-                checked_at: string;
-                drifted_files?: {
-                    file: string;
-                    group: string;
-                    pinned_sha: string;
-                    status: string;
-                    vendor_sha: string;
-                }[];
-                has_drift: boolean;
-                has_registry_drift: boolean;
-                has_wire_drift: boolean;
-                releases_url: string;
-                upstream_sha: string;
-            } | null;
-            uptime: string;
-        };
-        quotaHistoryData: {
-            enabled: boolean;
-            model: string;
-            snapshots: {
-                entitlements?: string;
-                limit: number;
-                recent: number;
-                reset_at: number;
-                ts: number;
-            }[];
-            token: number;
-        };
-        setupData: {
-            base_url: string;
-            bridge: boolean;
-            bridge_tokens: number;
-            has_tokens: boolean;
-            key_hint: string;
-            mode: string;
-            model: string;
-            models: string[];
-            token_count: number;
-        };
-        tokenTestAllResponse: {
-            instance_id: string;
-            message: string;
-            ok: boolean;
-            token: number;
-        }[];
-        tokensData: {
-            bridge_token_cards?: {
-                active_runs: number;
-                ban_type?: string;
-                banned_until?: string;
-                cooldown_until: string;
-                freebucks?: {
-                    balance: number;
-                    daily: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    };
-                    monthly?: {
-                        limit: number;
-                        percent_used: number;
-                        remaining: number;
-                        reset_at?: string;
-                        spent: number;
-                    } | null;
-                    plan_id?: string;
-                    price_notices?: {
-                        [key: string]: string;
-                    };
-                    prices?: {
-                        [key: string]: number;
-                    };
-                    quota_exempt?: boolean;
-                    spend: {
-                        limit_usd: number;
-                        reset_at?: string;
-                    };
-                    wallet: {
-                        balance: number;
-                        monthly_bonus: number;
-                        next_bonus_at?: string;
-                    };
-                } | null;
-                key: string;
-                locked: boolean;
-                model: string;
-                requests: number;
-                session_active: boolean;
-                spend_day: number;
-                spend_pct: number;
-                status: string;
-            }[];
-            bridge_tokens: number;
-            burst_balance_enabled: boolean;
-            chat_max_inflight_metered: number;
-            chat_max_inflight_unmetered: number;
-            has_tokens: boolean;
-            in_bridge: boolean;
-            maturity_enabled: boolean;
-            mode: string;
-            rate_limit_failover: boolean;
-            show_bridge: boolean;
-            token_count: number;
-            token_rotation?: string;
-            tokens: Record<string, never>[];
-            unmetered_models?: {
-                id: string;
-                name: string;
-            }[];
-        };
-        tracesData: {
-            enabled: boolean;
-            traces: {
-                error: string;
-                model: string;
-                ms: string;
-                phases?: {
-                    ms: number;
-                    name: string;
-                }[];
-                status: string;
-                time: string;
-                token: string;
-            }[];
-        };
+  schemas: {
+    AuthStatusResponse: {
+      authenticated: boolean;
+      has_password: boolean;
+      is_default_admin_token: boolean;
+      require_login: boolean;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    ChangePasswordRequest: {
+      current_password: string;
+      new_password: string;
+    };
+    ChangePasswordResponse: {
+      message: string;
+      ok: boolean;
+    };
+    ConfigSaveResponse: {
+      message: string;
+      ok: boolean;
+      restart_only?: string[];
+    };
+    DiagResponse: {
+      checks: {
+        message: string;
+        name: string;
+        ok: boolean;
+        warn: boolean;
+      }[];
+    };
+    LoginCompletedResponse: {
+      status: string;
+      token_index: number;
+      user?: string;
+    };
+    LoginRequest: {
+      token: string;
+    };
+    LoginStartResponse: {
+      expires_at: string;
+      fingerprint: string;
+      flow_id: string;
+      login_url: string;
+    };
+    LogoutResponse: {
+      ok: boolean;
+    };
+    MaturityUpdateRequest: {
+      enabled?: boolean | null;
+      mode?: string;
+      target?: number | null;
+      touch_model?: string;
+    };
+    ModeSwitchRequest: {
+      mode: string;
+    };
+    NoticesResponse: {
+      count: number;
+      notices: {
+        badge?: string;
+        id: string;
+        message: string;
+        timestamp?: string;
+        title: string;
+        token_index?: number | null;
+        tone: string;
+        type: string;
+        url?: string;
+      }[];
+      peak_hours: {
+        current_utc: string;
+        is_peak: boolean;
+        /** Format: date-time */
+        next_window_at: string;
+        next_window_in: string;
+        window_end_utc: string;
+        window_start_utc: string;
+      };
+    };
+    PageStateRequest: {
+      data: Record<string, never>;
+    };
+    PageStateResponse: {
+      data: unknown;
+    };
+    ReloadResponse: {
+      auth_tokens: number;
+      message: string;
+      status: string;
+    };
+    RequireLoginRequest: {
+      enabled?: boolean | null;
+      require_login?: boolean | null;
+    };
+    RequireLoginResponse: {
+      message: string;
+      ok: boolean;
+      require_login: boolean;
+    };
+    RestartResponse: {
+      message: string;
+      ok: boolean;
+    };
+    ResultEnvelope: {
+      code?: string;
+      message: string;
+      ok: boolean;
+    };
+    SettingsListResponse: {
+      degraded: boolean;
+      settings: {
+        key: string;
+        restart_only: boolean;
+        secret: boolean;
+        source: string;
+        value: string;
+      }[];
+    };
+    SettingsPostRequest: {
+      key: string;
+      value: unknown;
+    };
+    SettingsPostResponse: {
+      code: string;
+      message: string;
+      ok: boolean;
+      restart_only: string[];
+    };
+    SmokeRequest: {
+      model: string;
+      prompt: string;
+      token: string;
+    };
+    SmokeResponse: {
+      model: string;
+      ms: number;
+      ok: boolean;
+      phases: {
+        ms: number;
+        name: string;
+      }[];
+      preview: string;
+      token: string;
+    };
+    SpawnSessionRequest: {
+      model?: string;
+    };
+    TokenAddRequest: {
+      token: string;
+    };
+    TokenRemoveRequest: {
+      index?: number | null;
+      token?: number | null;
+    };
+    TokenSwapRequest: {
+      action?: string;
+      direction?: string;
+      from?: number | null;
+      i?: number | null;
+      index?: number | null;
+      j?: number | null;
+      to?: number | null;
+    };
+    VersionResponse: {
+      current_version: string;
+      has_update: boolean;
+      latest_version: string;
+      update_url: string;
+    };
+    configData: {
+      effective: {
+        key: string;
+        secret: boolean;
+        value: string;
+      }[];
+      env_content: string;
+      has_env_file: boolean;
+    };
+    getConfigMetaResponse: {
+      default: string;
+      description: string;
+      enum?: string[];
+      essential: boolean;
+      group: string;
+      hidden?: boolean;
+      key: string;
+      kind: string;
+      restart_only: boolean;
+      secret: boolean;
+    }[];
+    logsData: {
+      enabled: boolean;
+      entries: {
+        fields: string;
+        level: string;
+        message: string;
+        time: string;
+      }[];
+      has_filter: boolean;
+      level: string;
+      msg: string;
+    };
+    logsHistoryData: {
+      enabled: boolean;
+      entries: {
+        fields: string;
+        level: string;
+        msg: string;
+        req_id?: string;
+        ts: number;
+      }[];
+    };
+    maturityHistoryData: {
+      enabled: boolean;
+      events: {
+        detail: string;
+        kind: string;
+        ts: number;
+      }[];
+      token: number;
+    };
+    metricsData: {
+      fingerprint_rotations: number;
+      models: number;
+      per_tokens: {
+        fingerprint_rotations: number;
+        requests_24h: number;
+        risk_level: string;
+        spend_day: number;
+        token: number;
+        transient_retries: number;
+      }[];
+      requests_spark: string;
+      requests_total: number;
+      requests_trend: {
+        direction: string;
+        percentage: number;
+      };
+      retries_spark: string;
+      retries_trend: {
+        direction: string;
+        percentage: number;
+      };
+      sample_count: number;
+      transient_retries: number;
+    };
+    modelsData: {
+      agents: number;
+      aliases: {
+        alias: string;
+        real: string;
+      }[];
+      count: number;
+      has_aliases: boolean;
+      models: {
+        agent: string;
+        badges?: string[];
+        display_name?: string;
+        efforts?: string[];
+        id: string;
+        notice?: string;
+        pool?: string;
+        price: number;
+        price_label?: string;
+        quota: string;
+        served: boolean;
+        tagline?: string;
+      }[];
+    };
+    overviewData: {
+      base_url: string;
+      bridge_token_cards?: {
+        active_runs: number;
+        ban_type?: string;
+        banned_until?: string;
+        cooldown_until: string;
+        freebucks?: {
+          balance: number;
+          daily: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          };
+          monthly?: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          } | null;
+          plan_id?: string;
+          price_notices?: {
+            [key: string]: string;
+          };
+          prices?: {
+            [key: string]: number;
+          };
+          quota_exempt?: boolean;
+          spend: {
+            limit_usd: number;
+            reset_at?: string;
+          };
+          wallet: {
+            balance: number;
+            monthly_bonus: number;
+            next_bonus_at?: string;
+          };
+        } | null;
+        key: string;
+        locked: boolean;
+        model: string;
+        requests: number;
+        session_active: boolean;
+        spend_day: number;
+        spend_pct: number;
+        status: string;
+      }[];
+      bridge_tokens: number;
+      fingerprint_rotations: number;
+      has_tokens: boolean;
+      in_bridge: boolean;
+      is_default_admin_token: boolean;
+      max_messages_per_day: number;
+      mode: string;
+      model_count: number;
+      models: string[];
+      require_login: boolean;
+      safe_mode: boolean;
+      show_bridge: boolean;
+      tokens: {
+        access_tier?: string;
+        account_id?: string;
+        active_runs: number;
+        allowed_models?: string[];
+        allowlist_skips?: number;
+        ban_type?: string;
+        banned_until?: string;
+        cooldown_active: boolean;
+        cooldown_until: string;
+        daily_limit: number;
+        email?: string;
+        freebucks?: {
+          balance: number;
+          daily: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          };
+          monthly?: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          } | null;
+          plan_id?: string;
+          price_notices?: {
+            [key: string]: string;
+          };
+          prices?: {
+            [key: string]: number;
+          };
+          quota_exempt?: boolean;
+          spend: {
+            limit_usd: number;
+            reset_at?: string;
+          };
+          wallet: {
+            balance: number;
+            monthly_bonus: number;
+            next_bonus_at?: string;
+          };
+        } | null;
+        has_referral: boolean;
+        has_standing: boolean;
+        index: number;
+        last_usage?: string;
+        locked: boolean;
+        maturity?: {
+          badge?: string;
+          enabled: boolean;
+          last_action?: string;
+          last_advanced?: string;
+          last_result?: string;
+          last_touch?: string;
+          mode: string;
+          no_advance_days?: number;
+          slot?: string;
+          target: number;
+          touch_model?: string;
+          warn?: boolean;
+        } | null;
+        messages_24h: number;
+        queue_depth: number;
+        queue_position: number;
+        referral_code?: string;
+        referral_github_linked: boolean;
+        referral_qualified_count: number;
+        referral_reset_at?: string;
+        referral_sessions_left: number;
+        requests: number;
+        requests_per_day: number;
+        requests_per_day_limit: number;
+        requests_per_day_reset_in: number;
+        requests_per_minute: number;
+        requests_per_minute_limit: number;
+        risk_level: string;
+        session_status: string;
+        standing_blurb?: string;
+        standing_capped_by?: string;
+        standing_capped_reason?: string;
+        standing_label: string;
+        standing_level: string;
+        standing_next_level: string;
+        standing_next_level_at: string;
+        standing_next_steps?: {
+          detail?: string;
+          href?: string;
+          id: string;
+          label: string;
+          points: number;
+        }[];
+        standing_score: number;
+        streak?: number;
+        streak_updated_at?: string;
+        today_used?: boolean;
+        transient_retries: number;
+        usage_pct: number;
+      }[];
+      transient_retries: number;
+      upstream_sync?: {
+        checked_at: string;
+        drifted_files?: {
+          file: string;
+          group: string;
+          pinned_sha: string;
+          status: string;
+          vendor_sha: string;
+        }[];
+        has_drift: boolean;
+        has_registry_drift: boolean;
+        has_wire_drift: boolean;
+        releases_url: string;
+        upstream_sha: string;
+      } | null;
+      uptime: string;
+    };
+    quotaHistoryData: {
+      enabled: boolean;
+      model: string;
+      snapshots: {
+        entitlements?: string;
+        limit: number;
+        recent: number;
+        reset_at: number;
+        ts: number;
+      }[];
+      token: number;
+    };
+    setupData: {
+      base_url: string;
+      bridge: boolean;
+      bridge_tokens: number;
+      has_tokens: boolean;
+      key_hint: string;
+      mode: string;
+      model: string;
+      models: string[];
+      token_count: number;
+    };
+    tokenTestAllResponse: {
+      instance_id: string;
+      message: string;
+      ok: boolean;
+      token: number;
+    }[];
+    tokensData: {
+      bridge_token_cards?: {
+        active_runs: number;
+        ban_type?: string;
+        banned_until?: string;
+        cooldown_until: string;
+        freebucks?: {
+          balance: number;
+          daily: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          };
+          monthly?: {
+            limit: number;
+            percent_used: number;
+            remaining: number;
+            reset_at?: string;
+            spent: number;
+          } | null;
+          plan_id?: string;
+          price_notices?: {
+            [key: string]: string;
+          };
+          prices?: {
+            [key: string]: number;
+          };
+          quota_exempt?: boolean;
+          spend: {
+            limit_usd: number;
+            reset_at?: string;
+          };
+          wallet: {
+            balance: number;
+            monthly_bonus: number;
+            next_bonus_at?: string;
+          };
+        } | null;
+        key: string;
+        locked: boolean;
+        model: string;
+        requests: number;
+        session_active: boolean;
+        spend_day: number;
+        spend_pct: number;
+        status: string;
+      }[];
+      bridge_tokens: number;
+      burst_balance_enabled: boolean;
+      chat_max_inflight_metered: number;
+      chat_max_inflight_unmetered: number;
+      has_tokens: boolean;
+      in_bridge: boolean;
+      maturity_enabled: boolean;
+      mode: string;
+      rate_limit_failover: boolean;
+      show_bridge: boolean;
+      token_count: number;
+      token_rotation?: string;
+      tokens: Record<string, never>[];
+      unmetered_models?: {
+        id: string;
+        name: string;
+      }[];
+    };
+    tracesData: {
+      enabled: boolean;
+      traces: {
+        error: string;
+        model: string;
+        ms: string;
+        phases?: {
+          ms: number;
+          name: string;
+        }[];
+        status: string;
+        time: string;
+        token: string;
+      }[];
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    spaRoot: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  spaRoot: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    spaRootSlash: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
+        content: {
+          "text/html": string;
         };
+      };
     };
-    getAuthStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Dashboard auth state (login mode, factory-default check) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthStatusResponse"];
-                };
-            };
-        };
+  };
+  spaRootSlash: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    changePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePasswordRequest"];
-            };
+        content: {
+          "text/html": string;
         };
-        responses: {
-            /** @description Rotate the admin dashboard password */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChangePasswordResponse"];
-                };
-            };
-        };
+      };
     };
-    getConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Effective config (sensitive: raw .env read) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["configData"];
-                };
-            };
-        };
+  };
+  getAuthStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getConfigMeta: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Dashboard auth state (login mode, factory-default check) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Configuration catalog (the settings form schema) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["getConfigMetaResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["AuthStatusResponse"];
         };
+      };
     };
-    events: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Server-sent event stream (dashboard live updates) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-        };
+  };
+  changePassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getLogs: {
-        parameters: {
-            query?: {
-                /** @description Log level filter */
-                level?: string;
-                /** @description Message substring filter */
-                msg?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Recent log ring view model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["logsData"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChangePasswordRequest"];
+      };
     };
-    getLogsHistory: {
-        parameters: {
-            query?: {
-                /** @description Log level filter */
-                level?: string;
-                /** @description Message substring filter */
-                msg?: string;
-                /** @description Request id filter */
-                req_id?: string;
-                /** @description Unix-millis lower bound */
-                since?: string;
-                /** @description Unix-millis upper bound */
-                until?: string;
-                /** @description Max records (default 500) */
-                limit?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Rotate the admin dashboard password */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Persisted log records */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["logsHistoryData"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ChangePasswordResponse"];
         };
+      };
     };
-    getMaturityHistory: {
-        parameters: {
-            query: {
-                /** @description Pool token index */
-                token: string;
-                /** @description Unix-millis lower bound */
-                since?: string;
-                /** @description Max events (default 200) */
-                limit?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Streak/standing transitions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["maturityHistoryData"];
-                };
-            };
-        };
+  };
+  getConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getMetrics: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Effective config (sensitive: raw .env read) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Latency and throughput view model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["metricsData"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["configData"];
         };
+      };
     };
-    getModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Served-model catalog view model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["modelsData"];
-                };
-            };
-        };
+  };
+  getConfigMeta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getNotices: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Configuration catalog (the settings form schema) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Upstream announcements and live broadcasts */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoticesResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["getConfigMetaResponse"];
         };
+      };
     };
-    getOverview: {
-        parameters: {
-            query?: {
-                /** @description view=live returns the hot-poll subset (live numbers only); absent returns the full shape */
-                view?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Overview view model (pool, models, quota, upstream sync) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["overviewData"];
-                };
-            };
-        };
+  };
+  events: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getPageState: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Server-sent event stream (dashboard live updates) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Per-page UI snapshot (absent row reads back empty, never 404) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageStateResponse"];
-                };
-            };
+        content: {
+          "text/event-stream": string;
         };
+      };
     };
-    putPageState: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PageStateRequest"];
-            };
-        };
-        responses: {
-            /** @description Upsert one per-page UI snapshot (data must be a JSON object) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  getLogs: {
+    parameters: {
+      query?: {
+        /** @description Log level filter */
+        level?: string;
+        /** @description Message substring filter */
+        msg?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getQuotaHistory: {
-        parameters: {
-            query: {
-                /** @description Pool token index (-1 disables) */
-                token: string;
-                /** @description Model id */
-                model: string;
-                /** @description Unix-millis lower bound */
-                since?: string;
-                /** @description Max samples (default 500) */
-                limit?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Recent log ring view model */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Per-model quota samples */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["quotaHistoryData"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["logsData"];
         };
+      };
     };
-    requireLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequireLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Enable/disable dashboard login (open mode is loopback-only) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RequireLoginResponse"];
-                };
-            };
-        };
+  };
+  getLogsHistory: {
+    parameters: {
+      query?: {
+        /** @description Log level filter */
+        level?: string;
+        /** @description Message substring filter */
+        msg?: string;
+        /** @description Request id filter */
+        req_id?: string;
+        /** @description Unix-millis lower bound */
+        since?: string;
+        /** @description Unix-millis upper bound */
+        until?: string;
+        /** @description Max records (default 500) */
+        limit?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Persisted log records */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description DB settings overlay: effective values plus source tiers */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsListResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["logsHistoryData"];
         };
+      };
     };
-    saveSetting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SettingsPostRequest"];
-            };
-        };
-        responses: {
-            /** @description Validate, persist and hot-apply one overlay knob */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SettingsPostResponse"];
-                };
-            };
-        };
+  };
+  getMaturityHistory: {
+    parameters: {
+      query: {
+        /** @description Pool token index */
+        token: string;
+        /** @description Unix-millis lower bound */
+        since?: string;
+        /** @description Max events (default 200) */
+        limit?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    resetSetting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Streak/standing transitions */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Drop one overlay row (falls back to .env/env/default) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["maturityHistoryData"];
         };
+      };
     };
-    getSetup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Setup wizard view model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["setupData"];
-                };
-            };
-        };
+  };
+  getMetrics: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getTokens: {
-        parameters: {
-            query?: {
-                /** @description view=live returns the hot-poll subset (live numbers only); absent returns the full shape */
-                view?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Latency and throughput view model */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Token cards view model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tokensData"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["metricsData"];
         };
+      };
     };
-    getTraces: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Recent chat traces */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tracesData"];
-                };
-            };
-        };
+  };
+  getModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    getVersion: {
-        parameters: {
-            query?: {
-                /** @description force=true invalidates the cached update check */
-                force?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Served-model catalog view model */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Running version plus update check */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VersionResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["modelsData"];
         };
+      };
     };
-    assets: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Static dashboard assets */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  getNotices: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    bridgeTokenLock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Upstream announcements and live broadcasts */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Lock one bridge-mode entry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["NoticesResponse"];
         };
+      };
     };
-    bridgeTokenUnlock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                key: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Unlock one bridge-mode entry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  getOverview: {
+    parameters: {
+      query?: {
+        /** @description view=live returns the hot-poll subset (live numbers only); absent returns the full shape */
+        view?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    spaConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Overview view model (pool, models, quota, upstream sync) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["overviewData"];
         };
+      };
     };
-    saveConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "text/plain": string;
-            };
-        };
-        responses: {
-            /** @description Write the raw .env text, reload and report restart-only/overridden keys */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigSaveResponse"];
-                };
-            };
-        };
+  };
+  getPageState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
     };
-    diag: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Per-page UI snapshot (absent row reads back empty, never 404) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Configuration and upstream reachability checks */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiagResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["PageStateResponse"];
         };
+      };
     };
-    loginPage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Login page shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  putPageState: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
     };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Dashboard login (sets the fb_admin session cookie; 302 to /admin on success) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PageStateRequest"];
+      };
     };
-    loginStart: {
-        parameters: {
-            query?: {
-                /** @description isolated=false requests the stable machine fingerprint */
-                isolated?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Upsert one per-page UI snapshot (data must be a JSON object) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Start a device-login browser flow (?isolated=false for the stable fingerprint) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginStartResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
         };
+      };
     };
-    loginStatus: {
-        parameters: {
-            query: {
-                /** @description Full fingerprint id from login/start */
-                fingerprint: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Poll one device-login flow (pending: status alone; completed: token_index plus user) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginCompletedResponse"];
-                };
-            };
-        };
+  };
+  getQuotaHistory: {
+    parameters: {
+      query: {
+        /** @description Pool token index (-1 disables) */
+        token: string;
+        /** @description Model id */
+        model: string;
+        /** @description Unix-millis lower bound */
+        since?: string;
+        /** @description Max samples (default 500) */
+        limit?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    logout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Per-model quota samples */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Dashboard logout (clears the fb_admin session cookie) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LogoutResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["quotaHistoryData"];
         };
+      };
     };
-    spaLogs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  requireLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    spaMetrics: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RequireLoginRequest"];
+      };
     };
-    modeSwitch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Enable/disable dashboard login (open mode is loopback-only) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModeSwitchRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["RequireLoginResponse"];
         };
-        responses: {
-            /** @description Switch bridge/pooled mode (loopback rules apply) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+      };
     };
-    spaModels: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  getSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    spaPlayground: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description DB settings overlay: effective values plus source tiers */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["SettingsListResponse"];
         };
+      };
     };
-    playgroundChat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Prompt through the real chat handler with streaming forced (SSE answer) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-        };
+  };
+  saveSetting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    reload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Reload configuration from disk and apply live (Bearer ADMIN_TOKEN) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReloadResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SettingsPostRequest"];
+      };
     };
-    restart: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Validate, persist and hot-apply one overlay knob */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Validate config and restart the gateway process */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RestartResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["SettingsPostResponse"];
         };
+      };
     };
-    spaSetup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  resetSetting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
     };
-    smoke: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Drop one overlay row (falls back to .env/env/default) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SmokeRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
         };
-        responses: {
-            /** @description Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SmokeResponse"];
-                };
-            };
-        };
+      };
     };
-    spaTokens: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
+  };
+  getSetup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    tokenAdd: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Setup wizard view model */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenAddRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["setupData"];
         };
-        responses: {
-            /** @description Add one upstream token to the pool and persist to .env */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+      };
     };
-    tokenRemove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenRemoveRequest"];
-            };
-        };
-        responses: {
-            /** @description Remove one pool token (absent index removes the last) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  getTokens: {
+    parameters: {
+      query?: {
+        /** @description view=live returns the hot-poll subset (live numbers only); absent returns the full shape */
+        view?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    tokenSwap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Token cards view model */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenSwapRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["tokensData"];
         };
-        responses: {
-            /** @description Swap two pool positions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+      };
     };
-    tokenTestAll: {
-        parameters: {
-            query?: {
-                /** @description auto=1 serves the throttled quota snapshot without probing */
-                auto?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Probe every pooled token (?auto=1 returns the throttled snapshot) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["tokenTestAllResponse"];
-                };
-            };
-        };
+  };
+  getTraces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    tokenDropSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Recent chat traces */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Drop one token's upstream session */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["tracesData"];
         };
+      };
     };
-    tokenFinish: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description FINISH one token's upstream runs */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  getVersion: {
+    parameters: {
+      query?: {
+        /** @description force=true invalidates the cached update check */
+        force?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    tokenLock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Running version plus update check */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Take one token out of rotation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["VersionResponse"];
         };
+      };
     };
-    tokenMaturity: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MaturityUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Set per-token streak-maturity automation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  assets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    tokenMaturityTouch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Static dashboard assets */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Fire one manual maturity touch outside the daily slot */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "text/html": string;
         };
+      };
     };
-    tokenMaturityWarnReset: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Clear one token's non-advance warning (re-arms the daily loop) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  bridgeTokenLock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
     };
-    tokenSpawnSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Lock one bridge-mode entry */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SpawnSessionRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
         };
-        responses: {
-            /** @description Ensure one token's upstream session for a model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+      };
     };
-    tokenTest: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Zero-cost upstream probe of one token */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  bridgeTokenUnlock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
     };
-    tokenUnlock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Unlock one bridge-mode entry */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Return one token to rotation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
         };
+      };
     };
-    tokenUnlockLock: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Unlock then immediately re-lock (cooldown reset) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResultEnvelope"];
-                };
-            };
-        };
+  };
+  spaConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    spaTraces: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description SPA shell (HTML) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
+        content: {
+          "text/html": string;
         };
+      };
     };
+  };
+  saveConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "text/plain": string;
+      };
+    };
+    responses: {
+      /** @description Write the raw .env text, reload and report restart-only/overridden keys */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ConfigSaveResponse"];
+        };
+      };
+    };
+  };
+  diag: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Configuration and upstream reachability checks */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagResponse"];
+        };
+      };
+    };
+  };
+  loginPage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Login page shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  login: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LoginRequest"];
+      };
+    };
+    responses: {
+      /** @description Dashboard login (sets the fb_admin session cookie; 302 to /admin on success) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  loginStart: {
+    parameters: {
+      query?: {
+        /** @description isolated=false requests the stable machine fingerprint */
+        isolated?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Start a device-login browser flow (?isolated=false for the stable fingerprint) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LoginStartResponse"];
+        };
+      };
+    };
+  };
+  loginStatus: {
+    parameters: {
+      query: {
+        /** @description Full fingerprint id from login/start */
+        fingerprint: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Poll one device-login flow (pending: status alone; completed: token_index plus user) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LoginCompletedResponse"];
+        };
+      };
+    };
+  };
+  logout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dashboard logout (clears the fb_admin session cookie) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LogoutResponse"];
+        };
+      };
+    };
+  };
+  spaLogs: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  spaMetrics: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  modeSwitch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModeSwitchRequest"];
+      };
+    };
+    responses: {
+      /** @description Switch bridge/pooled mode (loopback rules apply) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  spaModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  spaPlayground: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  playgroundChat: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Prompt through the real chat handler with streaming forced (SSE answer) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": string;
+        };
+      };
+    };
+  };
+  reload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reload configuration from disk and apply live (Bearer ADMIN_TOKEN) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReloadResponse"];
+        };
+      };
+    };
+  };
+  restart: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Validate config and restart the gateway process */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RestartResponse"];
+        };
+      };
+    };
+  };
+  spaSetup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  smoke: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmokeRequest"];
+      };
+    };
+    responses: {
+      /** @description Zero-cost upstream probe with SSE preview (DEVTOOLS_ENABLED gate) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SmokeResponse"];
+        };
+      };
+    };
+  };
+  spaTokens: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  tokenAdd: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TokenAddRequest"];
+      };
+    };
+    responses: {
+      /** @description Add one upstream token to the pool and persist to .env */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenRemove: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TokenRemoveRequest"];
+      };
+    };
+    responses: {
+      /** @description Remove one pool token (absent index removes the last) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenSwap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TokenSwapRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap two pool positions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenTestAll: {
+    parameters: {
+      query?: {
+        /** @description auto=1 serves the throttled quota snapshot without probing */
+        auto?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Probe every pooled token (?auto=1 returns the throttled snapshot) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["tokenTestAllResponse"];
+        };
+      };
+    };
+  };
+  tokenDropSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Drop one token's upstream session */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenFinish: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description FINISH one token's upstream runs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenLock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Take one token out of rotation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenMaturity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MaturityUpdateRequest"];
+      };
+    };
+    responses: {
+      /** @description Set per-token streak-maturity automation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenMaturityTouch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Fire one manual maturity touch outside the daily slot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenMaturityWarnReset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Clear one token's non-advance warning (re-arms the daily loop) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenSpawnSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SpawnSessionRequest"];
+      };
+    };
+    responses: {
+      /** @description Ensure one token's upstream session for a model */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenTest: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Zero-cost upstream probe of one token */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenUnlock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Return one token to rotation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenUnlockLock: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Unlock then immediately re-lock (cooldown reset) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  spaTraces: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SPA shell (HTML) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
 }
