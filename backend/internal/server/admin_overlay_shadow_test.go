@@ -175,14 +175,14 @@ func TestChangePasswordConvergesAdminTokenOverlay(t *testing.T) {
 	st := attachShadowStore(t, s)
 	h := s.Handler()
 	cookie := shadowLogin(t, h, "secretPass123")
-	// Seed the stale migrated row after login: the overlay now shadows the
-	// file, so the effective credential is the stale value.
+	// Seed the stale migrated row after login: it would shadow the file on
+	// the next reload, so the change must converge it instead of failing
+	// its divergence guard on the migrated row.
 	if err := st.SetSetting(config.OverlayRowKey("ADMIN_TOKEN"), "stale-pass"); err != nil {
 		t.Fatalf("SetSetting: %v", err)
 	}
-
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/change-password",
-		strings.NewReader(`{"current_password":"stale-pass","new_password":"rotatedPass789"}`))
+		strings.NewReader(`{"current_password":"secretPass123","new_password":"rotatedPass789"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()

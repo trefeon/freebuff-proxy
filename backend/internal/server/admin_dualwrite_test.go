@@ -252,15 +252,23 @@ func TestDualWriteModeSwitchBridgeDropsMarker(t *testing.T) {
 	}
 }
 
-// TestTokenMarkerDelta pins the zero-secret marker mapping: pooled lists set
-// the presence flag, an emptied pool drops the row.
+// TestTokenMarkerDelta pins the write-through mapping: pooled lists set the
+// presence flag AND converge the config:AUTH_TOKENS overlay row to the same
+// list; an emptied pool converges the row empty (bridge pins by presence)
+// and drops the marker row.
 func TestTokenMarkerDelta(t *testing.T) {
 	set, del := tokenMarkerDelta([]string{"a", "b"})
 	if set[tokenMarkerKey] != "true" || len(del) != 0 {
 		t.Errorf("pooled delta = (%v, %v), want marker set", set, del)
 	}
+	if set[config.OverlayRowKey("AUTH_TOKENS")] != "a,b" {
+		t.Errorf("pooled delta AUTH_TOKENS row = %q, want converged %q", set[config.OverlayRowKey("AUTH_TOKENS")], "a,b")
+	}
 	set, del = tokenMarkerDelta(nil)
-	if len(set) != 0 || len(del) != 1 || del[0] != tokenMarkerKey {
-		t.Errorf("bridge delta = (%v, %v), want marker deleted", set, del)
+	if set[config.OverlayRowKey("AUTH_TOKENS")] != "" || len(set) != 1 {
+		t.Errorf("bridge delta set = %v, want only the empty AUTH_TOKENS pin", set)
+	}
+	if len(del) != 1 || del[0] != tokenMarkerKey {
+		t.Errorf("bridge delta del = %v, want marker deleted", del)
 	}
 }
