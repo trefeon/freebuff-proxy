@@ -6,7 +6,6 @@
     Unlock,
     Lock,
     Trash2,
-    GripVertical,
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import StatusBadge from "./StatusBadge.svelte";
@@ -97,25 +96,23 @@
   ondragleave={(e) => onDragLeave?.(e, idx)}
   ondrop={(e) => onDrop?.(e, idx)}
   ondragend={onDragEnd}
-  class="fp-inset rounded p-3.5 flex flex-col gap-2.5 transition-all {dragging
+  title={totalTokens > 1 ? $tr("Drag to reorder account position") : undefined}
+  aria-label={totalTokens > 1
+    ? $tr("Draggable account card {index}", { index: idx + 1 })
+    : undefined}
+  class="fp-inset rounded p-3.5 flex flex-col gap-2.5 transition-all {totalTokens >
+    1 && !actionPending
+    ? 'cursor-grab active:cursor-grabbing'
+    : ''} {dragging
     ? 'opacity-30 bg-[var(--fp-surface-2)]/60'
     : dragOver
       ? 'border-[var(--fp-accent)] ring-2 ring-[var(--fp-accent)] bg-[var(--fp-accent)]/5'
       : ''}"
 >
   <!-- Header: identity, status cluster and email share one wrap row;
-       reorder chevrons sit right. Grip hides on touch (chevrons cover it). -->
+       reorder chevrons sit right. The whole card is the drag handle. -->
   <div class="flex items-center justify-between gap-2">
     <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
-      {#if totalTokens > 1}
-        <div
-          class="cursor-grab active:cursor-grabbing p-1 text-[var(--fp-dim)] hover:text-[var(--fp-accent)] rounded select-none -ml-1 hover:bg-[var(--fp-surface)] transition-colors [@media(pointer:coarse)]:hidden"
-          title={$tr("Drag to reorder account position")}
-          aria-label={$tr("Drag to reorder")}
-        >
-          <GripVertical size={16} />
-        </div>
-      {/if}
       <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
         >Account #{idx + 1}</span
       >
