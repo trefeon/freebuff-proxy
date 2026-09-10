@@ -154,8 +154,29 @@ type SettingsEntry struct {
 
 // SettingsListResponse is the GET /admin/api/settings answer.
 type SettingsListResponse struct {
-	Degraded bool            `json:"degraded"`
-	Settings []SettingsEntry `json:"settings"`
+	Degraded bool               `json:"degraded"`
+	Settings []SettingsEntry    `json:"settings"`
+	Migrate  *MigrateStatusInfo `json:"migrate,omitempty"`
+}
+
+// MigrateStatusInfo is the boot-time smart-migration report carried on the
+// settings payload (read-cheap: the store captures it once at Open, the
+// handler serves it from memory plus the already-fetched settings rows —
+// no per-request migration work). FromVersion is the detected PRAGMA
+// user_version stamp before migration (0: fresh init, no DB file); Applied
+// lists the goose versions that actually executed that boot (empty on a
+// strict no-op re-boot); Marker reports the env-to-DB marker row
+// (config:migrated_env_v1) being present; Noop reports zero boot writes
+// (goose chain already at latest and the marker already set). Regenerate
+// data/openapi.json via go generate ./backend/internal/dashboard/ after
+// touching this shape (the emitter inlines it into SettingsListResponse).
+type MigrateStatusInfo struct {
+	FromVersion int   `json:"from_version"`
+	ToVersion   int   `json:"to_version"`
+	Applied     []int `json:"applied"`
+	Fresh       bool  `json:"fresh"`
+	Marker      bool  `json:"marker"`
+	Noop        bool  `json:"noop"`
 }
 
 // SettingsPostRequest is the POST /admin/api/settings body.

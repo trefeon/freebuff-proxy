@@ -384,3 +384,133 @@ func TestSettingsDegradedFlag(t *testing.T) {
 		t.Error("GET settings store-backed returned an empty catalog")
 	}
 }
+
+// migrateTestCookie logs into a store-backed gateway and returns the Cookie
+// header value carrying the session (mirrors settingsTestServer).
+func migrateTestCookie(t *testing.T, ts *httptest.Server) string {
+	t.Helper()
+	resp := postLogin(t, ts.URL+"/admin/login", "secret")
+	defer func() { _ = resp.Body.Close() }()
+	var admin, csrf string
+	for _, c := range resp.Cookies() {
+		if c.Name == "fb_admin" {
+			admin = c.Name + "=" + c.Value
+		}
+		if c.Name == "fb_csrf" {
+			csrf = c.Value
+		}
+	}
+	if admin == "" || csrf == "" {
+		t.Fatal("login did not set fb_admin + fb_csrf cookies")
+	}
+	return admin + "; fb_csrf=" + csrf
+}
+
+// migratePayload fetches GET /admin/api/settings and returns its migrate
+// object (nil when the gateway serves live-only without a store).
+func migratePayload(t *testing.T, ts *httptest.Server, cookie string) map[string]any {
+	t.Helper()
+	code, out := settingsDo(t, http.MethodGet, ts.URL+"/admin/api/settings", cookie, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("GET settings = %d: %v", code, out)
+	}
+	raw, ok := out["migrate"]
+	if !ok || raw == nil {
+		return nil
+	}
+	mig, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("migrate = %T, want an object", raw)
+	}
+	return mig
+}
+
+// TestSettingsMigratePayloadShape pins the migrate-status readers on the
+// settings payload: from_version, applied[], noop (plus to_version, fresh,
+// marker) ride GET /admin/api/settings from the store's in-memory Open
+// report plus the marker row — read-cheap, no per-request migration work.
+func TestSettingsMigratePayloadShape(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dbPath := filepath.Join(t.TempDir(), "migrate.db")
+	st, ms, err := store.OpenWithStatus(dbPath)
+	if err != nil {
+		t.Fatalf("OpenWithStatus: %v", err)
+	}
+	if ms.FromVersion != 0 || len(ms.Applied) != 4 || !ms.Fresh || ms.Noop {
+		t.Fatalf("fresh status = %+v, want {From:0 Applied:x4 Fresh:true Noop:false}", ms)
+	}
+	srv, _ := server.NewTestServerStack(t, nil, []*testutil.MockUpstream{testutil.NewMock()},
+		func(c *config.Config) { c.AdminToken = "secret" }, nil, nil, server.WithHistory(st))
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	t.Cleanup(func() { _ = st.Close() })
+	cookie := migrateTestCookie(t, ts)
+
+	// Fresh boot, marker-less: the report names the detected generation and
+	// the applied chain; the marker is absent until the env import runs.
+	mig := migratePayload(t, ts, cookie)
+	if mig == nil {
+		t.Fatal("store-backed settings has no migrate object, want the boot report")
+	}
+	if mig["from_version"] != 0.0 || mig["to_version"] != 4.0 {
+		t.Errorf("migrate from/to = %v/%v, want 0/4", mig["from_version"], mig["to_version"])
+	}
+	applied, ok := mig["applied"].([]any)
+	if !ok || len(applied) != 4 {
+		t.Fatalf("migrate applied = %v, want the 4-step chain", mig["applied"])
+	}
+	for i, v := range applied {
+		if v != float64(i+1) {
+			t.Errorf("migrate applied[%d] = %v, want %d", i, v, i+1)
+		}
+	}
+	if mig["fresh"] != true || mig["marker"] != false || mig["noop"] != false {
+		t.Errorf("migrate fresh/marker/noop = %v/%v/%v, want true/false/false", mig["fresh"], mig["marker"], mig["noop"])
+	}
+
+	// The env import flips the marker (no server restart, same handle).
+	if err := st.SetSetting(config.MigrationMarkerRow, config.MigrationMarkerValue); err != nil {
+		t.Fatalf("set marker: %v", err)
+	}
+	if mig := migratePayload(t, ts, cookie); mig["marker"] != true {
+		t.Errorf("migrate marker = %v after the import, want true", mig["marker"])
+	}
+
+	// A re-boot converges to the strict no-op shape: applied encodes [] and
+	// the marker stays set.
+	ts.Close()
+	if err := st.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	st2, ms2, err := store.OpenWithStatus(dbPath)
+	if err != nil {
+		t.Fatalf("re-OpenWithStatus: %v", err)
+	}
+	t.Cleanup(func() { _ = st2.Close() })
+	if ms2.Fresh || len(ms2.Applied) != 0 || !ms2.Noop {
+		t.Fatalf("re-boot status = %+v, want {Fresh:false Applied:[] Noop:true}", ms2)
+	}
+	srv2, _ := server.NewTestServerStack(t, nil, []*testutil.MockUpstream{testutil.NewMock()},
+		func(c *config.Config) { c.AdminToken = "secret" }, nil, nil, server.WithHistory(st2))
+	ts2 := httptest.NewServer(srv2.Handler())
+	t.Cleanup(ts2.Close)
+	mig2 := migratePayload(t, ts2, migrateTestCookie(t, ts2))
+	if mig2["marker"] != true || mig2["noop"] != true {
+		t.Errorf("re-boot migrate marker/noop = %v/%v, want true/true", mig2["marker"], mig2["noop"])
+	}
+	applied2, ok := mig2["applied"].([]any)
+	if !ok || applied2 == nil || len(applied2) != 0 {
+		t.Errorf("re-boot migrate applied = %#v, want [] (never null)", mig2["applied"])
+	}
+}
+
+// TestSettingsMigrateAbsentLiveOnly pins the degraded side: without a store
+// the settings payload carries no migrate object (there are no boot facts).
+func TestSettingsMigrateAbsentLiveOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
+	ts := dashboardServer(t, "secret", nil)
+	t.Cleanup(ts.Close)
+	if mig := migratePayload(t, ts, authedCookie(t, ts)); mig != nil {
+		t.Errorf("live-only migrate = %v, want absent", mig)
+	}
+}

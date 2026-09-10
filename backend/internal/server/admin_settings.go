@@ -29,10 +29,10 @@ import (
 // the effective display value plus the precedence tier that provides it.
 type settingsEntry = dashboard.SettingsEntry
 
-// settingsOverlay reads the live DB overlay (canonical key -> raw value).
-// A nil store or a read failure degrades to empty (file/env/default only);
+// settingsRows reads the raw DB settings dump (key -> raw value). A nil
+// store or a read failure degrades to empty (file/env/default only);
 // mutations 503 instead (a write must not silently land nowhere).
-func (a *adminHandlers) settingsOverlay() map[string]string {
+func (a *adminHandlers) settingsRows() map[string]string {
 	if a.settings == nil {
 		return map[string]string{}
 	}
@@ -41,7 +41,39 @@ func (a *adminHandlers) settingsOverlay() map[string]string {
 		a.logfunc().Warn("settings overlay unreadable; serving file/env/default", "err", err)
 		return map[string]string{}
 	}
-	return config.OverlayFromRows(rows)
+	return rows
+}
+
+// settingsOverlay reads the live DB overlay (canonical key -> raw value).
+// A nil store or a read failure degrades to empty (file/env/default only);
+// mutations 503 instead (a write must not silently land nowhere).
+func (a *adminHandlers) settingsOverlay() map[string]string {
+	return config.OverlayFromRows(a.settingsRows())
+}
+
+// migrateStatusInfo builds the boot smart-migration report for the settings
+// payload from the store's in-memory Open report plus the already-fetched
+// settings rows (marker presence): read-cheap, no per-request migration
+// work and no extra DB round trip beyond the rows the handler already
+// reads. Nil with a nil store (live-only boots carry no migration facts).
+func (a *adminHandlers) migrateStatusInfo(rows map[string]string) *dashboard.MigrateStatusInfo {
+	if a.settings == nil {
+		return nil
+	}
+	ms := a.settings.MigrateStatus()
+	_, marker := rows[config.MigrationMarkerRow]
+	applied := ms.Applied
+	if applied == nil {
+		applied = []int{}
+	}
+	return &dashboard.MigrateStatusInfo{
+		FromVersion: ms.FromVersion,
+		ToVersion:   ms.ToVersion,
+		Applied:     applied,
+		Fresh:       ms.Fresh,
+		Marker:      marker,
+		Noop:        ms.Noop && marker,
+	}
 }
 
 // loadConfig is the single overlay-aware reload every admin mutation and
@@ -58,7 +90,10 @@ func (a *adminHandlers) handleSettingsGet(w http.ResponseWriter, r *http.Request
 	// state honestly. Status stays 200 with the full catalog — every row
 	// still reports its effective value and tier.
 	degraded := a.settings == nil
-	overlay := a.settingsOverlay()
+	// One rows fetch feeds both the overlay and the migrate report (marker
+	// presence): no extra DB round trip beyond what the overlay already did.
+	rows := a.settingsRows()
+	overlay := config.OverlayFromRows(rows)
 	cfg := a.cfgLoad()
 	sources := config.SettingSources(a.configPath, overlay)
 	values := make(map[string]config.DataEntry, len(config.Catalog()))
@@ -80,7 +115,7 @@ func (a *adminHandlers) handleSettingsGet(w http.ResponseWriter, r *http.Request
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(dashboard.SettingsListResponse{Degraded: degraded, Settings: entries})
+	_ = json.NewEncoder(w).Encode(dashboard.SettingsListResponse{Degraded: degraded, Settings: entries, Migrate: a.migrateStatusInfo(rows)})
 }
 
 func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Request) {

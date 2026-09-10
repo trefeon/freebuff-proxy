@@ -399,6 +399,41 @@
           "degraded": {
             "type": "boolean"
           },
+          "migrate": {
+            "nullable": true,
+            "properties": {
+              "applied": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "fresh": {
+                "type": "boolean"
+              },
+              "from_version": {
+                "type": "integer"
+              },
+              "marker": {
+                "type": "boolean"
+              },
+              "noop": {
+                "type": "boolean"
+              },
+              "to_version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "applied",
+              "fresh",
+              "from_version",
+              "marker",
+              "noop",
+              "to_version"
+            ],
+            "type": "object"
+          },
           "settings": {
             "items": {
               "properties": {
