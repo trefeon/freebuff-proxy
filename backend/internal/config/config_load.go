@@ -31,9 +31,13 @@ type LoadOptions struct {
 	// Overlay is the DB settings overlay (ADR-0019): canonical KEY -> raw
 	// VALUE pairs applied after the .env file and before the process
 	// environment, so UI-persisted knobs beat the file without rewriting
-	// it while explicit process env keeps winning. Blocked keys (secrets,
-	// UPSTREAM_BASE_URL, DB_PATH) are filtered, never applied. Nil or empty
-	// behaves like Load.
+	// it while explicit process env keeps winning. Since the env-to-DB
+	// migration every catalog key is overlay-addressable, secrets included
+	// (the DB file holds them at mode 0600); AUTH_TOKENS applies with
+	// presence semantics (an empty row pins bridge mode and suppresses CLI
+	// auto-discovery, mirroring the .env tier), and AUTO_DISCOVER_TOKEN is
+	// honored from the overlay only when the process environment leaves it
+	// unset. Nil or empty behaves like Load.
 	Overlay map[string]string
 }
 
@@ -587,11 +591,19 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	// also opts into discovery: the operator explicitly asked to run like
 	// the CLI, so AUTO_DISCOVER_TOKEN=false must not silently leave the
 	// pool empty.
+	// AUTO_DISCOVER_TOKEN resolves process env > DB overlay > default true,
+	// like every other knob (the overlay only counts when the environment
+	// leaves it unset). It records on the config so the dashboard and the
+	// env-to-DB migration export the effective value instead of hardcoding
+	// it.
+	autoDiscover := true
+	if v, ok := os.LookupEnv("AUTO_DISCOVER_TOKEN"); ok {
+		autoDiscover = !isFalseWord(v)
+	} else if v, ok := opts.Overlay["AUTO_DISCOVER_TOKEN"]; ok {
+		autoDiscover = !isFalseWord(v)
+	}
+	cfg.AutoDiscoverToken = autoDiscover
 	if opts.DiscoverCLIToken != nil {
-		autoDiscover := true
-		if v := strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_DISCOVER_TOKEN"))); v == "false" || v == "0" || v == "off" || v == "no" {
-			autoDiscover = false
-		}
 		if (autoDiscover || cfg.AdoptCLISession) && len(cfg.AuthTokens) == 0 && !raw.AuthTokensSet {
 			if token, email, srcPath, ok := opts.DiscoverCLIToken(); ok {
 				cfg.AuthTokens = []string{token}
@@ -801,6 +813,18 @@ func parseBool(s string) (bool, bool) {
 		return false, true
 	}
 	return false, false
+}
+
+// isFalseWord reports whether s disables a flag in the AUTO_DISCOVER_TOKEN
+// convention: "false"/"0"/"off"/"no" (case-insensitive, trimmed). Anything
+// else — including blank — leaves the flag enabled, matching the loader's
+// long-standing reading of the variable.
+func isFalseWord(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "false", "0", "off", "no":
+		return true
+	}
+	return false
 }
 
 // parseCSV splits a comma-separated value via splitList.

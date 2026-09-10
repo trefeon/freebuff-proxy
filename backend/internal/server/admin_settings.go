@@ -96,6 +96,21 @@ func (a *adminHandlers) handleSettingsPost(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	key := config.NormalizeSettingKey(req.Key)
+	// AUTH_TOKENS and ADMIN_TOKEN have dedicated mutation endpoints that
+	// converge the overlay alongside the other layers they touch: the Tokens
+	// page and mode switch reconcile the live pool and the presence marker,
+	// Change-password refreshes the session cookie and forces
+	// require-login. A direct knob write would bypass that reconciliation
+	// (the pool adopts additions but never removals), so it 400s with a
+	// pointer instead of persisting a row the pool cannot honor.
+	if key == "AUTH_TOKENS" {
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "AUTH_TOKENS is managed on the Tokens page and mode switch, not as a knob (the pool needs reconciling).", "invalid_setting")
+		return
+	}
+	if key == "ADMIN_TOKEN" {
+		a.dash.RenderResult(w, http.StatusBadRequest, false, "ADMIN_TOKEN is changed via Change password, not as a knob (the session cookie needs refreshing).", "invalid_setting")
+		return
+	}
 	val, ok := settingsValueString(req.Value)
 	if !ok {
 		a.dash.RenderResult(w, http.StatusBadRequest, false, "Value must be a string, number, or boolean.", "bad_value")

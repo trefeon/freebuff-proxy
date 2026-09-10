@@ -4,16 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"freebuff-proxy/backend/internal/config"
 )
 
 // tokenMarkerKey is the settings-table presence marker for the AUTH_TOKENS
-// pool. Raw tokens never reach the store: the marker carries zero secret
-// material ("true" while a pooled .env persists, absent in bridge mode), so
-// token add/remove/swap/mode-switch still participate in the dual-layer
-// persist without violating the no-raw-tokens rule. AUTH_TOKENS and
-// ADMIN_TOKEN themselves stay .env-only and never enter the settings table.
+// pool ("true" while pooled, absent in bridge mode): a cheap presence signal
+// for readers that must not parse the pool. Since the env-to-DB migration
+// the raw pool itself is ALSO mirrored in the config:AUTH_TOKENS overlay row
+// (the dashboard DB holds secrets at mode 0600) — tokenMarkerDelta converges
+// both, so a migrated row can never shadow the .env write with a stale list
+// and fail the reload verify.
 const tokenMarkerKey = "auth/tokens_configured"
 
 // dualPhase names which layer of a dualWrite failed, so callers keep their
@@ -154,9 +156,16 @@ func (a *adminHandlers) restoreSettingRows(snap map[string]*string) {
 }
 
 // tokenMarkerDelta maps a post-mutation AUTH_TOKENS list to its settings
-// write-through: marker set while pooled, marker dropped in bridge mode.
+// write-through: marker set while pooled, marker dropped in bridge mode,
+// and the config:AUTH_TOKENS overlay row converged to the same list (empty
+// in bridge mode, where presence pins the choice and suppresses CLI
+// auto-discovery). Every token path (add/remove/swap/mode-switch) funnels
+// through here, so the overlay — which beats .env at load — always carries
+// the latest pool instead of shadowing the file just written.
 func tokenMarkerDelta(tokens []string) (set map[string]string, del []string) {
-	set = map[string]string{}
+	set = map[string]string{
+		config.OverlayRowKey("AUTH_TOKENS"): strings.Join(tokens, ","),
+	}
 	if len(tokens) > 0 {
 		set[tokenMarkerKey] = "true"
 		return set, nil

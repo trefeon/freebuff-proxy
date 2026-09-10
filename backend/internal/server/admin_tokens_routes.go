@@ -229,7 +229,8 @@ func (a *adminHandlers) handleModeSwitch(w http.ResponseWriter, r *http.Request)
 		// Persist AUTH_TOKENS= (explicit empty) and
 		// reload, verifying the effective config actually lands in bridge
 		// mode before touching the live pool. Roll the .env back on failure.
-		// Dual-layer persist: AUTH_TOKENS= (explicit empty) to .env, token
+		// Dual-layer persist: AUTH_TOKENS= (explicit empty) to .env and the
+		// overlay row converged empty (bridge pins by presence), token
 		// marker dropped from settings (bridge = no pooled tokens).
 		set, del := tokenMarkerDelta(nil)
 		newCfg, err := a.dualWrite(

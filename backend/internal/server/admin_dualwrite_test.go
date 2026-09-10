@@ -95,10 +95,13 @@ func TestDualWriteRequireLoginRoundTrip(t *testing.T) {
 		t.Error("RequireLogin flipped to true after .env seed edit, want overlay (false) to win")
 	}
 
-	// No secret material may ever land in the settings table.
+	// The require-login path writes only its own knob: no credential row or
+	// value may appear as its side effect. (Credential rows do exist after
+	// the env-to-DB migration and the token/password write-through paths —
+	// this pins the require-login toggle stays in its lane.)
 	for k, v := range dualWriteStoreRows(t, st) {
 		if k == config.OverlayRowKey("AUTH_TOKENS") || k == config.OverlayRowKey("ADMIN_TOKEN") {
-			t.Errorf("secret overlay row %q must never exist", k)
+			t.Errorf("secret overlay row %q written by the require-login path", k)
 		}
 		if strings.Contains(v, "secretPass123") || strings.Contains(v, "tok-0") {
 			t.Errorf("settings row %q leaks secret material: %q", k, v)
@@ -249,15 +252,23 @@ func TestDualWriteModeSwitchBridgeDropsMarker(t *testing.T) {
 	}
 }
 
-// TestTokenMarkerDelta pins the zero-secret marker mapping: pooled lists set
-// the presence flag, an emptied pool drops the row.
+// TestTokenMarkerDelta pins the write-through mapping: pooled lists set the
+// presence flag AND converge the config:AUTH_TOKENS overlay row to the same
+// list; an emptied pool converges the row empty (bridge pins by presence)
+// and drops the marker row.
 func TestTokenMarkerDelta(t *testing.T) {
 	set, del := tokenMarkerDelta([]string{"a", "b"})
 	if set[tokenMarkerKey] != "true" || len(del) != 0 {
 		t.Errorf("pooled delta = (%v, %v), want marker set", set, del)
 	}
+	if set[config.OverlayRowKey("AUTH_TOKENS")] != "a,b" {
+		t.Errorf("pooled delta AUTH_TOKENS row = %q, want converged %q", set[config.OverlayRowKey("AUTH_TOKENS")], "a,b")
+	}
 	set, del = tokenMarkerDelta(nil)
-	if len(set) != 0 || len(del) != 1 || del[0] != tokenMarkerKey {
-		t.Errorf("bridge delta = (%v, %v), want marker deleted", set, del)
+	if set[config.OverlayRowKey("AUTH_TOKENS")] != "" || len(set) != 1 {
+		t.Errorf("bridge delta set = %v, want only the empty AUTH_TOKENS pin", set)
+	}
+	if len(del) != 1 || del[0] != tokenMarkerKey {
+		t.Errorf("bridge delta del = %v, want marker deleted", del)
 	}
 }

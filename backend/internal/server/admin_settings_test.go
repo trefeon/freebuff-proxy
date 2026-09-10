@@ -187,16 +187,20 @@ func TestSettingsOverlayCycle(t *testing.T) {
 	}
 }
 
-// TestSettingsPostRejects pins the validation gate: secrets, unknown keys,
-// and unparseable values never reach the DB.
+// TestSettingsPostRejects pins the validation gate: pool/password credentials
+// with dedicated endpoints (AUTH_TOKENS, ADMIN_TOKEN), unknown keys, and
+// unparseable values never reach the DB as knob writes. The remaining
+// formerly-blocked keys persist since the env-to-DB migration (the DB holds
+// secrets at mode 0600); their acceptance is pinned by
+// TestSettingsPostAcceptsMigratedSecrets.
 func TestSettingsPostRejects(t *testing.T) {
 	ts, cookie, csrf := settingsTestServer(t)
 
-	for _, key := range []string{"AUTH_TOKENS", "ADMIN_TOKEN", "API_KEYS", "WEBHOOK_URL", "UPSTREAM_BASE_URL", "DB_PATH", "AUTO_DISCOVER_TOKEN"} {
+	for _, key := range []string{"AUTH_TOKENS", "ADMIN_TOKEN", "DB_PATH"} {
 		code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
 			map[string]any{"key": key, "value": "x"})
 		if code != http.StatusBadRequest {
-			t.Errorf("POST %s = %d %v, want 400 (never in DB)", key, code, res)
+			t.Errorf("POST %s = %d %v, want 400 (dedicated endpoint or unknown)", key, code, res)
 		}
 	}
 	for _, kv := range [][2]string{
@@ -220,6 +224,32 @@ func TestSettingsPostRejects(t *testing.T) {
 	for _, key := range []string{"SAFE_MODE", "MAX_REQUESTS_PER_MINUTE", "RATE_LIMIT_PER_IP", "HTTP_READ_TIMEOUT"} {
 		if entries[key]["source"] == "db" {
 			t.Errorf("%s source = db after rejected POSTs, want no overlay row", key)
+		}
+	}
+}
+
+// TestSettingsPostAcceptsMigratedSecrets pins the env-to-DB migration's POST
+// surface: API_KEYS, WEBHOOK_URL, UPSTREAM_BASE_URL, and AUTO_DISCOVER_TOKEN
+// persist to the DB overlay and report source=db (fake values only).
+func TestSettingsPostAcceptsMigratedSecrets(t *testing.T) {
+	ts, cookie, csrf := settingsTestServer(t)
+
+	for key, value := range map[string]string{
+		"API_KEYS":            "fb-test-fake-client-1",
+		"WEBHOOK_URL":         "https://example.invalid/hook",
+		"UPSTREAM_BASE_URL":   "https://example.invalid",
+		"AUTO_DISCOVER_TOKEN": "false",
+	} {
+		code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
+			map[string]any{"key": key, "value": value})
+		if code != http.StatusOK || res["ok"] != true {
+			t.Errorf("POST %s = %d %v, want 200 ok (migrated secret persists)", key, code, res)
+		}
+	}
+	entries := settingsSources(t, ts, cookie)
+	for _, key := range []string{"API_KEYS", "WEBHOOK_URL", "UPSTREAM_BASE_URL", "AUTO_DISCOVER_TOKEN"} {
+		if entries[key]["source"] != "db" {
+			t.Errorf("%s source = %v, want db after POST", key, entries[key]["source"])
 		}
 	}
 }

@@ -162,7 +162,7 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 	case "HTTP2_UPSTREAM":
 		return strconv.FormatBool(c.HTTP2Upstream), false
 	case "AUTO_DISCOVER_TOKEN":
-		return "true", false
+		return strconv.FormatBool(c.AutoDiscoverToken), false
 	case "DEVTOOLS_ENABLED":
 		return strconv.FormatBool(c.DevToolsEnabled), false
 	case "ADOPT_CLI_SESSION":

@@ -34,6 +34,15 @@ Then:
 Defaults that matter (`.env.example`): `SAFE_MODE=true` (anti-ban preset),
 `COST_MODE=free`, 30 req/min and 1500 req/day Pacific limits.
 
+Configuration persistence: the first boot imports the effective config
+(process env wins over `.env` over defaults) into the dashboard DB
+(`data/freebuff.db`, mode `0600`) as `config:` overlay rows plus a
+`config:migrated_env_v1` marker — later boots are no-ops via the marker.
+The DB is then the persisted home the dashboard saves write to, secrets
+included (`AUTH_TOKENS`, `ADMIN_TOKEN`, `API_KEYS`, `WEBHOOK_URL` rows);
+keep its `0600` mode on copies/backups. Explicit process env still wins at
+runtime, so a migrated row never overrides the environment.
+
 ## Layout
 
 - `backend/` — gateway source.

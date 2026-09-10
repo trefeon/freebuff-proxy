@@ -138,3 +138,62 @@ func TestRequireLoginConvergesOverlay(t *testing.T) {
 		t.Error("effective RequireLogin still true after toggle to false")
 	}
 }
+
+// TestModeSwitchBridgeConvergesAuthTokensOverlay: with a stale migrated
+// config:AUTH_TOKENS row pinning a pool the .env no longer carries, the
+// pooled→bridge switch converges the row to empty instead of failing — the
+// switch is write-through (DB-unified storage), so token management keeps
+// working after the env-to-DB migration instead of tripping its own
+// divergence guard on the migrated row.
+func TestModeSwitchBridgeConvergesAuthTokensOverlay(t *testing.T) {
+	s := newReviewFixServer(t, "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secretPass123\n", nil)
+	st := attachShadowStore(t, s)
+	if err := st.SetSetting(config.OverlayRowKey("AUTH_TOKENS"), "tok-stale"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	h := s.Handler()
+	cookie := shadowLogin(t, h, "secretPass123")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/mode", strings.NewReader(`{"mode":"bridge"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bridge switch status = %d, want 200 (stale overlay converges): %s", rec.Code, rec.Body.String())
+	}
+	if v, _, _ := st.GetSetting(config.OverlayRowKey("AUTH_TOKENS")); v != "" {
+		t.Errorf("overlay AUTH_TOKENS = %q, want converged empty (bridge pin)", v)
+	}
+	if !s.admin.cfgLoad().BridgeMode() {
+		t.Error("effective config not in bridge mode after switch")
+	}
+}
+
+func TestChangePasswordConvergesAdminTokenOverlay(t *testing.T) {
+	s := newReviewFixServer(t, "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secretPass123\n", nil)
+	st := attachShadowStore(t, s)
+	h := s.Handler()
+	cookie := shadowLogin(t, h, "secretPass123")
+	// Seed the stale migrated row after login: it would shadow the file on
+	// the next reload, so the change must converge it instead of failing
+	// its divergence guard on the migrated row.
+	if err := st.SetSetting(config.OverlayRowKey("ADMIN_TOKEN"), "stale-pass"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/change-password",
+		strings.NewReader(`{"current_password":"secretPass123","new_password":"rotatedPass789"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change-password status = %d, want 200 (stale overlay converges): %s", rec.Code, rec.Body.String())
+	}
+	if v, _, _ := st.GetSetting(config.OverlayRowKey("ADMIN_TOKEN")); v != "rotatedPass789" {
+		t.Error("overlay ADMIN_TOKEN not converged to the new credential")
+	}
+	if got := s.admin.cfgLoad().AdminToken; got != "rotatedPass789" {
+		t.Error("effective ADMIN_TOKEN not rotated")
+	}
+}

@@ -1,10 +1,14 @@
-// Package store is the dashboard history backend (ADR-0016): one pure-Go
-// SQLite file holding log entries, quota snapshots, maturity events, and
-// request records. Leaf package by construction: stdlib + the modernc driver
-// + pressly/goose for migrations only, zero internal imports (see archtest
-// matrix). History is display and debug data, never control state: a missing
-// or corrupt file degrades to live-only views, and retention runs off the
-// request path.
+// Package store is the dashboard backend (ADR-0016): one pure-Go SQLite file
+// holding log entries, quota snapshots, maturity events, request records,
+// and — since the env-to-DB migration — the DB settings overlay (ADR-0019),
+// the persisted home of the whole config knob set. That includes secrets
+// (AUTH_TOKENS, ADMIN_TOKEN, API_KEYS, WEBHOOK_URL rows): the file is
+// created and kept at mode 0600 on open, and operators must preserve that
+// when copying or backing the file up. Leaf package by construction: stdlib
+// + the modernc driver + pressly/goose for migrations only, zero internal
+// imports (see archtest matrix). History is display and debug data, never
+// control state: a missing or corrupt file degrades to live-only views, and
+// retention runs off the request path.
 package store
 
 import (
@@ -178,6 +182,16 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version=%d", schemaVersion)); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: stamp version: %w", err)
+	}
+	// The settings table holds secrets since the env-to-DB migration
+	// (AUTH_TOKENS, ADMIN_TOKEN, API_KEYS, WEBHOOK_URL overlay rows), so
+	// the file is kept at 0600: a fresh create inherits umask-loosened
+	// modes, and a pre-migration file may still be 0644. Best-effort is
+	// not enough for credential material — a chmod failure fails the open
+	// and the caller degrades to live-only.
+	if err := os.Chmod(path, 0o600); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("store: chmod 0600 %s: %w", path, err)
 	}
 	return &Store{db: db}, nil
 }

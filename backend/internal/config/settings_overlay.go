@@ -4,6 +4,12 @@
 //
 //	built-in defaults < JSON -config < .env file < DB overlay < process env
 //
+// Since the env-to-DB migration the overlay is the persisted home of the
+// whole knob set, secrets included: the settings table lives in the dashboard
+// DB file (0600, enforced at open), so AUTH_TOKENS, ADMIN_TOKEN, API_KEYS,
+// and WEBHOOK_URL rows are expected there. Explicit process env still wins
+// at runtime — a migrated row never silently overrides the environment.
+//
 // The overlay lives in the generic settings table (store package) under
 // OverlayRowKey namespacing; this package only defines the key contract and
 // the load-time application, so the bottom-layer import rule holds (config
@@ -21,22 +27,20 @@ import (
 	"time"
 )
 
-// SettingsBlockedKeys are never stored as a DB overlay: credentials and
-// loopback-sensitive material stay env/.env-only, as does AUTO_DISCOVER_TOKEN
-// (env-only: it controls whether the .env file is read at all, so an overlay
-// row could never take effect — and the effective view hardcodes its display
-// to "true", so storing "false" would be a silent no-op). POST rejects them;
-// Load filters them defensively (a tampered row must not flip the instance
-// into pooled mode or repoint the upstream).
-var SettingsBlockedKeys = map[string]bool{
-	"AUTH_TOKENS":         true,
-	"ADMIN_TOKEN":         true,
-	"API_KEYS":            true,
-	"WEBHOOK_URL":         true,
-	"UPSTREAM_BASE_URL":   true,
-	"DB_PATH":             true,
-	"AUTO_DISCOVER_TOKEN": true,
-}
+// SettingsBlockedKeys names keys that may never live in the DB overlay.
+// Empty since the env-to-DB migration: every formerly-blocked key
+// (AUTH_TOKENS, ADMIN_TOKEN, API_KEYS, WEBHOOK_URL, UPSTREAM_BASE_URL,
+// DB_PATH, AUTO_DISCOVER_TOKEN) is now overlay-addressable so a fully
+// migrated user runs from the DB alone. The map (and IsSettingsBlocked) stay
+// as the gate for any future key that must remain env-only. Two notes:
+//
+//   - DB_PATH has no catalog entry, so OverlayFromRows still drops it as an
+//     unknown key: the open path resolves the file from the process
+//     environment before any overlay could load, and a row could never
+//     repoint the live file.
+//   - Process env still wins over the overlay at runtime for every key, so
+//     a migrated row can never silently override an explicit environment.
+var SettingsBlockedKeys = map[string]bool{}
 
 // OverlayRowPrefix namespaces config overlays inside the generic settings
 // table (store holds other control state under its own keys).
@@ -70,9 +74,15 @@ func OverlayRowKey(key string) string {
 
 // OverlayFromRows extracts the DB overlay (canonical key -> raw value) from
 // a full settings-table dump. Unknown, blocked, or malformed rows are
-// skipped: the overlay only ever addresses writable catalog keys, and a value
-// that fails ValidateSettingValue could never take effect (it would fail the
-// POST gate), so a tampered or stale row must not poison the load.
+// skipped: the overlay only ever addresses writable catalog keys, and a
+// non-empty value that fails ValidateSettingValue could never take effect
+// (it would fail the POST gate), so a tampered or stale row must not poison
+// the load. Empty values are kept as no-op pins: every override*From helper
+// skips blanks, so they change nothing — except AUTH_TOKENS, where presence
+// (even empty) is the explicit bridge-mode choice that suppresses CLI
+// auto-discovery, mirroring the .env tier. The migration writes one row per
+// catalog key (blanks included), so the overlay round-trips the full knob
+// set; explicit process env still wins over every row at Load.
 func OverlayFromRows(rows map[string]string) map[string]string {
 	out := map[string]string{}
 	for rowKey, value := range rows {
@@ -87,8 +97,10 @@ func OverlayFromRows(rows map[string]string) map[string]string {
 		if _, known := LookupSetting(n); !known {
 			continue
 		}
-		if err := ValidateSettingValue(n, value); err != nil {
-			continue
+		if strings.TrimSpace(value) != "" {
+			if err := ValidateSettingValue(n, value); err != nil {
+				continue
+			}
 		}
 		out[n] = value
 	}
@@ -97,10 +109,12 @@ func OverlayFromRows(rows map[string]string) map[string]string {
 
 // ValidateSettingValue checks one overlay write before it touches the DB:
 // the key must be a known writable catalog key and the value must parse for
-// its kind. Deeper semantic checks (durations, model locks, fallback maps)
-// run through the full Load in the POST handler — this gate only rejects
-// what could never take effect (unknown keys, secrets, unparseable
-// bool/int/float), so a 400 never stores a silent no-op.
+// its kind. Secrets are storable: the settings table lives in the dashboard
+// DB file (0600, enforced at open), which is the persisted home of the whole
+// knob set since the env-to-DB migration. Deeper semantic checks (durations,
+// model locks, fallback maps) run through the full Load in the POST handler
+// — this gate only rejects what could never take effect (unknown keys,
+// unparseable bool/int/float), so a 400 never stores a silent no-op.
 func ValidateSettingValue(key, value string) error {
 	n := NormalizeSettingKey(key)
 	if n == "" {
@@ -112,9 +126,6 @@ func ValidateSettingValue(key, value string) error {
 	def, ok := LookupSetting(n)
 	if !ok {
 		return fmt.Errorf("unknown setting %q", n)
-	}
-	if def.Secret {
-		return fmt.Errorf("%s cannot be stored as a DB overlay (env/.env only)", n)
 	}
 	v := strings.TrimSpace(value)
 	if v == "" {
@@ -161,12 +172,17 @@ func ValidateSettingValue(key, value string) error {
 // and the process environment (ADR-0019 precedence). It shares
 // applyMappedValues with applyDotenv, so every key the loader parses is
 // overlay-addressable by construction — no parallel key list to drift.
+// AUTH_TOKENS rides alongside with .env-tier presence semantics: the key's
+// presence (even empty) records an explicit pool choice and suppresses CLI
+// auto-discovery, so a migrated bridge-mode user stays in bridge mode when
+// the environment no longer pins the pool. Explicit process env still wins:
+// Load applies the real-environment AUTH_TOKENS block after this overlay.
 func applySettingsOverlay(raw *rawConfig, overlay map[string]string) {
 	if len(overlay) == 0 {
 		return
 	}
-	// Defense in depth: POST already rejects these, but a tampered row must
-	// never repoint secrets or the upstream through the back door.
+	// Defense in depth: OverlayFromRows already drops these, but a caller
+	// passing a hand-built map must not smuggle unknown rows into raw.
 	filtered := make(map[string]string, len(overlay))
 	for k, v := range overlay {
 		n := NormalizeSettingKey(k)
@@ -182,6 +198,10 @@ func applySettingsOverlay(raw *rawConfig, overlay map[string]string) {
 		return
 	}
 	applyMappedValues(raw, func(name string) string { return filtered[name] })
+	if v, ok := filtered["AUTH_TOKENS"]; ok {
+		raw.AuthTokens = splitList(v)
+		raw.AuthTokensSet = true
+	}
 }
 
 // SettingSources reports, per catalog key, which precedence tier provides

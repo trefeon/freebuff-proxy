@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -64,37 +63,87 @@ func TestSettingsOverlayIntBool(t *testing.T) {
 	}
 }
 
-// TestSettingsOverlayBlockedNeverApplies: a tampered overlay row for a
-// secret/endpoint key must not take effect — the file/env value stands.
-func TestSettingsOverlayBlockedNeverApplies(t *testing.T) {
+// TestSettingsOverlaySecretsApply: since the env-to-DB migration every
+// catalog key is overlay-addressable, secrets included (the DB file holds
+// them at mode 0600) — a migrated row takes effect when the environment
+// leaves the key unset. Fake values only, never real credentials.
+func TestSettingsOverlaySecretsApply(t *testing.T) {
 	clearEnv(t)
 	t.Chdir(t.TempDir())
 	cfg, err := LoadOpts("", LoadOptions{Overlay: map[string]string{
-		"AUTH_TOKENS":       "tok-should-not-apply",
-		"ADMIN_TOKEN":       "hijack",
-		"UPSTREAM_BASE_URL": "https://evil.example.com",
+		"AUTH_TOKENS":       "fb-test-fake-token-1",
+		"ADMIN_TOKEN":       "fb-test-fake-admin-1",
+		"API_KEYS":          "fb-test-fake-client-1",
+		"WEBHOOK_URL":       "https://example.invalid/hook",
+		"UPSTREAM_BASE_URL": "https://example.invalid",
 		"SAFE_MODE":         "false",
 	}})
 	if err != nil {
 		t.Fatalf("LoadOpts: %v", err)
 	}
-	if len(cfg.AuthTokens) != 0 {
-		t.Errorf("blocked AUTH_TOKENS overlay applied: %v", cfg.AuthTokens)
+	if len(cfg.AuthTokens) != 1 || cfg.AuthTokens[0] != "fb-test-fake-token-1" {
+		t.Errorf("overlay AUTH_TOKENS did not apply: %v", cfg.AuthTokens)
 	}
-	if cfg.AdminToken == "hijack" {
-		t.Error("blocked ADMIN_TOKEN overlay applied")
+	if cfg.AdminToken != "fb-test-fake-admin-1" {
+		t.Error("overlay ADMIN_TOKEN did not apply")
 	}
-	if strings.Contains(cfg.UpstreamBaseURL, "evil") {
-		t.Errorf("blocked UPSTREAM_BASE_URL overlay applied: %q", cfg.UpstreamBaseURL)
+	if len(cfg.APIKeys) != 1 || cfg.APIKeys[0] != "fb-test-fake-client-1" {
+		t.Errorf("overlay API_KEYS did not apply: %v", cfg.APIKeys)
+	}
+	if cfg.WebhookURL != "https://example.invalid/hook" {
+		t.Errorf("overlay WEBHOOK_URL = %q, want the overlay value", cfg.WebhookURL)
+	}
+	if cfg.UpstreamBaseURL != "https://example.invalid" {
+		t.Errorf("overlay UPSTREAM_BASE_URL = %q, want the overlay value", cfg.UpstreamBaseURL)
 	}
 	if cfg.SafeMode {
 		t.Error("SafeMode = true, want false (allowed overlay must still apply)")
 	}
 }
 
+// TestSettingsOverlaySecretsEnvWins: explicit process env still beats a
+// migrated DB row for every formerly-blocked key — precedence never silently
+// changes for existing users.
+func TestSettingsOverlaySecretsEnvWins(t *testing.T) {
+	clearEnv(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("AUTH_TOKENS", "fb-test-fake-env-token-1")
+	t.Setenv("ADMIN_TOKEN", "fb-test-fake-env-admin-1")
+	t.Setenv("API_KEYS", "fb-test-fake-env-client-1")
+	t.Setenv("WEBHOOK_URL", "https://env.invalid/hook")
+	t.Setenv("UPSTREAM_BASE_URL", "https://env.invalid")
+	cfg, err := LoadOpts("", LoadOptions{Overlay: map[string]string{
+		"AUTH_TOKENS":       "fb-test-fake-db-token-1",
+		"ADMIN_TOKEN":       "fb-test-fake-db-admin-1",
+		"API_KEYS":          "fb-test-fake-db-client-1",
+		"WEBHOOK_URL":       "https://db.invalid/hook",
+		"UPSTREAM_BASE_URL": "https://db.invalid",
+	}})
+	if err != nil {
+		t.Fatalf("LoadOpts env-wins: %v", err)
+	}
+	if len(cfg.AuthTokens) != 1 || cfg.AuthTokens[0] != "fb-test-fake-env-token-1" {
+		t.Errorf("AUTH_TOKENS = %v, want the env value", cfg.AuthTokens)
+	}
+	if cfg.AdminToken != "fb-test-fake-env-admin-1" {
+		t.Error("ADMIN_TOKEN lost to the overlay, want env to win")
+	}
+	if len(cfg.APIKeys) != 1 || cfg.APIKeys[0] != "fb-test-fake-env-client-1" {
+		t.Errorf("API_KEYS = %v, want the env value", cfg.APIKeys)
+	}
+	if cfg.WebhookURL != "https://env.invalid/hook" {
+		t.Errorf("WEBHOOK_URL = %q, want the env value", cfg.WebhookURL)
+	}
+	if cfg.UpstreamBaseURL != "https://env.invalid" {
+		t.Errorf("UPSTREAM_BASE_URL = %q, want the env value", cfg.UpstreamBaseURL)
+	}
+}
+
 // TestOverlayCoversCatalog: every non-blocked catalog key must be
 // overlay-addressable (applyMappedValues is the single shared key list, so
 // this guards the filter in applySettingsOverlay, not the list itself).
+// Since the env-to-DB migration the blocked set is empty: AUTH_TOKENS rides
+// the overlay with presence semantics next to applyMappedValues.
 func TestOverlayCoversCatalog(t *testing.T) {
 	for _, def := range Catalog() {
 		if IsSettingsBlocked(def.Key) {
@@ -119,9 +168,9 @@ func TestOverlayCoversCatalog(t *testing.T) {
 	if _, ok := ov["THEME"]; ok {
 		t.Errorf("OverlayFromRows kept non-config row: %v", ov)
 	}
-	blocked := OverlayFromRows(map[string]string{"config:AUTH_TOKENS": "x"})
-	if len(blocked) != 0 {
-		t.Errorf("OverlayFromRows kept blocked key: %v", blocked)
+	kept := OverlayFromRows(map[string]string{"config:AUTH_TOKENS": "x"})
+	if kept["AUTH_TOKENS"] != "x" {
+		t.Errorf("OverlayFromRows dropped unblocked AUTH_TOKENS: %v", kept)
 	}
 	unknown := OverlayFromRows(map[string]string{"config:NOPE_NOT_A_KEY": "x"})
 	if len(unknown) != 0 {
@@ -129,8 +178,11 @@ func TestOverlayCoversCatalog(t *testing.T) {
 	}
 }
 
-// TestValidateSettingValue pins the POST gate: unknown/blocked/secret keys
-// and unparseable typed values reject; writable knobs accept.
+// TestValidateSettingValue pins the POST gate: unknown keys and unparseable
+// typed values reject; writable knobs accept. Secrets are storable since
+// the env-to-DB migration (the DB file holds them at mode 0600); AUTH_TOKENS
+// and ADMIN_TOKEN take the dedicated-endpoint path in the settings POST
+// handler, but Validate itself accepts them so migrated rows read back.
 func TestValidateSettingValue(t *testing.T) {
 	for key, value := range map[string]string{
 		"LOG_LEVEL":               "debug",
@@ -140,6 +192,12 @@ func TestValidateSettingValue(t *testing.T) {
 		"MODELS_ALLOW":            "deepseek/deepseek-v4-flash",
 		"MATURITY_TARGET_DAYS":    "14",
 		"HTTP_READ_TIMEOUT":       "90s",
+		"AUTH_TOKENS":             "fb-test-fake-token-1",
+		"ADMIN_TOKEN":             "fb-test-fake-admin-1",
+		"API_KEYS":                "fb-test-fake-client-1",
+		"WEBHOOK_URL":             "https://example.invalid/hook",
+		"UPSTREAM_BASE_URL":       "https://example.invalid",
+		"AUTO_DISCOVER_TOKEN":     "false",
 	} {
 		if err := ValidateSettingValue(key, value); err != nil {
 			t.Errorf("ValidateSettingValue(%s,%s) = %v, want nil", key, value, err)
@@ -147,13 +205,7 @@ func TestValidateSettingValue(t *testing.T) {
 	}
 	for key, value := range map[string]string{
 		"NOPE_NOT_A_KEY":          "x",
-		"AUTH_TOKENS":             "tok",
-		"ADMIN_TOKEN":             "x",
-		"API_KEYS":                "x",
-		"WEBHOOK_URL":             "https://example.com",
-		"UPSTREAM_BASE_URL":       "https://example.com",
 		"DB_PATH":                 "/tmp/x.db",
-		"AUTO_DISCOVER_TOKEN":     "false",
 		"SAFE_MODE":               "banana",
 		"MAX_REQUESTS_PER_MINUTE": "lots",
 		"RATE_LIMIT_PER_IP":       "fast",
@@ -235,20 +287,50 @@ func TestLogAndListenKeysAreRestartOnly(t *testing.T) {
 	}
 }
 
-// TestAutoDiscoverTokenBlocked pins AUTO_DISCOVER_TOKEN as env-only: it
-// controls whether the .env file is read at all, so a DB overlay row could
-// never take effect — and the effective view hardcodes its display to
-// "true", so storing "false" would be a silent no-op. POST must 400 (via
-// ValidateSettingValue) and read paths must drop the row.
-func TestAutoDiscoverTokenBlocked(t *testing.T) {
-	if !IsSettingsBlocked("AUTO_DISCOVER_TOKEN") {
-		t.Error("IsSettingsBlocked(AUTO_DISCOVER_TOKEN) = false, want true")
+// TestAutoDiscoverTokenOverlay: AUTO_DISCOVER_TOKEN is overlay-addressable
+// since the env-to-DB migration. The overlay row takes effect only when the
+// process environment leaves the key unset (env wins); the resolved value
+// records on Config and suppresses CLI auto-discovery when false.
+func TestAutoDiscoverTokenOverlay(t *testing.T) {
+	if IsSettingsBlocked("AUTO_DISCOVER_TOKEN") {
+		t.Error("IsSettingsBlocked(AUTO_DISCOVER_TOKEN) = true, want false (unblocked by the env-to-DB migration)")
 	}
-	if err := ValidateSettingValue("AUTO_DISCOVER_TOKEN", "false"); err == nil {
-		t.Error("ValidateSettingValue(AUTO_DISCOVER_TOKEN) accepted, want rejection")
+	if err := ValidateSettingValue("AUTO_DISCOVER_TOKEN", "false"); err != nil {
+		t.Errorf("ValidateSettingValue(AUTO_DISCOVER_TOKEN) = %v, want nil", err)
 	}
-	if ov := OverlayFromRows(map[string]string{"config:AUTO_DISCOVER_TOKEN": "false"}); len(ov) != 0 {
-		t.Errorf("OverlayFromRows kept blocked AUTO_DISCOVER_TOKEN: %v", ov)
+	if ov := OverlayFromRows(map[string]string{"config:AUTO_DISCOVER_TOKEN": "false"}); ov["AUTO_DISCOVER_TOKEN"] != "false" {
+		t.Errorf("OverlayFromRows dropped unblocked AUTO_DISCOVER_TOKEN: %v", ov)
+	}
+	clearEnv(t)
+	t.Chdir(t.TempDir())
+	// clearEnv pins AUTO_DISCOVER_TOKEN=false in the environment; unset it so
+	// the first load below resolves the overlay tier alone.
+	if err := os.Unsetenv("AUTO_DISCOVER_TOKEN"); err != nil {
+		t.Fatal(err)
+	}
+	fakeDiscover := func() (string, string, string, bool) { return "fb-test-fake-discovered-1", "", "", true }
+	// Overlay "false" with no env: discovery suppressed, field records false.
+	cfg, err := LoadOpts("", LoadOptions{DiscoverCLIToken: fakeDiscover, Overlay: map[string]string{"AUTO_DISCOVER_TOKEN": "false"}})
+	if err != nil {
+		t.Fatalf("LoadOpts: %v", err)
+	}
+	if cfg.AutoDiscoverToken {
+		t.Error("AutoDiscoverToken = true, want false (overlay)")
+	}
+	if len(cfg.AuthTokens) != 0 {
+		t.Errorf("AuthTokens = %v, want empty (overlay false suppresses discovery)", cfg.AuthTokens)
+	}
+	// Env "true" beats overlay "false": discovery fires.
+	t.Setenv("AUTO_DISCOVER_TOKEN", "true")
+	cfg, err = LoadOpts("", LoadOptions{DiscoverCLIToken: fakeDiscover, Overlay: map[string]string{"AUTO_DISCOVER_TOKEN": "false"}})
+	if err != nil {
+		t.Fatalf("LoadOpts env-wins: %v", err)
+	}
+	if !cfg.AutoDiscoverToken {
+		t.Error("AutoDiscoverToken = false, want true (env wins)")
+	}
+	if len(cfg.AuthTokens) != 1 || cfg.AuthTokens[0] != "fb-test-fake-discovered-1" {
+		t.Errorf("AuthTokens = %v, want the discovered token (env true enables discovery)", cfg.AuthTokens)
 	}
 }
 
@@ -269,7 +351,11 @@ func TestSettingSourcesDotenvUserIDAlias(t *testing.T) {
 }
 
 // TestOverlayFromRowsDropsMalformed pins the documented contract that
-// malformed rows are skipped: a value that fails ValidateSettingValue could
+// malformed rows are skipped: a non-empty value that fails
+// ValidateSettingValue could never take effect (it would fail the POST
+// gate), so a tampered or stale row must not poison the load. Empty values
+// are kept as no-op pins instead (every override helper skips blanks, and
+// AUTH_TOKENS presence is the bridge-mode pin).
 func TestOverlayFromRowsDropsMalformed(t *testing.T) {
 	ov := OverlayFromRows(map[string]string{
 		"config:SAFE_MODE":               "false",
@@ -292,11 +378,20 @@ func TestOverlayFromRowsDropsMalformed(t *testing.T) {
 		"config:MAX_REQUESTS_PER_MINUTE": "lots",
 		"config:RATE_LIMIT_PER_IP":       "fast",
 		"config:MATURITY_TARGET_DAYS":    "seven",
-		"config:LOG_LEVEL":               "",
 		"config:LOG_LEVEL2":              "debug",
 	})
 	if len(malformed) != 0 {
 		t.Errorf("OverlayFromRows kept malformed rows: %v", malformed)
+	}
+	pins := OverlayFromRows(map[string]string{
+		"config:LOG_LEVEL":   "",
+		"config:AUTH_TOKENS": "",
+	})
+	if v, ok := pins["LOG_LEVEL"]; !ok || v != "" {
+		t.Errorf("OverlayFromRows dropped the empty LOG_LEVEL pin: %v", pins)
+	}
+	if _, ok := pins["AUTH_TOKENS"]; !ok {
+		t.Errorf("OverlayFromRows dropped the empty AUTH_TOKENS bridge pin: %v", pins)
 	}
 }
 

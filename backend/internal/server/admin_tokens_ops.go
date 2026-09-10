@@ -65,14 +65,15 @@ func shortFlowID(fp string) string {
 }
 
 func (a *adminHandlers) syncTokensAfterMutation(tokens []string) error {
-	// Dual-layer persist (DB-unified storage): AUTH_TOKENS itself stays
-	// .env-only (raw tokens never reach the store), while the
-	// auth/tokens_configured presence marker goes write-through to the
-	// settings table — zero secret material. A reload-verification failure
-	// restores BOTH layers (mirrors handleModeSwitch's persist → verify →
-	// rollback). Otherwise the failed add leaves AUTH_TOKENS=<new> in .env
-	// while the live pool holds the old list — the very divergence the
-	// caller is trying to avoid.
+	// Dual-layer persist (DB-unified storage): AUTH_TOKENS goes write-through
+	// to BOTH .env (boot seed/export) and the config:AUTH_TOKENS overlay row
+	// (runtime truth — the DB holds secrets at mode 0600 since the env-to-DB
+	// migration), plus the auth/tokens_configured presence marker, via
+	// tokenMarkerDelta. A reload-verification failure restores BOTH layers
+	// (mirrors handleModeSwitch's persist → verify → rollback). Otherwise
+	// the failed add leaves AUTH_TOKENS=<new> in .env while the live pool
+	// holds the old list — the very divergence the caller is trying to
+	// avoid.
 	for i, tok := range tokens {
 		if strings.Contains(tok, ",") {
 			return fmt.Errorf("persist AUTH_TOKENS: AUTH_TOKENS entry %d contains a comma (AUTH_TOKENS is comma-separated in .env)", i+1)
