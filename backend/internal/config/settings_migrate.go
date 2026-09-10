@@ -71,7 +71,7 @@ func effectiveRawValue(cfg Config, key string) string {
 		// documents the migrated value but never drives the reader.
 		return strconv.FormatBool(effectiveAdminForceSecureCookies())
 	default:
-		v, _ := renderKey(cfg, key)
+		v, _ := renderKey(&cfg, key)
 		return v
 	}
 }
