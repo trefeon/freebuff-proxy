@@ -56,15 +56,15 @@
       "quota": "15 Freebucks/hr"
     },
     {
-      "id": "meta/muse-spark-1.3-contributor",
-      "display_name": "Muse Spark 1.3",
-      "tagline": "Queues, then falls back",
-      "badges": ["Reasoning: xhigh", "NEW"],
+      "id": "meta/muse-spark-1.2-contributor",
+      "display_name": "Muse Spark 1.2",
+      "tagline": "Queue",
+      "badges": ["Reasoning: xhigh"],
       "notice": "May use data for AI training",
       "price": 15,
       "price_label": "15 Freebucks/hr",
       "pool": "premium",
-      "agent": "base2-free-muse-spark-1-3",
+      "agent": "base2-free-muse-spark",
       "served": true,
       "efforts": ["minimal", "low", "medium", "high", "xhigh"],
       "quota": "15 Freebucks/hr"

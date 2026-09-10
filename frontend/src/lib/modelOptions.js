@@ -13,8 +13,8 @@ export const fallbackModelOptions = [
     tag: "premium",
   },
   {
-    id: "meta/muse-spark-1.3-contributor",
-    label: "meta/muse-spark-1.3-contributor",
+    id: "meta/muse-spark-1.2-contributor",
+    label: "meta/muse-spark-1.2-contributor",
     tag: "premium",
   },
   {

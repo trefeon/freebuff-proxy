@@ -774,7 +774,7 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByText("upstage/solar-pro4").first()).toBeVisible();
     await expect(page.getByText("z-ai/glm-5.3-flash").first()).toBeVisible();
     await expect(
-      page.getByText("meta/muse-spark-1.3-contributor").first(),
+      page.getByText("meta/muse-spark-1.2-contributor").first(),
     ).toBeVisible();
     // Count rows: header + 7 data rows (6 served + 1 referral)
     const rows = page.locator("table tbody tr");
