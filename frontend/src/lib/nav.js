@@ -5,6 +5,7 @@ import {
   Settings as SettingsIcon,
   FileText,
   FlaskConical,
+  AlertTriangle,
 } from "@lucide/svelte";
 import Overview from "./pages/Overview.svelte";
 import Tokens from "./pages/Tokens.svelte";
@@ -12,6 +13,7 @@ import Catalog from "./pages/Catalog.svelte";
 import Activity from "./pages/Activity.svelte";
 import Settings from "./pages/Settings.svelte";
 import DevTools from "./pages/DevTools.svelte";
+import Review from "./pages/Review.svelte";
 
 // Single source of truth for the dashboard page set (issue #290, dashboard
 // IA Phase 2: 11 page ids collapsed to 6). Both the sidebar's tab list
@@ -53,6 +55,14 @@ export const NAV_ITEMS = [
     label: "Dev Tools",
     icon: FlaskConical,
     gate: "devtools",
+  },
+  // REVIEW TEMP - temporary show-all page, WILL BE DELETED. Always visible,
+  // no gate, inSidebar true so the owner can click through everything.
+  {
+    id: "review",
+    component: Review,
+    label: "REVIEW-TEMP",
+    icon: AlertTriangle,
   },
 ];
 
