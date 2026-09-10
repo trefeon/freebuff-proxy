@@ -48,9 +48,15 @@
 
   function fmtCompact(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(s / 3600);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
     const m = Math.floor((s % 3600) / 60);
-    return (h > 0 ? `${h}h` : "") + `${m}m${s % 60}s`;
+    // Weekend gaps run 48h+: days keep the badge readable.
+    return (
+      (d > 0 ? `${d}d` : "") +
+      (h > 0 || d > 0 ? `${h}h` : "") +
+      `${m}m${s % 60}s`
+    );
   }
 
   // Live remainder from the absolute timestamp in BOTH states: the backend
