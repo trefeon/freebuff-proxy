@@ -16,9 +16,9 @@ import (
 // dashboard saves write to, not a new winner.
 
 // MigrationMarkerRow is the settings-table row whose presence means the
-// env-to-DB import already ran. It lives outside the OverlayRowPrefix
-// namespace on purpose: OverlayFromRows only accepts catalog keys, so the
-// marker can never leak into a Load overlay.
+// env-to-DB import already ran. It shares the config: prefix but is not a
+// catalog key, so OverlayFromRows drops it and it can never leak into a
+// Load overlay.
 const MigrationMarkerRow = "config:migrated_env_v1"
 
 // MigrationMarkerValue is the value stored at MigrationMarkerRow.
