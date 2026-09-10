@@ -240,7 +240,10 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 	if got := mock1.RequestsSnapshot(); got != 0 {
 		t.Errorf("token1 upstream hits = %d after 61s tick, want 0 (backoff holds)", got)
 	}
-	// Past the doubled interval the round completes and resets.
+	// Past the doubled interval the round completes and resets. Traffic is
+	// still flowing (re-marked: without it the pool would have aged into
+	// WARM, whose doubled 10m cadence correctly holds much longer).
+	markPoolActive(p, now.Add(121*time.Second))
 	p.smartProbeTickAt(ctx, now.Add(121*time.Second))
 	if got := mock0.SessionProbesSnapshot(); got != 1 {
 		t.Errorf("token0 probes = %d, want 1 (recovered)", got)
