@@ -140,13 +140,14 @@ func (c Config) Validate() error {
 	}
 
 	// The maturity touch model must look like a catalog id
-	// (provider/model). Whether it is actually served and unpriced
-	// (never spends Freebucks) is enforced where modelcat is visible —
-	// the pool skips misconfigured touches with a warn log and the admin
-	// maturity endpoint rejects them (config is a bottom-layer package
-	// and must not import modelcat).
-	if c.MaturityTouchModel != "" && !strings.Contains(c.MaturityTouchModel, "/") {
-		return fmt.Errorf("MATURITY_TOUCH_MODEL %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash)", c.MaturityTouchModel)
+	// (provider/model) or be the "auto" sentinel (cheapest served
+	// unmetered row, the new default). Whether an explicit id is
+	// actually served and unpriced (never spends Freebucks) is enforced
+	// where modelcat is visible — the pool skips misconfigured touches
+	// with a warn log and the admin maturity endpoint rejects them
+	// (config is a bottom-layer package and must not import modelcat).
+	if c.MaturityTouchModel != "" && !strings.EqualFold(strings.TrimSpace(c.MaturityTouchModel), "auto") && !strings.Contains(c.MaturityTouchModel, "/") {
+		return fmt.Errorf("MATURITY_TOUCH_MODEL %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash) or \"auto\"", c.MaturityTouchModel)
 	}
 	if c.LogLevel != "" {
 		if _, ok := ParseLevel(c.LogLevel); !ok {

@@ -1470,7 +1470,16 @@
                 "maturity": {
                   "nullable": true,
                   "properties": {
+                    "auto_touch_model": {
+                      "type": "string"
+                    },
+                    "auto_touch_reason": {
+                      "type": "string"
+                    },
                     "badge": {
+                      "type": "string"
+                    },
+                    "effective_touch_model": {
                       "type": "string"
                     },
                     "enabled": {
@@ -1497,8 +1506,14 @@
                     "slot": {
                       "type": "string"
                     },
+                    "slot_day": {
+                      "type": "string"
+                    },
                     "target": {
                       "type": "integer"
+                    },
+                    "touch_day": {
+                      "type": "string"
                     },
                     "touch_model": {
                       "type": "string"

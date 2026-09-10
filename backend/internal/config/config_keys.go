@@ -184,28 +184,28 @@ func defaultRawConfig() rawConfig {
 		TransientRetries:                 nil,  // nil = 1 (one retry after a transient transport failure; 0 disables)
 		SessionPersist:                   true, // session persistence on by default: restart resumes unexpired sessions
 		SessionStateFile:                 ".freebuff-session-state.json",
-		HTTP2Upstream:                    true,                         // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
-		SessionCreateMaxParallelGlobal:   ptrInt(128),                  // #86: concurrent session admissions cap
-		SessionCreateMaxParallelPerModel: ptrInt(32),                   // #86: per-model concurrent admissions cap
-		ChatMaxInflightMetered:           ptrInt(1),                    // chat burst queue: concurrent in-flight chats per token on metered (priced) models
-		ChatMaxInflightUnmetered:         ptrInt(3),                    // chat burst queue: concurrent in-flight chats per token on unmetered (unpriced) models
-		RunFinishQueueSize:               ptrInt(64),                   // #90: bounded deferred-FINISH queue
-		RunFinishInlineTimeout:           "250ms",                      // #90: inline FINISH fallback bound
-		RunsDrainQueueCap:                ptrInt(64),                   // #55: draining-runs list cap
-		RunsDrainTTL:                     "10m",                        // #55: draining-runs TTL eviction
-		SessionReAdmitLead:               "60s",                        // #99: pre-emptive re-admit lead
-		SessionProbeCacheTTL:             "15s",                        // #60: admission probe cache TTL
-		FallbackAfter:                    "0",                          // #100: queue-wait fallback threshold (ms); 0 = disabled by default
-		BurstBalanceEnabled:              true,                         // burst spreading on by default; false restores drain-only selection
-		BurstWindow:                      "1m",                         // sliding window for counting same-model admissions toward BURST_THRESHOLD
-		BurstThreshold:                   ptrInt(20),                   // same-model admissions inside BURST_WINDOW that trip spreading for that model
-		BurstMaxTokens:                   ptrInt(2),                    // distinct accounts one model's burst spreads across (minimum 2)
-		MaturityEnabled:                  true,                         // streak-maturity automation on by default; dry-run probes prove schedule before live touches
-		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
-		QuotaAutoProbe:                   true,                         // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
-		QuotaProbeActiveInterval:         "60s",                        // busy-pool probe cadence
-		QuotaProbeIdleHeartbeat:          "30m",                        // idle-pool probe heartbeat (also the 429-backoff ceiling)
-		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never spends Freebucks
+		HTTP2Upstream:                    true,        // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
+		SessionCreateMaxParallelGlobal:   ptrInt(128), // #86: concurrent session admissions cap
+		SessionCreateMaxParallelPerModel: ptrInt(32),  // #86: per-model concurrent admissions cap
+		ChatMaxInflightMetered:           ptrInt(1),   // chat burst queue: concurrent in-flight chats per token on metered (priced) models
+		ChatMaxInflightUnmetered:         ptrInt(3),   // chat burst queue: concurrent in-flight chats per token on unmetered (unpriced) models
+		RunFinishQueueSize:               ptrInt(64),  // #90: bounded deferred-FINISH queue
+		RunFinishInlineTimeout:           "250ms",     // #90: inline FINISH fallback bound
+		RunsDrainQueueCap:                ptrInt(64),  // #55: draining-runs list cap
+		RunsDrainTTL:                     "10m",       // #55: draining-runs TTL eviction
+		SessionReAdmitLead:               "60s",       // #99: pre-emptive re-admit lead
+		SessionProbeCacheTTL:             "15s",       // #60: admission probe cache TTL
+		FallbackAfter:                    "0",         // #100: queue-wait fallback threshold (ms); 0 = disabled by default
+		BurstBalanceEnabled:              true,        // burst spreading on by default; false restores drain-only selection
+		BurstWindow:                      "1m",        // sliding window for counting same-model admissions toward BURST_THRESHOLD
+		BurstThreshold:                   ptrInt(20),  // same-model admissions inside BURST_WINDOW that trip spreading for that model
+		BurstMaxTokens:                   ptrInt(2),   // distinct accounts one model's burst spreads across (minimum 2)
+		MaturityEnabled:                  true,        // streak-maturity automation on by default; dry-run probes prove schedule before live touches
+		MaturityDryRun:                   true,        // maturity touches probe only until the operator proves the schedule
+		QuotaAutoProbe:                   true,        // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
+		QuotaProbeActiveInterval:         "60s",       // busy-pool probe cadence
+		QuotaProbeIdleHeartbeat:          "30m",       // idle-pool probe heartbeat (also the 429-backoff ceiling)
+		MaturityTouchModel:               "auto",      // auto default: cheapest served unmetered row, explicit id overrides
 	}
 }
 

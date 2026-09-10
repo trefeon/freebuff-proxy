@@ -481,7 +481,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	}
 	maturityTouchModel := strings.TrimSpace(raw.MaturityTouchModel)
 	if maturityTouchModel == "" {
-		maturityTouchModel = "deepseek/deepseek-v4-flash"
+		maturityTouchModel = "auto"
 	}
 	// BURST_WINDOW is zero-tolerant: "" falls back to the 1m default (a zero
 	// window would trip on every admission past the threshold count of zero

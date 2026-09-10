@@ -269,6 +269,32 @@
       </Button>
     </div>
   {/if}
+  {#if token.maturity}
+    {@const mm = token.maturity}
+    <div class="mb-2 px-2 py-1.5 rounded bg-[var(--fp-bg)]/40">
+      <div
+        class="flex items-center justify-between gap-2 text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider mb-1"
+      >
+        <span>{$tr("Warming")}</span>
+        {#if mm.badge}
+          <span class="fp-num normal-case font-medium text-[var(--fp-dim)]"
+            >{mm.badge}</span
+          >
+        {/if}
+      </div>
+      <p class="fp-num text-xs text-[var(--fp-dim)]">
+        {$tr("slot")}
+        {mm.slot ? new Date(mm.slot).toLocaleString() : "—"} ·
+        {mm.last_action
+          ? `${mm.last_action} → ${mm.last_result ?? "?"}`
+          : $tr("no touch yet")}{mm.last_touch
+          ? ` · ${new Date(mm.last_touch).toLocaleString()}`
+          : ""}{mm.effective_touch_model
+          ? ` · ${mm.effective_touch_model}`
+          : ""}
+      </p>
+    </div>
+  {/if}
   {#if token.has_standing}
     <!-- Standing / trust block (issue #140): level,
          score progress toward the next level, the cap

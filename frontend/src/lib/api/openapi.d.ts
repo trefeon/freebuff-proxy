@@ -1105,6 +1105,14 @@ export interface components {
     };
     SettingsListResponse: {
       degraded: boolean;
+      migrate?: {
+        applied: number[];
+        fresh: boolean;
+        from_version: number;
+        marker: boolean;
+        noop: boolean;
+        to_version: number;
+      } | null;
       settings: {
         key: string;
         restart_only: boolean;
@@ -1378,7 +1386,10 @@ export interface components {
         last_usage?: string;
         locked: boolean;
         maturity?: {
+          auto_touch_model?: string;
+          auto_touch_reason?: string;
           badge?: string;
+          effective_touch_model?: string;
           enabled: boolean;
           last_action?: string;
           last_advanced?: string;
@@ -1387,7 +1398,9 @@ export interface components {
           mode: string;
           no_advance_days?: number;
           slot?: string;
+          slot_day?: string;
           target: number;
+          touch_day?: string;
           touch_model?: string;
           warn?: boolean;
         } | null;

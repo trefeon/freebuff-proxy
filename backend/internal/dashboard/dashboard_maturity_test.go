@@ -87,3 +87,40 @@ func TestMaturityCardTouchModelRoundTrip(t *testing.T) {
 		t.Errorf("fallback touch_model = %+v, want empty", bare.Maturity)
 	}
 }
+
+// Next-touch visibility rides the card: slot/touch days plus the resolved
+// effective/auto models must survive the mapper on both the full and the
+// live card, so the Warming tab renders its countdown, day-strip, and Auto
+// pick without a new scheduler. Old snapshots without the keys still map
+// (omitempty keeps the payload shape).
+func TestMaturityCardNextTouchRoundTrip(t *testing.T) {
+	slot := time.Date(2026, 9, 5, 7, 30, 0, 0, time.UTC)
+	touch := slot.Add(2 * time.Hour)
+	snap := pool.TokenSnapshot{
+		Maturity: &pool.MaturitySnapshot{
+			Enabled: true, Target: 7, Mode: "unmetered", Badge: "Warming",
+			Slot: slot, SlotDay: "2026-09-05", LastTouch: touch, TouchDay: "2026-09-05",
+			LastAction: "probe", LastResult: "ok",
+			EffectiveTouchModel: "upstage/solar-pro4",
+			AutoTouchModel:      "upstage/solar-pro4",
+			AutoTouchReason:     "auto:unmetered",
+		},
+	}
+	for name, card := range map[string]*maturityCard{
+		"full": cardFromSnapshot(snap).Maturity,
+		"live": liveCardFromSnapshot(snap).Maturity,
+	} {
+		if card == nil {
+			t.Fatalf("%s card.Maturity = nil, want rendered card", name)
+		}
+		if card.SlotDay != "2026-09-05" || card.TouchDay != "2026-09-05" {
+			t.Errorf("%s slot/touch day = %q/%q, want 2026-09-05/2026-09-05", name, card.SlotDay, card.TouchDay)
+		}
+		if card.EffectiveTouchModel != "upstage/solar-pro4" {
+			t.Errorf("%s effective = %q, want upstage/solar-pro4", name, card.EffectiveTouchModel)
+		}
+		if card.AutoTouchModel != "upstage/solar-pro4" || card.AutoTouchReason != "auto:unmetered" {
+			t.Errorf("%s auto = %q/%q, want upstage/solar-pro4/auto:unmetered", name, card.AutoTouchModel, card.AutoTouchReason)
+		}
+	}
+}

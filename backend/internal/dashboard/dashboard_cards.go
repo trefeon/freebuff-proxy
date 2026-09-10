@@ -129,22 +129,28 @@ type tokenCard struct {
 }
 
 // maturityCard is the dashboard view of pool.MaturitySnapshot: automation
-// toggle + streak target + touch mode + badge + today's slot + last touch
-// (time, action, result, advance) + non-advance warning. Nil when the token
-// never opted in.
+// toggle + streak target + touch mode + badge + today's slot (slot/slot_day)
+// + last touch (time/touch_day, action, result, advance) + non-advance
+// warning + resolved effective/auto touch models. Nil when the token never
+// opted in. All new keys are omitempty so old payloads keep their shape.
 type maturityCard struct {
-	Enabled       bool   `json:"enabled"`
-	Target        int    `json:"target"`
-	Mode          string `json:"mode"`
-	TouchModel    string `json:"touch_model,omitempty"`
-	Badge         string `json:"badge,omitempty"`
-	Slot          string `json:"slot,omitempty"`
-	LastTouch     string `json:"last_touch,omitempty"`
-	LastAction    string `json:"last_action,omitempty"`
-	LastResult    string `json:"last_result,omitempty"`
-	LastAdvanced  string `json:"last_advanced,omitempty"`
-	Warn          bool   `json:"warn,omitempty"`
-	NoAdvanceDays int    `json:"no_advance_days,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	Target              int    `json:"target"`
+	Mode                string `json:"mode"`
+	TouchModel          string `json:"touch_model,omitempty"`
+	Badge               string `json:"badge,omitempty"`
+	Slot                string `json:"slot,omitempty"`
+	SlotDay             string `json:"slot_day,omitempty"`
+	LastTouch           string `json:"last_touch,omitempty"`
+	TouchDay            string `json:"touch_day,omitempty"`
+	LastAction          string `json:"last_action,omitempty"`
+	LastResult          string `json:"last_result,omitempty"`
+	LastAdvanced        string `json:"last_advanced,omitempty"`
+	Warn                bool   `json:"warn,omitempty"`
+	NoAdvanceDays       int    `json:"no_advance_days,omitempty"`
+	EffectiveTouchModel string `json:"effective_touch_model,omitempty"`
+	AutoTouchModel      string `json:"auto_touch_model,omitempty"`
+	AutoTouchReason     string `json:"auto_touch_reason,omitempty"`
 }
 
 // freebucksWindowCard is one window of the Freebucks allowance (issue #232):
