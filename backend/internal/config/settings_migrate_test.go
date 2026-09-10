@@ -147,6 +147,11 @@ func TestEffectiveOverlayEmptyPoolPinsBridge(t *testing.T) {
 func TestMigratedKeysReportDB(t *testing.T) {
 	clearEnv(t)
 	t.Chdir(t.TempDir())
+	// clearEnv pins AUTO_DISCOVER_TOKEN=false in the environment (which
+	// correctly wins); unset it so the overlay tier reports below.
+	if err := os.Unsetenv("AUTO_DISCOVER_TOKEN"); err != nil {
+		t.Fatal(err)
+	}
 	overlay := map[string]string{
 		"AUTH_TOKENS":         "fb-test-fake-token-1",
 		"ADMIN_TOKEN":         "fb-test-fake-admin-1",
