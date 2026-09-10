@@ -996,11 +996,21 @@ test.describe("dashboard hermetic mocks", () => {
       "true",
     );
     await expect(page.locator("table tbody tr")).toHaveCount(2);
-    await expect(page.getByText("deepseek/deepseek-v4-flash")).toBeVisible();
+    const traceTable = page.locator("table");
+    await expect(
+      traceTable.getByText("deepseek/deepseek-v4-flash"),
+    ).toBeVisible();
     // Phase chips render the per-phase latency names from the payload
-    await expect(page.getByText("acquire_ms")).toBeVisible();
+    await expect(traceTable.getByText("acquire_ms")).toBeVisible();
     // The error row surfaces the error text
-    await expect(page.getByText("upstream timeout")).toBeVisible();
+    await expect(traceTable.getByText("upstream timeout")).toBeVisible();
+    // Mobile renders the same rows as stacked cards instead of the table.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const traceCards = page.getByLabel("Chat traces");
+    await expect(
+      traceCards.getByText("deepseek/deepseek-v4-flash"),
+    ).toBeVisible();
+    await expect(traceCards.getByText("upstream timeout")).toBeVisible();
   });
 
   test("Traces error shows a titled alert with retry", async ({ page }) => {

@@ -216,9 +216,12 @@ test.describe("real-world data", () => {
     await expect(page.getByText("req_id=req-bbb2")).toHaveCount(4);
     await page.goto(admin("activity"));
     await page.getByRole("button", { name: "Traces" }).click();
-    await expect(page.getByText("deepseek/deepseek-v4-flash")).toBeVisible();
-    await expect(page.getByText("upstream timeout").first()).toBeVisible();
-    await expect(page.getByText("acquire_ms")).toBeVisible();
+    const traceTable = page.locator("table");
+    await expect(
+      traceTable.getByText("deepseek/deepseek-v4-flash"),
+    ).toBeVisible();
+    await expect(traceTable.getByText("upstream timeout")).toBeVisible();
+    await expect(traceTable.getByText("acquire_ms")).toBeVisible();
     await page.goto(admin("activity"));
     await page.getByRole("button", { name: "Metrics" }).click();
     await expect(page.getByText("HIGH")).toBeVisible();
