@@ -21,11 +21,12 @@ name: upstream-drift
 on:
   workflow_dispatch:
   schedule:
-    # Every 6h: the upstream public-sync bot lands batches near-daily (three
-    # commits inside 40 minutes observed 2026-08-31), and wire drift once sat
-    # unreviewed between twice-weekly runs. 6h bounds blind windows while
-    # keeping PR/branch churn bounded by the close-superseded step below.
-    - cron: '17 */6 * * *'
+    # Every 12h (05:17 and 17:17 UTC): the upstream public-sync bot lands
+    # batches near-daily. Each run diffs checkpoint -> HEAD, where the
+    # checkpoint is the committed pin (snapshots.json upstream_sha), so the
+    # report always covers last-recorded ver -> current ver with nothing
+    # missed between runs. Close-superseded steps keep one rolling PR per SHA.
+    - cron: '17 5,17 * * *'
 
 permissions:
   contents: write
@@ -45,6 +46,13 @@ jobs:
       has_wire_drift: ${{ steps.report.outputs.has_wire_drift }}
       upstream_sha: ${{ steps.report.outputs.upstream_sha }}
       drift_summary: ${{ steps.report.outputs.drift_summary }}
+      exact_action: ${{ steps.exact.outputs.exact_action }}
+      exact_functional: ${{ steps.exact.outputs.exact_functional }}
+      exact_announce: ${{ steps.exact.outputs.exact_announce }}
+      tui_action: ${{ steps.tui.outputs.tui_action }}
+      tui_announce: ${{ steps.tui.outputs.tui_announce }}
+      tui_refresh: ${{ steps.tui.outputs.tui_refresh }}
+      old_sha: ${{ steps.exact.outputs.old_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -55,6 +63,7 @@ jobs:
         id: report
         env:
           DRIFT_REPORT: ${{ runner.temp }}/drift.json
+          FREEBUFF_REFERENCE_DIR: ${{ runner.temp }}/freebuff-ref
         run: |
           rc=0
           bash scripts/check-upstream.sh main 2>&1 | tee "$RUNNER_TEMP/check.log" || rc=$?
@@ -90,19 +99,94 @@ jobs:
             echo "$drift_summary"
             echo "EOF"
           } >>"$GITHUB_OUTPUT"
+      - name: Run exact drift detection
+        id: exact
+        env:
+          EXACT_REPORT: ${{ runner.temp }}/exact.json
+          FREEBUFF_REFERENCE_DIR: ${{ runner.temp }}/freebuff-ref
+        run: |
+          # Export-level MODEL/PRICE/WIRE report, old pin -> new upstream SHA.
+          # Exit 1 means action needed; never fail the job on it.
+          rc=0
+          bash scripts/drift-exact.sh "" "${{ steps.report.outputs.upstream_sha }}" || rc=$?
+          echo "drift-exact.sh exit code: $rc"
+          {
+            echo "exact_action=$(jq -r .summary.action_needed "$EXACT_REPORT")"
+            echo "exact_functional=$(jq -r .summary.functional_files "$EXACT_REPORT")"
+            echo "old_sha=$(jq -r .old_sha "$EXACT_REPORT")"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "exact_announce<<EOF"
+            jq -r '.announce[]' "$EXACT_REPORT"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Run TUI wireframe detection
+        id: tui
+        env:
+          TUI_REPORT: ${{ runner.temp }}/tui.json
+          FREEBUFF_REFERENCE_DIR: ${{ runner.temp }}/freebuff-ref
+        run: |
+          # Picker rows/order/fields, checkpoint pin -> new upstream SHA.
+          # Exit 1 means action needed; never fail the job on it.
+          rc=0
+          bash scripts/drift-tui.sh "" "${{ steps.report.outputs.upstream_sha }}" || rc=$?
+          echo "drift-tui.sh exit code: $rc"
+          {
+            echo "tui_action=$(jq -r .action_needed "$TUI_REPORT")"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "tui_announce<<EOF"
+            jq -r '.announce[]' "$TUI_REPORT"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+          {
+            echo "tui_refresh<<EOF"
+            jq -r '.refresh[]' "$TUI_REPORT"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+
 
       - name: Post step summary
         if: always()
         env:
           DRIFT_REPORT: ${{ runner.temp }}/drift.json
+          EXACT_REPORT: ${{ runner.temp }}/exact.json
+          TUI_REPORT: ${{ runner.temp }}/tui.json
+          OLD_SHA: ${{ steps.exact.outputs.old_sha }}
+          UPSTREAM_SHA: ${{ steps.report.outputs.upstream_sha }}
         run: |
           echo "## Upstream drift check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Checkpoint ${OLD_SHA:0:7} -> upstream ${UPSTREAM_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "check-upstream.sh exit code: ${script_rc:-unknown}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat "$DRIFT_REPORT" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Exact drift (scripts/drift-exact.sh)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$EXACT_REPORT" ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.announce[]' "$EXACT_REPORT" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exact report missing" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## TUI wireframe (scripts/drift-tui.sh)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$TUI_REPORT" ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.announce[]' "$TUI_REPORT" >> "$GITHUB_STEP_SUMMARY"
+            echo "---" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.refresh[]' "$TUI_REPORT" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "tui report missing" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   codegen-parity:
     name: Generated files match wiregen output
@@ -224,7 +308,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          OLD_SHA: ${{ needs.drift.outputs.old_sha }}
           DRIFT_SUMMARY: ${{ needs.drift.outputs.drift_summary }}
+          EXACT_ANNOUNCE: ${{ needs.drift.outputs.exact_announce }}
+          TUI_ANNOUNCE: ${{ needs.drift.outputs.tui_announce }}
+          TUI_REFRESH: ${{ needs.drift.outputs.tui_refresh }}
         run: |
           existing=$(gh pr list --state open --json number,title \
             --jq ".[] | select(.title | startswith(\"chore(registry): sync pinned upstream models to vendor ${UPSTREAM_SHA:0:7}\")) | .number" | head -1)
@@ -234,10 +322,24 @@ jobs:
           fi
           gh pr create --base main \
             --title "chore(registry): sync pinned upstream models to vendor ${UPSTREAM_SHA:0:7}" \
-            --body "Upstream SHA: $UPSTREAM_SHA
-          
+            --body "Checkpoint ${OLD_SHA:0:7} -> upstream ${UPSTREAM_SHA:0:7}
+
           $DRIFT_SUMMARY
-          
+
+          ## Backend impact (must change)
+          - Registry pins (auto-synced in this PR) feed the wire prices map.
+          - Regenerate the catalog: go run ./backend/cmd/wiregen -upstream $UPSTREAM_SHA.
+
+          ## Exact model/price changes (scripts/drift-exact.sh)
+
+          $EXACT_ANNOUNCE
+
+          ## Frontend impact: picker rows/copy (scripts/drift-tui.sh)
+
+          $TUI_ANNOUNCE
+
+          Refresh: $TUI_REFRESH
+
           Note: PRs created with GITHUB_TOKEN do not trigger CI workflows; run the checks manually before merging." \
             --label "dependencies"
 
@@ -332,7 +434,7 @@ jobs:
           # One rolling wire PR per upstream SHA; an older open PR for a
           # different SHA is stale the moment a newer SHA exists.
           gh pr list --state open --json number,title,headRefName \
-            --jq '.[] | select(.title | startswith("chore(wire): upstream drift needs porting")) | {number, title, branch: .headRefName}' \
+            --jq '.[] | select(.title | startswith("chore(wire): upstream drift needs porting") or startswith("chore(wire): upstream drift to vendor")) | {number, title, branch: .headRefName}' \
           | jq -c . \
           | while read -r pr; do
               num=$(echo "$pr" | jq -r .number)
@@ -348,19 +450,37 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          OLD_SHA: ${{ needs.drift.outputs.old_sha }}
           DRIFT_SUMMARY: ${{ needs.drift.outputs.drift_summary }}
           CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+          EXACT_FUNCTIONAL: ${{ needs.drift.outputs.exact_functional }}
+          EXACT_ANNOUNCE: ${{ needs.drift.outputs.exact_announce }}
+          TUI_ANNOUNCE: ${{ needs.drift.outputs.tui_announce }}
         run: |
           short="${UPSTREAM_SHA:0:7}"
+          if [ "${EXACT_FUNCTIONAL:-0}" != "0" ]; then
+            kind="[port-needed]"
+          else
+            kind="[comment-only]"
+          fi
+          title="chore(wire): upstream drift to vendor ${short} ${kind}"
           existing=$(gh pr list --state open --json number,title \
-            --jq ".[] | select(.title | startswith(\"chore(wire): upstream drift needs porting to vendor ${short}\")) | .number" | head -1)
+            --jq ".[] | select(.title | startswith(\"chore(wire): upstream drift to vendor ${short}\")) | .number" | head -1)
           if [ -n "$existing" ]; then
             echo "Existing wire-drift PR #$existing already open for this upstream SHA; nothing to create."
             exit 0
           fi
-          body="Upstream SHA: $UPSTREAM_SHA
+          body="Checkpoint ${OLD_SHA:0:7} -> upstream $UPSTREAM_SHA
 
           $DRIFT_SUMMARY
+
+          ## Backend impact: port the FUNCTIONAL hunks below (Go-side + test)
+
+          $EXACT_ANNOUNCE
+
+          ## Frontend impact: picker rows/copy (scripts/drift-tui.sh)
+
+          $TUI_ANNOUNCE
 
           ## Drift classification (scripts/review-wire-drift.sh)
           COMMENT-ONLY rows are resolved by the baseline refresh in this PR.
@@ -371,7 +491,7 @@ jobs:
           $CLASSIFICATION
           \`\`\`"
           gh pr create --base main \
-            --title "chore(wire): upstream drift needs porting to vendor ${short}" \
+            --title "$title" \
             --body "$body" \
             --label "anti-ban"
 
