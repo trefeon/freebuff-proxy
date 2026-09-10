@@ -14,7 +14,6 @@
   import CopyButton from "../components/CopyButton.svelte";
   import Alert from "../components/Alert.svelte";
   import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
-  import SetupSnippets from "../components/SetupSnippets.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { createQueryStore } from "../stores/query.js";
@@ -609,18 +608,5 @@
         </ul>
       </Card>
     {/if}
-
-    <!-- Client setup (ex Setup page): fetches independently, always visible -->
-    <section aria-label="Client setup">
-      <div class="flex items-center justify-between mb-3">
-        <h2
-          id="client-setup"
-          class="text-lg font-semibold text-[var(--fp-text)]"
-        >
-          {$tr("Client Setup")}
-        </h2>
-      </div>
-      <SetupSnippets />
-    </section>
   {/if}
 </PageShell>
