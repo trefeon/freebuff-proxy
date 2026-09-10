@@ -261,11 +261,11 @@ type Pool struct {
 
 	rr     atomic.Uint64 // round-robin start index
 	logger *slog.Logger
-	// quotaBootAt anchors the ADR-0024 staggered boot-probe slots. Set once
-	// in Start before the maintain loop launches (happens-before the first
-	// tick via the goroutine spawn); zero until then, which also keeps
-	// unit tests that never Start probe-free. Never reset — Shutdown is
-	// terminal and a second Start is a no-op (p.once).
+	// quotaBootAt anchors the smart-probe boot round. Set once in Start
+	// before the maintain loop launches (happens-before the first tick via
+	// the goroutine spawn); zero until then, which also keeps unit tests
+	// that never Start boot-force-free. Never reset — Shutdown is terminal
+	// and a second Start is a no-op (p.once).
 	quotaBootAt time.Time
 	// histSink is the optional maturity history consumer (ADR-0016); nil
 	// keeps the pool free of persistence. Set once via SetHistorySink.
@@ -369,6 +369,10 @@ type Pool struct {
 	// Guarded by bulkProbeMu.
 	bulkProbeMu   sync.Mutex
 	lastBulkProbe time.Time
+	// smartProbe is the activity-aware quota prober state (tiers, 429
+	// backoff, boot/kick/idle-sleep flags). In-memory only. Guarded by its
+	// own mutex; see quota_smartprobe.go.
+	smartProbe smartProbeState
 
 	// modelAdmissionGate serializes cold-path Acquire per model: the leader
 	// creates a gate on registration; concurrent followers block on it
@@ -488,20 +492,6 @@ type tokenEntry struct {
 	// (SetConfig slot changes) drop it — re-enable after a token swap.
 	maturityMu sync.Mutex
 	maturity   maturityState
-	// quotaProbeDay is the Pacific calendar day (YYYY-MM-DD) the quota
-	// auto-probe last fired for this entry (ADR-0022). Touched only by the
-	// maintain goroutine (quotaAutoProbeTick), so no lock is needed — the
-	// same single-writer rule as nextPollAt/pollFailures above. Zero value
-	// = never probed; entry rebuilds (SetConfig slot changes) drop it.
-	quotaProbeDay string
-	// quotaSeeded reports the ADR-0024 boot seed filled this entry's
-	// last-known quota (SeedQuotaSnapshot, before Start). quotaBootProbed
-	// marks the one staggered recovery probe fired (maintain goroutine).
-	// Same single-writer discipline: seed flag written pre-Start
-	// (happens-before the maintain loop via the Start spawn), boot flag by
-	// the maintain goroutine only. Entry rebuilds drop both.
-	quotaSeeded     bool
-	quotaBootProbed bool
 }
 
 func (e *tokenEntry) Email() string {
@@ -816,6 +806,12 @@ func (p *Pool) SetConfig(cfg *config.Config) {
 			}
 		}
 	}
+	// A rebuilt roster changes probe membership: kick the smart prober so
+	// the next tick runs a round for the new slots without waiting out the
+	// tier timer.
+	if changed {
+		p.smartProbeKick()
+	}
 
 	// Session persistence is decided at startup: the store is built from the
 	// boot config and injected once via SetSessionStore, so a reload cannot
@@ -897,6 +893,9 @@ func (p *Pool) AddToken(token string) (int, error) {
 	// index-aligned usage/spend slice needs to be extended — the publish
 	// order rule is satisfied by construction.
 	idx = p.roster.add(entry)
+	// New membership: the next tick probes it without waiting out the tier
+	// timer (event trigger, like the boot round).
+	p.smartProbeKick()
 	return idx, nil
 }
 

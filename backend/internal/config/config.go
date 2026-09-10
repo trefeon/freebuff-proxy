@@ -221,11 +221,23 @@ type Config struct {
 	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose
 	// streak reaches its target auto-releases its administrative lock.
 	MaturityTargetDays int
-	// QuotaAutoProbe enables the quota auto-probe scheduler (ADR-0022,
-	// QUOTA_AUTO_PROBE; default true): each pooled token is probed once per
-	// Pacific day at a deterministic jittered slot in the 2h window before
-	// its known quota reset. False restores exact pre-scheduler behavior.
+	// QuotaAutoProbe is the master switch for the activity-aware quota
+	// prober (QUOTA_AUTO_PROBE; default true): a busy pool probes every
+	// QuotaProbeActiveInterval, a warming pool every 5m, an idle pool once
+	// plus the QuotaProbeIdleHeartbeat heartbeat. False restores
+	// pre-scheduler behavior (manual probes only).
 	QuotaAutoProbe bool
+	// QuotaProbeActiveInterval is how often each pooled token is
+	// quota-probed while the pool is busy (traffic <2m ago;
+	// QUOTA_PROBE_ACTIVE_INTERVAL; default 60s). Zero-tolerant like
+	// BURST_WINDOW: empty or non-positive values fall back to the default.
+	QuotaProbeActiveInterval time.Duration
+	// QuotaProbeIdleHeartbeat is how often each pooled token is
+	// quota-probed while the pool sits idle (no traffic for 15m+;
+	// QUOTA_PROBE_IDLE_HEARTBEAT; default 30m, also the ceiling for
+	// 429-backoff doubling). Zero-tolerant like BURST_WINDOW: empty or
+	// non-positive values fall back to the default.
+	QuotaProbeIdleHeartbeat time.Duration
 	// WaitingRoomChain, when enabled (WAITING_ROOM_CHAIN=false default),
 	// fires the reference ad-chain + streak requests before the next
 	// session create after an upstream 428 waiting_room_required (issue

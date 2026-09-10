@@ -11,8 +11,8 @@
 // The manual Probe-all button (no auto param) always forces through the
 // same pass and refreshes the timestamp. The visit probe ignores the
 // QUOTA_AUTO_PROBE kill-switch: like the manual button it is an explicit
-// user-visit action, not scheduler work. ADR-0022 daily slots and the
-// ADR-0024 boot seed stay as backstops.
+// user-visit action, not scheduler work. The smart-probe scheduler treats
+// every fired bulk pass as a round and restarts its timer from it.
 package pool
 
 import (
@@ -77,10 +77,14 @@ func (p *Pool) markBulkProbed(now time.Time) {
 }
 
 // ProbeAll force-probes every pooled token (the manual Probe-all button):
-// always probes, then refreshes the pool-scoped timestamp.
+// always probes, then refreshes the pool-scoped timestamp. The pass also
+// stamps the smart-probe timer, so the scheduler treats it as a round
+// instead of re-probing on the next tick.
 func (p *Pool) ProbeAll(ctx context.Context) []BulkProbeResult {
 	out := p.probeAllTokens(ctx)
-	p.markBulkProbed(time.Now())
+	now := time.Now()
+	p.markBulkProbed(now)
+	p.smartProbeNoteManual(now)
 	return out
 }
 
@@ -88,7 +92,6 @@ func (p *Pool) ProbeAll(ctx context.Context) []BulkProbeResult {
 // last-bulk-probe timestamp is older than maxAge (or never): the visit
 // auto-probe path. Returns false without touching upstream when fresh.
 // The slot is claimed before probing so concurrent visitors share one
-// pass instead of each firing their own.
 func (p *Pool) ProbeAllIfStale(ctx context.Context, maxAge time.Duration) bool {
 	now := time.Now()
 	p.bulkProbeMu.Lock()
@@ -99,5 +102,8 @@ func (p *Pool) ProbeAllIfStale(ctx context.Context, maxAge time.Duration) bool {
 	p.lastBulkProbe = now
 	p.bulkProbeMu.Unlock()
 	p.probeAllTokens(ctx)
+	// A fired visit pass refreshes every token like the manual button, so
+	// it restarts the smart-probe timer too.
+	p.smartProbeNoteManual(time.Now())
 	return true
 }

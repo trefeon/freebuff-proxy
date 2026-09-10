@@ -357,7 +357,27 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Keep per-token quota fresh without manual probes: each pooled token is probed once per Pacific day at a deterministic jittered slot in the 2h window before its known quota reset (ADR-0022). Applies live on reload; false restores pre-scheduler behavior."
+    "description": "Master switch for the activity-aware quota prober: a busy pool probes every QUOTA_PROBE_ACTIVE_INTERVAL, a warming pool every 5m, an idle pool once plus the QUOTA_PROBE_IDLE_HEARTBEAT heartbeat. Applies live on reload; false restores pre-scheduler behavior (manual probes only)."
+  },
+  {
+    "key": "QUOTA_PROBE_ACTIVE_INTERVAL",
+    "group": "pool",
+    "kind": "text",
+    "default": "60s",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "How often each pooled token is quota-probed while the pool is busy (traffic under 2m ago). Go duration (default 60s); the warming cadence stays 5m, idle is covered by QUOTA_PROBE_IDLE_HEARTBEAT. Applies live on reload."
+  },
+  {
+    "key": "QUOTA_PROBE_IDLE_HEARTBEAT",
+    "group": "pool",
+    "kind": "text",
+    "default": "30m",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "How often each pooled token is quota-probed while the pool sits idle (no traffic for 15m or more): one probe fires when traffic stops, then only this heartbeat until traffic resumes. Go duration (default 30m, also the ceiling for 429-backoff doubling). Applies live on reload."
   },
   {
     "key": "RATE_LIMIT_BURST",

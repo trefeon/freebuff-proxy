@@ -1,23 +1,32 @@
-// quota_bootseed_test.go — ADR-0024 coverage: the boot seed fills the live
-// view (and teaches the scheduler its reset), never downgrades fresher live
-// data, and is idempotent; the recovery boot probe fires exactly once for
-// virgin tokens and never for seeded or disabled ones. Existing
-// quota_autoprobe_test.go cases are untouched.
+// quota_bootseed_test.go — boot seed coverage: the seed fills the live
+// view from persisted rows, drops bad rows, never downgrades fresher live
+// data, and is idempotent.
 package pool
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"freebuff-proxy/backend/internal/session"
 	"freebuff-proxy/backend/internal/testutil"
+	"freebuff-proxy/backend/internal/upstream"
 )
 
 // seededPool builds a one-token pool with a fresh (unprobed) manager.
 func seededPool(t *testing.T, mock *testutil.MockUpstream) *Pool {
 	t.Helper()
 	return newTestPool(t, mock)
+}
+
+// seedLiveQuota installs live quota through the same UpdateQuotaFromProbe
+// path a real probe uses.
+func seedLiveQuota(t *testing.T, p *Pool, token int, reset time.Time) {
+	t.Helper()
+	toks := p.roster.Load()
+	(*toks)[token].session.UpdateQuotaFromProbe(&upstream.SessionState{
+		RateLimitsByModel: map[string]upstream.ModelQuota{
+			modelA: {Model: modelA, Limit: 5, RecentCount: 1, ResetAt: reset, Period: "pacific_day"},
+		},
+	})
 }
 
 func TestQuotaBootSeedFillsViewAndReset(t *testing.T) {
@@ -44,15 +53,6 @@ func TestQuotaBootSeedFillsViewAndReset(t *testing.T) {
 	if !snaps[0].QuotaStale {
 		t.Error("QuotaStale = false, want true (seed is last-known)")
 	}
-	toks := p.roster.Load()
-	if !(*toks)[0].quotaSeeded {
-		t.Error("quotaSeeded = false, want true (row applied)")
-	}
-	// The scheduler learns the reset from the seed.
-	got, ok := quotaAutoProbeReset(session.SessionSnapshot{QuotaByModel: snaps[0].QuotaByModel}, time.Now())
-	if !ok || !got.Equal(reset) {
-		t.Errorf("scheduler reset = %v,%v, want %v,true (seed teaches reset)", got, ok, reset)
-	}
 }
 
 func TestQuotaBootSeedDropsBadRows(t *testing.T) {
@@ -68,10 +68,6 @@ func TestQuotaBootSeedDropsBadRows(t *testing.T) {
 	if len(p.Snapshot()[0].QuotaByModel) != 0 {
 		t.Errorf("bad rows polluted the view: %+v", p.Snapshot()[0].QuotaByModel)
 	}
-	toks := p.roster.Load()
-	if (*toks)[0].quotaSeeded {
-		t.Error("quotaSeeded = true with zero applied rows, want false")
-	}
 }
 
 func TestQuotaBootSeedNoDowngrade(t *testing.T) {
@@ -79,7 +75,7 @@ func TestQuotaBootSeedNoDowngrade(t *testing.T) {
 	defer mock.Close()
 	p := seededPool(t, mock)
 	reset := time.Now().Add(3 * time.Hour)
-	seedQuotaReset(t, p, 0, reset) // live probe: same path a real probe uses
+	seedLiveQuota(t, p, 0, reset) // live probe: same path a real probe uses
 
 	stale := time.Now().Add(-24 * time.Hour)
 	p.SeedQuotaSnapshot([]QuotaSeedRow{{
@@ -107,117 +103,5 @@ func TestQuotaBootSeedIdempotent(t *testing.T) {
 	if before.Limit != after.Limit || before.RecentCount != after.RecentCount ||
 		!before.ResetAt.Equal(after.ResetAt) || before.Entitlement["base"] != after.Entitlement["base"] {
 		t.Errorf("re-push changed the view: %+v vs %+v", before, after)
-	}
-}
-
-func TestQuotaBootProbeSlotSpread(t *testing.T) {
-	boot := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
-	end := boot.Add(quotaBootProbeWindow)
-	seen := map[time.Time]bool{}
-	for i := range 8 {
-		s := quotaBootProbeSlot(i, boot)
-		if s.Before(boot) || !s.Before(end) {
-			t.Errorf("token %d slot %v outside [boot, boot+5m)", i, s)
-		}
-		if b := quotaBootProbeSlot(i, boot); !b.Equal(s) {
-			t.Errorf("token %d slot not deterministic: %v vs %v", i, s, b)
-		}
-		seen[s] = true
-	}
-	if len(seen) < 2 {
-		t.Error("all 8 token slots identical: no per-token spread")
-	}
-}
-
-func TestQuotaBootProbeDueGates(t *testing.T) {
-	now := time.Now()
-	old := now.Add(-time.Hour) // every slot (boot+0..5m) is past
-	if !quotaBootProbeDue(0, false, old, now) {
-		t.Error("due case: want true (slot long past, never probed)")
-	}
-	if quotaBootProbeDue(0, true, old, now) {
-		t.Error("already boot-probed: want false (once per process)")
-	}
-	if quotaBootProbeDue(0, false, time.Time{}, now) {
-		t.Error("zero boot (pool never Started): want false")
-	}
-	if quotaBootProbeDue(0, false, now.Add(time.Hour), now) {
-		t.Error("slot still in the future: want false")
-	}
-}
-
-func TestQuotaBootProbeVirginFiresOnce(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := seededPool(t, mock)
-	setQuotaAutoProbe(p, true)
-	// Boot relatif terhadap tick (bukan wall now) agar slot selalu lewat:
-	// pola yang sama dengan perbaikan TestQuotaBootProbeSeededSkips.
-	tick := laNoon(time.Now())
-	p.quotaBootAt = tick.Add(-time.Hour)
-
-	p.quotaAutoProbeTickAt(context.Background(), tick)
-	if got := mock.SessionProbesSnapshot(); got != 1 {
-		t.Fatalf("SessionProbes = %d, want 1 (one session-less boot probe)", got)
-	}
-	toks := p.roster.Load()
-	if !(*toks)[0].quotaBootProbed {
-		t.Error("quotaBootProbed = false, want true (fired)")
-	}
-	if got := (*toks)[0].quotaProbeDay; got != laDay(tick) {
-		t.Errorf("quotaProbeDay = %q, want %q (day marked, no same-day double)", got, laDay(tick))
-	}
-	// Second tick: once per process, no second probe.
-	p.quotaAutoProbeTickAt(context.Background(), tick.Add(time.Minute))
-	if got := mock.SessionProbesSnapshot(); got != 1 {
-		t.Errorf("SessionProbes = %d after re-tick, want 1 (once per process)", got)
-	}
-}
-
-func TestQuotaBootProbeSeededSkips(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := seededPool(t, mock)
-	setQuotaAutoProbe(p, true)
-	// Seed with a reset whose normal slot stays future of the tick below.
-	// The slot trails the reset by <5m, so anchor the reset to the tick
-	// (not wall-now): wall-now+3h sits before LA noon on mornings and the
-	// boot tick would wrongly fire. Known reset, nothing due, at any hour.
-	tick := laNoon(time.Now())
-	p.SeedQuotaSnapshot([]QuotaSeedRow{{
-		Token: 0, Model: modelA, Limit: 5, Recent: 1,
-		ResetAt: tick.Add(3 * time.Hour), ProbedAt: time.Now(),
-	}})
-	p.quotaBootAt = time.Now().Add(-time.Hour)
-
-	p.quotaAutoProbeTickAt(context.Background(), tick)
-	if got := mock.SessionProbesSnapshot(); got != 0 {
-		t.Errorf("SessionProbes = %d for seeded token, want 0 (normal slots own it)", got)
-	}
-}
-
-func TestQuotaBootProbeDisabledSkips(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := seededPool(t, mock)
-	// Kill-switch off (zero-value test config): virgin token, due slot.
-	p.quotaBootAt = time.Now().Add(-time.Hour)
-
-	p.quotaAutoProbeTickAt(context.Background(), laNoon(time.Now()))
-	if got := mock.SessionProbesSnapshot(); got != 0 {
-		t.Errorf("SessionProbes = %d with kill-switch off, want 0 (seed display only)", got)
-	}
-}
-
-func TestQuotaBootProbeUnstartedSkips(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := seededPool(t, mock)
-	setQuotaAutoProbe(p, true)
-	// quotaBootAt zero: pool never Started — no boot probe, exactly the
-	// pre-ADR-0024 unknown-reset behavior.
-	p.quotaAutoProbeTickAt(context.Background(), laNoon(time.Now()))
-	if got := mock.SessionProbesSnapshot(); got != 0 {
-		t.Errorf("SessionProbes = %d with zero boot time, want 0", got)
 	}
 }
