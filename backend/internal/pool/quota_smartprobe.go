@@ -265,8 +265,12 @@ func (p *Pool) smartProbeTickAt(ctx context.Context, now time.Time) {
 
 // smartProbeRound probes every eligible token once, staggering between
 // probes. The first upstream 429 aborts the round (the remaining tokens
-// wait for the doubled interval). Returns the success count plus whether
-// the round hit a 429 or the context died mid-round.
+// wait for the doubled interval). A 429 arrives two ways: an unparseable
+// body classifies to ErrRateLimited, while a structured quota body parses
+// into a SessionState with Status "rate_limited" (the quota it carries is
+// still cached by ProbeToken — the abort only spares the other tokens).
+// Returns the success count plus whether the round hit a 429 or the
+// context died mid-round.
 func (p *Pool) smartProbeRound(ctx context.Context, toks []*tokenEntry, now time.Time) (fired int, limited, canceled bool) {
 	staggered := false
 	for i, tok := range toks {
@@ -283,11 +287,15 @@ func (p *Pool) smartProbeRound(ctx context.Context, toks []*tokenEntry, now time
 			}
 		}
 		staggered = true
-		if err := p.smartProbeOne(ctx, i, tok); err != nil {
+		st, err := p.smartProbeOne(ctx, i, tok)
+		if err != nil {
 			if errors.Is(err, upstream.ErrRateLimited) {
 				return fired, true, false
 			}
 			continue
+		}
+		if st != nil && st.Status == "rate_limited" {
+			return fired, true, false
 		}
 		fired++
 	}
@@ -296,11 +304,12 @@ func (p *Pool) smartProbeRound(ctx context.Context, toks []*tokenEntry, now time
 
 // smartProbeOne issues one session-less ProbeToken with a bounded context,
 // warn-only on failure. It never records usage: probes stay out of the
-// ledgers, lastActive, and requestsServed by construction.
-func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) error {
+// ledgers, lastActive, and requestsServed by construction. The live state
+// rides along so the round can spot a 429 that parsed as quota data.
+func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) (*upstream.SessionState, error) {
 	label := tokenEntryLabel(tok)
 	fire, cancel := context.WithTimeout(ctx, quotaProbeFireTimeout)
-	_, err := p.ProbeToken(fire, i)
+	st, err := p.ProbeToken(fire, i)
 	cancel()
 	if err != nil {
 		if errors.Is(err, upstream.ErrRateLimited) {
@@ -308,10 +317,14 @@ func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) error 
 		} else {
 			p.logger.Warn("pool: smart probe failed", "token", i+1, "token_label", label, "err", err)
 		}
-		return err
+		return nil, err
 	}
-	p.logger.Debug("pool: smart probe refreshed", "token", i+1, "token_label", label)
-	return nil
+	if st != nil && st.Status == "rate_limited" {
+		p.logger.Warn("pool: smart probe rate-limited, aborting round", "token", i+1, "token_label", label)
+	} else {
+		p.logger.Debug("pool: smart probe refreshed", "token", i+1, "token_label", label)
+	}
+	return st, nil
 }
 
 // smartProbeSkipToken reports whether the token sits out this round: the

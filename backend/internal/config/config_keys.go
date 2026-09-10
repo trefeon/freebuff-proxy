@@ -201,6 +201,7 @@ func defaultRawConfig() rawConfig {
 		BurstThreshold:                   ptrInt(20),                   // same-model admissions inside BURST_WINDOW that trip spreading for that model
 		BurstMaxTokens:                   ptrInt(2),                    // distinct accounts one model's burst spreads across (minimum 2)
 		MaturityEnabled:                  true,                         // streak-maturity automation on by default; dry-run probes prove schedule before live touches
+		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
 		QuotaAutoProbe:                   true,                         // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
 		QuotaProbeActiveInterval:         "60s",                        // busy-pool probe cadence
 		QuotaProbeIdleHeartbeat:          "30m",                        // idle-pool probe heartbeat (also the 429-backoff ceiling)
