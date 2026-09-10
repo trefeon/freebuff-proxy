@@ -311,9 +311,10 @@ test.describe("operator interactions (hermetic mocks)", () => {
         body: `{"token":0,"ok":true,"message":"ok"}{"token":1,"ok":true,"message":"ok"}`,
       });
     });
-    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Allowances" }).click();
     await expect(
-      page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+      page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
     const before = gets;
     const probe = page.waitForRequest(
@@ -536,15 +537,13 @@ test.describe("operator interactions (hermetic mocks)", () => {
         await route.continue();
       }
     });
-
-    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.goto("http://127.0.0.1:4173/admin/#settings");
     const drain = page.getByRole("radio", { name: "Drain (Safest)" });
     const rr = page.getByRole("radio", { name: "Round Robin (1:1)" });
     await expect(drain).toHaveAttribute("aria-checked", "true");
 
     await rr.click();
     await expect(rr).toHaveAttribute("aria-checked", "true");
-    expect(bodies[bodies.length - 1]).toContain("TOKEN_ROTATION=round_robin");
 
     const failover = page.getByRole("switch", {
       name: "Auto Failover on Rate Limit (429)",
@@ -552,6 +551,14 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(failover).toHaveAttribute("aria-checked", "true");
     await failover.click();
     await expect(failover).toHaveAttribute("aria-checked", "false");
+    // Traffic edits batch through the Settings .env save (Save/Discard),
+    // not immediate POSTs: one save persists both keys.
+    page.once("dialog", (d) => d.accept());
+    await page
+      .getByRole("button", { name: "Save Changes", exact: true })
+      .click();
+    await expect.poll(() => bodies.length).toBeGreaterThan(0);
+    expect(bodies[bodies.length - 1]).toContain("TOKEN_ROTATION=round_robin");
     expect(bodies[bodies.length - 1]).toContain("RATE_LIMIT_FAILOVER=false");
   });
   // -------------------------------------------------------------------------
@@ -612,7 +619,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
       await route.continue();
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    // Burst controls live in the Settings Traffic section now.
+    await page.goto("http://127.0.0.1:4173/admin/#settings");
     const burst = page.getByRole("region", { name: "Burst Balance" });
 
     // Toggle flips locally, then its own overlay save persists the key.
@@ -675,7 +683,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
     // Console is the default view: the seeded chat request/done pair renders
     // one request-group card (singular header + POST line).
     await expect(page.getByText("1 model request").first()).toBeVisible();
@@ -700,7 +708,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const refetch = page.waitForResponse(
       (r) => r.url().includes("/admin/api/logs") && r.status() === 200,
     );
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await refetch;
 
     // Clear wipes the console view behind a confirm dialog.
@@ -720,7 +728,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#log-level")).toBeVisible();
 
@@ -758,7 +766,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    await page.goto("http://127.0.0.1:4173/admin/#logs");
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
     await page.getByRole("button", { name: "Table" }).click();
     await expect(page.locator("#logs-page-size")).toBeVisible();
     await expect(page.getByText("Page 1 /", { exact: false })).toBeVisible();
@@ -923,7 +931,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
       (r) => r.url().includes("/admin/api/setup") && r.status() === 200,
       { timeout: 5000 },
     );
-    await page.goto("http://127.0.0.1:4173/admin/setup");
+    await page.goto("http://127.0.0.1:4173/admin/#overview");
     await setupResp;
     await page
       .context()
@@ -933,7 +941,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     const reset = page.getByRole("button", { name: "Reset" });
     await expect(reset).toBeDisabled();
 
-    await page.getByRole("button", { name: "Generate" }).click();
+    await page.getByRole("button", { name: "Generate", exact: true }).click();
     const generated = await keyInput.inputValue();
     expect(generated).not.toBe("not-needed");
     expect(generated.length).toBeGreaterThan(8);
@@ -960,10 +968,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#overview");
     for (const [link, heading] of [
       ["Tokens", "Tokens"],
-      ["Maturity", "Account Maturity"],
-      ["Quota Tracker", "Quota Tracker"],
-      ["Models", "Models"],
-      ["Logs", "Logs"],
+      ["Catalog", "Catalog"],
+      ["Activity", "Activity"],
       ["Settings", "Settings"],
     ] as Array<[string, string]>) {
       await nav.getByRole("link", { name: link }).click();

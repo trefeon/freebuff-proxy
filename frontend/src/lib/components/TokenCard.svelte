@@ -15,6 +15,8 @@
     statusFor,
     riskBadgeFor,
     cooldownLabel,
+    maturityBadgeFor,
+    freebucksBadgeLabel,
   } from "../utils/tokenStatus.js";
   import { tr } from "../i18n.js";
 
@@ -65,6 +67,8 @@
   // Risk chip (moved from the standalone At-risk cards): shown when the
   // account carries a risk flag and no ban badge already claims the row.
   const riskBadge = $derived(riskBadgeFor(token));
+  const maturityBadge = $derived(maturityBadgeFor(token));
+  const freebucksLabel = $derived(freebucksBadgeLabel(token));
 
   // Live session countdown (freebuff TUI parity). Anchor to the server's
   // ABSOLUTE expiry when the snapshot carries one (issue: a relative
@@ -172,15 +176,26 @@
     </div>
   </td>
   <td>
-    <div class="flex items-center gap-1.5">
-      <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
-      {#if riskBadge}
-        <StatusBadge
-          status={riskBadge.label}
-          tone={riskBadge.tone}
-          pulse={riskBadge.pulse}
-        />
-      {/if}
+    <div class="flex flex-col items-start gap-1">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+        {#if riskBadge}
+          <StatusBadge
+            status={riskBadge.label}
+            tone={riskBadge.tone}
+            pulse={riskBadge.pulse}
+          />
+        {/if}
+      </div>
+      <div class="flex flex-wrap items-center gap-1">
+        {#if token.session_model}
+          <StatusBadge tone="info" status={token.session_model} />
+        {/if}
+        {#if freebucksLabel}
+          <StatusBadge tone="idle" status={freebucksLabel} />
+        {/if}
+        <StatusBadge status={maturityBadge.label} tone={maturityBadge.tone} />
+      </div>
     </div>
   </td>
   <td>

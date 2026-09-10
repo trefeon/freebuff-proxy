@@ -14,11 +14,14 @@
   import CopyButton from "../components/CopyButton.svelte";
   import Alert from "../components/Alert.svelte";
   import AnnouncementsBanner from "../components/AnnouncementsBanner.svelte";
+  import SetupSnippets from "../components/SetupSnippets.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { createQueryStore } from "../stores/query.js";
   import { tr } from "../i18n.js";
   import { recordPageVisit } from "../stores/pageState.js";
+  import { formatTime, parseLogFields } from "../utils/format.js";
+  import { cooldownLabel } from "../utils/tokenStatus.js";
   let data = $state(null);
   let loading = $state(true);
   let error = $state("");
@@ -112,6 +115,7 @@
   let unsubError = null;
   onMount(() => {
     recordPageVisit("overview");
+    fetchRecentErrors();
     releaseQuery = overviewQuery.ensure();
     unsubData = overviewQuery.data.subscribe((v) => {
       if (v) {
@@ -141,6 +145,81 @@
       releaseQuery?.();
     };
   });
+  // Worst-account callout: single riskiest token (critical > high > medium;
+  // tie-breaks: cooldown active wins, then lowest requests/day headroom).
+  const RISK_RANK = { critical: 0, high: 1, medium: 2 };
+  function dayHeadroom(t) {
+    const limit = t.requests_per_day_limit ?? 0;
+    if (!(limit > 0)) return Number.POSITIVE_INFINITY;
+    return limit - (t.requests_per_day ?? 0);
+  }
+  let worstAccount = $derived.by(() => {
+    const tokens = data?.tokens ?? [];
+    if (tokens.length === 0) return null;
+    let worst = tokens[0];
+    for (let i = 1; i < tokens.length; i++) {
+      const a = tokens[i];
+      const b = worst;
+      const ra = RISK_RANK[a.risk_level] ?? 3;
+      const rb = RISK_RANK[b.risk_level] ?? 3;
+      if (ra !== rb) {
+        if (ra < rb) worst = a;
+        continue;
+      }
+      if (!!a.cooldown_active !== !!b.cooldown_active) {
+        if (a.cooldown_active) worst = a;
+        continue;
+      }
+      if (dayHeadroom(a) < dayHeadroom(b)) worst = a;
+    }
+    if (
+      worst.risk_level === "critical" ||
+      worst.risk_level === "high" ||
+      worst.cooldown_active
+    ) {
+      return worst;
+    }
+    return null;
+  });
+
+  // Recent-errors mini-list: one-shot logs fetch per mount (no polling).
+  // Failures hide the section silently.
+  const ERROR_MESSAGES = new Set([
+    "request failed",
+    "chat request refused",
+    "messages request refused",
+    "responses request refused",
+    "rate limit exceeded",
+  ]);
+  let recentErrors = $state([]);
+  function isErrorEntry(e) {
+    if (!e) return false;
+    if (e.level === "error") return true;
+    if (ERROR_MESSAGES.has(e.message)) return true;
+    if (e.message === "chat trace") {
+      for (const f of parseLogFields(e.fields)) {
+        if (f.key === "status" && f.value === "error") return true;
+      }
+    }
+    return false;
+  }
+  function errorDetail(e) {
+    const parsed = parseLogFields(e.fields);
+    if (parsed.length === 0) return "";
+    const pref =
+      parsed.find((f) => f.key === "error" || f.key === "reason") ?? parsed[0];
+    return pref.value ? `${pref.key}=${pref.value}` : pref.key;
+  }
+  async function fetchRecentErrors() {
+    try {
+      const res = await fetchAPI(adminApi.logs);
+      const entries = res?.entries ?? [];
+      // Entries arrive newest-first; keep the 5 most recent error-ish ones.
+      recentErrors = entries.filter(isErrorEntry).slice(0, 5);
+    } catch {
+      recentErrors = [];
+    }
+  }
 
   function retry() {
     error = "";
@@ -271,6 +350,42 @@
           { label: $tr("Models"), value: data.model_count ?? 0 },
         ]}
       />
+      {#if worstAccount}
+        {@const w = worstAccount}
+        {@const cd = cooldownLabel(w, Date.now())}
+        <Alert
+          tone={w.risk_level === "critical" ? "error" : "warning"}
+          title={$tr("Account #{index} needs attention", {
+            index: w.index,
+          })}
+        >
+          <p class="text-sm">
+            {w.email || $tr("unknown account")}
+            <span class="fp-num text-xs">· {w.risk_level}</span>
+          </p>
+          {#if w.cooldown_active}
+            <p class="mt-1 text-xs">
+              {$tr("Cooldown active")}{#if cd !== "—"}<span class="fp-num">
+                  · {cd}
+                  {$tr("remaining")}</span
+                >{:else if w.cooldown_until}<span class="fp-num">
+                  · {w.cooldown_until}</span
+                >{/if}
+            </p>
+          {/if}
+          {#if w.session_status}
+            <p class="mt-1 text-xs">
+              {$tr("Session: {status}", { status: w.session_status })}
+            </p>
+          {/if}
+          <a
+            href="#tokens"
+            class="fp-btn fp-btn-secondary fp-btn-sm mt-3 inline-flex items-center gap-1.5"
+          >
+            <span>{$tr("Open Tokens")}</span>
+          </a>
+        </Alert>
+      {/if}
 
       <!-- Hybrid mode: pool summary above plus a compact bridge-relay card -->
       {#if data.mode === "hybrid"}
@@ -461,6 +576,51 @@
       <div class="mt-4">
         <ApiKeysEditor />
       </div>
+    </section>
+    {#if recentErrors.length > 0}
+      <Card title={$tr("Recent errors")}>
+        {#snippet footer()}
+          <a
+            href="#activity"
+            class="text-xs text-[var(--fp-accent)] hover:underline"
+          >
+            {$tr("Open Activity")}
+          </a>
+        {/snippet}
+        <ul class="flex flex-col gap-2">
+          {#each recentErrors as e, i (i)}
+            <li
+              class="flex flex-col gap-0.5 border-b border-[var(--fp-border)] pb-2 last:border-0 last:pb-0 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-3"
+            >
+              <span class="fp-num shrink-0 text-[11px] text-[var(--fp-dim)]"
+                >{formatTime(e.time)}</span
+              >
+              <span class="min-w-0 break-words text-xs text-[var(--fp-text)]"
+                >{e.message}</span
+              >
+              {#if errorDetail(e)}
+                <span
+                  class="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--fp-muted)]"
+                  title={errorDetail(e)}>{errorDetail(e)}</span
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </Card>
+    {/if}
+
+    <!-- Client setup (ex Setup page): fetches independently, always visible -->
+    <section aria-label="Client setup">
+      <div class="flex items-center justify-between mb-3">
+        <h2
+          id="client-setup"
+          class="text-lg font-semibold text-[var(--fp-text)]"
+        >
+          {$tr("Client Setup")}
+        </h2>
+      </div>
+      <SetupSnippets />
     </section>
   {/if}
 </PageShell>

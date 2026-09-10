@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import Sidebar from "./lib/Sidebar.svelte";
   import Login from "./lib/pages/Login.svelte";
-  import { pageComponentFor } from "./lib/nav.js";
+  import { pageComponentFor, resolveLegacyPage } from "./lib/nav.js";
   import ChangePasswordModal from "./lib/components/ChangePasswordModal.svelte";
   import ConfirmModal from "./lib/components/ConfirmModal.svelte";
   import SecurityBanner from "./lib/components/SecurityBanner.svelte";
@@ -18,17 +18,32 @@
   } from "./lib/stores/session.js";
   import { tr } from "./lib/i18n.js";
   import { loadPageState, savePageState } from "./lib/stores/pageState.js";
+  // Legacy page ids redirect to their IA-merge target (see
+  // LEGACY_PAGE_REDIRECTS in lib/nav.js). A redirect carrying a tab plants
+  // the one-shot sessionStorage key the target page consumes on mount for
+  // its initial tab, then returns the target page.
+  function applyLegacyRedirect(id) {
+    const target = resolveLegacyPage(id);
+    if (!target) return id;
+    if (target.tab) {
+      try {
+        sessionStorage.setItem(`fp-page-tab:${target.page}`, target.tab);
+      } catch {
+        // Storage unavailable — the target page opens on its default tab.
+      }
+    }
+    return target.page;
+  }
   function getInitialTab() {
     if (typeof window === "undefined") return "overview";
     const path = window.location.pathname;
     const hash = window.location.hash.replace("#", "");
     if (path === adminActions.login || hash === "login") return "login";
-    // Legacy alias: '#config' still routes to the Settings page.
-    if (hash === "config") return "settings";
-    if (hash) return hash;
+    // Legacy hash (incl. the '#config' alias): redirect to the target page.
+    if (hash) return applyLegacyRedirect(hash);
     const segments = path.split("/").filter(Boolean);
     if (segments.length >= 2 && segments[0] === "admin" && segments[1]) {
-      return segments[1];
+      return applyLegacyRedirect(segments[1]);
     }
     return "overview";
   }
@@ -64,8 +79,10 @@
     const h = window.location.hash.replace("#", "");
     // Only known pages are remembered: persisting an unknown hash would
     // reopen a NotFound view on the next boot with no explicit route.
+    // Legacy ids normalize to their redirect target first (a stored legacy
+    // id would otherwise reopen NotFound once the redirect is gone).
     // shell.lastHash is last-writer-wins (see lib/stores/pageState.js).
-    const norm = h === "config" ? "settings" : h;
+    const norm = resolveLegacyPage(h)?.page ?? h;
     if (norm && pageComponentFor(norm))
       savePageState("shell", { lastHash: norm });
   }
@@ -101,7 +118,9 @@
       loadPageState("shell")
         .then((d) => {
           const raw = d && typeof d.lastHash === "string" ? d.lastHash : "";
-          const h = raw === "config" ? "settings" : raw.replace("#", "");
+          // A pre-merge snapshot may name a removed page: reopen its
+          // redirect target (with the tab one-shot) instead of NotFound.
+          const h = applyLegacyRedirect(raw.replace("#", ""));
           if (h && pageComponentFor(h)) window.location.hash = h;
         })
         .finally(() => {

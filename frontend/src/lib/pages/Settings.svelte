@@ -5,6 +5,7 @@
   import PageShell from "../components/PageShell.svelte";
   import Button from "../components/Button.svelte";
   import Alert from "../components/Alert.svelte";
+  import EmptyState from "../components/EmptyState.svelte";
   import SecurityCard from "../components/SecurityCard.svelte";
   import CommandCenterCard from "../components/CommandCenterCard.svelte";
   import GatewaySettings from "./settings/GatewaySettings.svelte";
@@ -39,6 +40,22 @@
   let settingsDegraded = $state(false);
   let saving = $state(false);
   let result = $state(null); // { ok, message, restart_only: string[] } — save outcome
+  // Key search across all catalog sections (70 keys).
+  let filterQuery = $state("");
+  let searching = $derived(filterQuery.trim().length > 0);
+  // Per-section visible-row counts (bound from the section components, -1
+  // until mounted) for the global search empty state.
+  let gatewayMatches = $state(-1);
+  let trafficMatches = $state(-1);
+  let routingMatches = $state(-1);
+  let advancedMatches = $state(-1);
+  let allEmpty = $derived(
+    searching &&
+      gatewayMatches === 0 &&
+      trafficMatches === 0 &&
+      routingMatches === 0 &&
+      advancedMatches === 0,
+  );
   // ---------------------------------------------------------------------------
   // .env parsing / merging — shared contract in ../utils/env.js (issue #234):
   // line-replace, comments preserved for untouched lines.
@@ -122,6 +139,19 @@
     }
     return n;
   });
+  // Dirty key names for the restart summary: the same .env-document diff
+  // the Save flow persists, partitioned by the catalog restart_only flag.
+  let dirtyKeys = $derived.by(() => {
+    const a = parseEnv(baseContent);
+    const b = parseEnv(rawText);
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].filter((k) => (a[k] ?? "") !== (b[k] ?? ""));
+  });
+  function needsRestart(key) {
+    return (meta ?? []).some((e) => e.key === key && e.restart_only);
+  }
+  let restartKeys = $derived(dirtyKeys.filter(needsRestart));
+  let liveKeys = $derived(dirtyKeys.filter((k) => !needsRestart(k)));
 
   // How many keys the DB overlay currently wins (ADR-0019 badge count).
   let dbCount = $derived(
@@ -372,6 +402,26 @@
           </Button>
         </div>
       </div>
+      {#if restartKeys.length > 0 || liveKeys.length > 0}
+        <div class="flex flex-col gap-0.5 mt-2 text-xs">
+          {#if restartKeys.length > 0}
+            <span
+              >{$tr("Needs restart ({n}): {keys}", {
+                n: restartKeys.length,
+                keys: restartKeys.join(", "),
+              })}</span
+            >
+          {/if}
+          {#if liveKeys.length > 0}
+            <span class="text-[var(--fp-dim)]"
+              >{$tr("Live-applying ({n}): {keys}", {
+                n: liveKeys.length,
+                keys: liveKeys.join(", "),
+              })}</span
+            >
+          {/if}
+        </div>
+      {/if}
     </Alert>
   {/if}
 
@@ -398,6 +448,23 @@
     </Alert>
   {/if}
 
+  <!-- Key search across all 70 catalog keys -->
+  <div class="flex flex-col gap-1.5">
+    <label
+      for="settings-search"
+      class="text-xs font-semibold text-[var(--fp-muted)]"
+      >{$tr("Search settings")}</label
+    >
+    <input
+      id="settings-search"
+      type="search"
+      autocomplete="off"
+      placeholder={$tr("Search 70 keys…")}
+      bind:value={filterQuery}
+      class="fp-input w-full sm:max-w-md"
+    />
+  </div>
+
   <SecurityCard onSuccess={fetchData} />
 
   <!-- 2. Gateway & Protection (General - live reload) -->
@@ -408,6 +475,8 @@
     sources={settingSources}
     onReset={resetSetting}
     onSaved={overlaySaved}
+    query={filterQuery}
+    onMatchCount={(n) => (gatewayMatches = n)}
   />
 
   <!-- 3. Traffic & Rate Limiting (Pool - live reload) -->
@@ -418,6 +487,8 @@
     sources={settingSources}
     onReset={resetSetting}
     onSaved={overlaySaved}
+    query={filterQuery}
+    onMatchCount={(n) => (trafficMatches = n)}
   />
 
   <!-- 4. Model Routing & Aliases (Upstream - live reload) -->
@@ -428,6 +499,8 @@
     sources={settingSources}
     onReset={resetSetting}
     onSaved={overlaySaved}
+    query={filterQuery}
+    onMatchCount={(n) => (routingMatches = n)}
   />
 
   <!-- 5. Advanced (every remaining catalog key with its default) -->
@@ -439,7 +512,28 @@
     sources={settingSources}
     onReset={resetSetting}
     onSaved={overlaySaved}
+    query={filterQuery}
+    onMatchCount={(n) => (advancedMatches = n)}
   />
+
+  {#if allEmpty}
+    <EmptyState
+      title={$tr('No settings match "{q}"', { q: filterQuery.trim() })}
+      description={$tr(
+        "Try a key name like TOKEN_ROTATION, or clear the search to see all sections.",
+      )}
+    >
+      {#snippet action()}
+        <Button
+          variant="secondary"
+          size="sm"
+          onclick={() => (filterQuery = "")}
+        >
+          {$tr("Clear search")}
+        </Button>
+      {/snippet}
+    </EmptyState>
+  {/if}
 
   <!-- 6. Command Center (Lifecycle, updates & rollback) -->
   <CommandCenterCard />

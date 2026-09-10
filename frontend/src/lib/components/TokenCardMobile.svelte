@@ -15,6 +15,7 @@
     statusFor,
     riskBadgeFor,
     cooldownLabel,
+    maturityBadgeFor,
   } from "../utils/tokenStatus.js";
   import { tr } from "../i18n.js";
 
@@ -86,6 +87,7 @@
   // Risk chip (moved from the standalone At-risk cards): shown when the
   // account carries a risk flag and no ban badge already claims the card.
   const riskBadge = $derived(riskBadgeFor(token));
+  const maturityBadge = $derived(maturityBadgeFor(token));
 </script>
 
 <div
@@ -125,6 +127,12 @@
             pulse={riskBadge.pulse}
           />
         {/if}
+      </div>
+      <div class="flex flex-wrap items-center gap-1">
+        {#if token.session_model}
+          <StatusBadge tone="info" status={token.session_model} />
+        {/if}
+        <StatusBadge status={maturityBadge.label} tone={maturityBadge.tone} />
       </div>
       {#if token.email || token.account_id}
         <span

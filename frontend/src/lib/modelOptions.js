@@ -4,7 +4,8 @@ import { adminApi } from "./api/paths.js";
 // Static fallback for when the admin API is unreachable (e.g. `npm run dev`
 // before the gateway is up). Bare ids only, no live prices here; the live
 // /admin/api/models payload (with per-model Freebucks/hr) supersedes them
-// whenever present.
+// whenever present. Offline-dev fallback only: every id below must exist in
+// the served registry (e2e/fixtures/models.json mirrors it).
 export const fallbackModelOptions = [
   {
     id: "openai/gpt-5.6-luna",
@@ -12,8 +13,8 @@ export const fallbackModelOptions = [
     tag: "premium",
   },
   {
-    id: "meta/muse-spark-1.2-contributor",
-    label: "meta/muse-spark-1.2-contributor",
+    id: "meta/muse-spark-1.3-contributor",
+    label: "meta/muse-spark-1.3-contributor",
     tag: "premium",
   },
   {

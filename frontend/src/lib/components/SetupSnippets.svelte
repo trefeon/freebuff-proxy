@@ -1,14 +1,19 @@
 <script>
+  /**
+   * SetupSnippets — self-contained client-setup section (ex Setup page).
+   * Fetches adminApi.setup itself so it renders anywhere, even when the
+   * host page has no token-pool data. Renders the Mode card, Client API
+   * Key card, Base URL + Models cards, and the 7-snippet quick-start grid.
+   */
   import { onMount } from "svelte";
   import { Check, Zap } from "@lucide/svelte";
-  import PageHeader from "../components/PageHeader.svelte";
-  import Card from "../components/Card.svelte";
-  import StatusBadge from "../components/StatusBadge.svelte";
-  import CopyButton from "../components/CopyButton.svelte";
-  import Alert from "../components/Alert.svelte";
-  import EmptyState from "../components/EmptyState.svelte";
-  import Button from "../components/Button.svelte";
-  import Field from "../components/Field.svelte";
+  import Card from "./Card.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
+  import CopyButton from "./CopyButton.svelte";
+  import Alert from "./Alert.svelte";
+  import EmptyState from "./EmptyState.svelte";
+  import Button from "./Button.svelte";
+  import Field from "./Field.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { tr } from "../i18n.js";
@@ -119,23 +124,7 @@
   ]);
 </script>
 
-<div class="space-y-6 page-enter">
-  <PageHeader
-    title={$tr("Setup")}
-    description={$tr(
-      "Client configuration for AI coding tools — copy a block into your tool's config.",
-    )}
-  >
-    <svelte:fragment slot="actions">
-      {#if data}
-        <StatusBadge status={data.mode} tone={modeTone} />
-      {:else if loading}
-        <span class="skeleton skeleton-text w-20"></span>
-      {/if}
-    </svelte:fragment>
-  </PageHeader>
-
-  <!-- Loading -->
+<div class="space-y-4">
   {#if loading}
     <div aria-busy="true">
       <Card class="space-y-3">
@@ -152,11 +141,10 @@
           <div class="skeleton skeleton-card"></div>
         {/each}
       </div>
-      <span class="sr-only">Loading setup data</span>
+      <span class="sr-only">{$tr("Loading setup data")}</span>
     </div>
   {/if}
 
-  <!-- Error -->
   {#if error}
     <div class="space-y-3">
       <Alert tone="error" title={$tr("Failed to load setup data")}
@@ -178,17 +166,18 @@
         <StatusBadge status={data.mode} tone={modeTone} />
         {#if isBridge}
           <span class="text-xs text-[var(--fp-dim)]"
-            >bridge tokens <span class="fp-num">{data.bridge_tokens}</span
-            ></span
+            >{$tr("bridge tokens")}
+            <span class="fp-num">{data.bridge_tokens}</span></span
           >
         {:else}
           <span class="text-xs text-[var(--fp-dim)]"
-            >pool size <span class="fp-num">{data.token_count}</span></span
+            >{$tr("pool size")}
+            <span class="fp-num">{data.token_count}</span></span
           >
           {#if isHybrid}
             <span class="text-xs text-[var(--fp-dim)]"
-              >bridge tokens <span class="fp-num">{data.bridge_tokens}</span
-              ></span
+              >{$tr("bridge tokens")}
+              <span class="fp-num">{data.bridge_tokens}</span></span
             >
           {/if}
         {/if}
@@ -197,7 +186,7 @@
       <p
         class="fp-inset mt-3 px-3 py-2 text-xs font-mono text-[var(--fp-muted)]"
       >
-        Key: {data.key_hint}
+        {$tr("Key: {hint}", { hint: data.key_hint })}
       </p>
     </Card>
 
@@ -221,24 +210,24 @@
             class="fp-input fp-mono flex-1"
           />
           <Button variant="secondary" size="sm" onclick={generateKey}>
-            <Zap size={16} />Generate
+            <Zap size={16} />{$tr("Generate")}
           </Button>
           <Button
             variant="ghost"
             size="sm"
             disabled={apiKey === "not-needed"}
-            onclick={resetKey}>Reset</Button
+            onclick={resetKey}>{$tr("Reset")}</Button
           >
         </div>
       </Field>
     </Card>
 
     <!-- Quick start -->
-    <h2
+    <h3
       class="text-[11px] font-mono uppercase tracking-[0.25em] text-[var(--fp-dim)]"
     >
       {$tr("Quick Start")}
-    </h2>
+    </h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card
         title={$tr("Base URL")}
@@ -248,7 +237,7 @@
           <div class="fp-inset flex-1 px-3 py-2 overflow-x-auto">
             <code class="text-xs">{baseURL}</code>
           </div>
-          <CopyButton text={baseURL} label="Copy URL" />
+          <CopyButton text={baseURL} label={$tr("Copy URL")} />
         </div>
       </Card>
 
@@ -258,27 +247,28 @@
       >
         {#if data.models.length > 0}
           <p class="text-xs text-[var(--fp-dim)] mb-3">
-            <span class="fp-num">{data.models.length}</span> served
+            <span class="fp-num">{data.models.length}</span>
+            {$tr("served")}
           </p>
           <div class="flex flex-wrap gap-2">
             {#each data.models as m (m)}
               <button
                 type="button"
                 onclick={() => copyModel(m)}
-                title="Copy model ID"
+                title={$tr("Copy model ID")}
                 class="min-h-6 px-2.5 py-1 rounded-[var(--fp-radius-sm)] text-xs font-mono transition-colors border
                   {copiedModel === m
                   ? 'border-[var(--fp-success)]/50 bg-[var(--fp-success)]/15 text-[var(--fp-success)]'
                   : 'border-[var(--fp-border)] bg-[var(--fp-input-bg)] text-[var(--fp-muted)] hover:border-[var(--fp-border-bright)] hover:text-[var(--fp-text)]'}"
               >
                 {#if copiedModel === m}
-                  <Check size={12} class="inline mr-1" />Copied
+                  <Check size={12} class="inline mr-1" />{$tr("Copied")}
                 {:else}
                   <span class="fp-num">{m}</span>
                   {#if m === model}
                     <span
                       class="ml-1.5 text-[9px] uppercase tracking-wider text-[var(--fp-accent)]"
-                      >default</span
+                      >{$tr("default")}</span
                     >
                   {/if}
                 {/if}
@@ -287,17 +277,19 @@
           </div>
         {:else}
           <EmptyState
-            title="No models served"
-            description="No model IDs are currently served by this gateway."
+            title={$tr("No models served")}
+            description={$tr(
+              "No model IDs are currently served by this gateway.",
+            )}
           />
         {/if}
       </Card>
 
       {#each snippets as s (s.name)}
         <Card title={s.name} class={s.wide ? "md:col-span-2" : ""}>
-          <svelte:fragment slot="actions">
+          {#snippet actions()}
             <CopyButton text={s.text} />
-          </svelte:fragment>
+          {/snippet}
           <pre
             class="fp-inset p-3 text-xs font-mono text-[var(--fp-muted)] overflow-x-auto whitespace-pre-wrap break-words">{s.text}</pre>
         </Card>

@@ -84,9 +84,10 @@ test("quota visit: mount fires one silent auto probe", async ({ page }) => {
       r.method() === "POST" &&
       r.url().includes("/admin/tokens/test-all?auto=1"),
   );
-  await page.goto("http://127.0.0.1:4173/admin/#quota");
+  await page.goto("http://127.0.0.1:4173/admin/#catalog");
+  await page.getByRole("button", { name: "Allowances" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
   // The mount fires after the first tokens load: exactly one POST carrying
   // ?auto=1 (stale server state probes; the mock stands in for stale).
@@ -113,9 +114,10 @@ test("quota visit: remount skips the probe when already fired", async ({
       r.method() === "POST" &&
       r.url().includes("/admin/tokens/test-all?auto=1"),
   );
-  await page.goto("http://127.0.0.1:4173/admin/#quota");
+  await page.goto("http://127.0.0.1:4173/admin/#catalog");
+  await page.getByRole("button", { name: "Allowances" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
   await autoReq;
   await page.waitForTimeout(500);
@@ -126,9 +128,10 @@ test("quota visit: remount skips the probe when already fired", async ({
   await expect(
     page.getByRole("heading", { name: "Tokens", exact: true }),
   ).toBeVisible();
-  await page.goto("http://127.0.0.1:4173/admin/#quota");
+  await page.goto("http://127.0.0.1:4173/admin/#catalog");
+  await page.getByRole("button", { name: "Allowances" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
   await page.waitForTimeout(500);
   expect(probeUrls).toHaveLength(1);
@@ -155,9 +158,10 @@ test("quota visit: failed auto probe surfaces the error path", async ({
       body: `{"ok":false,"message":"boom"}`,
     });
   });
-  await page.goto("http://127.0.0.1:4173/admin/#quota");
+  await page.goto("http://127.0.0.1:4173/admin/#catalog");
+  await page.getByRole("button", { name: "Allowances" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+    page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
   // Failure surfaces the server envelope message on the probeMsg error path
   // (not a bare HTTP status), with no success banner.

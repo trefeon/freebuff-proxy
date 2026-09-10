@@ -10,14 +10,13 @@
     Copy,
     Check,
   } from "@lucide/svelte";
-  import PageShell from "../components/PageShell.svelte";
-  import Card from "../components/Card.svelte";
-  import Button from "../components/Button.svelte";
-  import StatusBadge from "../components/StatusBadge.svelte";
-  import EmptyState from "../components/EmptyState.svelte";
-  import CopyButton from "../components/CopyButton.svelte";
-  import SegmentedControl from "../components/SegmentedControl.svelte";
-  import Alert from "../components/Alert.svelte";
+  import Card from "./Card.svelte";
+  import Button from "./Button.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
+  import EmptyState from "./EmptyState.svelte";
+  import CopyButton from "./CopyButton.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
+  import Alert from "./Alert.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi, adminRoot } from "../api/paths.js";
   import { usePolling } from "../utils/polling.js";
@@ -29,9 +28,16 @@
   import {
     loadPageState,
     savePageState,
-    recordPageVisit,
     pageStateNotice,
   } from "../stores/pageState.js";
+
+  let {
+    cursor = 0,
+    initialFilter = "",
+    onOpenTrace = null,
+    onOpenToken = null,
+  } = $props();
+
   /** @type {any} */
   let data = $state(null);
   let loading = $state(true);
@@ -73,6 +79,13 @@
     let h = 0;
     for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
     return CIRCLE_EMOJIS[h % CIRCLE_EMOJIS.length];
+  }
+
+  // Serving-token account index: numeric tokens open the token in the Tokens
+  // page; anything else renders as a plain chip.
+  function accIndex(tok) {
+    const t = String(tok ?? "").trim();
+    return /^\d+$/.test(t) ? Number(t) : null;
   }
 
   // Console is the specialized inference-traffic view: ONLY /v1 lines.
@@ -162,6 +175,7 @@
           effort: "",
           token: "",
           instanceId: "",
+          reqId: "",
           refused: false,
           reason: "",
           until: "",
@@ -324,6 +338,8 @@
     // Finalize: outcome, stable id, copy text, chips.
     const usedIds = new SvelteSet();
     for (const g of order) {
+      // Groups keyed "id-<reqId>" carry the request id for trace linking.
+      if (!g.reqId && g.key.startsWith("id-")) g.reqId = g.key.slice(3);
       const accessFail = g.accessStatus && Number(g.accessStatus) >= 400;
       const traceFail = g.traceStatus === "error";
       g.outcome =
@@ -497,6 +513,14 @@
     await fetchLogs();
   }
 
+  // Shared time cursor from the Activity page ("Refresh all"): refetch when
+  // it advances. untrack so filter/view reads inside fetchLogs don't become
+  // effect dependencies.
+  $effect(() => {
+    const c = cursor;
+    if (c) untrack(() => fetchLogs());
+  });
+
   function handleFilterChange() {
     page = 0;
     // The persist effect below saves the full filter set (debounced,
@@ -526,7 +550,17 @@
   });
 
   onMount(() => {
-    recordPageVisit("logs");
+    // One-shot initial filter: the prop covers in-page links (trace/metric
+    // "Logs" buttons via {#key} remount); sessionStorage covers cross-page
+    // links (e.g. DevTools) and takes precedence when the prop is empty.
+    let oneShot = initialFilter || "";
+    try {
+      const stored = sessionStorage.getItem("fp-activity-log-filter") || "";
+      if (stored) oneShot = stored;
+      sessionStorage.removeItem("fp-activity-log-filter");
+    } catch {
+      // Storage unavailable (private mode) — fall back to the prop alone.
+    }
     unsubNotice = pageStateNotice.subscribe((v) => (stateNotice = v));
     loadPageState("logs").then(async (d) => {
       if (d && typeof d === "object") {
@@ -551,6 +585,14 @@
         )
           viewMode = d.viewMode;
       }
+      // One-shot links only fill an untouched filter: a restored snapshot
+      // with user filter text (or in-flight keystrokes) always wins.
+      const restoredMsg =
+        d && typeof d === "object" && typeof d.filterMsg === "string"
+          ? d.filterMsg
+          : "";
+      if (oneShot && !restoredMsg && filterMsg === mountFilters.filterMsg)
+        filterMsg = oneShot;
       filtersReady = true;
       await fetchLogs();
       // Page restores after the first fetch lands: applying it earlier lets
@@ -618,34 +660,19 @@
   }
 </script>
 
-<PageShell
-  crumb="freebuff-proxy / Admin / logs.conf"
-  title={$tr("Logs")}
-  description={$tr(
-    "Live proxy and request logs from the in-memory ring buffer (200 max, newest first).",
-  )}
-  loading={loading && !data}
-  {error}
-  empty={data && !data.enabled
-    ? {
-        title: $tr("Log ring disabled"),
-        description: $tr(
-          "The server was started without an active logring handler, so no log entries are available.",
-        ),
-      }
-    : null}
-  onRetry={refresh}
->
-  {#snippet actions()}
+<div class="space-y-4">
+  <div class="flex items-center justify-end">
     <SegmentedControl
       bind:value={viewMode}
       options={[
         { id: "console", label: $tr("Console") },
         { id: "table", label: $tr("Table") },
       ]}
+      ariaLabel={$tr("Log view")}
       onchange={() => fetchLogs()}
     />
-  {/snippet}
+  </div>
+
   {#if stateNotice}
     <Alert tone="warning" title={$tr("Page state discarded")}>
       <div class="flex items-start justify-between gap-3">
@@ -664,7 +691,29 @@
     </Alert>
   {/if}
 
-  {#if data}
+  {#if loading && !data}
+    <div class="space-y-3" role="status" aria-label={$tr("Loading logs")}>
+      <div class="skeleton skeleton-card h-64"></div>
+      <span class="sr-only">{$tr("Loading logs")}</span>
+    </div>
+  {:else if error}
+    <Alert tone="error" title={$tr("Could not load this page")}>
+      {error}
+      <div class="mt-3">
+        <Button variant="secondary" onclick={refresh}>
+          <RefreshCw size={15} />
+          {$tr("Retry")}
+        </Button>
+      </div>
+    </Alert>
+  {:else if data && !data.enabled}
+    <EmptyState
+      title={$tr("Log ring disabled")}
+      description={$tr(
+        "The server was started without an active logring handler, so no log entries are available.",
+      )}
+    />
+  {:else if data}
     {#if viewMode === "console"}
       <Card pad="none">
         <!-- Console View Top Bar: stacks on mobile so 4 actions never overflow -->
@@ -836,17 +885,59 @@
                       >{/if}
                   </div>
                 {/if}
-                {#if g.chips.length > 0}
-                  <div class="flex flex-wrap gap-1 mt-1">
-                    {#each g.chips as chip, j (j)}
+                <div class="flex flex-wrap gap-1 mt-1">
+                  {#each g.chips as chip, j (j)}
+                    {#if chip.startsWith("ACC ")}
+                      {@const tok = chip.slice(4).trim()}
+                      {@const idx = accIndex(tok)}
+                      {#if idx !== null}
+                        <button
+                          type="button"
+                          onclick={() => onOpenToken?.(idx)}
+                          title={$tr("Open token {idx}", { idx })}
+                          class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap cursor-pointer hover:underline {groupChipClass(
+                            chip,
+                          )}">ACC {tok}</button
+                        >
+                      {:else}
+                        <span
+                          class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {groupChipClass(
+                            chip,
+                          )}">{chip}</span
+                        >
+                      {/if}
+                    {:else}
                       <span
                         class="inline-flex items-center rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap {groupChipClass(
                           chip,
                         )}">{chip}</span
                       >
-                    {/each}
-                  </div>
-                {/if}
+                    {/if}
+                  {/each}
+                  {#if !g.token}
+                    <span
+                      class="inline-flex items-center rounded border border-zinc-800 px-1.5 py-px text-[10px] leading-4 whitespace-nowrap text-zinc-600"
+                      >ACC —</span
+                    >
+                  {/if}
+                  {#if g.reqId}
+                    <button
+                      type="button"
+                      onclick={() => onOpenTrace?.(g.reqId, g.token)}
+                      title={$tr("Open trace {id}", { id: g.reqId })}
+                      class="inline-flex items-center rounded border border-zinc-700/80 bg-zinc-900 px-1.5 py-px text-[10px] leading-4 whitespace-nowrap text-zinc-300 cursor-pointer hover:text-white hover:border-zinc-500 transition-colors"
+                      >{$tr("Trace")}</button
+                    >
+                  {:else}
+                    <button
+                      type="button"
+                      disabled
+                      title={$tr("No request id for this entry")}
+                      class="inline-flex items-center rounded border border-zinc-800 px-1.5 py-px text-[10px] leading-4 whitespace-nowrap text-zinc-600 opacity-60 cursor-not-allowed"
+                      >{$tr("Trace")}</button
+                    >
+                  {/if}
+                </div>
               </div>
             {/each}
           {/if}
@@ -989,6 +1080,7 @@
               {#each keyedPagedEntries as row (row.k)}
                 {@const e = row.e}
                 {@const fields = parseLogFields(e.fields)}
+                {@const tokField = fields.find((f) => f.key === "token")}
                 {@const entryJson = JSON.stringify(
                   {
                     time: e.time,
@@ -1011,6 +1103,23 @@
                       class="font-mono text-sm text-[var(--fp-text)] min-w-0 flex-1 truncate"
                       >{e.message}</span
                     >
+                    {#if tokField}
+                      {@const tidx = accIndex(tokField.value)}
+                      {#if tidx !== null}
+                        <button
+                          type="button"
+                          onclick={() => onOpenToken?.(tidx)}
+                          title={$tr("Open token {idx}", { idx: tidx })}
+                          class="fp-num font-mono text-[11px] text-[var(--fp-accent)] hover:underline cursor-pointer bg-transparent border-0 p-0 shrink-0"
+                          >ACC {tokField.value}</button
+                        >
+                      {:else}
+                        <span
+                          class="fp-num font-mono text-[11px] text-[var(--fp-muted)] shrink-0"
+                          >ACC {tokField.value}</span
+                        >
+                      {/if}
+                    {/if}
                     <span class="shrink-0">
                       <CopyButton text={entryJson} label="Copy" />
                     </span>
@@ -1097,4 +1206,4 @@
       </Card>
     {/if}
   {/if}
-</PageShell>
+</div>

@@ -8,11 +8,9 @@
   import PageShell from "../components/PageShell.svelte";
   import BridgeTokenCard from "../components/BridgeTokenCard.svelte";
   import TokenTable from "./tokens/TokenTable.svelte";
-  import ToggleSwitch from "../components/ToggleSwitch.svelte";
-  import Stepper from "../components/Stepper.svelte";
-  import FieldBox from "../components/FieldBox.svelte";
-  import DbOverrideSave from "../components/DbOverrideSave.svelte";
-  import { fetchAPI, postAPI, postForm, csrfHeader } from "../api/client.js";
+  import SegmentedControl from "../components/SegmentedControl.svelte";
+  import MaturityPanel from "../components/MaturityPanel.svelte";
+  import { fetchAPI, postAPI, csrfHeader } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
   import {
@@ -21,7 +19,6 @@
     ensureTokensStore,
     refreshTokens,
   } from "../stores/tokens.js";
-  import { getEnvValue, setEnvValue } from "../utils/env.js";
   import { tr } from "../i18n.js";
   import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
   import { confirmAction } from "../stores/confirm.js";
@@ -45,108 +42,14 @@
   // the operator enables DEVTOOLS_ENABLED=true in .env (same gate as the
   // sidebar's Dev Tools tab and the server-side DevTools route).
   let devToolsEnabled = $state(false);
-  // Token rotation strategy (TOKEN_ROTATION in .env)
+  // Token rotation strategy (TOKEN_ROTATION) + auto-failover flag
+  // (RATE_LIMIT_FAILOVER): READ-ONLY here, fed from the tokens snapshot in
+  // applyTokens. Policy editing moved to Settings → Traffic.
   let tokenRotation = $state("drain");
-  let savingRotation = $state(false);
-  // Auto failover to another token on rate limit (RATE_LIMIT_FAILOVER in .env)
   let rateLimitFailover = $state(true);
-  let savingFailover = $state(false);
-  // Burst balance (ADR-0023, opt-in): enable + window/threshold/max-tokens.
-  // Persisted per key through the DB settings overlay (DbOverrideSave),
-  // never through the whole-file .env save above. Effective values load
-  // from GET /admin/api/settings so overlay rows win like everywhere else.
-  let burstEnabled = $state(false);
-  let burstWindowMin = $state(1);
-  let burstThreshold = $state(20);
-  let burstMaxTokens = $state(2);
-
-  function parseWindowMinutes(v) {
-    if (v == null) return null;
-    const m = String(v)
-      .trim()
-      .toLowerCase()
-      .match(/^(\d+(?:\.\d+)?)\s*(ns|us|µs|ms|s|m|h)$/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    const perMin = {
-      ns: 1 / 6e10,
-      us: 1 / 6e7,
-      µs: 1 / 6e7,
-      ms: 1 / 6e4,
-      s: 1 / 60,
-      m: 1,
-      h: 60,
-    }[m[2]];
-    return Math.max(1, Math.round(n * perMin));
-  }
-
-  async function refetchBurst() {
-    try {
-      const res = await fetchAPI(adminApi.settings);
-      const byKey = {};
-      for (const e of res?.settings ?? []) byKey[e.key] = e.value;
-      if (byKey.BURST_BALANCE_ENABLED !== undefined) {
-        burstEnabled =
-          String(byKey.BURST_BALANCE_ENABLED).toLowerCase() === "true";
-      }
-      const w = parseWindowMinutes(byKey.BURST_WINDOW);
-      if (w != null) burstWindowMin = w;
-      const th = Number.parseInt(byKey.BURST_THRESHOLD, 10);
-      if (Number.isFinite(th) && th >= 1) burstThreshold = th;
-      const mt = Number.parseInt(byKey.BURST_MAX_TOKENS, 10);
-      if (Number.isFinite(mt) && mt >= 2) burstMaxTokens = mt;
-    } catch {
-      // Keep last-known values: a failed background refresh must not wipe
-      // the burst controls (first load simply keeps the defaults).
-    }
-  }
-  async function setTokenRotation(newMode) {
-    if (savingRotation || tokenRotation === newMode) return;
-    savingRotation = true;
-    try {
-      const cfgRes = await fetchAPI(adminApi.config);
-      const envContent = cfgRes?.env_content || "";
-      const newContent = setEnvValue(envContent, "TOKEN_ROTATION", newMode);
-      const save = await postForm(adminActions.configSave, {
-        content: newContent,
-      });
-      if (save.ok) {
-        tokenRotation = newMode;
-        refreshTokens();
-      }
-    } catch (e) {
-      console.warn("Failed to update token rotation", e);
-    } finally {
-      savingRotation = false;
-    }
-  }
-
-  async function toggleRateLimitFailover(next) {
-    if (savingFailover) return;
-    savingFailover = true;
-    const nextVal = typeof next === "boolean" ? next : !rateLimitFailover;
-    try {
-      const cfgRes = await fetchAPI(adminApi.config);
-      const envContent = cfgRes?.env_content || "";
-      const newContent = setEnvValue(
-        envContent,
-        "RATE_LIMIT_FAILOVER",
-        String(nextVal),
-      );
-      const save = await postForm(adminActions.configSave, {
-        content: newContent,
-      });
-      if (save.ok) {
-        rateLimitFailover = nextVal;
-        refreshTokens();
-      }
-    } catch (e) {
-      console.warn("Failed to update rate limit failover", e);
-    } finally {
-      savingFailover = false;
-    }
-  }
+  // Active tab: pool accounts vs account warming. The legacy #maturity hash
+  // redirects here one-shot via sessionStorage (see onMount).
+  let tab = $state("accounts");
 
   // Device login flow
   let oauthStarting = $state(false);
@@ -440,16 +343,44 @@
   }
 
   // Deep page state: the expanded token row survives restarts via
-  // pages_state (warn-only; an out-of-range index is dropped).
+  // pages_state (warn-only; an out-of-range index is dropped). A cross-page
+  // account-expand link ("fp-tokens-expand") wins one-shot when present.
   function restoreExpandedToken() {
+    try {
+      const raw = sessionStorage.getItem("fp-tokens-expand");
+      if (raw !== null) {
+        sessionStorage.removeItem("fp-tokens-expand");
+        const n = Number.parseInt(String(raw).trim(), 10);
+        if (Number.isInteger(n)) {
+          expandedToken = n;
+          clampExpandedToken();
+          if (expandedToken !== null) {
+            savePageState("tokens", { expandedToken });
+            return;
+          }
+        }
+      }
+    } catch {
+      /* storage blocked: fall through to pages_state */
+    }
     loadPageState("tokens").then((d) => {
       if (Number.isInteger(d?.expandedToken) && d.expandedToken >= 0)
         expandedToken = d.expandedToken;
     });
   }
-
   onMount(() => {
     recordPageVisit("tokens");
+    // Legacy #maturity redirects here one-shot: consume the requested tab,
+    // then drop the key so a plain visit always lands on Accounts.
+    try {
+      const want = sessionStorage.getItem("fp-page-tab:tokens");
+      if (want !== null) {
+        sessionStorage.removeItem("fp-page-tab:tokens");
+        if (want === "accounts" || want === "warming") tab = want;
+      }
+    } catch {
+      /* storage blocked: default tab stands */
+    }
     restoreExpandedToken();
     // One shared tokens store owns the /admin/api/tokens poll + SSE (issue
     // #292); this page renders from the cached snapshot and refreshes the
@@ -469,34 +400,15 @@
       refreshTokens();
     }
     window.addEventListener("fp-config-saved", onConfigSaved);
+    // Rotation/failover chips are read-only from the tokens snapshot
+    // (applyTokens); only the DevTools gate still reads .env here.
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);
-        const envContent = cfgRes?.env_content || "";
-        devToolsEnabled = isDevToolsEnabled(envContent);
-
-        const rotVal = (
-          getEnvValue(envContent, "TOKEN_ROTATION") || "drain"
-        ).toLowerCase();
-        tokenRotation = [
-          "drain",
-          "round_robin",
-          "least_used",
-          "random",
-        ].includes(rotVal)
-          ? rotVal
-          : "drain";
-
-        const failoverVal = getEnvValue(envContent, "RATE_LIMIT_FAILOVER");
-        rateLimitFailover = failoverVal
-          ? failoverVal.toLowerCase() !== "false"
-          : true;
+        devToolsEnabled = isDevToolsEnabled(cfgRes?.env_content || "");
       } catch {
         devToolsEnabled = false;
-        tokenRotation = "drain";
-        rateLimitFailover = true;
       }
-      refetchBurst();
     })();
     return () => {
       release();
@@ -613,338 +525,125 @@
       {/if}
     </Alert>
   {/if}
+  <div class="flex flex-wrap items-center gap-2">
+    <SegmentedControl
+      bind:value={tab}
+      options={[
+        { id: "accounts", label: $tr("Accounts") },
+        { id: "warming", label: $tr("Warming") },
+      ]}
+      ariaLabel={$tr("Tokens sections")}
+    />
+  </div>
 
-  <!-- Add token form -->
-  <Card
-    title={$tr("Add Token to Pool")}
-    description={$tr(
-      "Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.",
-    )}
-  >
-    {#snippet actions()}
-      <Button
-        variant="secondary"
-        onclick={startOAuthLogin}
-        disabled={oauthStarting}
-      >
-        {#if oauthStarting}
-          <RefreshCw size={15} class="animate-spin" />
-          <span>{$tr("Authorizing…")}</span>
-        {:else}
-          <LogIn size={15} />
-          <span>{$tr("Device Login")}</span>
-        {/if}
-      </Button>
-    {/snippet}
-    <form onsubmit={addToken} class="flex flex-col gap-1.5">
-      <label
-        for="add-token-input"
-        class="text-xs font-medium text-[var(--fp-muted)]">{$tr("Token")}</label
-      >
-      <div
-        class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
-      >
-        <input
-          id="add-token-input"
-          type="text"
-          bind:value={newToken}
-          placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
-          autocomplete="off"
-          spellcheck="false"
-          class="fp-input fp-num flex-1"
-        />
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={adding || !newToken.trim() || tokenValid === false}
-          loading={adding}
-          class="shrink-0"
-        >
-          <Plus size={15} />
-          <span>{$tr("Add Token")}</span>
-        </Button>
-      </div>
-      {#if tokenValid === false}
-        <p class="text-[11px] text-[var(--fp-error)]" role="alert">
-          {$tr(
-            "Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix",
-          )}
-        </p>
-      {:else}
-        <p class="text-[11px] text-[var(--fp-dim)]">
-          {tokenValid === true
-            ? $tr("Valid format")
-            : $tr(
-                "UUID or session token from ~/.config/codebuff/credentials.json",
-              )}
-        </p>
-      {/if}
-    </form>
-  </Card>
-
-  <!-- Token Rotation Scheme & Handling Policy Card -->
-  <Card
-    title={$tr("Token Rotation & Handling Policy")}
-    description={$tr(
-      "Strategy used by the gateway to select upstream accounts for model requests.",
-    )}
-  >
-    {#snippet actions()}
-      <span
-        class="inline-flex items-center gap-1.5 font-mono text-xs text-[var(--fp-muted)]"
-      >
-        <span class="led {tokenRotation === 'drain' ? 'led-good' : 'led-idle'}"
-        ></span>
-        <span
-          class="uppercase tracking-wider font-semibold text-[var(--fp-accent)]"
-          >{tokenRotation}</span
-        >
-      </span>
-    {/snippet}
-
-    <div class="space-y-3">
-      <div
-        class="flex flex-wrap items-center gap-2"
-        role="radiogroup"
-        aria-label={$tr("Token Rotation Policy")}
-      >
-        <button
-          type="button"
-          role="radio"
-          aria-checked={tokenRotation === "drain"}
-          disabled={savingRotation}
-          onclick={() => setTokenRotation("drain")}
-          class="fp-btn {tokenRotation === 'drain'
-            ? 'fp-btn-primary'
-            : 'fp-btn-ghost'} fp-btn-sm text-xs"
-        >
-          {$tr("Drain (Safest)")}
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={tokenRotation === "round_robin"}
-          disabled={savingRotation}
-          onclick={() => setTokenRotation("round_robin")}
-          class="fp-btn {tokenRotation === 'round_robin'
-            ? 'fp-btn-primary'
-            : 'fp-btn-ghost'} fp-btn-sm text-xs"
-        >
-          {$tr("Round Robin (1:1)")}
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={tokenRotation === "least_used"}
-          disabled={savingRotation}
-          onclick={() => setTokenRotation("least_used")}
-          class="fp-btn {tokenRotation === 'least_used'
-            ? 'fp-btn-primary'
-            : 'fp-btn-ghost'} fp-btn-sm text-xs"
-        >
-          {$tr("Least Used (Max Quota)")}
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={tokenRotation === "random"}
-          disabled={savingRotation}
-          onclick={() => setTokenRotation("random")}
-          class="fp-btn {tokenRotation === 'random'
-            ? 'fp-btn-primary'
-            : 'fp-btn-ghost'} fp-btn-sm text-xs"
-        >
-          {$tr("Random (Stochastic)")}
-        </button>
-      </div>
-
-      <div
-        class="fp-inset p-3 rounded text-xs text-[var(--fp-muted)] flex items-start gap-2"
-      >
-        {#if tokenRotation === "drain"}
-          <p class="leading-relaxed">
-            <strong class="text-[var(--fp-text)]"
-              >{$tr("Drain Mode (Default & Recommended):")}</strong
-            >
-            {$tr(
-              "Sticks to one account until it is unfit (cooldown, quota, or ban) before rotating to the next token. Mimics authentic single-user behavior and provides the strongest anti-ban protection.",
-            )}
-          </p>
-        {:else if tokenRotation === "round_robin"}
-          <p class="leading-relaxed">
-            <strong class="text-[var(--fp-text)]"
-              >{$tr("Round-Robin Mode:")}</strong
-            >
-            {$tr(
-              "Rotates to the next token on every request (1:1). Note: rapid alternating requests across healthy accounts may raise upstream anomaly-detection signals.",
-            )}
-          </p>
-        {:else if tokenRotation === "least_used"}
-          <p class="leading-relaxed">
-            <strong class="text-[var(--fp-text)]"
-              >{$tr("Least-Used Mode:")}</strong
-            >
-            {$tr(
-              "Routes requests to the token with the lowest daily usage or active run count. Maximizes concurrency and distributes quota consumption evenly.",
-            )}
-          </p>
-        {:else if tokenRotation === "random"}
-          <p class="leading-relaxed">
-            <strong class="text-[var(--fp-text)]">{$tr("Random Mode:")}</strong>
-            {$tr(
-              "Selects an available healthy token at random per request. Provides stochastic load balancing.",
-            )}
-          </p>
-        {/if}
-      </div>
-      <!-- Rate Limit Auto-Failover Toggle -->
-      <div
-        class="pt-3 border-t border-[var(--fp-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-      >
-        <div class="space-y-0.5">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-semibold text-[var(--fp-text)]">
-              {$tr("Auto Failover on Rate Limit (429)")}
-            </span>
-            <span class="led {rateLimitFailover ? 'led-good' : 'led-dim'}"
-            ></span>
-          </div>
-          <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
-            {$tr(
-              "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.",
-            )}
-          </p>
-        </div>
-        <ToggleSwitch
-          checked={rateLimitFailover}
-          disabled={savingFailover}
-          saving={savingFailover}
-          ariaLabel="Auto Failover on Rate Limit (429)"
-          onchange={(v) => toggleRateLimitFailover(v)}
-        />
-      </div>
-      <!-- Burst Balance (opt-in, ADR-0023): per-key DB-overlay saves -->
-      <section
-        aria-label={$tr("Burst Balance")}
-        class="pt-3 border-t border-[var(--fp-border)] space-y-3"
-      >
-        <div
-          class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-        >
-          <div class="space-y-0.5">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-[var(--fp-text)]">
-                {$tr("Burst Balance (opt-in)")}
-              </span>
-              <span class="led {burstEnabled ? 'led-good' : 'led-dim'}"></span>
-            </div>
-            <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
-              {$tr(
-                "When one model is hammered, spread its burst across up to the max-token accounts once threshold admissions land inside the window — other models keep the strategy above. Caution: spreading looks less like single-user traffic than drain; keep off unless one model's bursts throttle a single account while siblings sit idle.",
-              )}
-            </p>
-          </div>
-          <ToggleSwitch
-            checked={burstEnabled}
-            ariaLabel="Burst Balance"
-            onchange={(v) => (burstEnabled = v)}
-          />
-        </div>
-        <DbOverrideSave
-          settingKey="BURST_BALANCE_ENABLED"
-          value={String(burstEnabled)}
-        />
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <FieldBox label={$tr("Window")} unit={$tr("minutes")} class="min-w-0">
-            <Stepper
-              bind:value={burstWindowMin}
-              min={1}
-              max={60}
-              ariaLabel={$tr("Burst window (minutes)")}
-              decreaseLabel={$tr("Decrease burst window")}
-              increaseLabel={$tr("Increase burst window")}
-            />
-            <DbOverrideSave
-              settingKey="BURST_WINDOW"
-              value={`${burstWindowMin}m`}
-            />
-          </FieldBox>
-          <FieldBox
-            label={$tr("Threshold")}
-            unit={$tr("requests")}
-            class="min-w-0"
-          >
-            <Stepper
-              bind:value={burstThreshold}
-              min={1}
-              max={1000}
-              ariaLabel={$tr("Burst threshold (requests)")}
-              decreaseLabel={$tr("Decrease burst threshold")}
-              increaseLabel={$tr("Increase burst threshold")}
-            />
-            <DbOverrideSave
-              settingKey="BURST_THRESHOLD"
-              value={String(burstThreshold)}
-            />
-          </FieldBox>
-          <FieldBox
-            label={$tr("Max tokens")}
-            unit={$tr("accounts")}
-            class="min-w-0"
-          >
-            <Stepper
-              bind:value={burstMaxTokens}
-              min={2}
-              max={Math.max(2, data?.token_count || 8)}
-              ariaLabel={$tr("Burst max tokens")}
-              decreaseLabel={$tr("Decrease burst max tokens")}
-              increaseLabel={$tr("Increase burst max tokens")}
-            />
-            <DbOverrideSave
-              settingKey="BURST_MAX_TOKENS"
-              value={String(burstMaxTokens)}
-            />
-          </FieldBox>
-        </div>
-      </section>
-    </div></Card
-  >
-  <TokenTable
-    tokens={data?.tokens ?? []}
-    tokenCount={data?.token_count ?? 0}
-    {loading}
-    {error}
-    {expandedToken}
-    {actionPending}
-    {now}
-    {devToolsEnabled}
-    bind:spawnModels
-    onToggle={toggleExpand}
-    onAction={handleTokenAction}
-    onSpawn={handleSpawn}
-    onRefresh={handleRefresh}
-    onDropSession={handleDropSession}
-    onSwap={handleSwap}
-    onMove={handleMove}
-    onRetry={() => {
-      error = "";
-      refreshTokens();
-    }}
-  />
-  {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
+  {#if tab === "accounts"}
+    <!-- Add token form -->
     <Card
-      title={$tr("Bridge Clients")}
+      title={$tr("Add Token to Pool")}
       description={$tr(
-        "{count} active bridge client(s) relaying their own FreeBuff tokens",
-        { count: data.bridge_token_cards.length },
+        "Paste a FreeBuff auth token (from credentials.json or CLI) to add it to the shared pool and save it to .env. Adding burns no quota.",
       )}
-      pad="none"
     >
-      <div class="flex flex-col gap-3 p-4">
-        {#each data.bridge_token_cards as bc (bc.key)}
-          <BridgeTokenCard card={bc} {now} />
-        {/each}
-      </div>
+      {#snippet actions()}
+        <Button
+          variant="secondary"
+          onclick={startOAuthLogin}
+          disabled={oauthStarting}
+        >
+          {#if oauthStarting}
+            <RefreshCw size={15} class="animate-spin" />
+            <span>{$tr("Authorizing…")}</span>
+          {:else}
+            <LogIn size={15} />
+            <span>{$tr("Device Login")}</span>
+          {/if}
+        </Button>
+      {/snippet}
+      <form onsubmit={addToken} class="flex flex-col gap-1.5">
+        <label
+          for="add-token-input"
+          class="text-xs font-medium text-[var(--fp-muted)]"
+          >{$tr("Token")}</label
+        >
+        <div
+          class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+        >
+          <input
+            id="add-token-input"
+            type="text"
+            bind:value={newToken}
+            placeholder="e.g. a94d808e-8a86-455b-80fb-a9df4422bfcb"
+            autocomplete="off"
+            spellcheck="false"
+            class="fp-input fp-num flex-1"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={adding || !newToken.trim() || tokenValid === false}
+            loading={adding}
+            class="shrink-0"
+          >
+            <Plus size={15} />
+            <span>{$tr("Add Token")}</span>
+          </Button>
+        </div>
+        {#if tokenValid === false}
+          <p class="text-[11px] text-[var(--fp-error)]" role="alert">
+            {$tr(
+              "Token must be at least 10 characters and must not contain spaces, commas, or Bearer prefix",
+            )}
+          </p>
+        {:else}
+          <p class="text-[11px] text-[var(--fp-dim)]">
+            {tokenValid === true
+              ? $tr("Valid format")
+              : $tr(
+                  "UUID or session token from ~/.config/codebuff/credentials.json",
+                )}
+          </p>
+        {/if}
+      </form>
     </Card>
+    <TokenTable
+      tokens={data?.tokens ?? []}
+      tokenCount={data?.token_count ?? 0}
+      {loading}
+      {error}
+      {expandedToken}
+      {actionPending}
+      {now}
+      {devToolsEnabled}
+      bind:spawnModels
+      onToggle={toggleExpand}
+      onAction={handleTokenAction}
+      onSpawn={handleSpawn}
+      onRefresh={handleRefresh}
+      onDropSession={handleDropSession}
+      onSwap={handleSwap}
+      onMove={handleMove}
+      onRetry={() => {
+        error = "";
+        refreshTokens();
+      }}
+    />
+    {#if data?.show_bridge && data?.bridge_token_cards?.length > 0}
+      <Card
+        title={$tr("Bridge Clients")}
+        description={$tr(
+          "{count} active bridge client(s) relaying their own FreeBuff tokens",
+          { count: data.bridge_token_cards.length },
+        )}
+        pad="none"
+      >
+        <div class="flex flex-col gap-3 p-4">
+          {#each data.bridge_token_cards as bc (bc.key)}
+            <BridgeTokenCard card={bc} {now} />
+          {/each}
+        </div>
+      </Card>
+    {/if}
+  {:else if tab === "warming"}
+    <MaturityPanel />
   {/if}
 </PageShell>

@@ -62,17 +62,19 @@ test.describe("per-page persist", () => {
   }) => {
     await mockDashboard(page, loadFixtures());
     await mockPageState(page, { shell: { lastHash: "tokens" } });
+    // A legacy hash is an explicit route too: it redirects to its target
+    // (and the normalized hash wins over the stored lastHash).
     await page.goto(admin("models"));
     await expect(
-      page.getByRole("heading", { name: "Models", exact: true }),
+      page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
-    expect(new URL(page.url()).hash).toBe("#models");
+    expect(new URL(page.url()).hash).toBe("#catalog");
   });
 
   test("logs filter text round-trips across reload", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
     const state = await mockPageState(page);
-    await page.goto(admin("logs"));
+    await page.goto(admin("activity"));
     // Filters live in the Table view (Console is the default).
     await page.getByRole("button", { name: "Table" }).click();
     const filter = page.locator("#log-msg");
@@ -132,7 +134,7 @@ test.describe("per-page persist", () => {
   test("logs full filter set round-trips across reload", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
     const state = await mockPageState(page);
-    await page.goto(admin("logs"));
+    await page.goto(admin("activity"));
     // Filters live in the Table view (Console is the default).
     await page.getByRole("button", { name: "Table" }).click();
     await page.locator("#log-level").selectOption("info");

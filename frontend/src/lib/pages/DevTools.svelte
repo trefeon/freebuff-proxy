@@ -39,8 +39,21 @@
   // Client API key for the /v1 playground + burst fetches below. Those hit
   // the public protocol surface (requireAuth), not the session-cookie admin
   // API, so a gateway with API_KEYS set answers 401 without one. Kept in
-  // memory only — never persisted.
+  // sessionStorage ("fp-devtools-client-key") — survives reloads within the
+  // tab session, cleared with the tab; never localStorage, never the server.
   let clientKey = $state("");
+  try {
+    clientKey = sessionStorage.getItem("fp-devtools-client-key") ?? "";
+  } catch {
+    // Storage unavailable (private mode) — stay memory-only.
+  }
+  $effect(() => {
+    try {
+      sessionStorage.setItem("fp-devtools-client-key", clientKey);
+    } catch {
+      // Storage unavailable — the key simply won't survive reload.
+    }
+  });
   const authHeaders = () =>
     clientKey.trim() ? { Authorization: `Bearer ${clientKey.trim()}` } : {};
   // "auto" = pure pool rotation; otherwise admit the session on the chosen
@@ -280,6 +293,22 @@
     }
   }
 
+  // Deep-link the latest playground run into the Activity Live console.
+  // The one-shot filter carries the run's most selective captured text (no
+  // request id is captured in this flow, so the run's model id); the hash
+  // routes to the Activity page, whose LiveConsole consumes the key once.
+  function viewRunInActivity() {
+    try {
+      sessionStorage.setItem(
+        "fp-activity-log-filter",
+        chatStatus?.model ?? selectedModel,
+      );
+    } catch {
+      // Storage unavailable — navigation still lands on Activity unfiltered.
+    }
+    window.location.hash = "activity";
+  }
+
   async function triggerTokenAction(url, body, confirmMsg) {
     if (confirmMsg) {
       const ok = await confirmAction({
@@ -470,7 +499,7 @@
           </div>
           <!-- Client key: the sends below hit /v1 (requireAuth), not the
             session-cookie admin API, so a gateway with API_KEYS set answers
-            401 without one. Memory-only; never persisted. -->
+            401 without one. Tab-session only (sessionStorage, never the server). -->
           <div class="flex flex-col gap-1.5">
             <label for="dev-client-key" class="text-xs text-[var(--fp-muted)]"
               >{$tr("Client API key")}</label
@@ -529,45 +558,51 @@
               {/if}
             </div>
 
-            <Button
-              variant="primary"
-              size="md"
-              loading={sendingChat}
-              disabled={sendingChat || !promptText.trim()}
-              onclick={sendPlaygroundChat}
-            >
-              <Send size={14} />
-              <span>{$tr("Send Request")}</span>
-            </Button>
-          </div>
-
-          {#if chatError}
-            <div
-              role="alert"
-              class="p-3 rounded bg-[var(--fp-error)]/10 border border-[var(--fp-error)]/30 text-xs text-[var(--fp-error)] font-mono"
-            >
-              {chatError}
+            <div class="flex items-center gap-2 shrink-0">
+              {#if chatStatus}
+                <Button variant="ghost" size="sm" onclick={viewRunInActivity}>
+                  <span>{$tr("View in Activity")}</span>
+                </Button>
+              {/if}
+              <Button
+                variant="primary"
+                size="md"
+                loading={sendingChat}
+                disabled={sendingChat || !promptText.trim()}
+                onclick={sendPlaygroundChat}
+              >
+                <Send size={14} />
+                <span>{$tr("Send Request")}</span>
+              </Button>
             </div>
-          {/if}
-
-          <!-- Output Box -->
-          {#if chatOutput}
-            <div
-              class="fp-inset rounded p-3.5 space-y-2 bg-[var(--fp-surface-2)]"
-            >
-              <div class="flex items-center justify-between">
-                <span
-                  class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider"
-                  >{$tr("Output")}</span
-                >
-                <CopyButton text={chatOutput} label="Copy Output" />
+            {#if chatError}
+              <div
+                role="alert"
+                class="p-3 rounded bg-[var(--fp-error)]/10 border border-[var(--fp-error)]/30 text-xs text-[var(--fp-error)] font-mono"
+              >
+                {chatError}
               </div>
-              <pre
-                class="font-mono text-xs text-[var(--fp-text)] whitespace-pre-wrap break-all select-all leading-relaxed max-h-80 overflow-y-auto">{chatOutput}</pre>
-            </div>
-          {/if}
-        </div>
-      </Card>
+            {/if}
+
+            <!-- Output Box -->
+            {#if chatOutput}
+              <div
+                class="fp-inset rounded p-3.5 space-y-2 bg-[var(--fp-surface-2)]"
+              >
+                <div class="flex items-center justify-between">
+                  <span
+                    class="text-xs font-semibold text-[var(--fp-muted)] uppercase tracking-wider"
+                    >{$tr("Output")}</span
+                  >
+                  <CopyButton text={chatOutput} label="Copy Output" />
+                </div>
+                <pre
+                  class="font-mono text-xs text-[var(--fp-text)] whitespace-pre-wrap break-all select-all leading-relaxed max-h-80 overflow-y-auto">{chatOutput}</pre>
+              </div>
+            {/if}
+          </div>
+        </div></Card
+      >
     </section>
 
     <!-- Section 2: Per-Token Session Spawner & Lifecycle -->

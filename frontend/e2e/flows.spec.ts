@@ -7,7 +7,7 @@ const admin = (hash) => `http://127.0.0.1:4173/admin/#${hash}`;
 test.describe("user flows", () => {
   test("models: copy model ID confirms Copied", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
-    await page.goto(admin("models"));
+    await page.goto(admin("catalog"));
     await page.getByText("deepseek/deepseek-v4-flash").first().waitFor();
     await page.getByRole("button", { name: "Copy model ID" }).first().click();
     await expect(page.getByText("Copied").first()).toBeVisible();
@@ -30,7 +30,7 @@ test.describe("user flows", () => {
         });
       }
     });
-    await page.goto(admin("models"));
+    await page.goto(admin("catalog"));
     await expect(page.getByText("Failed to load models")).toBeVisible();
     await page.getByRole("button", { name: "Retry" }).click();
     await expect(
@@ -45,8 +45,9 @@ test.describe("user flows", () => {
       hits += 1;
       await route.fallback();
     });
-    await page.goto(admin("quota"));
-    await page.getByText("Quota Tracker").first().waitFor();
+    await page.goto(admin("catalog"));
+    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByText("Account #1").first().waitFor();
     const before = hits;
     await page.getByRole("button", { name: "Refresh" }).first().click();
     await expect
@@ -70,7 +71,8 @@ test.describe("user flows", () => {
         body: JSON.stringify(tokens),
       });
     });
-    await page.goto(admin("quota"));
+    await page.goto(admin("catalog"));
+    await page.getByRole("button", { name: "Allowances" }).click();
     await expect(page.getByText("quota exempt").first()).toBeVisible();
   });
   test("tokens: paywalled model disables spawn", async ({ page }) => {

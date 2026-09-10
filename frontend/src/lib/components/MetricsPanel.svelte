@@ -1,15 +1,16 @@
 <script>
   import { onMount } from "svelte";
   import { RefreshCw } from "@lucide/svelte";
-  import PageHeader from "../components/PageHeader.svelte";
-  import Card from "../components/Card.svelte";
-  import Stat from "../components/Stat.svelte";
-  import Alert from "../components/Alert.svelte";
-  import Button from "../components/Button.svelte";
-  import StatusBadge from "../components/StatusBadge.svelte";
+  import Card from "./Card.svelte";
+  import Stat from "./Stat.svelte";
+  import Alert from "./Alert.svelte";
+  import Button from "./Button.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
   import { fetchAPI } from "../api/client.js";
   import { adminApi } from "../api/paths.js";
   import { tr } from "../i18n.js";
+
+  let { cursor = 0, onOpenToken = null, onOpenLogs = null } = $props();
 
   let data = $state(null);
   let loading = $state(true);
@@ -28,6 +29,13 @@
 
   onMount(fetchData);
 
+  // Shared time cursor from the Activity page ("Refresh all"): refetch when
+  // it advances. fetchData reads no reactive state, so cursor is the only
+  // dependency.
+  $effect(() => {
+    if (cursor) fetchData();
+  });
+
   // Trend shorthand: up/down/flat arrow plus the magnitude, e.g. "↑ 12.5%".
   function trendText(trend) {
     if (!trend) return "—";
@@ -42,21 +50,7 @@
   }
 </script>
 
-<div class="space-y-6 page-enter">
-  <PageHeader
-    title={$tr("Metrics")}
-    description={$tr(
-      "Gateway request counters, transient-retry and rotation activity, and per-token breakdowns.",
-    )}
-  >
-    {#snippet actions()}
-      <Button variant="ghost" onclick={fetchData}>
-        <RefreshCw size={15} />
-        {$tr("Refresh")}
-      </Button>
-    {/snippet}
-  </PageHeader>
-
+<div class="space-y-6">
   {#if loading}
     <div class="space-y-6" aria-busy="true">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -169,26 +163,36 @@
               <tr>
                 <th scope="col">{$tr("Token")}</th>
                 <th scope="col" class="num">{$tr("Requests (24h)")}</th>
-                <th scope="col" class="num">{$tr("Transient retries")}</th>
-                <th scope="col" class="num">{$tr("Fingerprint rotations")}</th>
+                <th scope="col" class="num hidden sm:table-cell"
+                  >{$tr("Transient retries")}</th
+                >
+                <th scope="col" class="num hidden sm:table-cell"
+                  >{$tr("Fingerprint rotations")}</th
+                >
                 <th scope="col" class="num">{$tr("Spend")}</th>
                 <th scope="col">{$tr("Risk")}</th>
+                <th scope="col"><span class="sr-only">{$tr("Links")}</span></th>
               </tr>
             </thead>
             <tbody>
               {#each data.per_tokens as p (p.token)}
                 <tr>
-                  <td
-                    ><span class="fp-num font-mono text-xs">#{p.token}</span
-                    ></td
-                  >
+                  <td>
+                    <button
+                      type="button"
+                      onclick={() => onOpenToken?.(p.token)}
+                      title={$tr("Open token {idx}", { idx: p.token })}
+                      class="fp-num font-mono text-xs text-[var(--fp-accent)] hover:underline cursor-pointer bg-transparent border-0 p-0"
+                      >#{p.token}</button
+                    >
+                  </td>
                   <td class="num"
                     >{Number(p.requests_24h ?? 0).toLocaleString()}</td
                   >
-                  <td class="num"
+                  <td class="num hidden sm:table-cell"
                     >{Number(p.transient_retries ?? 0).toLocaleString()}</td
                   >
-                  <td class="num"
+                  <td class="num hidden sm:table-cell"
                     >{Number(p.fingerprint_rotations ?? 0).toLocaleString()}</td
                   >
                   <td class="num"
@@ -199,6 +203,14 @@
                       status={p.risk_level || "low"}
                       tone={riskTone(p.risk_level)}
                     />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onclick={() => onOpenLogs?.("")}
+                      class="font-mono text-[11px] text-[var(--fp-accent)] hover:underline cursor-pointer bg-transparent border-0 p-0 whitespace-nowrap"
+                      >{$tr("Logs")}</button
+                    >
                   </td>
                 </tr>
               {/each}

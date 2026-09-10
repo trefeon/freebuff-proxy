@@ -119,10 +119,15 @@ test.describe("account maturity", () => {
       });
     }
 
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await expect(page.getByText("Warming").first()).toBeVisible();
     await expect(page.getByText("Not enrolled").first()).toBeVisible();
     await expect(page.getByText("Locked").first()).toBeVisible();
@@ -182,7 +187,8 @@ test.describe("account maturity", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
       page.getByText("Maturity automation is globally off"),
     ).toBeVisible();
@@ -214,10 +220,15 @@ test.describe("account maturity", () => {
         }),
       });
     });
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // Timeline folds by default: latest event visible, older events behind
     // the expander (capped at 5 recent).
     const timeline = page.getByRole("list", {
@@ -242,10 +253,15 @@ test.describe("account maturity", () => {
         body: JSON.stringify(maturityTokens()),
       });
     });
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // The page-header touch model picker is gone (per-card selects only).
     await expect(page.getByLabel("Economy touch model")).toHaveCount(0);
     // Cards render expanded: the per-card select is visible immediately.
@@ -303,7 +319,8 @@ test.describe("account maturity", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     const picker = page.getByLabel("Touch model for Account #1");
     await expect(picker).toBeVisible();
     // The effective global is visible inline, not buried in a tooltip.
@@ -335,10 +352,15 @@ test.describe("account maturity", () => {
       });
     });
     await mockPageState(page, {});
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // Controls render with no click; no expand toggle exists.
     await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
     await expect(
@@ -358,10 +380,15 @@ test.describe("account maturity", () => {
       });
     });
     await mockPageState(page, { maturity: { expanded: [1] } });
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // No fold state exists: every card renders regardless of the snapshot.
     await expect(page.getByLabel("Touch model for Account #2")).toBeVisible();
     await expect(page.getByLabel("Touch model for Account #1")).toBeVisible();
@@ -372,10 +399,15 @@ test.describe("account maturity", () => {
   }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
-    await page.goto("http://127.0.0.1:4173/admin/#maturity");
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
     await expect(
-      page.getByRole("heading", { name: "Account Maturity" }),
+      page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Warming" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     // Token #1 carries a maturity object in the shared tokens fixture, so
     // the restart-surviving timeline renders with no bespoke mocks.
     const timeline = page.getByRole("list", {

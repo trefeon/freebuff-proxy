@@ -736,9 +736,10 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       { loginPage: true },
     );
 
-    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Allowances" }).click();
     await expect(
-      page.getByRole("heading", { name: "Quota Tracker", exact: true }),
+      page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
 
     // Accounts are pooled, so per-account cards render (not the empty pool state).
@@ -840,7 +841,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Allowances" }).click();
     await expect(page.getByText("req/min")).toBeVisible();
     // Wait for the 10s hot poll to land, then prove the chips persist.
     await page.waitForResponse(
@@ -878,7 +880,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       { loginPage: true },
     );
 
-    await page.goto("http://127.0.0.1:4173/admin/#quota");
+    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Allowances" }).click();
     await expect(page.getByText("5 day streak")).toBeVisible();
     await expect(page.getByText("Active today")).toBeVisible();
     await expect(page.getByText(/2 more day.*to complete/)).toBeVisible();
