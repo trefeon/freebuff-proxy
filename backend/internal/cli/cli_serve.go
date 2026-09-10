@@ -46,14 +46,19 @@ func Serve(configPath string, verbose bool, version string) int {
 	// DB_PATH resolves from the process environment alone, so no config is
 	// needed to open it; a failure only warns (live-only), and the same
 	// handle feeds the history wiring below (never opened twice).
+	// OpenWithStatus also detects the file's data generation for the boot
+	// smart-migration report below: fresh init, legacy pre-goose stamp, or
+	// goose-converged (see the env-to-DB block after the logger exists).
 	var histStore *history.Store
 	var bootOverlay map[string]string
+	bootMigrate := history.MigrateStatus{Applied: []int{}}
 	{
 		dbPath := history.DBPathFromEnv()
-		if st, err := history.Open(dbPath); err != nil {
+		if st, ms, err := history.OpenWithStatus(dbPath); err != nil {
 			fmt.Fprintln(os.Stderr, "freebuff-proxy: settings store unavailable; running live-only:", err)
 		} else {
 			histStore = st
+			bootMigrate = ms
 			if rows, err := st.ListSettings(); err != nil {
 				fmt.Fprintln(os.Stderr, "freebuff-proxy: settings overlay unreadable; running on file/env:", err)
 			} else if ov := config.OverlayFromRows(rows); len(ov) > 0 {
@@ -115,19 +120,40 @@ func Serve(configPath string, verbose bool, version string) int {
 			}
 		}
 	}
-	// Env-to-DB migration: the first boot with a marker-less settings table
-	// imports the just-loaded effective config (env > file > defaults) into
-	// config: overlay rows so later boots — and the dashboard — run from the
-	// DB alone. Re-runs are no-ops via the marker; explicit process env
-	// keeps winning over every migrated row at runtime. A nil store (DB
-	// failed to open above) skips silently — live-only, nothing to persist
-	// to. Key names and the row count log here, never values.
+	// Boot smart migration, in order: the store open above already ran the
+	// pending goose chain for the detected data generation ((a) no DB file:
+	// fresh init, (b) legacy pre-goose stamp: baseline + remainder, (c)
+	// goose-converged: nothing pending); the env-to-DB import below runs
+	// when the marker row is missing and no-ops once it is present (d), so
+	// a marked, latest-version boot performs zero writes. Detection is
+	// version-aware: one INFO line per applied goose version plus a
+	// from->to summary, and the same facts stay readable for the dashboard
+	// via the store's in-memory MigrateStatus (GET /admin/api/settings
+	// "migrate"). Key names and counts log here, never values.
+	envImported := 0
+	migrateFailed := false
 	if histStore != nil {
 		if n, err := migrateEnvToDB(histStore, cfg); err != nil {
+			migrateFailed = true
 			logger.Warn("env-to-DB migration failed; running on file/env/overlay", "err", err)
-		} else if n > 0 {
-			logger.Info("migrated env config to DB overlay", "keys", n, "marker", config.MigrationMarkerRow)
+		} else {
+			envImported = n
+			if n > 0 {
+				logger.Info("migrated env config to DB overlay", "keys", n, "marker", config.MigrationMarkerRow)
+			}
 		}
+		for _, v := range bootMigrate.Applied {
+			logger.Info("store migration applied", "version", v, "from_version", bootMigrate.FromVersion, "to_version", bootMigrate.ToVersion)
+		}
+		// A failed env import retries on the next boot (the marker is only
+		// set after a full import), so it poisons the no-op verdict.
+		logger.Info("smart migrate complete",
+			"from_version", bootMigrate.FromVersion,
+			"to_version", bootMigrate.ToVersion,
+			"store_applied", bootMigrate.Applied,
+			"fresh", bootMigrate.Fresh,
+			"env_imported", envImported,
+			"noop", !migrateFailed && bootMigrate.Noop && envImported == 0)
 	}
 
 	// Load the hardcoded fallback immediately so the registry is usable
