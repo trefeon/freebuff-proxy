@@ -3,7 +3,6 @@
   import { recordPageVisit } from "../stores/pageState.js";
   import { SvelteDate, SvelteSet } from "svelte/reactivity";
   import FieldBox from "./FieldBox.svelte";
-  import Stepper from "./Stepper.svelte";
   import Pips from "./Pips.svelte";
   import Card from "./Card.svelte";
   import Alert from "./Alert.svelte";
@@ -110,7 +109,6 @@
       if (!(idx in drafts)) {
         drafts[idx] = {
           enabled: !!t.maturity?.enabled,
-          target: t.maturity?.target ?? 7,
           // No UI: the Touch box is model-select-only, the server value rides
           // along on save so an enabled token never resets to unmetered.
           mode: t.maturity?.mode ?? "unmetered",
@@ -297,7 +295,7 @@
       const d = drafts[idx];
       const res = await postAPI(tokenActions.maturity(idx), {
         enabled: d.enabled,
-        target: Number(d.target) || 7,
+        target: 0,
         mode: d.mode,
         touch_model: d.touchModel ?? "",
       });
@@ -476,7 +474,6 @@
         {@const m = t.maturity}
         {@const d = drafts[idx] ?? {
           enabled: false,
-          target: 7,
           mode: "unmetered",
           touchModel: "",
         }}
@@ -486,7 +483,7 @@
           description={t.email || $tr("unknown account")}
         >
           {#snippet actions()}
-            {@const streakTarget = m?.target ?? d.target ?? 7}
+            {@const streakTarget = m?.target ?? 7}
             <span class="flex shrink-0 flex-nowrap items-center gap-1.5">
               {#if m?.badge}
                 <StatusBadge tone={badgeTone(m.badge)} status={m.badge} />
@@ -536,7 +533,7 @@
               {@const effCost = costFor(eff)}
               {@const strip = weekStrip(t, idx)}
               {@const ledger = ledgerFor(t, idx)}
-              {@const streakTarget = m.target ?? d.target ?? 7}
+              {@const streakTarget = m.target ?? 7}
               {@const streakVal = t.streak ?? 0}
               <div
                 class="flex flex-col gap-1.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/60 px-2 py-1.5"
@@ -611,32 +608,8 @@
               </div>
             {/if}
 
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <FieldBox
-                label={$tr("Target Period")}
-                unit={$tr("days")}
-                class="sm:col-span-6 min-w-0 h-full"
-              >
-                <Stepper
-                  bind:value={d.target}
-                  min={1}
-                  max={28}
-                  disabled={!!saving[idx]}
-                  ariaLabel={$tr("Streak target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                  decreaseLabel={$tr("Decrease target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                  increaseLabel={$tr("Increase target for Account #{idx}", {
-                    idx: idx + 1,
-                  })}
-                />
-              </FieldBox>
-              <FieldBox
-                label={$tr("Touch Model")}
-                class="sm:col-span-6 min-w-0 h-full"
-              >
+            <div class="grid grid-cols-1 gap-2">
+              <FieldBox label={$tr("Touch Model")} class="min-w-0 h-full">
                 <select
                   class="fp-select !h-8 !py-1 !text-xs font-mono w-full min-w-0"
                   bind:value={d.touchModel}

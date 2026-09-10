@@ -134,12 +134,12 @@ test.describe("account maturity", () => {
 
     // Cards render expanded: controls are interactive immediately.
 
-    // Save posts the drafted target/mode/touch-model/enabled for Account #1.
+    // Save posts the drafted mode/touch-model/enabled for Account #1 with
+    // the auto target (0 = server global default, 7 days).
     const saveReq = page.waitForRequest(
       (r) =>
         r.method() === "POST" && r.url().includes("/admin/tokens/0/maturity"),
     );
-    await page.getByLabel("Streak target for Account #1").fill("14");
     await page
       .getByLabel("Touch model for Account #1")
       .selectOption("mimo/mimo-v2.5");
@@ -148,7 +148,7 @@ test.describe("account maturity", () => {
       .first()
       .click();
     await saveReq;
-    expect(posts[0].body).toContain("14");
+    expect(posts[0].body).toContain('"target":0');
     expect(posts[0].body).toContain('"touch_model":"mimo/mimo-v2.5"');
 
     // Touch now bypasses slot/throttle via the manual endpoint.
@@ -392,7 +392,7 @@ test.describe("account maturity", () => {
       "true",
     );
     // Controls render with no click; no expand toggle exists.
-    await expect(page.getByLabel("Streak target for Account #1")).toBeVisible();
+    await expect(page.getByLabel("Touch model for Account #1")).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Expand details|Collapse details/ }),
     ).toHaveCount(0);
