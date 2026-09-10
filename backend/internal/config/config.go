@@ -43,15 +43,21 @@ type Config struct {
 	// The only safe value is the token's own account id. (True CLI parity —
 	// auto-deriving each token's own id once via GET /api/v1/me — is
 	// deferred; see the gap analysis item 24.)
-	ActingUserID    string
-	TLSFingerprint  string // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
-	RegistryRefresh time.Duration
-	DebugDump       bool
-	DevToolsEnabled bool
-	LogFile         string
-	LogLevel        string // "" (use -v/default) or debug|info|warn|error|trace
-	LogFormat       string // "text" (default) or "json"
-	LogAccess       bool   // true = per-request access log lines (LOG_ACCESS; default true, an empty .env line keeps it enabled)
+	ActingUserID string
+	// AutoDiscoverToken records the effective AUTO_DISCOVER_TOKEN knob
+	// (default true): process env wins, else the DB overlay, else enabled.
+	// When false, an empty AUTH_TOKENS pool stays empty (bridge mode) and
+	// the CLI-credential discovery hook never fires; ADOPT_CLI_SESSION can
+	// still opt into discovery on its own.
+	AutoDiscoverToken bool
+	TLSFingerprint    string // "" (plain Go transport) | chrome120 | chrome126 | safari17 | safari18 | firefox120 | firefox128 | edge126 | random | auto
+	RegistryRefresh   time.Duration
+	DebugDump         bool
+	DevToolsEnabled   bool
+	LogFile           string
+	LogLevel          string // "" (use -v/default) or debug|info|warn|error|trace
+	LogFormat         string // "text" (default) or "json"
+	LogAccess         bool   // true = per-request access log lines (LOG_ACCESS; default true, an empty .env line keeps it enabled)
 	// LogRingSize is the bounded in-memory log ring capacity behind the
 	// dashboard log viewer (LOG_RING_SIZE; default 500, validated 50..5000).
 	LogRingSize       int

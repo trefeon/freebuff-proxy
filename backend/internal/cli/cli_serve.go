@@ -115,6 +115,20 @@ func Serve(configPath string, verbose bool, version string) int {
 			}
 		}
 	}
+	// Env-to-DB migration: the first boot with a marker-less settings table
+	// imports the just-loaded effective config (env > file > defaults) into
+	// config: overlay rows so later boots — and the dashboard — run from the
+	// DB alone. Re-runs are no-ops via the marker; explicit process env
+	// keeps winning over every migrated row at runtime. A nil store (DB
+	// failed to open above) skips silently — live-only, nothing to persist
+	// to. Key names and the row count log here, never values.
+	if histStore != nil {
+		if n, err := migrateEnvToDB(histStore, cfg); err != nil {
+			logger.Warn("env-to-DB migration failed; running on file/env/overlay", "err", err)
+		} else if n > 0 {
+			logger.Info("migrated env config to DB overlay", "keys", n, "marker", config.MigrationMarkerRow)
+		}
+	}
 
 	// Load the hardcoded fallback immediately so the registry is usable
 	// offline; the first background refresh replaces it on success.

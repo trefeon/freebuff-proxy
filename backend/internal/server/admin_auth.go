@@ -664,16 +664,23 @@ func (a *adminHandlers) handleAdminChangePassword(w http.ResponseWriter, r *http
 	a.adminSaveMu.Lock()
 	defer a.adminSaveMu.Unlock()
 
-	// Dual-layer persist: ADMIN_TOKEN stays .env-only (raw credential never
-	// reaches the store) while DASHBOARD_REQUIRE_LOGIN=true goes
-	// write-through to the settings overlay — .env is the boot seed/export,
-	// the overlay is runtime truth. Both layers roll back on failure.
+	// Dual-layer persist: ADMIN_TOKEN goes write-through to the settings
+	// overlay (the DB holds secrets at mode 0600 since the env-to-DB
+	// migration) AND to .env as boot seed/export, while
+	// DASHBOARD_REQUIRE_LOGIN=true converges its overlay row — .env is the
+	// export, the overlay is runtime truth. Both layers roll back on
+	// failure. Converging ADMIN_TOKEN (not just the file) matters after
+	// migration: a stale overlay row would otherwise beat the just-written
+	// file and trip the divergence guard below.
 	newCfg, err := a.dualWrite(
 		[]config.EnvUpdate{
 			{Key: "ADMIN_TOKEN", Value: req.NewPassword},
 			{Key: "DASHBOARD_REQUIRE_LOGIN", Value: "true"},
 		},
-		map[string]string{config.OverlayRowKey("DASHBOARD_REQUIRE_LOGIN"): "true"},
+		map[string]string{
+			config.OverlayRowKey("ADMIN_TOKEN"):             req.NewPassword,
+			config.OverlayRowKey("DASHBOARD_REQUIRE_LOGIN"): "true",
+		},
 		nil,
 		func(newCfg config.Config) error {
 			// Divergence guard (mirrors syncTokensAfterMutation): a real process

@@ -95,10 +95,13 @@ func TestDualWriteRequireLoginRoundTrip(t *testing.T) {
 		t.Error("RequireLogin flipped to true after .env seed edit, want overlay (false) to win")
 	}
 
-	// No secret material may ever land in the settings table.
+	// The require-login path writes only its own knob: no credential row or
+	// value may appear as its side effect. (Credential rows do exist after
+	// the env-to-DB migration and the token/password write-through paths —
+	// this pins the require-login toggle stays in its lane.)
 	for k, v := range dualWriteStoreRows(t, st) {
 		if k == config.OverlayRowKey("AUTH_TOKENS") || k == config.OverlayRowKey("ADMIN_TOKEN") {
-			t.Errorf("secret overlay row %q must never exist", k)
+			t.Errorf("secret overlay row %q written by the require-login path", k)
 		}
 		if strings.Contains(v, "secretPass123") || strings.Contains(v, "tok-0") {
 			t.Errorf("settings row %q leaks secret material: %q", k, v)
