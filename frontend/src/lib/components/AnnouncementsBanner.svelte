@@ -48,31 +48,51 @@
 
   function fmtCompact(ms) {
     const s = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(s / 3600);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
     const m = Math.floor((s % 3600) / 60);
-    return (h > 0 ? `${h}h` : "") + `${m}m${s % 60}s`;
+    // Weekend gaps run 48h+: days keep the badge readable.
+    return (
+      (d > 0 ? `${d}d` : "") +
+      (h > 0 || d > 0 ? `${h}h` : "") +
+      `${m}m${s % 60}s`
+    );
   }
 
-  // Live remainder from the absolute timestamp; past/missing timestamps
-  // fall back to the static string (keeps mocked e2e rows stable).
+  // Live remainder from the absolute timestamp in BOTH states: the backend
+  // sets next_window_at to the next transition (window end while in peak,
+  // next window start while off-peak), so the same countdown runs either
+  // way. Past/missing timestamps fall back to the static string (keeps
+  // mocked e2e rows stable).
   const peakLeft = $derived.by(() => {
-    if (!peakHours?.is_peak) return "";
     const ms = peakMsLeft(peakHours);
-    if (Number.isNaN(ms) || ms <= 0) return peakHours.next_window_in ?? "";
+    if (Number.isNaN(ms) || ms <= 0) return peakHours?.next_window_in ?? "";
     return fmtCompact(ms);
   });
+
+  // Next transition in the browser's own timezone: toLocaleString renders
+  // in local tz automatically, so WIB/CET/etc. owners see their own wall
+  // clock instead of doing UTC math. Empty when the timestamp is missing.
+  function peakLocal() {
+    const at = peakHours?.next_window_at;
+    if (!at) return "";
+    const d = new Date(at);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString(undefined, {
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   onMount(() => {
     loadNotices();
     let lastFetch = Date.now();
     const t = setInterval(() => {
       nowMs = Date.now();
-      // Window just lapsed: re-fetch so the badge flips peak/off-peak.
-      if (
-        peakHours?.is_peak &&
-        peakMsLeft(peakHours) <= 0 &&
-        nowMs - lastFetch > 30_000
-      ) {
+      // Window just lapsed either way: re-fetch so the badge flips
+      // peak/off-peak at the transition instead of counting below zero.
+      if (peakMsLeft(peakHours) <= 0 && nowMs - lastFetch > 30_000) {
         lastFetch = nowMs;
         loadNotices();
       }
@@ -123,17 +143,27 @@
             class="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono {peakHours.is_peak
               ? 'bg-[var(--fp-warning)]/15 text-[var(--fp-warning)] border border-[var(--fp-warning)]/30'
               : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}"
-            title={$tr(
-              "DeepSeek peak pricing window runs Mon-Fri 00:00-10:00 UTC",
-            )}
+            title={peakHours.is_peak
+              ? $tr(
+                  "Peak pricing ends {local} your time (Mon-Fri 00:00-10:00 UTC)",
+                  { local: peakLocal() },
+                )
+              : $tr(
+                  "Next peak window starts {local} your time (Mon-Fri 00:00-10:00 UTC)",
+                  { local: peakLocal() },
+                )}
           >
             <Clock size={11} />
             <span>
               {peakHours.is_peak
-                ? $tr("Peak Window ({in} left)", {
+                ? $tr("Peak ends {local} ({in} left)", {
+                    local: peakLocal(),
                     in: peakLeft,
                   })
-                : $tr("Off-Peak Window")}
+                : $tr("Peak starts {local} ({in})", {
+                    local: peakLocal(),
+                    in: peakLeft,
+                  })}
             </span>
           </div>
         {/if}
