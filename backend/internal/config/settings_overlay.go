@@ -165,6 +165,11 @@ func ValidateSettingValue(key, value string) error {
 			return fmt.Errorf("%s must be a Go duration (e.g. 30s, 1m, 5m), got %q", n, value)
 		}
 	}
+	if n == "QUOTA_PROBE_ACTIVE_INTERVAL" || n == "QUOTA_PROBE_IDLE_HEARTBEAT" {
+		if _, err := time.ParseDuration(v); err != nil {
+			return fmt.Errorf("%s must be a Go duration (e.g. 30s, 1m, 30m), got %q", n, value)
+		}
+	}
 	return nil
 }
 

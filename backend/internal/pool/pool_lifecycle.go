@@ -121,8 +121,8 @@ func pollSession(ctx context.Context, sess *session.Manager, cfg *config.Config,
 // nothing else.
 func (p *Pool) Start(ctx context.Context) {
 	p.once.Do(func() {
-		// ADR-0024: anchor the staggered boot-probe slots before the
-		// maintain loop launches (spawn happens-before the first tick).
+		// Anchor the smart-probe boot round before the maintain loop
+		// launches (spawn happens-before the first tick).
 		p.quotaBootAt = time.Now()
 		runCtx, cancel := context.WithCancel(ctx)
 		p.cancel = cancel
@@ -178,12 +178,24 @@ func (p *Pool) backfillLoop(ctx context.Context) {
 // time.Since which is cheap but the lock is uncontended outside maintain
 // ticks — RWMutex adds complexity with no benefit.
 func (p *Pool) idleFor() time.Duration {
-	p.lastActiveMu.Lock()
-	defer p.lastActiveMu.Unlock()
-	if p.lastActive.IsZero() {
+	return p.idleForAt(time.Now())
+}
+
+// idleForAt is idleFor with the clock injected (the smart-probe tier
+// classifier runs on fake-clock ticks in tests).
+func (p *Pool) idleForAt(now time.Time) time.Duration {
+	last := p.lastActiveAt()
+	if last.IsZero() {
 		return 0
 	}
-	return time.Since(p.lastActive)
+	return now.Sub(last)
+}
+
+// lastActiveAt snapshots the last successful Acquire instant.
+func (p *Pool) lastActiveAt() time.Time {
+	p.lastActiveMu.Lock()
+	defer p.lastActiveMu.Unlock()
+	return p.lastActive
 }
 
 // tryIdleFinish atomically checks whether the pool has been idle past
@@ -330,11 +342,11 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// need keeping. It never fires on unhealthy accounts (banned, cooling,
 	// quarantined, country-blocked) and defaults to dry-run probes.
 	p.maturityTick(ctx)
-	// Quota auto-probe (ADR-0022) rides every pass alongside maturity —
-	// including idle stretches, so quota is fresh when traffic resumes.
-	// Session-less ProbeToken, warn-only, one GET per token per Pacific
-	// day; QUOTA_AUTO_PROBE=false skips the pass entirely.
-	p.quotaAutoProbeTick(ctx)
+	// Smart quota probe rides every pass alongside maturity — including
+	// idle stretches, whose first tick runs the idle single-probe so quota
+	// is fresh when traffic resumes. Session-less ProbeToken, warn-only;
+	// QUOTA_AUTO_PROBE=false skips the pass entirely.
+	p.smartProbeTick(ctx)
 	// Burst balance (ADR-0023): prune out-of-window admission hits and fire
 	// exit edges for recovered episodes. Pure memory + WARN logging (no
 	// upstream traffic); rides every pass like maturity/autoprobe.

@@ -142,6 +142,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideString(&raw.MaturityTouchModel, "MATURITY_TOUCH_MODEL")
 	overrideInt(&raw.MaturityTargetDays, "MATURITY_TARGET_DAYS")
 	overrideBool(&raw.QuotaAutoProbe, "QUOTA_AUTO_PROBE")
+	overrideString(&raw.QuotaProbeActiveInterval, "QUOTA_PROBE_ACTIVE_INTERVAL")
+	overrideString(&raw.QuotaProbeIdleHeartbeat, "QUOTA_PROBE_IDLE_HEARTBEAT")
 	overrideBool(&raw.BurstBalanceEnabled, "BURST_BALANCE_ENABLED")
 	overrideString(&raw.BurstWindow, "BURST_WINDOW")
 	overrideInt(&raw.BurstThreshold, "BURST_THRESHOLD")
@@ -494,6 +496,29 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 			burstWindow = time.Minute
 		}
 	}
+	// Probe cadences are zero-tolerant like BURST_WINDOW: "" falls back to
+	// the documented default, and an explicit non-positive value falls back
+	// the same way (a zero cadence would probe on every tick).
+	quotaProbeActiveInterval := 60 * time.Second
+	if v := strings.TrimSpace(raw.QuotaProbeActiveInterval); v != "" {
+		quotaProbeActiveInterval, err = parseDuration(v, "QUOTA_PROBE_ACTIVE_INTERVAL")
+		if err != nil {
+			return Config{}, err
+		}
+		if quotaProbeActiveInterval <= 0 {
+			quotaProbeActiveInterval = 60 * time.Second
+		}
+	}
+	quotaProbeIdleHeartbeat := 30 * time.Minute
+	if v := strings.TrimSpace(raw.QuotaProbeIdleHeartbeat); v != "" {
+		quotaProbeIdleHeartbeat, err = parseDuration(v, "QUOTA_PROBE_IDLE_HEARTBEAT")
+		if err != nil {
+			return Config{}, err
+		}
+		if quotaProbeIdleHeartbeat <= 0 {
+			quotaProbeIdleHeartbeat = 30 * time.Minute
+		}
+	}
 	// BURST_THRESHOLD defaults to 20; BURST_MAX_TOKENS defaults to 2 (an
 	// explicit value below 2 is range-checked in Validate).
 	burstThreshold := 20
@@ -569,6 +594,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		MaturityTouchModel:               maturityTouchModel,
 		MaturityTargetDays:               maturityTargetDays,
 		QuotaAutoProbe:                   raw.QuotaAutoProbe,
+		QuotaProbeActiveInterval:         quotaProbeActiveInterval,
+		QuotaProbeIdleHeartbeat:          quotaProbeIdleHeartbeat,
 		BurstBalanceEnabled:              raw.BurstBalanceEnabled,
 		BurstWindow:                      burstWindow,
 		BurstThreshold:                   burstThreshold,
@@ -775,6 +802,8 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideStringFrom(&raw.MaturityTouchModel, get, "MATURITY_TOUCH_MODEL")
 	overrideIntFrom(&raw.MaturityTargetDays, get, "MATURITY_TARGET_DAYS")
 	overrideBoolFrom(&raw.QuotaAutoProbe, get, "QUOTA_AUTO_PROBE")
+	overrideStringFrom(&raw.QuotaProbeActiveInterval, get, "QUOTA_PROBE_ACTIVE_INTERVAL")
+	overrideStringFrom(&raw.QuotaProbeIdleHeartbeat, get, "QUOTA_PROBE_IDLE_HEARTBEAT")
 	overrideBoolFrom(&raw.BurstBalanceEnabled, get, "BURST_BALANCE_ENABLED")
 	overrideStringFrom(&raw.BurstWindow, get, "BURST_WINDOW")
 	overrideIntFrom(&raw.BurstThreshold, get, "BURST_THRESHOLD")

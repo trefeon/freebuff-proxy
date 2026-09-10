@@ -257,6 +257,9 @@ func (p *Pool) RemoveLastToken() error {
 	if !slip {
 		p.drainRemovedToken(last)
 	}
+	// Membership changed: the next tick probes the remaining roster without
+	// waiting out the tier timer.
+	p.smartProbeKick()
 	return nil
 }
 
@@ -291,6 +294,9 @@ func (p *Pool) RemoveTokenAt(idx int) error {
 	p.retired[target] = time.Now()
 	p.retiredMu.Unlock()
 	p.drainRemovedToken(target)
+	// Membership changed: the next tick probes the remaining roster without
+	// waiting out the tier timer.
+	p.smartProbeKick()
 	return nil
 }
 
@@ -371,6 +377,9 @@ func (p *Pool) RemoveAllTokens(ctx context.Context) {
 	// Clear the roster (entries, per-entry ledgers, and the mismatch map)
 	// through the single mutation entry point.
 	p.roster.clear()
+	// Membership changed (possibly to zero): the next tick re-evaluates the
+	// roster without waiting out the tier timer.
+	p.smartProbeKick()
 }
 
 // FinishTokenRuns finishes all active runs of token (dashboard action).

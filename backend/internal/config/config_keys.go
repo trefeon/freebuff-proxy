@@ -91,6 +91,8 @@ type rawConfig struct {
 	MaturityTouchModel               string                  `json:"MATURITY_TOUCH_MODEL"`
 	MaturityTargetDays               *int                    `json:"MATURITY_TARGET_DAYS"`
 	QuotaAutoProbe                   bool                    `json:"QUOTA_AUTO_PROBE"`
+	QuotaProbeActiveInterval         string                  `json:"QUOTA_PROBE_ACTIVE_INTERVAL"`
+	QuotaProbeIdleHeartbeat          string                  `json:"QUOTA_PROBE_IDLE_HEARTBEAT"`
 	BurstBalanceEnabled              bool                    `json:"BURST_BALANCE_ENABLED"`
 	BurstWindow                      string                  `json:"BURST_WINDOW"`
 	BurstThreshold                   *int                    `json:"BURST_THRESHOLD"`
@@ -200,8 +202,10 @@ func defaultRawConfig() rawConfig {
 		BurstMaxTokens:                   ptrInt(2),                    // distinct accounts one model's burst spreads across (minimum 2)
 		MaturityEnabled:                  true,                         // streak-maturity automation on by default; dry-run probes prove schedule before live touches
 		MaturityDryRun:                   true,                         // maturity touches probe only until the operator proves the schedule
+		QuotaAutoProbe:                   true,                         // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
+		QuotaProbeActiveInterval:         "60s",                        // busy-pool probe cadence
+		QuotaProbeIdleHeartbeat:          "30m",                        // idle-pool probe heartbeat (also the 429-backoff ceiling)
 		MaturityTouchModel:               "deepseek/deepseek-v4-flash", // unmetered default: never spends Freebucks
-		QuotaAutoProbe:                   true,                         // quota auto-probe scheduler on by default (ADR-0022); false restores pre-scheduler behavior
 	}
 }
 
