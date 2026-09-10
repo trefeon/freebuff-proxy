@@ -267,9 +267,11 @@ test.describe("account maturity", () => {
     // Cards render expanded: the per-card select is visible immediately.
     const picker = page.getByLabel("Touch model for Account #1");
     await expect(picker).toBeVisible();
-    // Empty value = global MATURITY_TOUCH_MODEL fallback.
+    // Empty value = Auto (cheapest served unmetered row, new default).
     await expect(picker).toHaveValue("");
-    await expect(picker.locator("option").first()).toHaveText("Global default");
+    await expect(picker.locator("option").first()).toHaveText(
+      "Auto (upstage/solar-pro4)",
+    );
     const options = await picker.locator("option").allTextContents();
     // Served models labeled with their server-reported cost class.
     expect(options).toContain("upstage/solar-pro4 (0 Freebucks/hr)");
@@ -285,6 +287,34 @@ test.describe("account maturity", () => {
     expect(lunaIdx).toBeGreaterThan(solarIdx);
     // No mode select: the Touch box is model-select-only, mode rides the save.
     await expect(page.getByLabel("Touch mode for Account #1")).toHaveCount(0);
+  });
+  test("maturity card shows the next-touch header with auto pick and ledger", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maturityTokens()),
+      });
+    });
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    await page.getByRole("button", { name: "Warming" }).click();
+    // Next-touch header: countdown/model/cost, streak chip, day strip.
+    const header = page.getByLabel("Next touch for Account #1");
+    await expect(header).toBeVisible();
+    await expect(header.getByText("upstage/solar-pro4").first()).toBeVisible();
+    // Auto default is inspectable next to the manual dropdown.
+    await expect(
+      page.getByText("Auto: upstage/solar-pro4").first(),
+    ).toBeVisible();
+    // Ledger from the existing history records (unmetered: zero spend).
+    await expect(header.getByText("Touches today").first()).toBeVisible();
+    await expect(header.getByText("Warming spend (7d)").first()).toBeVisible();
+    await expect(header.getByText("Projected/mo").first()).toBeVisible();
   });
   test("maturity touch select names the global default and links to its Settings row", async ({
     page,

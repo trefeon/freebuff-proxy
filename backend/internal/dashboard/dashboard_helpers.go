@@ -97,16 +97,21 @@ func maturityCardFromSnapshot(m *pool.MaturitySnapshot) *maturityCard {
 		return nil
 	}
 	card := &maturityCard{
-		Enabled:       m.Enabled,
-		Target:        m.Target,
-		Mode:          m.Mode,
-		TouchModel:    m.TouchModel,
-		Badge:         m.Badge,
-		LastAction:    m.LastAction,
-		LastResult:    m.LastResult,
-		LastAdvanced:  m.LastAdvanced,
-		Warn:          m.Warn,
-		NoAdvanceDays: m.NoAdvanceDays,
+		Enabled:             m.Enabled,
+		Target:              m.Target,
+		Mode:                m.Mode,
+		TouchModel:          m.TouchModel,
+		Badge:               m.Badge,
+		SlotDay:             m.SlotDay,
+		TouchDay:            m.TouchDay,
+		LastAction:          m.LastAction,
+		LastResult:          m.LastResult,
+		LastAdvanced:        m.LastAdvanced,
+		Warn:                m.Warn,
+		NoAdvanceDays:       m.NoAdvanceDays,
+		EffectiveTouchModel: m.EffectiveTouchModel,
+		AutoTouchModel:      m.AutoTouchModel,
+		AutoTouchReason:     m.AutoTouchReason,
 	}
 	if !m.Slot.IsZero() {
 		card.Slot = m.Slot.Format(time.RFC3339)

@@ -323,11 +323,11 @@
     "key": "MATURITY_TOUCH_MODEL",
     "group": "pool",
     "kind": "text",
-    "default": "deepseek/deepseek-v4-flash",
+    "default": "auto",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Model the unmetered maturity touch admits (a served, unpriced row — the touch never spends Freebucks)."
+    "description": "Touch model for unmetered maturity touches: \"auto\" (default) resolves the cheapest served unmetered row and falls back to this key's explicit value when no unmetered served row exists; an explicit provider/model id overrides auto. The touch never spends Freebucks (fail-closed on priced rows)."
   },
   {
     "key": "MODEL_LOCKS",

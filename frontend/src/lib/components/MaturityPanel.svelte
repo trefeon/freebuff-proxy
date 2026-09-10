@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { recordPageVisit } from "../stores/pageState.js";
-  import { SvelteSet } from "svelte/reactivity";
+  import { SvelteDate, SvelteSet } from "svelte/reactivity";
   import FieldBox from "./FieldBox.svelte";
   import Stepper from "./Stepper.svelte";
   import Pips from "./Pips.svelte";
@@ -16,6 +16,10 @@
   import {
     touchOptions as sharedTouchOptions,
     touchLabel,
+    autoTouchPick,
+    autoTouchReason,
+    touchCostFor,
+    touchPriceFor,
   } from "../utils/touchModels.js";
   import {
     tokensData as tokensStore,
@@ -36,9 +40,22 @@
   // header notice. Settings renders the toggle itself (catalog Essential).
   let globalEnabled = $state(true);
   let globalLoaded = $state(false);
-  // Resolved global MATURITY_TOUCH_MODEL for the per-card "Global default"
-  // option label: effective snapshot first, raw .env fallback, "" = unknown.
+  // Resolved global MATURITY_TOUCH_MODEL: effective snapshot first, raw .env
+  // fallback, "" = unknown. "auto"/"" is the sentinel for automatic
+  // resolution (cheapest served unmetered row); an explicit id is the
+  // fallback the server uses when auto has no unmetered candidate.
   let globalTouchModel = $state("");
+  // Wall clock for the next-touch countdown (30s tick; the 10s poll also
+  // refreshes it). One interval for the whole panel, cleared on unmount.
+  let nowMs = $state(Date.now());
+  let countdownTimer = null;
+
+  function isAutoSentinel(v) {
+    const s = String(v ?? "")
+      .trim()
+      .toLowerCase();
+    return s === "" || s === "auto";
+  }
 
   // Touch-model candidates: served models the gateway can admit (same
   // usable filter as Quota Tracker: a live agent binding, no withdrawn
@@ -125,6 +142,153 @@
     return sharedTouchOptions(modelRows, d?.touchModel ?? "");
   }
 
+  function exemptFor(t) {
+    return !!t?.freebucks?.quota_exempt;
+  }
+
+  // Server-resolved Auto pick first (payload), local cheapest-unmetered
+  // fallback for old servers that predate the new keys.
+  function autoFor(t) {
+    return (
+      t?.maturity?.auto_touch_model ||
+      autoTouchPick(modelRows, exemptFor(t)) ||
+      ""
+    );
+  }
+
+  function autoReasonFor(t) {
+    return (
+      t?.maturity?.auto_touch_reason || autoTouchReason(modelRows, exemptFor(t))
+    );
+  }
+
+  // Effective model preview: the manual draft when set, else the server's
+  // resolved model, else the local auto pick, else the explicit global.
+  function effectiveFor(t, d) {
+    if (d?.touchModel) return d.touchModel;
+    return (
+      t?.maturity?.effective_touch_model ||
+      autoFor(t) ||
+      (isAutoSentinel(globalTouchModel) ? "" : globalTouchModel)
+    );
+  }
+
+  function costFor(modelId) {
+    return touchCostFor(modelId, modelRows);
+  }
+
+  // First-option label: Auto pick with its reason under the new default,
+  // the explicit global fallback otherwise (kept verbatim for the
+  // Settings deep-link contract).
+  function autoOptionLabel() {
+    if (isAutoSentinel(globalTouchModel)) {
+      const pick = autoTouchPick(modelRows, false);
+      return pick ? `Auto (${pick})` : "Auto";
+    }
+    return null;
+  }
+
+  function fmtCountdown(ms) {
+    if (!isFinite(ms) || ms <= 0) return "due now";
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      const hr = h % 24;
+      return hr > 0 ? `in ${d}d ${hr}h` : `in ${d}d`;
+    }
+    if (h > 0) return `in ${h}h ${m}m`;
+    if (m > 0) return `in ${m}m`;
+    return `in ${s}s`;
+  }
+
+  function touchedToday(t) {
+    const m = t?.maturity;
+    if (m?.touch_day && m?.slot_day) return m.touch_day === m.slot_day;
+    return !!t?.today_used;
+  }
+
+  function nextTouchText(t) {
+    const m = t?.maturity;
+    if (!m) return "";
+    if (!m.enabled) return "Automation off";
+    if (touchedToday(t)) return "Touched today · next slot tomorrow";
+    if (m.slot) {
+      const at = new Date(m.slot).getTime();
+      if (!isNaN(at)) return fmtCountdown(at - nowMs);
+    }
+    return "due now";
+  }
+
+  function dayKey(ts) {
+    const d = new Date(Number(ts));
+    if (isNaN(d)) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  // Done/pending day-strip from the existing maturity history records:
+  // the last 7 calendar days, done when a touch event landed that day
+  // (or today already counts via today_used), pending otherwise.
+  function weekStrip(t, idx) {
+    const days = [];
+    const base = new SvelteDate(nowMs);
+    base.setHours(0, 0, 0, 0);
+    const touched = new SvelteSet();
+    for (const ev of histByIdx[idx] ?? []) {
+      if (ev?.kind === "touch") touched.add(dayKey(ev.ts));
+    }
+    for (let back = 6; back >= 0; back--) {
+      const d = new Date(base.getTime() - back * 86400000);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const isToday = back === 0;
+      const done = touched.has(key) || (isToday && !!t?.today_used);
+      days.push({ key, isToday, done });
+    }
+    return days;
+  }
+
+  function parseTouchModel(detail) {
+    const s = String(detail ?? "");
+    const i = s.indexOf("model=");
+    if (i < 0) return "";
+    return s.slice(i + 6).split(/[\s,;]+/)[0] ?? "";
+  }
+
+  function fmtSpend(n) {
+    const v = Math.round(Number(n) * 10) / 10;
+    if (!isFinite(v)) return "—";
+    return `${Number.isInteger(v) ? v : v.toFixed(1)} Freebucks`;
+  }
+
+  // Warming ledger from the existing history records: touches today, the
+  // week's warming Freebucks spend (0 by design for unmetered touches —
+  // only admitted touches on priced rows add up, which surfaces a
+  // premium-short fallback the moment it occurs), and the projected
+  // monthly burn at the current cadence.
+  function ledgerFor(t, idx) {
+    const evs = histByIdx[idx] ?? [];
+    const today = dayKey(nowMs);
+    let touchesToday = 0;
+    let spendWeek = 0;
+    const weekAgo = Number(nowMs) - 7 * 86400000;
+    for (const ev of evs) {
+      if (ev?.kind !== "touch") continue;
+      const ts = Number(ev?.ts);
+      if (!isFinite(ts) || ts < weekAgo) continue;
+      const detail = String(ev?.detail ?? "");
+      const isAdmitOk =
+        detail.includes("admit") && /(^|\s)ok(\s|$)/.test(detail);
+      if (dayKey(ts) === today) touchesToday += 1;
+      if (!isAdmitOk) continue;
+      const price = touchPriceFor(parseTouchModel(detail), modelRows);
+      if (isFinite(price) && price > 0) spendWeek += price;
+    }
+    if (touchesToday === 0 && touchedToday(t)) touchesToday = 1;
+    const projected = Math.round(spendWeek * (30 / 7) * 10) / 10;
+    return { touchesToday, spendWeek, projected };
+  }
+
   async function save(idx) {
     if (saving[idx]) return;
     saving[idx] = true;
@@ -193,6 +357,9 @@
   }
   onMount(() => {
     recordPageVisit("maturity");
+    countdownTimer = setInterval(() => {
+      nowMs = Date.now();
+    }, 30000);
     const release = ensureTokensStore();
     unsubStore = tokensStore.subscribe(applyTokens);
     unsubErr = tokensErrorStore.subscribe((err) => {
@@ -256,6 +423,8 @@
       }
     })();
     return () => {
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = null;
       release();
       unsubStore?.();
       unsubErr?.();
@@ -311,6 +480,7 @@
           mode: "unmetered",
           touchModel: "",
         }}
+        {@const autoLbl = autoOptionLabel()}
         <Card
           title={$tr("Account #{idx}", { idx: idx + 1 })}
           description={t.email || $tr("unknown account")}
@@ -361,6 +531,85 @@
                   : ""}
               </p>
             {/if}
+            {#if m}
+              {@const eff = effectiveFor(t, d)}
+              {@const effCost = costFor(eff)}
+              {@const strip = weekStrip(t, idx)}
+              {@const ledger = ledgerFor(t, idx)}
+              {@const streakTarget = m.target ?? d.target ?? 7}
+              {@const streakVal = t.streak ?? 0}
+              <div
+                class="flex flex-col gap-1.5 rounded border border-[var(--fp-border)]/60 bg-[var(--fp-surface)]/60 px-2 py-1.5"
+                aria-label={$tr("Next touch for Account #{idx}", {
+                  idx: idx + 1,
+                })}
+              >
+                <div
+                  class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
+                >
+                  <span class="fp-num font-semibold text-[var(--fp-fg)]">
+                    {nextTouchText(t)}
+                  </span>
+                  {#if eff}
+                    <code class="fp-num text-[11px] text-[var(--fp-muted)]"
+                      >{eff}</code
+                    >
+                    {#if effCost}
+                      <span class="fp-num text-[11px] text-[var(--fp-dim)]"
+                        >· {effCost}</span
+                      >
+                    {/if}
+                  {/if}
+                  <span
+                    class="fp-num ml-auto inline-flex items-center gap-1 text-[11px] text-[var(--fp-dim)]"
+                    title={$tr(
+                      "Daily touches banked toward the target (streak/target)",
+                    )}
+                  >
+                    {$tr("day {n}/{target}", {
+                      n: streakVal,
+                      target: streakTarget,
+                    })}
+                    {#if t.today_used}
+                      <span class="text-emerald-400"
+                        >· {$tr("Active today")}</span
+                      >
+                    {:else if !m.warn}
+                      <span>· {$tr("Needs activity today")}</span>
+                    {/if}
+                  </span>
+                </div>
+                <div
+                  class="flex items-center gap-1"
+                  role="img"
+                  aria-label={$tr("Touches last 7 days for Account #{idx}", {
+                    idx: idx + 1,
+                  })}
+                >
+                  {#each strip as day (day.key)}
+                    <span
+                      title={day.key +
+                        (day.done
+                          ? " · touched"
+                          : day.isToday
+                            ? " · pending today"
+                            : "")}
+                      class={`h-1.5 w-5 rounded-full ${day.done ? "bg-emerald-400/80" : day.isToday ? "bg-amber-400/70" : "bg-[var(--fp-border)]"}`}
+                    ></span>
+                  {/each}
+                </div>
+                {#if !d.touchModel}
+                  <p class="fp-num text-[11px] text-[var(--fp-dim)]">
+                    Auto: {autoFor(t) || "—"} ({autoReasonFor(t)})
+                  </p>
+                {/if}
+                <p class="fp-num text-[11px] text-[var(--fp-dim)]">
+                  Touches today {ledger.touchesToday} · Warming spend (7d) {fmtSpend(
+                    ledger.spendWeek,
+                  )} · Projected/mo {fmtSpend(ledger.projected)}
+                </p>
+              </div>
+            {/if}
 
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <FieldBox
@@ -396,15 +645,19 @@
                     idx: idx + 1,
                   })}
                   title={$tr(
-                    "Per-token touch model (cheapest first, priced rows last). Empty uses the global default from Settings → Advanced → Maturity Touch Model.",
+                    "Per-token touch model (cheapest first, priced rows last). Empty is Auto: the cheapest served unmetered row, falling back to the global default from Settings → Advanced → Maturity Touch Model.",
                   )}
                 >
                   <option value="">
-                    {globalTouchModel
-                      ? $tr("Global default ({model})", {
-                          model: globalTouchModel,
-                        })
-                      : $tr("Global default")}
+                    {#if autoLbl}
+                      {autoLbl}
+                    {:else if globalTouchModel}
+                      {$tr("Global default ({model})", {
+                        model: globalTouchModel,
+                      })}
+                    {:else}
+                      {$tr("Global default")}
+                    {/if}
                   </option>
                   {#each touchOptions(d) as o (o.id)}
                     <option value={o.id}>{touchLabel(o)}</option>

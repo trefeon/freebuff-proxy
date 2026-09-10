@@ -252,10 +252,9 @@
                 />
               {/snippet}
               {#if entry.key === "MATURITY_TOUCH_MODEL"}
-                <!-- Global touch default: same priced options as the per-token
-                Touch Model select (shared helper). No empty option — this IS
-                the global value; the current value (or catalog default)
-                stays selected. Saves through the existing row path. -->
+                <!-- Global touch default: Auto (the new default) plus the same
+                priced options as the per-token Touch Model select (shared
+                helper). Saves through the existing row path. -->
                 <select
                   class="fp-select"
                   value={val(entry.key, entry)}
@@ -263,6 +262,7 @@
                   title={val(entry.key, entry)}
                   onchange={(e) => onField(entry.key, e.currentTarget.value)}
                 >
+                  <option value="auto">Auto (cheapest unmetered)</option>
                   {#each globalTouchOpts(entry) as opt (opt.id)}
                     <option value={opt.id}>{touchLabel(opt)}</option>
                   {/each}

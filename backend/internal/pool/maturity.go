@@ -62,18 +62,38 @@ type MaturitySnapshot struct {
 	Enabled bool   `json:"enabled"`
 	Target  int    `json:"target"`
 	Mode    string `json:"mode"`
-	// TouchModel is the per-token touch-model override ("" = the global
-	// MATURITY_TOUCH_MODEL fallback). Omitted on the wire when unset so
-	// never-enrolled tokens keep their existing payload shape.
-	TouchModel    string    `json:"touch_model,omitempty"`
-	Badge         string    `json:"badge"`
-	Slot          time.Time `json:"slot,omitempty"`
-	LastTouch     time.Time `json:"last_touch,omitempty"`
-	LastAction    string    `json:"last_action,omitempty"`
-	LastResult    string    `json:"last_result,omitempty"`
-	LastAdvanced  string    `json:"last_advanced,omitempty"`
-	Warn          bool      `json:"warn,omitempty"`
-	NoAdvanceDays int       `json:"no_advance_days,omitempty"`
+	// TouchModel is the per-token touch-model override ("" = automatic:
+	// the cheapest served unmetered row, falling back to the global
+	// MATURITY_TOUCH_MODEL when no unmetered served row exists).
+	// Omitted on the wire when unset so never-enrolled tokens keep
+	// their existing payload shape.
+	TouchModel string    `json:"touch_model,omitempty"`
+	Badge      string    `json:"badge"`
+	Slot       time.Time `json:"slot,omitempty"`
+	// SlotDay is the account-timezone calendar day the Slot belongs to
+	// ("2006-01-02"): the dashboard derives the next-touch countdown
+	// and the done/pending day-strip from Slot/SlotDay/LastTouch
+	// without a new scheduler.
+	SlotDay   string    `json:"slot_day,omitempty"`
+	LastTouch time.Time `json:"last_touch,omitempty"`
+	// TouchDay is the account-timezone calendar day of the last touch
+	// ("2006-01-02"): TouchDay == SlotDay means touched today.
+	TouchDay      string `json:"touch_day,omitempty"`
+	LastAction    string `json:"last_action,omitempty"`
+	LastResult    string `json:"last_result,omitempty"`
+	LastAdvanced  string `json:"last_advanced,omitempty"`
+	Warn          bool   `json:"warn,omitempty"`
+	NoAdvanceDays int    `json:"no_advance_days,omitempty"`
+	// EffectiveTouchModel is the model the next touch will actually
+	// admit (manual override, premium-short pool head, auto pick, or
+	// explicit global fallback, in that precedence).
+	EffectiveTouchModel string `json:"effective_touch_model,omitempty"`
+	// AutoTouchModel is the automatic pick (cheapest served unmetered
+	// row) with AutoTouchReason naming why ("auto:unmetered" or
+	// "fallback:no-unmetered-served"). Shown by the UI next to the
+	// manual dropdown so the Auto default is inspectable.
+	AutoTouchModel  string `json:"auto_touch_model,omitempty"`
+	AutoTouchReason string `json:"auto_touch_reason,omitempty"`
 }
 
 // maturityState is the mutable per-token automation state, guarded by
@@ -196,11 +216,13 @@ func unmarshalMaturity(raw string) (maturityState, error) {
 // target <= 0 falls back to the configured MATURITY_TARGET_DAYS default;
 // mode "" means unmetered. mode premium-short spends from the account's
 // metered pool and stays opt-in per token.
-// touchModel is the per-token touch-model override; "" keeps the global
-// MATURITY_TOUCH_MODEL fallback. A non-empty value must be a provider/model
-// id (shape only — served/unmetered semantics stay in the fire path, which
-// fails closed on misconfigured models). The override is stored on disable
-// too, so re-enabling restores it.
+// touchModel is the per-token touch-model override; "" (or "auto") selects
+// the automatic default (cheapest served unmetered row, falling back to the
+// global MATURITY_TOUCH_MODEL when no unmetered served row exists). Any
+// other non-empty value must be a provider/model id (shape only —
+// served/unmetered semantics stay in the fire path, which fails closed on
+// misconfigured models). The override is stored on disable too, so
+// re-enabling restores it.
 func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, touchModel string) error {
 	toks := p.roster.Load()
 	if toks == nil || token < 0 || token >= len(*toks) {
@@ -213,6 +235,9 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, tou
 		return fmt.Errorf("pool: unknown maturity mode %q (want %q or %q)", mode, MaturityModeUnmetered, MaturityModePremiumShort)
 	}
 	touchModel = strings.TrimSpace(touchModel)
+	if modelcat.IsAutoTouchSentinel(touchModel) {
+		touchModel = ""
+	}
 	if touchModel != "" && !strings.Contains(touchModel, "/") {
 		return fmt.Errorf("pool: maturity touch model %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash)", touchModel)
 	}
@@ -269,12 +294,58 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, tou
 // maturityEffectiveModel resolves the touch model for one token: the
 // per-token override when set, else the global MATURITY_TOUCH_MODEL
 // fallback. An empty result means "no configured model", which the fire
-// path fails closed on (skip:touch-model).
+// path fails closed on (skip:touch-model). Callers that need the Auto
+// default (new default: cheapest served unmetered row) use
+// maturityResolveEffective, which layers auto resolution on top of this
+// explicit precedence.
 func maturityEffectiveModel(st maturityState, global string) string {
 	if st.touchModel != "" {
 		return st.touchModel
 	}
 	return global
+}
+
+// maturityAutoFor resolves the automatic touch-model pick for one token
+// from its live Freebucks meter: the cheapest IsServedModel row with
+// price 0 or a quota exemption. Honeypot, god-only, eval, paused, and
+// priced rows can never win (the IsServed gate plus the premium and live
+// price gates inside modelcat, never a naive price sort). The served set
+// only changes on registry sync (wiregen), so the pick is stable across
+// touches; per-touch meter movement stays enforced by the fail-closed
+// fire path, not by re-sorting here.
+func maturityAutoFor(tok *tokenEntry) (string, string) {
+	var prices map[string]float64
+	exempt := false
+	if tok != nil && tok.sessionMgr() != nil {
+		if snap := tok.sessionMgr().Snapshot(); snap.Freebucks != nil {
+			prices = snap.Freebucks.Prices
+			exempt = snap.Freebucks.QuotaExempt
+		}
+	}
+	return modelcat.AutoUnmeteredTouchModel(prices, exempt)
+}
+
+// maturityResolveEffective resolves the model the next touch will
+// actually admit, plus the auto pick and its reason for display.
+// Precedence: manual per-token override, premium-short pool head,
+// auto pick when the global is the auto sentinel ("auto"/""), else the
+// explicit global fallback. Empty effective means fail closed
+// (skip:touch-model) — never an invented model.
+func (p *Pool) maturityResolveEffective(st maturityState, tok *tokenEntry, global string) (effective, auto, reason string) {
+	auto, reason = maturityAutoFor(tok)
+	if st.touchModel != "" {
+		return st.touchModel, auto, reason
+	}
+	if st.mode == MaturityModePremiumShort {
+		if premium := modelcat.SharedPremiumModels(); len(premium) > 0 {
+			return premium[0], auto, reason
+		}
+		return "", auto, reason
+	}
+	if modelcat.IsAutoTouchSentinel(global) {
+		return auto, auto, reason
+	}
+	return global, auto, reason
 }
 
 // maturityDefaultTarget resolves the fallback streak target: the configured
@@ -432,9 +503,11 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 		return
 	}
 
-	// Per-token override wins; empty falls back to the global
-	// MATURITY_TOUCH_MODEL passed in from the tick.
-	p.maturityFire(ctx, dryRun, maturityEffectiveModel(st, touchModel), idx, tok, label, cached, today, now)
+	// Precedence: per-token override, premium-short pool head, auto pick
+	// when the global is the auto sentinel, else the explicit global
+	// fallback. Empty resolves fail closed in the fire path.
+	effective, _, _ := p.maturityResolveEffective(st, tok, touchModel)
+	p.maturityFire(ctx, dryRun, effective, idx, tok, label, cached, today, now)
 }
 
 // maturityRefreshStreak fetches one token's streak synchronously (bounded)
@@ -699,7 +772,8 @@ func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string,
 		return "", "skip:today-used", fmt.Errorf("pool: token %d already used today", token)
 	}
 	loc := maturityLocation(cached.TimeZone)
-	p.maturityFire(ctx, cfg.MaturityDryRun, maturityEffectiveModel(st, cfg.MaturityTouchModel), token, tok, tokenEntryLabel(tok), cached, now.In(loc).Format("2006-01-02"), now)
+	effective, _, _ := p.maturityResolveEffective(st, tok, cfg.MaturityTouchModel)
+	p.maturityFire(ctx, cfg.MaturityDryRun, effective, token, tok, tokenEntryLabel(tok), cached, now.In(loc).Format("2006-01-02"), now)
 	p.saveMaturity(token, tok)
 	fin := p.maturityCopy(tok)
 	return fin.lastAction, fin.lastResult, nil
@@ -739,10 +813,13 @@ func (p *Pool) maturityRecord(tok *tokenEntry, action, result, advanced string) 
 // maturitySnapshot builds the dashboard view for one entry (nil until first
 // enabled). Badge: Mature when the streak reached target, Warming while an
 // enabled token still climbs, Cold when an enabled token sits at zero.
+// SlotDay/TouchDay plus the resolved effective/auto models let the
+// dashboard render the next-touch countdown, the done/pending day-strip,
+// and the Auto pick with its reason without a new scheduler.
 func (p *Pool) maturitySnapshot(tok *tokenEntry, streak int) *MaturitySnapshot {
 	tok.maturityMu.Lock()
-	defer tok.maturityMu.Unlock()
 	m := tok.maturity
+	tok.maturityMu.Unlock()
 	// A drafted touch-model override counts as state: operators pre-configure
 	// it while disabled, and the card must echo it back after refresh.
 	if !m.enabled && m.lastAction == "" && m.lastResult == "" && m.touchModel == "" {
@@ -765,19 +842,29 @@ func (p *Pool) maturitySnapshot(tok *tokenEntry, streak int) *MaturitySnapshot {
 	if mode == "" {
 		mode = MaturityModeUnmetered
 	}
+	global := ""
+	if cfg := p.cfg.Load(); cfg != nil {
+		global = cfg.MaturityTouchModel
+	}
+	effective, auto, reason := p.maturityResolveEffective(maturityState{enabled: m.enabled, target: m.target, mode: mode, touchModel: m.touchModel}, tok, global)
 	return &MaturitySnapshot{
-		Enabled:       m.enabled,
-		Target:        target,
-		Mode:          mode,
-		TouchModel:    m.touchModel,
-		Badge:         badge,
-		Slot:          m.slot,
-		LastTouch:     m.lastTouch,
-		LastAction:    m.lastAction,
-		LastResult:    m.lastResult,
-		LastAdvanced:  m.lastAdvanced,
-		Warn:          m.warn,
-		NoAdvanceDays: m.noAdvanceDays,
+		Enabled:             m.enabled,
+		Target:              target,
+		Mode:                mode,
+		TouchModel:          m.touchModel,
+		Badge:               badge,
+		Slot:                m.slot,
+		SlotDay:             m.slotDay,
+		LastTouch:           m.lastTouch,
+		TouchDay:            m.touchDay,
+		LastAction:          m.lastAction,
+		LastResult:          m.lastResult,
+		LastAdvanced:        m.lastAdvanced,
+		Warn:                m.warn,
+		NoAdvanceDays:       m.noAdvanceDays,
+		EffectiveTouchModel: effective,
+		AutoTouchModel:      auto,
+		AutoTouchReason:     reason,
 	}
 }
 

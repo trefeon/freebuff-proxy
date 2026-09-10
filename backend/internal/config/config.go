@@ -213,9 +213,11 @@ type Config struct {
 	// session probe and never claim a session slot. Turn it off only after
 	// the dry-run log lines prove slots, skips and throttles behave.
 	MaturityDryRun bool
-	// MaturityTouchModel is the unmetered model the maturity touch admits
-	// (MATURITY_TOUCH_MODEL; default deepseek/deepseek-v4-flash). Must be a
-	// served, unpriced catalog row so the touch never spends Freebucks.
+	// MaturityTouchModel is the touch-model fallback for maturity touches
+	// (MATURITY_TOUCH_MODEL; default "auto"). "auto" (or "") resolves the
+	// cheapest served unmetered catalog row per token; an explicit
+	// provider/model id overrides auto. Either way the touch never spends
+	// Freebucks (fail-closed on priced rows).
 	MaturityTouchModel string
 	// MaturityTargetDays is the default streak target for newly-enabled
 	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose
