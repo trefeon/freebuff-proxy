@@ -291,20 +291,6 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, tou
 	return nil
 }
 
-// maturityEffectiveModel resolves the touch model for one token: the
-// per-token override when set, else the global MATURITY_TOUCH_MODEL
-// fallback. An empty result means "no configured model", which the fire
-// path fails closed on (skip:touch-model). Callers that need the Auto
-// default (new default: cheapest served unmetered row) use
-// maturityResolveEffective, which layers auto resolution on top of this
-// explicit precedence.
-func maturityEffectiveModel(st maturityState, global string) string {
-	if st.touchModel != "" {
-		return st.touchModel
-	}
-	return global
-}
-
 // maturityAutoFor resolves the automatic touch-model pick for one token
 // from its live Freebucks meter: the cheapest IsServedModel row with
 // price 0 or a quota exemption. Honeypot, god-only, eval, paused, and
