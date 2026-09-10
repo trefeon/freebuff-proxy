@@ -103,47 +103,44 @@
       ? 'border-[var(--fp-accent)] ring-2 ring-[var(--fp-accent)] bg-[var(--fp-accent)]/5'
       : ''}"
 >
-  <!-- Header: identity + status + one control cluster (reorder + expand) -->
+  <!-- Header: identity, status cluster and email share one wrap row;
+       reorder chevrons sit right. Grip hides on touch (chevrons cover it). -->
   <div class="flex items-center justify-between gap-2">
-    <div class="min-w-0 flex flex-col gap-1">
-      <div class="flex items-center gap-1.5 flex-wrap">
-        {#if totalTokens > 1}
-          <div
-            class="cursor-grab active:cursor-grabbing p-1 text-[var(--fp-dim)] hover:text-[var(--fp-accent)] rounded select-none -ml-1 hover:bg-[var(--fp-surface)] transition-colors"
-            title={$tr("Drag to reorder account position")}
-            aria-label={$tr("Drag to reorder")}
-          >
-            <GripVertical size={16} />
-          </div>
-        {/if}
-        <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
-          >Account #{idx + 1}</span
+    <div class="min-w-0 flex items-center gap-1.5 flex-wrap">
+      {#if totalTokens > 1}
+        <div
+          class="cursor-grab active:cursor-grabbing p-1 text-[var(--fp-dim)] hover:text-[var(--fp-accent)] rounded select-none -ml-1 hover:bg-[var(--fp-surface)] transition-colors [@media(pointer:coarse)]:hidden"
+          title={$tr("Drag to reorder account position")}
+          aria-label={$tr("Drag to reorder")}
         >
-        <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
-        {#if riskBadge}
-          <StatusBadge
-            status={riskBadge.label}
-            tone={riskBadge.tone}
-            pulse={riskBadge.pulse}
-          />
-        {/if}
-      </div>
-      <div class="flex flex-wrap items-center gap-1">
-        {#if token.session_model}
-          <StatusBadge tone="info" status={token.session_model} />
-        {/if}
-        <StatusBadge status={maturityBadge.label} tone={maturityBadge.tone} />
-      </div>
+          <GripVertical size={16} />
+        </div>
+      {/if}
+      <span class="fp-num text-xs font-semibold text-[var(--fp-text)]"
+        >Account #{idx + 1}</span
+      >
+      <StatusBadge status={st.label} tone={st.tone} pulse={st.pulse} />
+      {#if riskBadge}
+        <StatusBadge
+          status={riskBadge.label}
+          tone={riskBadge.tone}
+          pulse={riskBadge.pulse}
+        />
+      {/if}
+      {#if token.session_model}
+        <StatusBadge tone="info" status={token.session_model} />
+      {/if}
+      <StatusBadge status={maturityBadge.label} tone={maturityBadge.tone} />
       {#if token.email || token.account_id}
         <span
-          class="text-[11px] text-[var(--fp-muted)] break-words"
+          class="text-[11px] text-[var(--fp-muted)] truncate max-w-[160px]"
           title={token.email || token.account_id}
         >
           {token.email || token.account_id}
         </span>
       {/if}
     </div>
-    <div class="flex items-center gap-0.5 shrink-0">
+    <div class="flex items-center gap-1 shrink-0">
       {#if totalTokens > 1}
         <button
           type="button"
@@ -151,9 +148,9 @@
           title={$tr("Move Up / Prioritize")}
           aria-label={$tr("Move Up")}
           onclick={() => onSwap?.(idx, idx - 1)}
-          class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          class="inline-flex items-center justify-center w-10 h-10 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
         >
-          <ChevronUp size={15} />
+          <ChevronUp size={16} />
         </button>
         <button
           type="button"
@@ -161,16 +158,16 @@
           title={$tr("Move Down")}
           aria-label={$tr("Move Down")}
           onclick={() => onSwap?.(idx, idx + 1)}
-          class="inline-flex items-center justify-center w-8 h-8 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          class="inline-flex items-center justify-center w-10 h-10 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
         >
-          <ChevronDown size={15} />
+          <ChevronDown size={16} />
         </button>
       {/if}
     </div>
   </div>
 
-  <!-- Risk/usage stats (moved from the standalone At-risk cards): live
-       cooldown, 24h messages and run/request counts on every card. -->
+  <!-- Usage stats: cooldown banner, then msgs / runs+reqs / Freebucks in
+       one grid; the Freebucks today fraction is a bar, not a text row. -->
   <div class="flex flex-col gap-2">
     {#if token.cooldown_active}
       {@const cd = cooldownLabel(token, now)}
@@ -180,60 +177,82 @@
         {#if cd !== "expiring" && cd !== "—"}{$tr("remaining")}{/if}
       </div>
     {/if}
-    <div class="fp-inset px-2.5 py-1.5 text-xs text-[var(--fp-muted)]">
-      {#if token.daily_limit > 0}
-        <span class="fp-num text-[var(--fp-text)]"
-          >{token.messages_24h}/{token.daily_limit}</span
-        >
-        {$tr("msgs today")}
-        (<span class="fp-num">{token.usage_pct}%</span>)
-      {:else}
-        <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
-        {$tr("msgs 24h")}
-      {/if}
-    </div>
-    <div class="flex justify-between text-xs text-[var(--fp-dim)]">
-      <span
-        >runs <span class="fp-num text-[var(--fp-text)]"
-          >{token.active_runs}</span
-        ></span
-      >
-      <span>
-        reqs <span class="fp-num text-[var(--fp-text)]">{token.requests}</span>
-        {#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}
-          <span class="text-[10px] text-[var(--fp-muted)]">
-            ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0}
-              ·
-            {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
+    <div class="fp-inset px-2.5 py-2 text-xs">
+      <div class="grid grid-cols-3 gap-2">
+        <div class="min-w-0 text-[var(--fp-muted)]">
+          {#if token.daily_limit > 0}
+            <span class="fp-num text-[var(--fp-text)]"
+              >{token.messages_24h}/{token.daily_limit}</span
+            >
+            {$tr("msgs today")}
+            (<span class="fp-num">{token.usage_pct}%</span>)
+          {:else}
+            <span class="fp-num text-[var(--fp-text)]"
+              >{token.messages_24h}</span
+            >
+            {$tr("msgs 24h")}
+          {/if}
+        </div>
+        <div class="min-w-0 text-[var(--fp-dim)]">
+          <span
+            >runs <span class="fp-num text-[var(--fp-text)]"
+              >{token.active_runs}</span
+            ></span
           >
-        {/if}</span
-      >
-    </div>
-    {#if token.freebucks}
-      {@const fbBal = Math.max(
-        0,
-        Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0),
-      )}
-      {@const fbDaily = token.freebucks.daily ?? token.freebucks.Daily ?? {}}
-      {@const fbRem = Math.max(
-        0,
-        Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0),
-      )}
-      {@const fbLim = Math.max(
-        0,
-        Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0),
-      )}
-      <div class="fp-inset px-2.5 py-1.5 text-xs">
-        <span class="fp-num text-[var(--fp-accent)] font-semibold"
-          >{fbBal} {$tr("Freebucks")}</span
-        >
-        {#if fbLim > 0}
-          <span class="text-[var(--fp-muted)]">
-            · {fbRem}/{fbLim} {$tr("today")}</span
+          <span class="ml-2">
+            reqs <span class="fp-num text-[var(--fp-text)]"
+              >{token.requests}</span
+            >
+            {#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}
+              <span class="text-[10px] text-[var(--fp-muted)]">
+                ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0}
+                  ·
+                {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
+              >
+            {/if}</span
           >
+        </div>
+        {#if token.freebucks}
+          {@const fbBal = Math.max(
+            0,
+            Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0),
+          )}
+          {@const fbDaily =
+            token.freebucks.daily ?? token.freebucks.Daily ?? {}}
+          {@const fbRem = Math.max(
+            0,
+            Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0),
+          )}
+          {@const fbLim = Math.max(
+            0,
+            Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0),
+          )}
+          <div class="min-w-0">
+            <span class="fp-num text-[var(--fp-accent)] font-semibold"
+              >{fbBal} {$tr("Freebucks")}</span
+            >
+            {#if fbLim > 0}
+              <span class="text-[var(--fp-muted)]">
+                · {fbRem}/{fbLim} {$tr("today")}</span
+              >
+              <div
+                class="mt-1 h-1 rounded bg-[var(--fp-surface)]"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax={fbLim}
+                aria-valuenow={fbLim - fbRem}
+                aria-label={$tr("Freebucks today")}
+              >
+                <div
+                  class="h-full rounded bg-[var(--fp-accent)]"
+                  style={`width: ${fbLim > 0 ? Math.min(100, Math.round(((fbLim - fbRem) / fbLim) * 100)) : 0}%`}
+                ></div>
+              </div>
+            {/if}
+          </div>
         {/if}
       </div>
-    {/if}
+    </div>
   </div>
 
   <!-- Details (secondary info + drawer) behind the expand chevron -->
@@ -275,7 +294,7 @@
       aria-label={expanded
         ? `Collapse details for account ${idx + 1}`
         : `Expand details for account ${idx + 1}`}
-      class="inline-flex items-center justify-center w-9 h-9 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
+      class="inline-flex items-center justify-center w-11 h-11 shrink-0 rounded text-[var(--fp-dim)] hover:text-[var(--fp-text)] hover:bg-[var(--fp-surface)] transition-colors"
     >
       {#if expanded}
         <ChevronExpand size={17} class="rotate-180" />
@@ -283,7 +302,9 @@
         <ChevronDown size={17} class="rotate-[-90deg]" />
       {/if}
     </button>
-    <div class="flex items-center gap-1.5 flex-wrap justify-end">
+    <div
+      class="flex items-center gap-1.5 flex-wrap justify-end [&_.fp-btn]:min-h-[44px]"
+    >
       {#if token.cooldown_active}
         <Button
           variant="ghost"
