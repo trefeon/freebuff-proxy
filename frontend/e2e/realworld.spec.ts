@@ -239,10 +239,7 @@ test.describe("real-world data", () => {
     await expect(page.getByText("MAX_REQUESTS_PER_DAY")).toBeVisible();
     await page.goto(admin("overview"));
     await expect(
-      page.getByRole("heading", { name: "Client Setup" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "mimo/mimo-v2.5 default" }),
+      page.getByRole("heading", { name: "Client Integration" }),
     ).toBeVisible();
   });
 });

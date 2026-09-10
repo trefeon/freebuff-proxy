@@ -1055,13 +1055,13 @@ test.describe("dashboard hermetic mocks", () => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    // /admin/setup redirects to the Overview page (Client Setup lives there).
+    // /admin/setup redirects to the Overview page (client setup block removed).
     await page.goto("http://127.0.0.1:4173/admin/setup");
     await expect(
       page.getByRole("heading", { name: "Overview", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Client Setup" }),
+      page.getByRole("heading", { name: "Client Integration" }),
     ).toBeVisible();
 
     // /admin/playground maps to Dev Tools (self-gated; shows the disabled notice here)
