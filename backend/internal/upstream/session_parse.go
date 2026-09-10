@@ -69,6 +69,20 @@ type SessionState struct {
 	// UpgradeHint carries the upstream promotional or upgrade broadcast
 	// hint ({url, message}) if provided by the session server; nil otherwise.
 	UpgradeHint *SessionUpgradeHint
+	// UpdateRequired mirrors the upstream model_unavailable updateRequired
+	// flag (vendor 3f00c77, Desktop multi-session path only): the model is
+	// fine but this client build cannot resume a purchased hour, so the
+	// server refused rather than charge the hour again. False when the
+	// response omits it. This is an admission refusal flag, not the
+	// freebuff_update_required body marker (WireCodeFreebuffUpdateRequired:
+	// stale CLI app version).
+	UpdateRequired bool
+	// PurchasesPaused mirrors the upstream model_unavailable purchasesPaused
+	// flag (vendor 3f00c77, Desktop multi-session path only): minting new
+	// purchased sessions is paused server-side, so an up-to-date build
+	// needing a fresh purchase is refused rather than charged for an hour
+	// it could not be issued. False when the response omits it.
+	PurchasesPaused bool
 }
 
 // parseSessionResponse decodes a session control response body into a
@@ -127,6 +141,10 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			URL     string `json:"url"`
 			Message string `json:"message"`
 		} `json:"upgradeHint"`
+		// UpdateRequired / PurchasesPaused decode the optional Desktop
+		// multi-session refusal flags (vendor 3f00c77); absent = false.
+		UpdateRequired  bool `json:"updateRequired"`
+		PurchasesPaused bool `json:"purchasesPaused"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -152,6 +170,8 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 			AvailableHours:     raw.AvailableHours,
 			Message:            raw.Message,
 			GlmPromo:           string(raw.GlmPromo),
+			UpdateRequired:     raw.UpdateRequired,
+			PurchasesPaused:    raw.PurchasesPaused,
 		}
 		if raw.UpgradeHint != nil && (raw.UpgradeHint.URL != "" || raw.UpgradeHint.Message != "") {
 			state.UpgradeHint = &SessionUpgradeHint{

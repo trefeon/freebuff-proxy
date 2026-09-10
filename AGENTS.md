@@ -30,7 +30,8 @@ Machine-readable rules for agents working in this repo. Human overview lives in
   `backend/internal/dashboard/dist` is what the binary serves.
 - `upstream/freebuff` — gitignored live vendor clone of `CodebuffAI/freebuff`, never commit. Source of truth for all wire/registry/model work. Keep freshly fetched to `origin/main` before starting; pins live in `backend/internal/wirefacts/testdata/wire/snapshots.json` (`upstream_sha`) + `scripts/vendor-version.txt`, verified by `scripts/check-upstream.sh`.
 - `scripts/` — `sync-upstream.sh`, `check-upstream.sh` (canonical parity check),
-  `review-wire-drift.sh`.
+  `review-wire-drift.sh`, `drift-exact.sh` (exact export-level MODEL/PRICE/WIRE report),
+  `drift-tui.sh` (picker wireframe per tier: rows/order/fields + refresh checklist).
 - `.github/workflows/` — `ci.yml` (jobs `test`, `frontend`), `lint.yml` (job
   `golangci`), `codeql.yml` (job `analyze`), `dependency-review.yml`,
   `upstream-drift.yml`, `release.yml`.

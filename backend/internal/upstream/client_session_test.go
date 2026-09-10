@@ -442,10 +442,12 @@ func TestGetSessionWithOptsHeaders(t *testing.T) {
 
 func TestSessionCallStructured4xx(t *testing.T) {
 	cases := []struct {
-		name       string
-		statusCode int
-		body       string
-		wantStatus string
+		name                string
+		statusCode          int
+		body                string
+		wantStatus          string
+		wantUpdateRequired  bool
+		wantPurchasesPaused bool
 	}{
 		{
 			name:       "model_locked 409",
@@ -458,6 +460,24 @@ func TestSessionCallStructured4xx(t *testing.T) {
 			statusCode: http.StatusConflict,
 			body:       `{"status":"model_unavailable","requestedModel":"thudm/glm-5.2","availableHours":"08:00-20:00"}`,
 			wantStatus: "model_unavailable",
+		},
+		{
+			// Vendor 3f00c77: Desktop multi-session refusal for a client
+			// build too old to rotate a purchase claim (the model is fine).
+			name:               "model_unavailable with updateRequired",
+			statusCode:         http.StatusConflict,
+			body:               `{"status":"model_unavailable","requestedModel":"thudm/glm-5.2","availableHours":"Update Freebuff Desktop to resume your purchased hour.","updateRequired":true}`,
+			wantStatus:         "model_unavailable",
+			wantUpdateRequired: true,
+		},
+		{
+			// Vendor 3f00c77: Desktop multi-session refusal while minting
+			// new purchased sessions is paused server-side.
+			name:                "model_unavailable with purchasesPaused",
+			statusCode:          http.StatusConflict,
+			body:                `{"status":"model_unavailable","requestedModel":"thudm/glm-5.2","availableHours":"Purchased Desktop sessions are temporarily unavailable.","purchasesPaused":true}`,
+			wantStatus:          "model_unavailable",
+			wantPurchasesPaused: true,
 		},
 		{
 			name:       "ip_capped 429",
@@ -500,6 +520,12 @@ func TestSessionCallStructured4xx(t *testing.T) {
 			}
 			if st.Status != tc.wantStatus {
 				t.Errorf("status = %q, want %q", st.Status, tc.wantStatus)
+			}
+			if st.UpdateRequired != tc.wantUpdateRequired {
+				t.Errorf("UpdateRequired = %v, want %v", st.UpdateRequired, tc.wantUpdateRequired)
+			}
+			if st.PurchasesPaused != tc.wantPurchasesPaused {
+				t.Errorf("PurchasesPaused = %v, want %v", st.PurchasesPaused, tc.wantPurchasesPaused)
 			}
 		})
 	}
