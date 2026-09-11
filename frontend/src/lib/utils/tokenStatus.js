@@ -91,17 +91,6 @@ export function maturityBadgeFor(token) {
   return { label: t()("Not enrolled"), tone: "idle" };
 }
 
-/**
- * Tiny Freebucks summary label ("12 Freebucks"), or null when the snapshot
- * carries no freebucks payload.
- */
-export function freebucksBadgeLabel(token) {
-  const fb = token.freebucks;
-  if (!fb) return null;
-  const bal = Math.max(0, Math.round(fb.balance ?? fb.Balance ?? 0));
-  return t()("{bal} Freebucks", { bal });
-}
-
 /** Live cooldown countdown against the page clock (ms epoch). */
 export function cooldownLabel(token, now) {
   if (!token.cooldown_active || !token.cooldown_until) return "—";
