@@ -66,9 +66,9 @@ test.describe("per-page persist", () => {
     // (and the normalized hash wins over the stored lastHash).
     await page.goto(admin("models"));
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
-    expect(new URL(page.url()).hash).toBe("#catalog");
+    expect(new URL(page.url()).hash).toBe("#plans");
   });
 
   test("logs filter text round-trips across reload", async ({ page }) => {

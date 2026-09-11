@@ -170,7 +170,7 @@ test.describe("dashboard hermetic mocks", () => {
       if (res.url().includes("/admin/api/tokens")) tokensCount++;
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await page
       .waitForResponse(
@@ -179,10 +179,10 @@ test.describe("dashboard hermetic mocks", () => {
       )
       .catch(() => {});
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     // Sidebar entry links to the merged page
-    await expect(page.getByRole("link", { name: "Catalog" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Plans" })).toBeVisible();
 
     // Per-account cards: one per pooled account (1-based Account # labels)
     await expect(
@@ -225,7 +225,7 @@ test.describe("dashboard hermetic mocks", () => {
   }) => {
     const f = loadFixtures();
     // Upstream prices maps carry models with no gateway agent binding;
-    // the Models tab renders the catalog once with live prices joined in.
+    // the Models tab renders the served list once with live prices joined in.
     const pricedTokens = JSON.parse(JSON.stringify(f.tokens));
     pricedTokens.tokens[0].freebucks = {
       balance: 20,
@@ -238,10 +238,10 @@ test.describe("dashboard hermetic mocks", () => {
       },
     };
     await mockDashboard(page, f, { tokens: pricedTokens });
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Models" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     // Single shared note: live upstream values are identical for every
     // account in the region (no per-account model lists anymore).
@@ -269,10 +269,10 @@ test.describe("dashboard hermetic mocks", () => {
     staleTokens.tokens[0].quota_saved_at = "2026-09-03T10:00:00Z";
     await mockDashboard(page, f, { tokens: staleTokens });
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
@@ -299,7 +299,7 @@ test.describe("dashboard hermetic mocks", () => {
     };
     await mockDashboard(page, f, { tokens: meteredTokens });
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
@@ -724,7 +724,7 @@ test.describe("dashboard hermetic mocks", () => {
     const f = loadFixtures();
     await mockDashboard(page, f);
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Models" }).click();
     await page
       .waitForResponse(
@@ -734,7 +734,7 @@ test.describe("dashboard hermetic mocks", () => {
       .catch(() => {});
     // Models tab: table assertions stay, scoped to the merged page.
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
 
     // Models fixture has 7 rows
@@ -775,10 +775,10 @@ test.describe("dashboard hermetic mocks", () => {
     };
     await mockDashboard(page, f, { tokens: pricedTokens });
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Models" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     const rows = page.locator("table tbody tr");
     await expect(rows).toHaveCount(7);

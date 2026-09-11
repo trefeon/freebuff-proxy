@@ -284,17 +284,17 @@ test.describe("operator interactions (hermetic mocks)", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 3b. Manual probe moved off Catalog: no buttons there; Dev Tools owns it.
+  // 3b. Manual probe moved off Plans: no buttons there; Dev Tools owns it.
   // -------------------------------------------------------------------------
-  test("quota: catalog has no manual probe buttons, devtools does", async ({
+  test("quota: plans has no manual probe buttons, devtools does", async ({
     page,
   }) => {
     const f = loadFixtures();
     await mockDashboard(page, f, {}, { loginPage: true });
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
@@ -962,7 +962,7 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await page.goto("http://127.0.0.1:4173/admin/#overview");
     for (const [link, heading] of [
       ["Tokens", "Tokens"],
-      ["Catalog", "Catalog"],
+      ["Plans", "Plans"],
       ["Activity", "Activity"],
       ["Settings", "Settings"],
     ] as Array<[string, string]>) {

@@ -152,7 +152,7 @@
     {$tr("Live upstream values — identical for every account in the region.")}
   </p>
 
-  <Card title={$tr("Model Catalog")} pad="none">
+  <Card title={$tr("Models")} pad="none">
     <!-- Desktop: table (md+) -->
     <div class="hidden md:block overflow-x-auto">
       <table class="fp-table">
@@ -280,7 +280,7 @@
     <!-- Mobile: stacked cards (< md) — no horizontal scrolling -->
     <ul
       class="md:hidden flex flex-col gap-2.5 p-3.5"
-      aria-label={$tr("Model Catalog")}
+      aria-label={$tr("Models")}
     >
       {#each orderedModels as m (m.id)}
         {@const bound = Boolean(m.agent)}

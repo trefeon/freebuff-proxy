@@ -141,10 +141,10 @@ test.describe("real-world data", () => {
     page,
   }) => {
     await mockDashboard(page, loadFixtures(RW));
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
@@ -182,7 +182,7 @@ test.describe("real-world data", () => {
       { id: "upstage/solar-pro4", name: "Solar Pro 4" },
     ];
     await mockDashboard(page, f, { tokens });
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Models" }).click();
     await expect(page.getByTestId("models-note")).toContainText(
       "identical for every account in the region",
@@ -198,7 +198,7 @@ test.describe("real-world data", () => {
     page,
   }) => {
     await mockDashboard(page, loadFixtures(RW));
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Models" }).click();
     await expect(page.getByText("Fast & Direct").first()).toBeVisible();
     await expect(page.getByText("0 Freebucks/hr").first()).toBeVisible();

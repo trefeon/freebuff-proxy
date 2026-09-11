@@ -736,10 +736,10 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       { loginPage: true },
     );
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
-      page.getByRole("heading", { name: "Catalog", exact: true }),
+      page.getByRole("heading", { name: "Plans", exact: true }),
     ).toBeVisible();
 
     // Accounts are pooled, so per-account cards render (not the empty pool state).
@@ -831,7 +831,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
