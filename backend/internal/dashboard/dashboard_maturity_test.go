@@ -4,7 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/pool"
+	"freebuff-proxy/backend/internal/registry"
+	"freebuff-proxy/backend/internal/session"
+	"freebuff-proxy/backend/internal/testutil"
+	"freebuff-proxy/backend/internal/upstream"
 )
 
 // Maturity cards render from the pool snapshot and stay out of the payload
@@ -122,5 +127,61 @@ func TestMaturityCardNextTouchRoundTrip(t *testing.T) {
 		if card.AutoTouchModel != "upstage/solar-pro4" || card.AutoTouchReason != "auto:unmetered" {
 			t.Errorf("%s auto = %q/%q, want upstage/solar-pro4/auto:unmetered", name, card.AutoTouchModel, card.AutoTouchReason)
 		}
+	}
+}
+
+// The tokens payload carries the nightly-maintenance globals: the dry-run
+// flag for the badge plus tonight's window (RFC3339 absolute instants) for
+// the next-run countdown — a fixed 60m ending at Pacific midnight.
+func TestTokensDataMaturityWindow(t *testing.T) {
+	cfg := &config.Config{
+		AuthTokens:         []string{"tok-window-0"},
+		RotationInterval:   time.Hour,
+		RequestTimeout:     15 * time.Minute,
+		SessionCallTimeout: 5 * time.Second,
+		RegistryRefresh:    6 * time.Hour,
+		UpstreamBaseURL:    "https://www.codebuff.com",
+		MaturityEnabled:    true,
+		MaturityDryRun:     true,
+	}
+	mock := testutil.NewMock()
+	t.Cleanup(mock.Close)
+	clientCfg := *cfg
+	clientCfg.UpstreamBaseURL = mock.URL()
+	client, err := upstream.New(cfg.AuthTokens[0], &clientCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := registry.New(cfg, nil)
+	reg.LoadFallback()
+	p, err := pool.New(cfg, []*upstream.Client{client}, []*session.Manager{session.NewManager(client)}, reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := New(func() *config.Config { return cfg }, p, reg, nil, nil)
+	td := d.tokensData()
+	if !td.MaturityEnabled {
+		t.Error("maturity_enabled = false, want true")
+	}
+	if !td.MaturityDryRun {
+		t.Error("maturity_dry_run = false, want true (badge source)")
+	}
+	start, err := time.Parse(time.RFC3339, td.MaturityWindowStart)
+	if err != nil {
+		t.Fatalf("maturity_window_start = %q, want RFC3339: %v", td.MaturityWindowStart, err)
+	}
+	end, err := time.Parse(time.RFC3339, td.MaturityWindowEnd)
+	if err != nil {
+		t.Fatalf("maturity_window_end = %q, want RFC3339: %v", td.MaturityWindowEnd, err)
+	}
+	if end.Sub(start) != time.Hour {
+		t.Errorf("window length = %v, want 60m (fixed pre-reset window)", end.Sub(start))
+	}
+	la, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Skip("tzdata unavailable")
+	}
+	if pe := end.In(la); pe.Hour() != 0 || pe.Minute() != 0 {
+		t.Errorf("window end = %v Pacific, want midnight", pe.Format("15:04"))
 	}
 }

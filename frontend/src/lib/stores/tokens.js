@@ -31,6 +31,9 @@ const STATIC_TOP_KEYS = [
   "token_rotation",
   "rate_limit_failover",
   "maturity_enabled",
+  "maturity_dry_run",
+  "maturity_window_start",
+  "maturity_window_end",
 ];
 const STATIC_TOKEN_KEYS = [
   "email",

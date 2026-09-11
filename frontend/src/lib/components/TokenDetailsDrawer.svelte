@@ -283,14 +283,10 @@
         {/if}
       </div>
       <p class="fp-num text-xs text-[var(--fp-dim)]">
-        {$tr("slot")}
-        {mm.slot ? new Date(mm.slot).toLocaleString() : "—"} ·
         {mm.last_action
           ? `${mm.last_action} → ${mm.last_result ?? "?"}`
           : $tr("no touch yet")}{mm.last_touch
           ? ` · ${new Date(mm.last_touch).toLocaleString()}`
-          : ""}{mm.effective_touch_model
-          ? ` · ${mm.effective_touch_model}`
           : ""}
       </p>
     </div>

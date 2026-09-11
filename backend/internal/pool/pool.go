@@ -373,6 +373,13 @@ type Pool struct {
 	// backoff, boot/kick/idle-sleep flags). In-memory only. Guarded by its
 	// own mutex; see quota_smartprobe.go.
 	smartProbe smartProbeState
+	// maturityBackoffUntil is the pool-scoped 429 backoff for the nightly
+	// streak-maintenance run: a rate-limited touch aborts the walk and
+	// pauses further touches until this instant. In-memory only (a restart
+	// clears it; the touchDay/todayUsed idempotency still prevents
+	// double-touches). Guarded by maturityBackoffMu.
+	maturityBackoffMu    sync.Mutex
+	maturityBackoffUntil time.Time
 
 	// modelAdmissionGate serializes cold-path Acquire per model: the leader
 	// creates a gate on registration; concurrent followers block on it
