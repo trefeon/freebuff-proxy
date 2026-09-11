@@ -127,8 +127,7 @@
   // Deep-link focus from cross-page jump links: a link stashes a catalog
   // key in sessionStorage, then routes here.
   let pendingFocusKey = $state("");
-  // Served-model catalog for the global MATURITY_TOUCH_MODEL select: same
-  // option source as the Streak Maintenance global Touch Model select
+  // Served-model catalog for the global MATURITY_TOUCH_MODEL select
   // (shared utils/touchModels.js, priced labels kept). Fetched here so the
   // generic catalog row can render a dropdown instead of a raw text input.
   let modelRows = $state([]);
@@ -247,9 +246,8 @@
                 />
               {/snippet}
               {#if entry.key === "MATURITY_TOUCH_MODEL"}
-                <!-- Global touch default: Auto plus the same priced options
-                as the Streak Maintenance global select (shared helper).
-                Saves through the existing row path. -->
+                <!-- Global touch default: Auto plus priced options
+                (shared helper). Saves through the existing row path. -->
                 <select
                   class="fp-select"
                   value={val(entry.key, entry)}

@@ -1500,9 +1500,6 @@
                     "mode": {
                       "type": "string"
                     },
-                    "no_advance_days": {
-                      "type": "integer"
-                    },
                     "slot": {
                       "type": "string"
                     },
@@ -1517,9 +1514,6 @@
                     },
                     "touch_model": {
                       "type": "string"
-                    },
-                    "warn": {
-                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -2084,8 +2078,17 @@
           "in_bridge": {
             "type": "boolean"
           },
+          "maturity_dry_run": {
+            "type": "boolean"
+          },
           "maturity_enabled": {
             "type": "boolean"
+          },
+          "maturity_window_end": {
+            "type": "string"
+          },
+          "maturity_window_start": {
+            "type": "string"
           },
           "mode": {
             "type": "string"
@@ -2135,6 +2138,7 @@
           "chat_max_inflight_unmetered",
           "has_tokens",
           "in_bridge",
+          "maturity_dry_run",
           "maturity_enabled",
           "mode",
           "rate_limit_failover",
@@ -4080,42 +4084,6 @@
           }
         ],
         "summary": "Fire one manual maturity touch outside the daily slot",
-        "tags": [
-          "tokens"
-        ]
-      }
-    },
-    "/admin/tokens/{id}/maturity/warn-reset": {
-      "post": {
-        "operationId": "tokenMaturityWarnReset",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResultEnvelope"
-                }
-              }
-            },
-            "description": "Clear one token's non-advance warning (re-arms the daily loop)"
-          }
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "summary": "Clear one token's non-advance warning (re-arms the daily loop)",
         "tags": [
           "tokens"
         ]

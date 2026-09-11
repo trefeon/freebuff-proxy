@@ -46,7 +46,6 @@
   {"method": "POST", "path": "/admin/tokens/{id}/unlock-lock", "auth": "sensitive", "js": {"export": "tokenActions", "key": "unlockLock"}},
   {"method": "POST", "path": "/admin/tokens/{id}/maturity", "auth": "sensitive", "js": {"export": "tokenActions", "key": "maturity"}},
   {"method": "POST", "path": "/admin/tokens/{id}/maturity/touch", "auth": "sensitive", "js": {"export": "tokenActions", "key": "maturityTouch"}},
-  {"method": "POST", "path": "/admin/tokens/{id}/maturity/warn-reset", "auth": "sensitive", "js": {"export": "tokenActions", "key": "maturityWarnReset"}},
   {"method": "POST", "path": "/admin/bridge-tokens/{key}/lock", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/bridge-tokens/{key}/unlock", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/tokens/{id}/finish", "auth": "sensitive", "js": {"export": "tokenActions", "key": "finish"}},

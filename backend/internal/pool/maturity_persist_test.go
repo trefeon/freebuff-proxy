@@ -43,8 +43,8 @@ func (m *memMaturityStore) LoadMaturity(tokenHash string) (string, []byte, bool,
 }
 
 // A restart restores automation state: enable + fire on one pool, rebuild a
-// fresh pool over the same store, and the snapshot (config, slot, warning
-// counters) plus the streak cache survive.
+// fresh pool over the same store, and the snapshot (config, slot, advance
+// ledger) plus the streak cache survive.
 func TestMaturityRestartRestoresState(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -82,9 +82,10 @@ func TestMaturityRestartRestoresState(t *testing.T) {
 	if snap.Slot.IsZero() {
 		t.Error("restored slot is zero, want the pre-restart slot")
 	}
-	// Warming accounts leave rotation even across the restart.
-	if !p2.Snapshot()[0].Locked {
-		t.Error("restored warming token is unlocked, want locked")
+	// Restored warming accounts stay leasable: enrollment never locks,
+	// not even across a restart.
+	if p2.Snapshot()[0].Locked {
+		t.Error("restored warming token is locked, want leasable")
 	}
 	// A pool with no store row restores to never-enrolled (nil snapshot).
 	p3 := newMaturityPool(t, mock, true)
@@ -144,120 +145,5 @@ func TestMaturityDisabledTouchDraftSurvives(t *testing.T) {
 	}
 	if got := p3.Snapshot()[0].Maturity; got != nil {
 		t.Errorf("empty disabled snapshot = %+v, want nil", got)
-	}
-}
-
-// A released token whose streak drops below its release target re-locks
-// after 2 consecutive below-target days (counter survives restarts via the
-// blob). One bad day alone never re-locks; recovery resets the counter.
-func TestMaturityRelockAfterTwoBelowDays(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	mock.StreakBody = streakBody(7, false)
-	p := newMaturityPool(t, mock, true)
-	p.SetMaturityStore(newMemMaturityStore())
-	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
-		t.Fatalf("SetMaturity: %v", err)
-	}
-	day1 := time.Now()
-	p.maturityTickAt(context.Background(), day1)
-	if snap := p.Snapshot()[0]; snap.Maturity == nil || snap.Maturity.Enabled || snap.Locked {
-		t.Fatalf("day1 = %+v, want released (disabled+unlocked)", snap.Maturity)
-		return
-	}
-	belowDays := func() int {
-		toks := p.roster.Load()
-		e := (*toks)[0]
-		e.maturityMu.Lock()
-		defer e.maturityMu.Unlock()
-		return e.maturity.belowTargetDays
-	}
-	// Day 2: streak drops below target — counted, not re-locked.
-	mock.StreakBody = streakBody(5, false)
-	day2 := day1.Add(24 * time.Hour)
-	p.maturityTickAt(context.Background(), day2)
-	if got := belowDays(); got != 1 {
-		t.Fatalf("below days after day2 = %d, want 1", got)
-	}
-	if snap := p.Snapshot()[0]; snap.Maturity.Enabled || snap.Locked {
-		t.Fatalf("day2 locked/enabled, want still released (one bad day is noise)")
-	}
-	// Day 3: second consecutive below day — re-lock for warming.
-	day3 := day1.Add(48 * time.Hour)
-	p.maturityTickAt(context.Background(), day3)
-	snap := p.Snapshot()[0]
-	if snap.Maturity == nil || !snap.Maturity.Enabled || !snap.Locked {
-		t.Fatalf("day3 = %+v, want re-enabled + locked", snap.Maturity)
-		return
-	}
-}
-
-func TestMaturityRelockRecoveryResetsCounter(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	mock.StreakBody = streakBody(7, false)
-	p := newMaturityPool(t, mock, true)
-	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
-		t.Fatalf("SetMaturity: %v", err)
-	}
-	day1 := time.Now()
-	p.maturityTickAt(context.Background(), day1)
-	mock.StreakBody = streakBody(5, false)
-	p.maturityTickAt(context.Background(), day1.Add(24*time.Hour))
-	// Recovery before the second bad day: counter resets, never re-locks.
-	mock.StreakBody = streakBody(7, false)
-	p.maturityTickAt(context.Background(), day1.Add(48*time.Hour))
-	toks := p.roster.Load()
-	e := (*toks)[0]
-	e.maturityMu.Lock()
-	below := e.maturity.belowTargetDays
-	e.maturityMu.Unlock()
-	if below != 0 {
-		t.Errorf("below days after recovery = %d, want 0", below)
-	}
-	if snap := p.Snapshot()[0]; snap.Maturity.Enabled || snap.Locked {
-		t.Errorf("recovered token locked/enabled, want still released")
-	}
-}
-
-// Clearing a non-advance warning re-arms the loop: warn + counters drop,
-// config (enabled/target/mode/touch model) is untouched, and the next due
-// tick fires again instead of early-returning.
-func TestClearMaturityWarnRearms(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newMaturityPool(t, mock, true)
-	if err := p.SetMaturity(0, true, 7, "", modelB); err != nil {
-		t.Fatalf("SetMaturity: %v", err)
-	}
-	toks := p.roster.Load()
-	e := (*toks)[0]
-	e.maturityMu.Lock()
-	e.maturity.warn = true
-	e.maturity.noAdvanceDays = 3
-	e.maturity.lastNoAdvanceDay = "2026-09-06"
-	e.maturityMu.Unlock()
-	if err := p.ClearMaturityWarn(0); err != nil {
-		t.Fatalf("ClearMaturityWarn: %v", err)
-	}
-	snap := p.Snapshot()[0].Maturity
-	if snap == nil || snap.Warn || snap.NoAdvanceDays != 0 {
-		t.Fatalf("after reset = %+v, want warn cleared", snap)
-		return
-	}
-	if !snap.Enabled || snap.Target != 7 || snap.TouchModel != modelB {
-		t.Errorf("after reset identity = %+v, want enabled/7/%s kept", snap, modelB)
-	}
-	// Out-of-range tokens reject.
-	if err := p.ClearMaturityWarn(99); err == nil {
-		t.Error("ClearMaturityWarn(99) = nil, want range error")
-	}
-	// The next due tick fires (probe) instead of stopping at the warning.
-	now := windowNow()
-	seedStreak(p, 0, 2, false, now)
-	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
-	p.maturityTickAt(context.Background(), now)
-	if got := mock.SessionProbesSnapshot(); got != 1 {
-		t.Errorf("SessionProbes after reset = %d, want 1 (loop re-armed)", got)
 	}
 }

@@ -1,7 +1,6 @@
 /**
- * Shared touch-model option helpers (Streak Maintenance global select +
- * Settings → Advanced → MATURITY_TOUCH_MODEL global select). Single source
- * so both dropdowns stay identical; priced labels come straight from
+ * Shared touch-model option helpers (Settings → Advanced →
+ * MATURITY_TOUCH_MODEL global select). Priced labels come straight from
  * /admin/api/models rows (price_label/quota/pool) — never invented.
  */
 

@@ -5,7 +5,7 @@ import { adminApi } from "../api/paths.js";
 // for the three history rows, and every shape degrades to {enabled:false}
 // when the gateway runs live-only. Pages never hardcode history paths.
 
-// Maturity events for one token, newest first (cap for card timelines).
+// Maturity events for one token, newest first (cap for the ledger strip).
 export async function fetchMaturityHistory(tokenIdx, limit = 8) {
   const res = await fetchAPI(
     `${adminApi.maturityHistory}?token=${tokenIdx}&limit=${limit}`,
@@ -21,19 +21,4 @@ export async function fetchQuotaHistory(tokenIdx, model, limit = 60) {
   );
   if (!res?.enabled) return { enabled: false, snapshots: [] };
   return { enabled: true, snapshots: res.snapshots ?? [] };
-}
-
-// Event-kind chip tones for maturity timelines.
-export function historyKindTone(kind) {
-  switch (kind) {
-    case "advance":
-    case "release":
-      return "good";
-    case "warn":
-      return "bad";
-    case "config":
-      return "info";
-    default:
-      return "idle";
-  }
 }

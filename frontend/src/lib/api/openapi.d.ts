@@ -892,23 +892,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/admin/tokens/{id}/maturity/warn-reset": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Clear one token's non-advance warning (re-arms the daily loop) */
-    post: operations["tokenMaturityWarnReset"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/admin/tokens/{id}/session": {
     parameters: {
       query?: never;
@@ -1396,13 +1379,11 @@ export interface components {
           last_result?: string;
           last_touch?: string;
           mode: string;
-          no_advance_days?: number;
           slot?: string;
           slot_day?: string;
           target: number;
           touch_day?: string;
           touch_model?: string;
-          warn?: boolean;
         } | null;
         messages_24h: number;
         queue_depth: number;
@@ -2809,28 +2790,6 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Fire one manual maturity touch outside the daily slot */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ResultEnvelope"];
-        };
-      };
-    };
-  };
-  tokenMaturityWarnReset: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Clear one token's non-advance warning (re-arms the daily loop) */
       200: {
         headers: {
           [name: string]: unknown;

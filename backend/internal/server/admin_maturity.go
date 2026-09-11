@@ -107,9 +107,9 @@ func parseMaturityBool(s string) bool {
 }
 
 // handleTokenMaturity sets per-token streak-maturity automation
-// (POST /admin/tokens/{id}/maturity). Enabling also applies the
-// administrative lock so the warming account leaves rotation; hitting the
-// streak target auto-releases it. Disabling never unlocks.
+// (POST /admin/tokens/{id}/maturity). Enrollment never locks: the account
+// stays leasable in serving rotation. Hitting the streak target disables
+// automation. Disabling stops the touches and never touches the lock.
 func (a *adminHandlers) handleTokenMaturity(w http.ResponseWriter, r *http.Request) {
 	id, err := tokenActionID(r)
 	var params maturityParams
@@ -137,7 +137,7 @@ func (a *adminHandlers) handleTokenMaturity(w http.ResponseWriter, r *http.Reque
 	}
 	if params.enabled {
 		a.logfunc().Info("dashboard token maturity enabled", "token", id, "target", params.target, "mode", params.mode, "touch_model", params.touchModel)
-		a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" maturity on — locked for warming; auto-releases at its streak target.")
+		a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" maturity on — stays in serving rotation; automation disables at its streak target.")
 		return
 	}
 	a.logfunc().Info("dashboard token maturity disabled", "token", id)
@@ -160,22 +160,4 @@ func (a *adminHandlers) handleTokenMaturityTouch(w http.ResponseWriter, r *http.
 	}
 	a.logfunc().Info("dashboard token maturity touched", "token", id, "action", action, "result", result)
 	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" touch: "+action+" → "+result+".")
-}
-
-// handleTokenMaturityWarnReset clears one token's non-advance warning
-// (POST /admin/tokens/{id}/maturity/warn-reset): the dashboard Reset warning
-// lever. Additive: only the warn loop resets (warn + day counters drop, the
-// daily touch re-arms); enabled/target/mode/touch_model are untouched, so
-// this never locks, unlocks, or reconfigures the token.
-func (a *adminHandlers) handleTokenMaturityWarnReset(w http.ResponseWriter, r *http.Request) {
-	id, err := tokenActionID(r)
-	if err == nil {
-		err = a.pool.ClearMaturityWarn(id)
-	}
-	if err != nil {
-		a.dash.RenderConfigResult(w, r, false, "Maturity warn reset failed: "+err.Error())
-		return
-	}
-	a.logfunc().Info("dashboard token maturity warning cleared", "token", id)
-	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" maturity warning cleared — daily loop re-armed.")
 }

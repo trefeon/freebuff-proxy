@@ -307,7 +307,7 @@
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Global kill-switch for the nightly streak-maintenance run: enrolled locked tokens get one low-cost touch in the 60 minutes before the Pacific-midnight reset until they reach MATURITY_TARGET_DAYS. Default true (probes run in dry-run mode); set false to disable all automated touches."
+    "description": "Global kill-switch for the nightly streak-maintenance run: enrolled tokens stay leasable and get one low-cost touch in the 60 minutes before the Pacific-midnight reset until they reach MATURITY_TARGET_DAYS. Default true (probes run in dry-run mode); set false to disable all automated touches."
   },
   {
     "key": "MATURITY_TARGET_DAYS",
@@ -317,7 +317,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Global streak target for every enrolled token (1-28 days; the dashboard enrolls with target 0 = this default, per-account targets are gone). A token whose streak reaches the target auto-releases its administrative lock."
+    "description": "Global streak target for every enrolled token (1-28 days; the dashboard enrolls with target 0 = this default, per-account targets are gone). A token whose streak reaches the target stops getting touches (automation disables itself)."
   },
   {
     "key": "MATURITY_TOUCH_MODEL",
@@ -327,7 +327,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Global touch model for the nightly run: empty (default, same as \"auto\") admits the cheapest served price-0/exempt row per account and falls back to this key's explicit value when no unmetered served row exists; an explicit provider/model id overrides auto. The touch never spends Freebucks (fail-closed on priced rows). Accounts with client traffic since the last Pacific reset are skipped, as are quarantined/banned/cooling/country-blocked ones."
+    "description": "Global touch model for the nightly run: empty (default, same as \"auto\") admits the cheapest served price-0/exempt row per account and falls back to this key's explicit value when no unmetered served row exists; an explicit provider/model id overrides auto. The touch never spends Freebucks (fail-closed on priced rows). Accounts with client traffic since the last Pacific reset are skipped, as are quarantined/banned/cooling/country-blocked/locked ones."
   },
   {
     "key": "MODEL_LOCKS",

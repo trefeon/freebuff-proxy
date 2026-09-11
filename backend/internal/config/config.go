@@ -218,7 +218,8 @@ type Config struct {
 	MaturityTouchModel string
 	// MaturityTargetDays is the default streak target for newly-enabled
 	// tokens (MATURITY_TARGET_DAYS; default 7, valid 1..28). A token whose
-	// streak reaches its target auto-releases its administrative lock.
+	// streak reaches its target stops getting touches (automation disables
+	// itself; enrollment never locks).
 	MaturityTargetDays int
 	// QuotaAutoProbe is the master switch for the activity-aware quota
 	// prober (QUOTA_AUTO_PROBE; default true): a busy pool probes every

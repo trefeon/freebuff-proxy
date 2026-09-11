@@ -982,7 +982,7 @@ func (p *Pool) saveMaturity(idx int, tok *tokenEntry) {
 		return
 	}
 	ms := p.maturityCopy(tok)
-	if !ms.enabled && ms.lastAction == "" && ms.lastResult == "" && ms.releasedTarget <= 0 && ms.touchModel == "" {
+	if !ms.enabled && ms.lastAction == "" && ms.lastResult == "" && ms.touchModel == "" {
 		return
 	}
 	stateJSON, err := ms.marshalMaturity()
@@ -1006,8 +1006,9 @@ func (p *Pool) saveMaturity(idx int, tok *tokenEntry) {
 // RestoreMaturity loads persisted automation state into the roster (boot
 // path; the owner calls it once after SetMaturityStore). Tokens with no row
 // stay never-enrolled; corrupt rows warn and stay never-enrolled (never
-// fatal: automation must not block boot). Re-enabled warming tokens
-// re-lock out of rotation, mirroring SetMaturity.
+// fatal: automation must not block boot). Restored locks are never
+// applied: enrollment keeps every account leasable, and only the operator
+// locks.
 func (p *Pool) RestoreMaturity() error {
 	p.maturityStoreMu.Lock()
 	st := p.maturityStore
@@ -1043,30 +1044,7 @@ func (p *Pool) RestoreMaturity() error {
 				tok.SetStreak(&si)
 			}
 		}
-		if ms.enabled {
-			tok.locked.Store(true)
-		}
 	}
-	return nil
-}
-
-// ClearMaturityWarn resets one token's non-advance warning (dashboard Reset
-// warning lever): warn + day counters drop and the daily loop re-arms, while
-// config (enabled/target/mode/touch model) and streak evidence stay
-// untouched. Idempotent: clearing a token with no warning succeeds.
-func (p *Pool) ClearMaturityWarn(token int) error {
-	toks := p.roster.Load()
-	if toks == nil || token < 0 || token >= len(*toks) {
-		return fmt.Errorf("pool: token %d out of range", token)
-	}
-	tok := (*toks)[token]
-	tok.maturityMu.Lock()
-	tok.maturity.warn = false
-	tok.maturity.noAdvanceDays = 0
-	tok.maturity.lastNoAdvanceDay = ""
-	tok.maturityMu.Unlock()
-	p.saveMaturity(token, tok)
-	p.emitMaturity(token, "warn-reset", "warning cleared by operator")
 	return nil
 }
 
