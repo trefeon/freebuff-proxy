@@ -69,7 +69,7 @@ export const MODEL_METADATA = {
     badges: ["Images"],
   },
   "deepseek/deepseek-v4-flash": {
-    displayName: "DeepSeek V4 Flash 07/31",
+    displayName: "DeepSeek V4.1 Flash",
     tagline: "Smart & Fast",
     badges: ["Reasoning: high", "NEW"],
     disclaimer: "May use data for AI training",

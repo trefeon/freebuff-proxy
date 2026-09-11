@@ -43,7 +43,7 @@
     },
     {
       "id": "deepseek/deepseek-v4-flash",
-      "display_name": "DeepSeek V4 Flash 07/31",
+      "display_name": "DeepSeek V4.1 Flash",
       "tagline": "Smart & Fast",
       "badges": ["Reasoning: high", "NEW"],
       "notice": "May use data for AI training",
