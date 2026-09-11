@@ -19,14 +19,47 @@
     {
       title: "Auth & session",
       rows: [
-        { m: "GET", p: "/admin/login", note: "SPA login route (HTML, not JSON)" },
-        { m: "POST", p: "/admin/login", note: "Sign in (form field: token)", form: "login" },
-        { m: "POST", p: "/admin/logout", note: "Sign out (clears session cookie)" },
-        { m: "POST", p: "/admin/login/start", note: "OAuth/device login start", json: true },
+        {
+          m: "GET",
+          p: "/admin/login",
+          note: "SPA login route (HTML, not JSON)",
+        },
+        {
+          m: "POST",
+          p: "/admin/login",
+          note: "Sign in (form field: token)",
+          form: "login",
+        },
+        {
+          m: "POST",
+          p: "/admin/logout",
+          note: "Sign out (clears session cookie)",
+        },
+        {
+          m: "POST",
+          p: "/admin/login/start",
+          note: "OAuth/device login start",
+          json: true,
+        },
         { m: "GET", p: "/admin/login/status", note: "Login flow status poll" },
-        { m: "GET", p: "/admin/api/auth/status", note: "Auth status (default-token flag)" },
-        { m: "POST", p: "/admin/api/change-password", note: "Change dashboard password", json: true, body: '{\n  "current_password": "",\n  "new_password": ""\n}' },
-        { m: "POST", p: "/admin/api/require-login", note: "Toggle require-login gate", json: true },
+        {
+          m: "GET",
+          p: "/admin/api/auth/status",
+          note: "Auth status (default-token flag)",
+        },
+        {
+          m: "POST",
+          p: "/admin/api/change-password",
+          note: "Change dashboard password",
+          json: true,
+          body: '{\n  "current_password": "",\n  "new_password": ""\n}',
+        },
+        {
+          m: "POST",
+          p: "/admin/api/require-login",
+          note: "Toggle require-login gate",
+          json: true,
+        },
       ],
     },
     {
@@ -45,82 +78,276 @@
       title: "Tokens & pool",
       rows: [
         { m: "GET", p: "/admin/api/tokens", note: "Pool snapshot" },
-        { m: "POST", p: "/admin/tokens/test-all", note: "Probe every pool token", json: true },
-        { m: "POST", p: "/admin/tokens/add", note: "Add one upstream token", json: true, body: '{\n  "token": "test-token"\n}' },
-        { m: "POST", p: "/admin/tokens/remove", note: "DESTRUCTIVE: remove pool token (confirm)", json: true, danger: true, body: '{\n  "token": 0\n}' },
-        { m: "POST", p: "/admin/tokens/swap", note: "DESTRUCTIVE: swap two pool positions (confirm)", json: true, danger: true, body: '{\n  "from": 0,\n  "to": 0\n}' },
-        { m: "POST", p: "/admin/tokens/{id}/unlock", note: "Unlock pool token {id}" },
-        { m: "POST", p: "/admin/tokens/{id}/lock", note: "Lock pool token {id}" },
-        { m: "POST", p: "/admin/tokens/{id}/unlock-lock", note: "Clear stale lock on {id}" },
-        { m: "POST", p: "/admin/tokens/{id}/finish", note: "DESTRUCTIVE: finish runs on {id} (confirm)", danger: true },
-        { m: "POST", p: "/admin/tokens/{id}/drop-session", note: "DESTRUCTIVE: drop session on {id} (confirm)", danger: true },
+        {
+          m: "POST",
+          p: "/admin/tokens/test-all",
+          note: "Probe every pool token",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/add",
+          note: "Add one upstream token",
+          json: true,
+          body: '{\n  "token": "test-token"\n}',
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/remove",
+          note: "DESTRUCTIVE: remove pool token (confirm)",
+          json: true,
+          danger: true,
+          body: '{\n  "token": 0\n}',
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/swap",
+          note: "DESTRUCTIVE: swap two pool positions (confirm)",
+          json: true,
+          danger: true,
+          body: '{\n  "from": 0,\n  "to": 0\n}',
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/unlock",
+          note: "Unlock pool token {id}",
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/lock",
+          note: "Lock pool token {id}",
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/unlock-lock",
+          note: "Clear stale lock on {id}",
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/finish",
+          note: "DESTRUCTIVE: finish runs on {id} (confirm)",
+          danger: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/drop-session",
+          note: "DESTRUCTIVE: drop session on {id} (confirm)",
+          danger: true,
+        },
         { m: "POST", p: "/admin/tokens/{id}/test", note: "Probe token {id}" },
-        { m: "POST", p: "/admin/tokens/{id}/session", note: "Admit session on {id}", json: true },
-        { m: "POST", p: "/admin/tokens/{id}/maturity", note: "Maturity probe on {id}", json: true },
-        { m: "POST", p: "/admin/tokens/{id}/maturity/touch", note: "Touch maturity on {id}", json: true },
-        { m: "POST", p: "/admin/tokens/{id}/maturity/warn-reset", note: "Reset maturity warning on {id}", json: true },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/session",
+          note: "Admit session on {id}",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/maturity",
+          note: "Maturity probe on {id}",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/maturity/touch",
+          note: "Touch maturity on {id}",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/tokens/{id}/maturity/warn-reset",
+          note: "Reset maturity warning on {id}",
+          json: true,
+        },
       ],
     },
     {
       title: "Bridge (kept-for-human)",
       rows: [
-        { m: "POST", p: "/admin/bridge-tokens/{key}/lock", note: "Lock bridge token {key}" },
-        { m: "POST", p: "/admin/bridge-tokens/{key}/unlock", note: "Unlock bridge token {key}" },
+        {
+          m: "POST",
+          p: "/admin/bridge-tokens/{key}/lock",
+          note: "Lock bridge token {key}",
+        },
+        {
+          m: "POST",
+          p: "/admin/bridge-tokens/{key}/unlock",
+          note: "Unlock bridge token {key}",
+        },
       ],
     },
     {
       title: "Config & settings",
       rows: [
-        { m: "GET", p: "/admin/api/config", note: "Effective config + .env document (sensitive)" },
-        { m: "GET", p: "/admin/api/config/meta", note: "78-key catalog (keycatalog.go)" },
-        { m: "GET", p: "/admin/api/settings", note: "DB overlay sources (env|db|file|default)" },
-        { m: "POST", p: "/admin/api/settings", note: "Save one DB overlay key", json: true, body: '{\n  "key": "",\n  "value": ""\n}' },
-        { m: "DELETE", p: "/admin/api/settings/{key}", note: "DESTRUCTIVE: drop DB override for {key} (confirm)", danger: true },
-        { m: "POST", p: "/admin/config", note: "DESTRUCTIVE: rewrite .env + reload (confirm)", form: "config" },
+        {
+          m: "GET",
+          p: "/admin/api/config",
+          note: "Effective config + .env document (sensitive)",
+        },
+        {
+          m: "GET",
+          p: "/admin/api/config/meta",
+          note: "78-key catalog (keycatalog.go)",
+        },
+        {
+          m: "GET",
+          p: "/admin/api/settings",
+          note: "DB overlay sources (env|db|file|default)",
+        },
+        {
+          m: "POST",
+          p: "/admin/api/settings",
+          note: "Save one DB overlay key",
+          json: true,
+          body: '{\n  "key": "",\n  "value": ""\n}',
+        },
+        {
+          m: "DELETE",
+          p: "/admin/api/settings/{key}",
+          note: "DESTRUCTIVE: drop DB override for {key} (confirm)",
+          danger: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/config",
+          note: "DESTRUCTIVE: rewrite .env + reload (confirm)",
+          form: "config",
+        },
         { m: "GET", p: "/admin/api/pages/{id}", note: "Per-page stored state" },
-        { m: "PUT", p: "/admin/api/pages/{id}", note: "Upsert per-page state", json: true },
+        {
+          m: "PUT",
+          p: "/admin/api/pages/{id}",
+          note: "Upsert per-page state",
+          json: true,
+        },
       ],
     },
     {
       title: "Activity (logs / quota / maturity / traces)",
       rows: [
         { m: "GET", p: "/admin/api/logs", note: "Recent logs (sensitive)" },
-        { m: "GET", p: "/admin/api/logs/history", note: "Log history (sensitive)" },
+        {
+          m: "GET",
+          p: "/admin/api/logs/history",
+          note: "Log history (sensitive)",
+        },
         { m: "GET", p: "/admin/api/quota/history", note: "Quota history" },
-        { m: "GET", p: "/admin/api/maturity/history", note: "Maturity history" },
+        {
+          m: "GET",
+          p: "/admin/api/maturity/history",
+          note: "Maturity history",
+        },
         { m: "GET", p: "/admin/api/traces", note: "Trace list" },
       ],
     },
     {
       title: "Ops: mode / diag / smoke / playground / lifecycle",
       rows: [
-        { m: "POST", p: "/admin/reload", note: "DESTRUCTIVE: reload proxy (confirm)", danger: true, json: true },
-        { m: "POST", p: "/admin/restart", note: "DESTRUCTIVE: restart gateway (confirm)", danger: true, json: true },
-        { m: "POST", p: "/admin/mode", note: "Kept-for-human: switch gateway mode", json: true },
-        { m: "POST", p: "/admin/diag", note: "Kept-for-human: run diagnostics", json: true },
-        { m: "POST", p: "/admin/smoke", note: "Kept-for-human: run smoke probe", json: true },
-        { m: "POST", p: "/admin/playground/chat", note: "Kept-for-human: model chat", json: true, body: '{\n  "messages": [\n    {\n      "role": "user",\n      "content": "review ping"\n    }\n  ]\n}' },
+        {
+          m: "POST",
+          p: "/admin/reload",
+          note: "DESTRUCTIVE: reload proxy (confirm)",
+          danger: true,
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/restart",
+          note: "DESTRUCTIVE: restart gateway (confirm)",
+          danger: true,
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/mode",
+          note: "Kept-for-human: switch gateway mode",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/diag",
+          note: "Kept-for-human: run diagnostics",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/smoke",
+          note: "Kept-for-human: run smoke probe",
+          json: true,
+        },
+        {
+          m: "POST",
+          p: "/admin/playground/chat",
+          note: "Kept-for-human: model chat",
+          json: true,
+          body: '{\n  "messages": [\n    {\n      "role": "user",\n      "content": "review ping"\n    }\n  ]\n}',
+        },
       ],
     },
     {
       title: "SPA routes (page links, no JSON)",
       rows: [
-        { m: "GET", p: "/admin", note: "Dashboard root (redirects to /admin/)", link: true },
+        {
+          m: "GET",
+          p: "/admin",
+          note: "Dashboard root (redirects to /admin/)",
+          link: true,
+        },
         { m: "GET", p: "/admin/", note: "Dashboard SPA shell", link: true },
-        { m: "GET", p: "/admin/tokens", note: "Legacy tokens route", link: true },
-        { m: "GET", p: "/admin/models", note: "Legacy models route", link: true },
-        { m: "GET", p: "/admin/traces", note: "Legacy traces route", link: true },
+        {
+          m: "GET",
+          p: "/admin/tokens",
+          note: "Legacy tokens route",
+          link: true,
+        },
+        {
+          m: "GET",
+          p: "/admin/models",
+          note: "Legacy models route",
+          link: true,
+        },
+        {
+          m: "GET",
+          p: "/admin/traces",
+          note: "Legacy traces route",
+          link: true,
+        },
         { m: "GET", p: "/admin/setup", note: "Legacy setup route", link: true },
-        { m: "GET", p: "/admin/playground", note: "Legacy playground route", link: true },
-        { m: "GET", p: "/admin/config", note: "Legacy config route (sensitive)", link: true },
-        { m: "GET", p: "/admin/logs", note: "Legacy logs route (sensitive)", link: true },
-        { m: "GET", p: "/admin/metrics", note: "Legacy metrics route", link: true },
+        {
+          m: "GET",
+          p: "/admin/playground",
+          note: "Legacy playground route",
+          link: true,
+        },
+        {
+          m: "GET",
+          p: "/admin/config",
+          note: "Legacy config route (sensitive)",
+          link: true,
+        },
+        {
+          m: "GET",
+          p: "/admin/logs",
+          note: "Legacy logs route (sensitive)",
+          link: true,
+        },
+        {
+          m: "GET",
+          p: "/admin/metrics",
+          note: "Legacy metrics route",
+          link: true,
+        },
       ],
     },
     {
       title: "Static assets",
       rows: [
-        { m: "GET", p: "/admin/assets/", note: "Static asset dir (no JSON fetch; link only)", link: true },
+        {
+          m: "GET",
+          p: "/admin/assets/",
+          note: "Static asset dir (no JSON fetch; link only)",
+          link: true,
+        },
       ],
     },
   ];
@@ -139,8 +366,13 @@
 
   function resolvePath(p, k) {
     let out = p;
-    if (out.includes("{id}")) out = out.replace("{id}", (idVals[k] ?? "0").trim() || "0");
-    if (out.includes("{key}")) out = out.replace("{key}", encodeURIComponent((keyVals[k] ?? "test-key").trim() || "test-key"));
+    if (out.includes("{id}"))
+      out = out.replace("{id}", (idVals[k] ?? "0").trim() || "0");
+    if (out.includes("{key}"))
+      out = out.replace(
+        "{key}",
+        encodeURIComponent((keyVals[k] ?? "test-key").trim() || "test-key"),
+      );
     return out;
   }
 
@@ -154,7 +386,8 @@
     const k = rowKey(gi, ri);
     if (pending[k]) return;
     if (row.danger && typeof confirm === "function") {
-      if (!confirm(`REVIEW TEMP: ${row.m} ${row.p} — destructive. Fire it?`)) return;
+      if (!confirm(`REVIEW TEMP: ${row.m} ${row.p} — destructive. Fire it?`))
+        return;
     }
     pending[k] = true;
     outputs[k] = "…";
@@ -244,7 +477,8 @@
       const nextEdits = {};
       for (const entry of meta) {
         const eff = m.get(entry.key)?.value ?? entry.default ?? "";
-        nextEdits[entry.key] = entry.kind === "bool" ? String(eff) : String(eff ?? "");
+        nextEdits[entry.key] =
+          entry.kind === "bool" ? String(eff) : String(eff ?? "");
       }
       editVals = nextEdits;
       try {
@@ -277,7 +511,10 @@
           .map((s) => s.trim())
           .join(",");
       }
-      const res = await postAPI("/admin/api/settings", { key: k, value: String(v ?? "") });
+      const res = await postAPI("/admin/api/settings", {
+        key: k,
+        value: String(v ?? ""),
+      });
       editOut[k] = JSON.stringify(res ?? { ok: true }, null, 2);
       await fetchSettingsTable();
     } catch (e) {
@@ -287,7 +524,9 @@
 
   let filteredMeta = $derived(
     tableFilter.trim()
-      ? meta.filter((e) => e.key.toLowerCase().includes(tableFilter.trim().toLowerCase()))
+      ? meta.filter((e) =>
+          e.key.toLowerCase().includes(tableFilter.trim().toLowerCase()),
+        )
       : meta,
   );
 
@@ -305,9 +544,9 @@
     REVIEW-TEMP: TEMPORARY show-all page — WILL BE DELETED
   </p>
   <p class="mt-1 text-sm text-[var(--fp-muted)]">
-    REVIEW TEMP: click-through surface for every admin endpoint (all 62
-    manifest rows) plus the 78-key settings source table. Nothing here is
-    production UI; do not link to it or build on it.
+    REVIEW TEMP: click-through surface for every admin endpoint (all 62 manifest
+    rows) plus the 78-key settings source table. Nothing here is production UI;
+    do not link to it or build on it.
   </p>
 </div>
 
@@ -315,31 +554,43 @@
   <div>
     <h1 class="text-xl font-bold">REVIEW-TEMP: every admin endpoint</h1>
     <p class="text-sm text-[var(--fp-muted)]">
-      <!-- REVIEW TEMP -->Read-only where unsure: GETs fire directly; POST/PUT/DELETE use
-      minimal safe bodies and confirm() before destructive ones
-      (remove/swap/drop-session/finish/restart/reload) but remain try-able.
+      <!-- REVIEW TEMP -->Read-only where unsure: GETs fire directly;
+      POST/PUT/DELETE use minimal safe bodies and confirm() before destructive
+      ones (remove/swap/drop-session/finish/restart/reload) but remain try-able.
     </p>
   </div>
 
   <!-- REVIEW TEMP - try-it sections, one per area -->
   {#each GROUPS as group, gi (group.title)}
-    <section aria-label={group.title} class="rounded border border-[var(--fp-border)] p-4">
-      <h2 class="mb-3 text-base font-semibold">{group.title} ({group.rows.length})</h2>
+    <section
+      aria-label={group.title}
+      class="rounded border border-[var(--fp-border)] p-4"
+    >
+      <h2 class="mb-3 text-base font-semibold">
+        {group.title} ({group.rows.length})
+      </h2>
       <div class="space-y-3">
         {#each group.rows as row, ri (rowKey(gi, ri))}
           {@const k = rowKey(gi, ri)}
           <div class="rounded border border-[var(--fp-border)] p-3">
             <!-- REVIEW TEMP row -->
             <div class="flex flex-wrap items-baseline gap-2">
-              <span class="rounded bg-[var(--fp-accent)]/15 px-1.5 py-0.5 font-mono text-[11px] font-bold">{row.m}</span>
+              <span
+                class="rounded bg-[var(--fp-accent)]/15 px-1.5 py-0.5 font-mono text-[11px] font-bold"
+                >{row.m}</span
+              >
               <code class="font-mono text-xs break-all">{row.p}</code>
             </div>
             <p class="mt-1 text-xs text-[var(--fp-muted)]">{row.note}</p>
 
             {#if row.link}
               <p class="mt-2 text-xs">
-                <a class="underline" href={resolvePath(row.p, k)}>Open {resolvePath(row.p, k)}</a>
-                <span class="text-[var(--fp-muted)]"> (static/page route — no JSON fetch)</span>
+                <a class="underline" href={resolvePath(row.p, k)}
+                  >Open {resolvePath(row.p, k)}</a
+                >
+                <span class="text-[var(--fp-muted)]">
+                  (static/page route — no JSON fetch)</span
+                >
               </p>
             {:else}
               <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -411,7 +662,10 @@
                 ></textarea>
               {/if}
               {#if outputs[k]}
-                <pre class="mt-2 max-h-64 overflow-auto rounded bg-black/30 p-2 font-mono text-[11px] whitespace-pre-wrap">{outputs[k]}</pre>
+                <pre
+                  class="mt-2 max-h-64 overflow-auto rounded bg-black/30 p-2 font-mono text-[11px] whitespace-pre-wrap">{outputs[
+                    k
+                  ]}</pre>
               {/if}
             {/if}
           </div>
@@ -421,8 +675,13 @@
   {/each}
 
   <!-- REVIEW TEMP - settings source table -->
-  <section aria-label="Settings source table" class="rounded border border-[var(--fp-border)] p-4">
-    <h2 class="mb-1 text-base font-semibold">Settings source table (78-key catalog)</h2>
+  <section
+    aria-label="Settings source table"
+    class="rounded border border-[var(--fp-border)] p-4"
+  >
+    <h2 class="mb-1 text-base font-semibold">
+      Settings source table (78-key catalog)
+    </h2>
     <p class="mb-3 text-xs text-[var(--fp-muted)]">
       <!-- REVIEW TEMP -->GET /admin/api/config/meta + GET /admin/api/config +
       GET /admin/api/settings — same three fetches as Settings.svelte. Secret
@@ -436,9 +695,13 @@
         value={tableFilter}
         oninput={(e) => (tableFilter = e.currentTarget.value)}
       />
-      <button class="fp-btn fp-btn-sm" onclick={fetchSettingsTable}>Refresh</button>
+      <button class="fp-btn fp-btn-sm" onclick={fetchSettingsTable}
+        >Refresh</button
+      >
       {#if settingsDegraded}
-        <span class="text-xs text-yellow-500">DB overlay unavailable (degraded)</span>
+        <span class="text-xs text-yellow-500"
+          >DB overlay unavailable (degraded)</span
+        >
       {/if}
     </div>
     {#if settingsLoading}
@@ -461,7 +724,8 @@
           </thead>
           <tbody>
             {#each filteredMeta as entry (entry.key)}
-              {@const eff = effectiveMap.get(entry.key)?.value ?? entry.default ?? ""}
+              {@const eff =
+                effectiveMap.get(entry.key)?.value ?? entry.default ?? ""}
               <tr class="border-b border-[var(--fp-border)] align-top">
                 <td class="p-1 font-bold break-all">{entry.key}</td>
                 <td class="p-1">{entry.group}</td>
@@ -482,7 +746,8 @@
                       <select
                         class="fp-input text-[11px]"
                         value={editVals[entry.key] ?? "false"}
-                        onchange={(e) => (editVals[entry.key] = e.currentTarget.value)}
+                        onchange={(e) =>
+                          (editVals[entry.key] = e.currentTarget.value)}
                       >
                         <option value="true">true</option>
                         <option value="false">false</option>
@@ -491,7 +756,8 @@
                       <select
                         class="fp-input text-[11px]"
                         value={editVals[entry.key] ?? ""}
-                        onchange={(e) => (editVals[entry.key] = e.currentTarget.value)}
+                        onchange={(e) =>
+                          (editVals[entry.key] = e.currentTarget.value)}
                       >
                         {#each entry.enum ?? [] as opt (opt)}
                           <option value={opt}>{opt}</option>
@@ -501,18 +767,28 @@
                       <input
                         class="fp-input w-32 text-[11px]"
                         value={editVals[entry.key] ?? ""}
-                        oninput={(e) => (editVals[entry.key] = e.currentTarget.value)}
+                        oninput={(e) =>
+                          (editVals[entry.key] = e.currentTarget.value)}
                       />
                     {/if}
-                    <button class="fp-btn fp-btn-sm mt-1" onclick={() => saveSettingKey(entry)}>
+                    <button
+                      class="fp-btn fp-btn-sm mt-1"
+                      onclick={() => saveSettingKey(entry)}
+                    >
                       Save
                     </button>
                     {#if editOut[entry.key]}
-                      <pre class="mt-1 max-h-24 overflow-auto whitespace-pre-wrap">{editOut[entry.key]}</pre>
+                      <pre
+                        class="mt-1 max-h-24 overflow-auto whitespace-pre-wrap">{editOut[
+                          entry.key
+                        ]}</pre>
                     {/if}
                   {:else}
                     <span class="text-[var(--fp-muted)]">
-                      read-only{#if entry.secret} (secret){/if}{#if entry.restart_only} (restart-only){/if}{#if entry.hidden} (hidden){/if}
+                      read-only{#if entry.secret}
+                        (secret){/if}{#if entry.restart_only}
+                        (restart-only){/if}{#if entry.hidden}
+                        (hidden){/if}
                     </span>
                   {/if}
                 </td>
