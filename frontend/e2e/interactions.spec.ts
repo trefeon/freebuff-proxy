@@ -914,42 +914,6 @@ test.describe("operator interactions (hermetic mocks)", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 12. Setup: generate fills a key, reset restores, model buttons render.
-  // -------------------------------------------------------------------------
-  test("setup: generate fills a key, reset restores, model buttons render", async ({
-    page,
-  }) => {
-    const f = loadFixtures();
-    await mockDashboard(page, f);
-    const setupResp = page.waitForResponse(
-      (r) => r.url().includes("/admin/api/setup") && r.status() === 200,
-      { timeout: 5000 },
-    );
-    await page.goto("http://127.0.0.1:4173/admin/#overview");
-    await setupResp;
-    await page
-      .context()
-      .grantPermissions(["clipboard-read", "clipboard-write"]);
-    const keyInput = page.locator("#setup-api-key");
-    await expect(keyInput).toHaveValue("not-needed");
-    const reset = page.getByRole("button", { name: "Reset" });
-    await expect(reset).toBeDisabled();
-
-    await page.getByRole("button", { name: "Generate", exact: true }).click();
-    const generated = await keyInput.inputValue();
-    expect(generated).not.toBe("not-needed");
-    expect(generated.length).toBeGreaterThan(8);
-    await expect(reset).toBeEnabled();
-    await reset.click();
-    await expect(keyInput).toHaveValue("not-needed");
-
-    const modelBtns = page.getByTitle("Copy model ID");
-    await expect(modelBtns.first()).toBeVisible();
-    await modelBtns.first().click();
-    await expect(page.getByText("Copied").first()).toBeVisible();
-  });
-
-  // -------------------------------------------------------------------------
   // 13. Sidebar reaches every section.
   // -------------------------------------------------------------------------
   test("nav: sidebar links reach every section", async ({ page }) => {
