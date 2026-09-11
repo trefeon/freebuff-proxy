@@ -558,3 +558,43 @@ func TestFreebucksCappedQuotaExempt(t *testing.T) {
 		t.Error("not capped with spent monthly allowance, want capped despite exempt")
 	}
 }
+
+// TestFreebucksCappedClaimableGrants pins vendor af898dc
+// getFreebucksModelMeter: eligible earned grants admission may convert count
+// toward canStart (balance + claimableGrantFreebucks >= price), while the
+// monthly allowance still gates and a grant shortfall still caps.
+func TestFreebucksCappedClaimableGrants(t *testing.T) {
+	mkSnap := func(fb *upstream.FreebucksInfo) session.SessionSnapshot {
+		return session.SessionSnapshot{Freebucks: fb}
+	}
+	fb := func(balance, grant float64) *upstream.FreebucksInfo {
+		return &upstream.FreebucksInfo{
+			Balance:        balance,
+			ClaimableGrant: grant,
+			Daily:          upstream.FreebucksWindow{Limit: 20, Spent: 19, Remaining: 1, ResetAt: time.Now().Add(time.Hour)},
+			Wallet:         upstream.FreebucksWallet{},
+			Prices:         map[string]float64{"deepseek/deepseek-v4-flash": 5},
+		}
+	}
+	// Zero balance, grant covers the price → not capped.
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(fb(0, 5)), "deepseek/deepseek-v4-flash"); capped {
+		t.Error("capped with 0 balance + grant 5 >= price 5, want not capped")
+	}
+	// Balance plus grant covers the price → not capped.
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(fb(1.5, 4)), "deepseek/deepseek-v4-flash"); capped {
+		t.Error("capped with spendable 5.5 >= price 5, want not capped")
+	}
+	// Grant short of the price → still capped.
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(fb(1, 3)), "deepseek/deepseek-v4-flash"); !capped {
+		t.Error("not capped with spendable 4 < price 5, want capped")
+	}
+	// No grant behaves exactly like before (regression anchor).
+	if capped, _ := freebucksCappedForSnapshot(mkSnap(fb(1, 0)), "deepseek/deepseek-v4-flash"); !capped {
+		t.Error("not capped with balance 1 < price 5 and no grant, want capped")
+	}
+	// Nil block never caps (upstream freebucks:null → canStart, never a
+	// revived legacy quota — there is no legacy path to revive).
+	if capped, _ := freebucksCappedForSnapshot(session.SessionSnapshot{}, "deepseek/deepseek-v4-flash"); capped {
+		t.Error("capped with nil Freebucks, want not capped")
+	}
+}

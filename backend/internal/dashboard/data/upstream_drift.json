@@ -1,15 +1,15 @@
 {
   "upstream": "https://github.com/CodebuffAI/freebuff.git",
   "upstream_sha": "af898dcad679dbbd27389aef8a674cee31d58d43",
-  "checked_at": "2026-09-11T09:46:05Z",
-  "wiregen_sha": "78a7ab4ed6754a694a7699091e03f5f9bfee45d9",
+  "checked_at": "2026-09-11T15:26:00Z",
+  "wiregen_sha": "af898dcad679dbbd27389aef8a674cee31d58d43",
   "vendor_version": "0.0.173",
-  "vendor_version_pinned": "0.0.172",
-  "version_changed": true,
+  "vendor_version_pinned": "0.0.173",
+  "version_changed": false,
   "files": [
     {"group":"registry","file":"common/src/constants/free-agents.ts","pinned_sha":"e2077f92c632","vendor_sha":"e2077f92c632","status":"SAME"},
     {"group":"registry","file":"common/src/constants/freebuff-model-ids.ts","pinned_sha":"b4a0f2aca8ea","vendor_sha":"b4a0f2aca8ea","status":"SAME"},
-    {"group":"registry","file":"common/src/constants/freebuff-models.ts","pinned_sha":"ce9864368073","vendor_sha":"6eb41a9ed697","status":"DRIFT"},
+    {"group":"registry","file":"common/src/constants/freebuff-models.ts","pinned_sha":"6eb41a9ed697","vendor_sha":"6eb41a9ed697","status":"SAME"},
     {"group":"registry","file":"common/src/constants/gemini.ts","pinned_sha":"5de5784f9633","vendor_sha":"5de5784f9633","status":"SAME"},
     {"group":"registry","file":"common/src/constants/model-config.ts","pinned_sha":"210f9bbfe1ac","vendor_sha":"210f9bbfe1ac","status":"SAME"},
     {"group":"registry","file":"common/src/constants/freebuff-model-entitlements.ts","pinned_sha":"695bf9dd0c8d","vendor_sha":"695bf9dd0c8d","status":"SAME"},
@@ -19,12 +19,12 @@
     {"group":"wire","file":"common/src/constants/freebuff-signup-block.ts","pinned_sha":"","vendor_sha":"b42006247502","status":"SAME"},
     {"group":"wire","file":"common/src/constants/freebuff-peak-hours.ts","pinned_sha":"","vendor_sha":"8cb33dfeaf17","status":"SAME"},
     {"group":"wire","file":"common/src/util/freebuff-model-availability.ts","pinned_sha":"","vendor_sha":"43971606f941","status":"SAME"},
-    {"group":"wire","file":"cli/src/components/freebuff-model-selector.tsx","pinned_sha":"","vendor_sha":"1c01bc7753a3","status":"DRIFT"},
-    {"group":"wire","file":"common/src/types/freebuff-session.ts","pinned_sha":"","vendor_sha":"0815c431e906","status":"DRIFT"},
+    {"group":"wire","file":"cli/src/components/freebuff-model-selector.tsx","pinned_sha":"","vendor_sha":"1c01bc7753a3","status":"SAME"},
+    {"group":"wire","file":"common/src/types/freebuff-session.ts","pinned_sha":"","vendor_sha":"0815c431e906","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/constants.ts","pinned_sha":"","vendor_sha":"233ab67d1922","status":"SAME"},
     {"group":"wire","file":"packages/agent-runtime/src/prompt-agent-stream.ts","pinned_sha":"","vendor_sha":"7bf7ca49fb51","status":"SAME"},
-    {"group":"wire","file":"packages/agent-runtime/src/run-agent-step.ts","pinned_sha":"","vendor_sha":"70abc659c5b9","status":"DRIFT"},
-    {"group":"wire","file":"packages/agent-runtime/src/run-programmatic-step.ts","pinned_sha":"","vendor_sha":"ee15c9726e1c","status":"DRIFT"},
+    {"group":"wire","file":"packages/agent-runtime/src/run-agent-step.ts","pinned_sha":"","vendor_sha":"70abc659c5b9","status":"SAME"},
+    {"group":"wire","file":"packages/agent-runtime/src/run-programmatic-step.ts","pinned_sha":"","vendor_sha":"ee15c9726e1c","status":"SAME"},
     {"group":"wire","file":"common/src/tools/constants.ts","pinned_sha":"","vendor_sha":"c2508c4590f2","status":"SAME"}
   ]
 }

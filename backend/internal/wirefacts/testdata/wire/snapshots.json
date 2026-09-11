@@ -1,6 +1,6 @@
 {
-  "upstream_sha": "78a7ab4ed6754a694a7699091e03f5f9bfee45d9",
-  "vendor_version": "0.0.172",
+  "upstream_sha": "af898dcad679dbbd27389aef8a674cee31d58d43",
+  "vendor_version": "0.0.173",
   "files": [
     {
       "path": "common/src/constants/freebuff-standing.ts",
@@ -28,11 +28,11 @@
     },
     {
       "path": "cli/src/components/freebuff-model-selector.tsx",
-      "sha256": "0d5395be79b1a2fad8992bcfc2baa6b9fa7e6aedd1f692ed4c7f20ec28ed3153"
+      "sha256": "1c01bc7753a32214646cadc9ca63fda1befc6b80743b9e9cecb175a158ad2006"
     },
     {
       "path": "common/src/types/freebuff-session.ts",
-      "sha256": "4ffaad205fd87f9db6590b41ad766f1242733b0856ffaf20a164cd707c6fe85b"
+      "sha256": "0815c431e906d0c4b0ac6e8e66a061c8322ee3e7e3a4a486329d8968753473a7"
     },
     {
       "path": "packages/agent-runtime/src/constants.ts",
@@ -44,11 +44,11 @@
     },
     {
       "path": "packages/agent-runtime/src/run-agent-step.ts",
-      "sha256": "0b7d580c13492651d53d1e2b5bee76dac7fbd9428e52ca9a44346c48a16b4879"
+      "sha256": "70abc659c5b9b83d3ee249561f9e2fed18ac6dec9e394f709c0268a8a58df1f1"
     },
     {
       "path": "packages/agent-runtime/src/run-programmatic-step.ts",
-      "sha256": "9e70a0780edc2e114781d327bbbe933cfec5fa50ee30c0fbd2882c042b646b71"
+      "sha256": "ee15c9726e1ca7b68ebb67a82c8bd31d0e4b19943f03d3927185bc2cb79ef7be"
     },
     {
       "path": "common/src/tools/constants.ts",

@@ -74,7 +74,7 @@ if [[ "$FUNC_COUNT" != "0" ]]; then
 fi
 
 # File list comes from the manifest so the 13 paths stay in one place.
-mapfile -t WIRE_FILES < <(python3 -c "import json; print('\n'.join(f['path'] for f in json.load(open(r'$SNAPSHOTS'))['files']))")
+mapfile -t WIRE_FILES < <(python3 -c "import json; print('\n'.join(f['path'] for f in json.load(open(r'$SNAPSHOTS'))['files']))" | tr -d '\r')
 
 if ((DRY_RUN)); then
   echo "==> dry-run: would refresh ${#WIRE_FILES[@]} wire snapshots via git show plus LF normalize"

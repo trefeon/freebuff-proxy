@@ -111,12 +111,15 @@ var wireGateBacked = map[string]bool{
 // classifyError body markers (superseded is the server-response shape while
 // session_superseded is the gate/chat error code; model_unavailable rides
 // availableHours prose; premium_slot_taken and the purchase_* trio are
-// Desktop-only purchase-flow admission shapes). Anything outside this set
-// plus the snapshot-verified wire values fails the run as unknown.
+// Desktop-only purchase-flow admission shapes; consent_required is the 409
+// wallet-consent admission shape, handled from the parsed session status).
+// Anything outside this set plus the snapshot-verified wire values fails the
+// run as unknown.
 var wireKnownStatuses = map[string]bool{
 	"none": true, "active": true, "ended": true,
 	"superseded": true, "model_unavailable": true, "premium_slot_taken": true,
 	"purchase_claim_released": true, "purchase_in_use": true, "purchase_capacity": true,
+	"consent_required": true,
 }
 
 // wireNotice pins one notice constant: its Go name, upstream export, source

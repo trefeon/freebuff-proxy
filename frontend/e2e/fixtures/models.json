@@ -45,7 +45,7 @@
       "id": "deepseek/deepseek-v4-flash",
       "display_name": "DeepSeek V4.1 Flash",
       "tagline": "Smart & Fast",
-      "badges": ["Reasoning: high", "NEW"],
+      "badges": ["Reasoning: high", "Images", "NEW"],
       "notice": "May use data for AI training",
       "price": 15,
       "price_label": "15 Freebucks/hr",

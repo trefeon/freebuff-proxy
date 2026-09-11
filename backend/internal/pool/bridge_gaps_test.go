@@ -61,7 +61,7 @@ func TestBridgeWaitingRoomChainFiresBeforeCreate(t *testing.T) {
 			streaks.Add(1)
 			w.WriteHeader(200)
 			_, _ = io.WriteString(w, `{"streak":0,"todayUsed":0}`)
-		case "/api/v1/freebuff/session":
+		case "/api/v1/freebuff/session/admission":
 			if r.Method == http.MethodPost {
 				// 428 waiting_room_required on every create: the client
 				// classifies it and arms the gate flag. The second create

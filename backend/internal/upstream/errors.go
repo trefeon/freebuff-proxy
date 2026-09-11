@@ -104,6 +104,14 @@ var (
 	// upstream message goes to the client verbatim so the agent sees the
 	// loop warning and starts a fresh turn.
 	ErrTurnSpendLimited = errors.New("upstream turn spend limited")
+	// ErrSessionAdmissionUnsupported: the session admission POST hit
+	// 404/405 — the server predates the dedicated admission route
+	// (vendor af898dc) and cannot safely start or resume sessions.
+	// Fail closed: never fall back to the legacy session POST (which
+	// predates the purchase/takeover guarantees) and never map to
+	// "disabled" (upstream freebuff-session-api.ts
+	// FREEBUFF_SESSION_UNSUPPORTED_MESSAGE).
+	ErrSessionAdmissionUnsupported = errors.New("upstream session admission unsupported")
 )
 
 // WaitingRoomError is the concrete value behind ErrWaitingRoom; callers

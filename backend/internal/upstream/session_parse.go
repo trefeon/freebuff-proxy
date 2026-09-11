@@ -69,6 +69,22 @@ type SessionState struct {
 	// UpgradeHint carries the upstream promotional or upgrade broadcast
 	// hint ({url, message}) if provided by the session server; nil otherwise.
 	UpgradeHint *SessionUpgradeHint
+	// HTTPStatus is the HTTP status of the session control response the
+	// state was parsed from (0 when synthesized, e.g. the 404 mappings).
+	// Terminal admission refusals surface it so callers report the honest
+	// upstream status instead of inventing one.
+	HTTPStatus int
+	// FreebucksRefund is the settled early-end refund from a session DELETE
+	// receipt (freebucksRefund, including zero); nil when the server sent
+	// none. FreebucksRefundPending mirrors freebucksRefundPending: final
+	// usage is still outstanding and the DELETE must be replayed with the
+	// same instance id for its receipt (vendor af898dc).
+	FreebucksRefund        *float64
+	FreebucksRefundPending bool
+	// WalletConsent mirrors the walletConsent block of a consent_required
+	// admission refusal (vendor af898dc: {price, walletSpend}); nil on any
+	// other status.
+	WalletConsent *WalletConsent
 	// UpdateRequired mirrors the upstream model_unavailable updateRequired
 	// flag (vendor 3f00c77, Desktop multi-session path only): the model is
 	// fine but this client build cannot resume a purchased hour, so the
@@ -85,22 +101,42 @@ type SessionState struct {
 	PurchasesPaused bool
 }
 
-// parseSessionResponse decodes a session control response body into a
-// SessionState: the 404 create/poll mapping, JSON decode, quota/standing/
-// availability-window parsing, and the passive ban-risk feed (#64). Errors
-// are classified through the standard matrix.
+// WalletConsent is the upstream wallet-consent demand: the admission price
+// and the wallet Freebucks spend the user must confirm by re-picking the
+// model with an explicit spend limit (vendor af898dc, consent_required).
+type WalletConsent struct {
+	Price       float64 `json:"price"`
+	WalletSpend float64 `json:"walletSpend"`
+}
+
+// rawWalletConsent mirrors FreebuffWalletConsent (vendor af898dc).
+type rawWalletConsent struct {
+	Price       float64 `json:"price"`
+	WalletSpend float64 `json:"walletSpend"`
+}
 
 func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, body string) (*SessionState, error) {
 
-	if resp.StatusCode == 404 {
-		if req.Method == http.MethodPost {
-			// A create 404 means no session slot exists upstream.
-			return &SessionState{Status: "disabled"}, nil
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		if req.Method == http.MethodPost && isSessionAdmissionRequest(req) {
+			// The dedicated admission route fails closed on servers
+			// predating its guarantees: 404/405 means the server is too
+			// old to start or resume sessions safely — NOT that free mode
+			// is disabled, and never a cue to retry the legacy session
+			// POST (upstream freebuff-session-api.ts callFreebuffSession
+			// throws session_admission_unsupported there).
+			return nil, fmt.Errorf("%w: %s", ErrSessionAdmissionUnsupported, SessionUnsupportedMessage)
 		}
-		// A poll 404 means the session no longer exists upstream (expired or
-		// evicted). Treat it as ended so the session manager re-creates it,
-		// instead of caching a permanent "disabled" with no expiry.
-		return &SessionState{Status: "ended"}, nil
+		if resp.StatusCode == http.StatusNotFound {
+			if req.Method == http.MethodPost {
+				// A legacy-path create 404 means no session slot exists upstream.
+				return &SessionState{Status: "disabled", HTTPStatus: resp.StatusCode}, nil
+			}
+			// A poll 404 means the session no longer exists upstream (expired or
+			// evicted). Treat it as ended so the session manager re-creates it,
+			// instead of caching a permanent "disabled" with no expiry.
+			return &SessionState{Status: "ended", HTTPStatus: resp.StatusCode}, nil
+		}
 	}
 
 	c.dump("session", req, resp.StatusCode, body)
@@ -145,6 +181,11 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		// multi-session refusal flags (vendor 3f00c77); absent = false.
 		UpdateRequired  bool `json:"updateRequired"`
 		PurchasesPaused bool `json:"purchasesPaused"`
+		// freebucksRefund / freebucksRefundPending ride the ended DELETE
+		// receipt (vendor af898dc); walletConsent rides consent_required.
+		FreebucksRefund        *float64          `json:"freebucksRefund"`
+		FreebucksRefundPending bool              `json:"freebucksRefundPending"`
+		WalletConsent          *rawWalletConsent `json:"walletConsent"`
 	}
 	if err := json.Unmarshal([]byte(body), &raw); err == nil && raw.Status != "" {
 		state := &SessionState{
@@ -184,6 +225,15 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				state.UnavailableWindow = &w
 			}
 		}
+		state.HTTPStatus = resp.StatusCode
+		state.FreebucksRefund = raw.FreebucksRefund
+		state.FreebucksRefundPending = raw.FreebucksRefundPending
+		if raw.WalletConsent != nil {
+			state.WalletConsent = &WalletConsent{
+				Price:       raw.WalletConsent.Price,
+				WalletSpend: raw.WalletConsent.WalletSpend,
+			}
+		}
 		if raw.Standing != nil {
 			standing := &SessionStanding{
 				Level:        raw.Standing.Level,
@@ -220,6 +270,15 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 				Balance:      raw.Freebucks.Balance,
 				Prices:       raw.Freebucks.Prices,
 				PriceNotices: raw.Freebucks.PriceNotices,
+			}
+			fb.ClaimableGrant = raw.Freebucks.ClaimableGrant
+			if raw.Freebucks.Upgrade != nil {
+				fb.Upgrade = &FreebucksUpgrade{
+					Kind:    raw.Freebucks.Upgrade.Kind,
+					CTA:     raw.Freebucks.Upgrade.CTA,
+					Tooltip: raw.Freebucks.Upgrade.Tooltip,
+					ModelID: raw.Freebucks.Upgrade.ModelID,
+				}
 			}
 			if raw.Freebucks.QuotaExempt != nil {
 				fb.QuotaExempt = *raw.Freebucks.QuotaExempt
@@ -302,9 +361,15 @@ func (c *Client) parseSessionResponse(req *http.Request, resp *http.Response, bo
 		}
 		return state, nil
 	}
-
 	if resp.StatusCode >= 400 {
 		return nil, c.classify(resp.StatusCode, body, resp.Header)
+	}
+	if req.Method == http.MethodDelete {
+		// Pre-receipt servers answer a DELETE with 2xx and an empty (or
+		// otherwise receipt-less) body: the slot is released, there is
+		// just no refund to record. Succeed with an empty receipt rather
+		// than failing teardown on old servers.
+		return &SessionState{Status: "ended", HTTPStatus: resp.StatusCode}, nil
 	}
 
 	return nil, fmt.Errorf("upstream: unparseable session response %q", truncate(body, 200))

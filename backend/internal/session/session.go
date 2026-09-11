@@ -393,15 +393,17 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			}
 		}
 		return SessionSnapshot{
-			Refreshing:   m.refreshing,
-			QuotaByModel: quota,
-			QuotaStale:   m.snap.savedQuotaStale && len(quota) > 0,
-			QuotaSavedAt: m.snap.savedQuotaAt,
-			GlmPromo:     m.snap.savedGlmPromo,
-			RemainingMs:  m.snap.savedRemainingMs,
-			Referral:     m.snap.savedReferral,
-			AccessTier:   m.snap.savedAccessTier,
-			Freebucks:    m.snap.savedFreebucks,
+			Refreshing:    m.refreshing,
+			QuotaByModel:  quota,
+			QuotaStale:    m.snap.savedQuotaStale && len(quota) > 0,
+			QuotaSavedAt:  m.snap.savedQuotaAt,
+			GlmPromo:      m.snap.savedGlmPromo,
+			RemainingMs:   m.snap.savedRemainingMs,
+			Referral:      m.snap.savedReferral,
+			AccessTier:    m.snap.savedAccessTier,
+			Freebucks:     m.snap.savedFreebucks,
+			LastRefund:    m.lastRefund,
+			PendingRefund: m.pendingRefund,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -450,6 +452,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Freebucks:     m.state.freebucks,
 		UpgradeHint:   m.state.upgradeHint,
 		ServerMessage: m.state.serverMessage,
+		LastRefund:    m.lastRefund,
+		PendingRefund: m.pendingRefund,
 	}
 }
 

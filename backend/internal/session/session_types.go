@@ -70,6 +70,12 @@ type SessionSnapshot struct {
 	// ServerMessage is any live broadcast or error message sent by the
 	// session server; "" when absent.
 	ServerMessage string `json:"server_message,omitempty"`
+	// LastRefund is the last settled session-DELETE freebucksRefund (vendor
+	// af898dc); nil when no DELETE receipt carried one. PendingRefund is
+	// the instance id of a release whose receipt reported
+	// freebucksRefundPending ("" when none): replayed by RefreshRefund.
+	LastRefund    *float64 `json:"last_refund,omitempty"`
+	PendingRefund string   `json:"pending_refund,omitempty"`
 }
 
 // QuotaSnapshot is one model's live session quota for healthz/metrics

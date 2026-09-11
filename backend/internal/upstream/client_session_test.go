@@ -40,7 +40,7 @@ func TestSessionControlCalls(t *testing.T) {
 	}
 
 	// end + tolerated 404 (DELETE carries the held instance id).
-	if err := client.EndSession(context.Background(), "inst-abc-123"); err != nil {
+	if _, err := client.EndSession(context.Background(), "inst-abc-123"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -248,18 +248,18 @@ func TestSessionCallParsesRateLimitsByModel(t *testing.T) {
 }
 
 func TestSession404Mapping(t *testing.T) {
-	// A create 404 means no session slot exists upstream → disabled.
+	// A create hitting 404/405 on the dedicated admission route means the
+	// server predates the route's guarantees: fail closed with
+	// ErrSessionAdmissionUnsupported, never "disabled" (vendor af898dc,
+	// freebuff-session-api.ts session_admission_unsupported).
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mock.SessionMode = "404"
 
 	client, _ := New("tok", testConfig(mock.URL(), nil))
-	st, err := client.CreateSession(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.Status != "disabled" {
-		t.Errorf("create 404 status = %q, want disabled", st.Status)
+	_, err := client.CreateSession(context.Background())
+	if !errors.Is(err, ErrSessionAdmissionUnsupported) {
+		t.Errorf("create 404 err = %v, want ErrSessionAdmissionUnsupported", err)
 	}
 
 	// A poll 404 means the session vanished upstream (expired/evicted) →
@@ -569,7 +569,7 @@ func TestEndSession404Tolerated(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := client.EndSession(context.Background(), "inst-1"); err != nil {
+		if _, err := client.EndSession(context.Background(), "inst-1"); err != nil {
 			t.Errorf("EndSession 404 = %v, want nil", err)
 		}
 	})
@@ -585,7 +585,7 @@ func TestEndSession404Tolerated(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := client.EndSession(context.Background(), "inst-1"); err == nil {
+		if _, err := client.EndSession(context.Background(), "inst-1"); err == nil {
 			t.Error("EndSession 500 succeeded, want error")
 		}
 	})
@@ -612,7 +612,7 @@ func TestEndSessionInstanceHeader(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := client.EndSession(context.Background(), "inst-held-1"); err != nil {
+		if _, err := client.EndSession(context.Background(), "inst-held-1"); err != nil {
 			t.Fatal(err)
 		}
 		if !sawDelete {
@@ -639,7 +639,7 @@ func TestEndSessionInstanceHeader(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := client.EndSession(context.Background(), ""); err != nil {
+		if _, err := client.EndSession(context.Background(), ""); err != nil {
 			t.Fatal(err)
 		}
 		if !sawDelete {
@@ -787,4 +787,236 @@ func TestProbeAccountDoesNotSendIncludeUnusedRateLimits(t *testing.T) {
 	if st.RateLimitsByModel == nil || st.RateLimitsByModel["deepseek/deepseek-v4-flash"].Limit != 6 {
 		t.Errorf("RateLimitsByModel = %+v, want parsed per-model quota", st.RateLimitsByModel)
 	}
+}
+
+// TestCreateAdmissionRoute pins the vendor af898dc admission shape: the
+// create POST targets the dedicated admission route (never the legacy
+// session path) and always carries the wallet spend-limit header at the
+// server default, exactly like a CLI POST with no explicit model pick.
+func TestCreateAdmissionRoute(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	var gotPath, gotSpend, gotModel string
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotSpend = r.Header.Get("x-freebuff-wallet-spend-limit")
+		gotModel = r.Header.Get("x-freebuff-model")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1","expiresAt":"2026-09-12T10:00:00.000Z"}`)
+	}
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CreateSessionForModel(context.Background(), "deepseek/deepseek-v4-flash"); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/api/v1/freebuff/session/admission" {
+		t.Errorf("create path = %q, want the dedicated admission route", gotPath)
+	}
+	if gotSpend != "0" {
+		t.Errorf("x-freebuff-wallet-spend-limit = %q, want server default 0", gotSpend)
+	}
+	if gotModel != "deepseek/deepseek-v4-flash" {
+		t.Errorf("x-freebuff-model = %q, want requested model", gotModel)
+	}
+}
+
+// TestCreateAdmissionMethodNotAllowed pins the fail-closed half of the
+// admission contract: a 405 (like a 404) means a pre-route server, never a
+// cue to retry the legacy path.
+func TestCreateAdmissionMethodNotAllowed(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		_, _ = io.WriteString(w, `{"error":"method not allowed"}`)
+	}
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.CreateSession(context.Background())
+	if !errors.Is(err, ErrSessionAdmissionUnsupported) {
+		t.Errorf("create 405 err = %v, want ErrSessionAdmissionUnsupported", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "No purchase was made") {
+		t.Errorf("create 405 err = %v, want the verbatim fail-closed copy", err)
+	}
+}
+
+// TestSessionParsesClaimableGrantAndUpgrade pins the vendor af898dc meter
+// additions: claimable earned grants (counted toward canStart, excluded
+// from the spendable display) and the upgrade nudge (limited_offer kind).
+func TestSessionParsesClaimableGrantAndUpgrade(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"inst-1","expiresAt":"2026-09-12T10:00:00.000Z",`+
+			`"freebucks":{"balance":1.5,"claimableGrantFreebucks":4.0,"daily":{"limit":10,"spent":8.5,"remaining":1.5},`+
+			`"prices":{"deepseek/deepseek-v4-flash":5.0},`+
+			`"upgrade":{"kind":"limited_offer","cta":"Get 50% off","tooltip":"Half-price Flash until renewal","modelId":"deepseek/deepseek-v4-flash"}}}`)
+	}
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := client.CreateSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fb := st.Freebucks
+	if fb == nil {
+		t.Fatal("Freebucks is nil, want parsed block")
+	}
+	if fb.ClaimableGrant != 4.0 {
+		t.Errorf("ClaimableGrant = %v, want 4.0", fb.ClaimableGrant)
+	}
+	if got := fb.Spendable(); got != 5.5 {
+		t.Errorf("Spendable = %v, want 5.5 (balance + claimable)", got)
+	}
+	if fb.Upgrade == nil {
+		t.Fatal("Upgrade is nil, want parsed nudge")
+	}
+	if fb.Upgrade.Kind != "limited_offer" || fb.Upgrade.CTA != "Get 50% off" || fb.Upgrade.ModelID != "deepseek/deepseek-v4-flash" {
+		t.Errorf("Upgrade = %+v, want limited_offer nudge for flash", fb.Upgrade)
+	}
+	if !strings.Contains(fb.Upgrade.Tooltip, "Half-price") {
+		t.Errorf("Upgrade.Tooltip = %q, want full promise", fb.Upgrade.Tooltip)
+	}
+}
+
+// TestSessionNullFreebucks pins the vendor af898dc null-wallet shape: a
+// consent_required refusal (and pending-settlement polls) carry
+// freebucks:null, which parses to a nil block — never a zero meter and
+// never a revived legacy quota.
+func TestSessionNullFreebucks(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"status":"consent_required","accessTier":"full",`+
+			`"walletConsent":{"price":5.0,"walletSpend":2.0},"freebucks":null}`)
+	}
+	client, err := New("tok", testConfig(mock.URL(), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := client.CreateSession(context.Background())
+	if err != nil {
+		t.Fatalf("consent_required must parse (taxonomy decides), got %v", err)
+	}
+	if st.Status != "consent_required" {
+		t.Errorf("status = %q, want consent_required", st.Status)
+	}
+	if st.Freebucks != nil {
+		t.Errorf("Freebucks = %+v, want nil for freebucks:null", st.Freebucks)
+	}
+	if st.WalletConsent == nil {
+		t.Fatal("WalletConsent is nil, want parsed demand")
+	}
+	if st.WalletConsent.Price != 5.0 || st.WalletConsent.WalletSpend != 2.0 {
+		t.Errorf("WalletConsent = %+v, want price=5 walletSpend=2", st.WalletConsent)
+	}
+	if st.HTTPStatus != http.StatusConflict {
+		t.Errorf("HTTPStatus = %d, want 409", st.HTTPStatus)
+	}
+}
+
+// TestEndSessionRefundReceipt pins the vendor af898dc DELETE receipt: the
+// ended body carries the settled refund (including zero) and the pending
+// flag that demands a same-instance replay.
+func TestEndSessionRefundReceipt(t *testing.T) {
+	t.Run("settled refund parsed", func(t *testing.T) {
+		mock := testutil.NewMock()
+		defer mock.Close()
+		mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"status":"ended","instanceId":"inst-1","freebucksRefund":2.5}`)
+		}
+		client, err := New("tok", testConfig(mock.URL(), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rcpt, err := client.EndSession(context.Background(), "inst-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rcpt == nil {
+			t.Fatal("receipt is nil, want parsed ended receipt")
+		}
+		if rcpt.Status != "ended" {
+			t.Errorf("receipt status = %q, want ended", rcpt.Status)
+		}
+		if rcpt.Refund == nil || *rcpt.Refund != 2.5 {
+			t.Errorf("receipt refund = %+v, want 2.5", rcpt.Refund)
+		}
+		if rcpt.Pending {
+			t.Error("receipt pending = true, want false")
+		}
+	})
+
+	t.Run("pending demands replay", func(t *testing.T) {
+		mock := testutil.NewMock()
+		defer mock.Close()
+		mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"status":"ended","instanceId":"inst-1","freebucksRefundPending":true}`)
+		}
+		client, err := New("tok", testConfig(mock.URL(), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rcpt, err := client.EndSession(context.Background(), "inst-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rcpt == nil || !rcpt.Pending {
+			t.Errorf("receipt = %+v, want pending replay demand", rcpt)
+		}
+		if rcpt != nil && rcpt.Refund != nil {
+			t.Errorf("receipt refund = %v, want nil (unsettled)", *rcpt.Refund)
+		}
+	})
+
+	t.Run("empty body succeeds without receipt fields", func(t *testing.T) {
+		mock := testutil.NewMock()
+		defer mock.Close()
+		mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}
+		client, err := New("tok", testConfig(mock.URL(), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rcpt, err := client.EndSession(context.Background(), "inst-1")
+		if err != nil {
+			t.Fatalf("DELETE 200 empty body = %v, want success (pre-receipt server)", err)
+		}
+		if rcpt == nil || rcpt.Status != "ended" {
+			t.Errorf("receipt = %+v, want ended success", rcpt)
+		}
+	})
+
+	t.Run("404 yields nil receipt", func(t *testing.T) {
+		mock := testutil.NewMock()
+		defer mock.Close()
+		mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, `{"error":"session not found"}`)
+		}
+		client, err := New("tok", testConfig(mock.URL(), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rcpt, err := client.EndSession(context.Background(), "inst-gone")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rcpt != nil {
+			t.Errorf("receipt = %+v, want nil (nothing to end)", rcpt)
+		}
+	})
 }

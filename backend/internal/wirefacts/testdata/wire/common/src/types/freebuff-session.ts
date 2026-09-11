@@ -241,11 +241,15 @@ export interface FreebuffFreebucksMonthlyAllowance {
  * shape carried day/week/month windows beside the session pools' own rings;
  * this one is the whole indicator set for an account on the meter.
  */
+// A session response carries null when this block cannot refresh. Clients
+// must clear the old balance; undefined still means no meter was supplied.
 export interface FreebuffFreebucksInfo {
   /** Server-authorized quota exemption: new sessions remain usable at zero balance. */
   quotaExempt?: boolean
   /** Spendable right now: `daily.remaining + wallet.balance`. */
   balance: number
+  /** Eligible earned grants admission may convert; excluded from spendable balances. */
+  claimableGrantFreebucks?: number
   daily: FreebuffFreebucksWindow
   wallet: FreebuffFreebucksWallet
   /** @deprecated Provider-spend caps are no longer enforced or displayed. */
@@ -267,6 +271,30 @@ export interface FreebuffFreebucksInfo {
   peak?: FreebuffFreebucksPeak
   /** Scheduled changes announced by the server; do not reprice admitted sessions. */
   priceChanges?: readonly FreebuffPriceChange[]
+  /**
+   * The upgrade prompt the SERVER computed for this account, when one applies.
+   *
+   * On the wire, like `prices`, rather than derived on the client: the copy is
+   * built from the Freebucks constants, which are export-excluded, so a public
+   * client cannot hold them — and a client deciding who is offered what would
+   * be reading its own belief about tier and entitlement. Absent means "draw
+   * nothing": a subscriber, an account outside the plans audience, or a server
+   * that predates the field.
+   */
+  upgrade?: FreebuffFreebucksUpgrade
+}
+
+export interface FreebuffFreebucksUpgrade {
+  /** `limited_offer` is the DeepSeek discount for an unpaid limited account;
+   *  `upgrade` is the plain prompt for an unpaid full-access account. */
+  kind: 'limited_offer' | 'upgrade'
+  /** One line, for a button or a row. */
+  cta: string
+  /** The full promise, including the renewal price the CTA has no room for. */
+  tooltip: string
+  /** For `limited_offer`: the row the discount applies to, so a picker can
+   *  draw it on that row alone. */
+  modelId?: string
 }
 
 export interface FreebuffFreebucksPeak {
@@ -524,18 +552,16 @@ export const getRateLimitsByModel = (
         .rateLimitsByModel
     : undefined
 
-/** Pull the per-model subscription offers off whichever statuses carry them
- *  (none, active, ended). Loose parameter type for the same reason as
- *  `getRateLimitsByModel`. Undefined from a server that predates
- *  subscriptions, so callers render nothing rather than an empty upsell. */
-/** The caller's Freebucks block, wherever it rides the response. */
+/** The caller's usable Freebucks block. Wire null means refresh unavailable;
+ * undefined means no meter supplied. Never synthesize a balance for either. */
 export const getFreebucksInfo = (
   session: { status: string } | null | undefined,
-): FreebuffFreebucksInfo | undefined => {
-  const info = session && 'freebucks' in session
-    ? (session as { freebucks?: FreebuffFreebucksInfo }).freebucks
-    : undefined
-  return info ? applyFreebucksPriceChanges(info) : undefined
+): FreebuffFreebucksInfo | null | undefined => {
+  const info =
+    session && 'freebucks' in session
+      ? (session as { freebucks?: FreebuffFreebucksInfo | null }).freebucks
+      : undefined
+  return info ? applyFreebucksPriceChanges(info) : info
 }
 
 /**
@@ -704,7 +730,22 @@ export interface FreebuffLimitedModeReason {
   ipPrivacySignals?: FreebuffIpPrivacySignal[] | null
 }
 
+/** Permission for one requested session: a wallet ceiling, or explicit consent
+ * to its current price when the balance/quote was unavailable. Absence is zero. */
+export type FreebuffWalletSpendLimit = number | 'session'
+
+export interface FreebuffWalletConsent {
+  price: number
+  walletSpend: number
+}
+
 export type FreebuffSessionAdmissionResponse = (
+  | {
+      status: 'consent_required'
+      accessTier?: FreebuffAccessTier
+      walletConsent: FreebuffWalletConsent
+      freebucks: null
+    }
   | ({
       /** User has no session row. CLI must POST to start a session. Also
        *  returned when `getSessionState` notices the user has been swept past
@@ -747,7 +788,7 @@ export type FreebuffSessionAdmissionResponse = (
       /** Spendable Freebucks and the per-model session prices. Rides
        *  every state for the same reason `subscription` does: the
        *  balance is shown in the picker, mid-session and after it. */
-      freebucks?: FreebuffFreebucksInfo
+      freebucks?: FreebuffFreebucksInfo | null
     } & FreebuffLimitedModeReason)
   | ({
       status: 'active'
@@ -771,7 +812,7 @@ export type FreebuffSessionAdmissionResponse = (
       /** Spendable Freebucks and the per-model session prices. Rides
        *  every state for the same reason `subscription` does: the
        *  balance is shown in the picker, mid-session and after it. */
-      freebucks?: FreebuffFreebucksInfo
+      freebucks?: FreebuffFreebucksInfo | null
     } & FreebuffLimitedModeReason)
   | ({
       /** Session is over. While `instanceId` is present we're inside the
@@ -808,7 +849,7 @@ export type FreebuffSessionAdmissionResponse = (
       /** Spendable Freebucks and the per-model session prices. Rides
        *  every state for the same reason `subscription` does: the
        *  balance is shown in the picker, mid-session and after it. */
-      freebucks?: FreebuffFreebucksInfo
+      freebucks?: FreebuffFreebucksInfo | null
     } & FreebuffLimitedModeReason)
   | {
       /** Request originated outside the free-mode allowlist, or from an
@@ -876,6 +917,35 @@ export type FreebuffSessionAdmissionResponse = (
        * the field.
        */
       withdrawn?: boolean
+      /**
+       * The MODEL is fine; this CLIENT BUILD cannot resume a purchased hour,
+       * and the server refused rather than charge the hour again. Set only on
+       * the Desktop multi-session path, for a binary too old to rotate a
+       * purchase claim.
+       *
+       * Older clients ignore it and still render `availableHours`, which is
+       * worded so the sentence they build around it does not blame the model.
+       * The refusal it replaces read "<model> isn't available right now
+       * (Update Freebuff Desktop …)", which sent a user off the model that was
+       * working onto whatever was not.
+       */
+      updateRequired?: boolean
+      /**
+       * The MODEL is fine; minting NEW purchased Desktop sessions is paused
+       * server-side (FREEBUFF_DESKTOP_PURCHASE_ADMISSION), so an up-to-date
+       * build that needs a fresh purchase is refused rather than charged for
+       * an hour it could not be issued. Not an update problem and not a
+       * model problem: the pick works again as soon as the pause lifts, on
+       * the build the user already has. Set only on the Desktop
+       * multi-session path.
+       *
+       * Older clients ignore it and still render `availableHours`, which is
+       * worded so the sentence they build around it does not blame the model.
+       * The refusal it replaces read "<model> isn't available right now
+       * (Purchased Desktop sessions are temporarily unavailable …)", which a
+       * reader takes as the model being down and switches away from.
+       */
+      purchasesPaused?: boolean
     }
   | {
       /** Account is banned. Returned from every endpoint so banned bots can't
@@ -910,7 +980,7 @@ export type FreebuffSessionAdmissionResponse = (
       upgrade?: FreebuffUpgradeHint
       /** Not sent by the server on a refusal; a client may CARRY the block it
        *  was holding so the refusal is still rendered in the meter's words. */
-      freebucks?: FreebuffFreebucksInfo
+      freebucks?: FreebuffFreebucksInfo | null
       /** The freebuff model the user tried to join. */
       model: string
       /** The pool that refused, as on `FreebuffSessionRateLimit` — opaque. */
@@ -946,7 +1016,7 @@ export type FreebuffSessionAdmissionResponse = (
       status: 'spend_limited'
       accessTier?: FreebuffAccessTier
       /** See `rate_limited`: carried by the client, never sent. */
-      freebucks?: FreebuffFreebucksInfo
+      freebucks?: FreebuffFreebucksInfo | null
       message: string
       resetAt: string
       retryAfterMs: number

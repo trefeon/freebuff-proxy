@@ -359,10 +359,14 @@ func (m *Manager) releaseHeldSlotForTarget(ctx context.Context, targetModel stri
 	// DELETE first; only clear the cache when it actually succeeded — a
 	// failed release (401/transport) must keep the cached state so the
 	// caller's error path (dead-token/cleanup) can still end the session.
-	if err := m.client.EndSession(ctx, oldID); err != nil {
+	// A receipt feeds the refund tracking so a pending settlement stays
+	// replayable through a later EndSession.
+	rcpt, err := m.client.EndSession(ctx, oldID)
+	if err != nil {
 		slog.Warn("session: EndSession failed on model switch (state kept)", "instance_id", oldID, "held_model", heldModel, "err", err)
 		return
 	}
+	m.recordReleaseReceipt(oldID, rcpt)
 	m.mu.Lock()
 	// Re-check: another path may have changed the state since we unlocked.
 	if m.state != nil && m.state.instanceID == oldID {
@@ -543,7 +547,12 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			m.mu.Unlock()
 			m.recordInvalidation(tableReason(status))
 			slog.Debug("session recreated", "reason", tableReason(status), "status", status, "instance_id", st.InstanceID)
-		case "banned", "country_blocked", "rate_limited", "ip_capped", "spend_limited", "session_model_mismatch", "limited_ip":
+		case "banned", "country_blocked", "rate_limited", "ip_capped", "spend_limited", "session_model_mismatch", "limited_ip",
+			"consent_required", "purchase_claim_released", "purchase_in_use", "purchase_capacity":
+			// The last four are terminal admission refusals (vendor
+			// af898dc): the wallet consent demand and the Desktop
+			// purchase-flow failures stop polling upstream (nextDelayMs
+			// returns null) — surface them with no retry and no cooldown.
 			return statusError(status, st)
 		case "model_locked":
 			// Previous session is locked to a different model.
@@ -564,7 +573,11 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			if releaseID == "" {
 				releaseID = heldID
 			}
-			_ = m.client.EndSession(ctx, releaseID)
+			// Best-effort like before; a receipt still feeds the refund
+			// tracking so a pending settlement stays replayable.
+			if rcpt, _ := m.client.EndSession(ctx, releaseID); rcpt != nil {
+				m.recordReleaseReceipt(releaseID, rcpt)
+			}
 			slog.Debug("session released on model lock, retrying", "reason", reasonModelLock, "current", st.CurrentModel, "target", targetModel)
 		case "model_unavailable":
 			// Requested model is not available; fall back to the cheapest
@@ -589,25 +602,109 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 	return errors.New("session: refresh iteration budget exhausted")
 }
 
+// recordReleaseReceipt folds a session-DELETE receipt into the refund
+// tracking (vendor af898dc): a settled freebucksRefund becomes lastRefund
+// (nil clears, mirroring the CLI's ?? null), and a pending receipt parks
+// its instance for replay (mirroring pendingRefund, singular like the CLI
+// — a newer release supersedes an older pending one). A nil receipt (the
+// tolerated 404: row already gone) records nothing. Caller need not hold
+// mu.
+func (m *Manager) recordReleaseReceipt(instanceID string, rcpt *upstream.SessionRefundReceipt) {
+	if rcpt == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastRefund = rcpt.Refund
+	if rcpt.Pending && instanceID != "" {
+		m.pendingRefund = instanceID
+	} else {
+		m.pendingRefund = ""
+	}
+}
+
+// RefreshRefund replays the DELETE for a pending early-end refund (vendor
+// af898dc freebucksRefundPending): same instance id, until the server
+// returns an ended receipt without the pending flag. A settled replay
+// records lastRefund (the CLI's ?? 0: an ended receipt with no amount is a
+// zero refund, not an unknown one) and clears the pending entry; a
+// still-pending or failed replay keeps it for the next EndSession. A
+// gone row (invalid/superseded/404) clears it — nothing is left to settle.
+func (m *Manager) RefreshRefund(ctx context.Context) error {
+	m.mu.Lock()
+	pending := m.pendingRefund
+	m.mu.Unlock()
+	if pending == "" {
+		return nil
+	}
+	rcpt, err := m.client.EndSession(ctx, pending)
+	if err != nil {
+		if errors.Is(err, upstream.ErrSessionInvalid) || errors.Is(err, upstream.ErrSessionSuperseded) {
+			m.mu.Lock()
+			if m.pendingRefund == pending {
+				m.pendingRefund = ""
+			}
+			m.mu.Unlock()
+			return nil
+		}
+		return err
+	}
+	if rcpt == nil {
+		m.mu.Lock()
+		if m.pendingRefund == pending {
+			m.pendingRefund = ""
+		}
+		m.mu.Unlock()
+		return nil
+	}
+	if rcpt.Status == "ended" && !rcpt.Pending {
+		refund := 0.0
+		if rcpt.Refund != nil {
+			refund = *rcpt.Refund
+		}
+		m.mu.Lock()
+		if m.pendingRefund == pending {
+			m.pendingRefund = ""
+			m.lastRefund = &refund
+		}
+		m.mu.Unlock()
+		return nil
+	}
+	if rcpt.Pending {
+		return nil
+	}
+	return fmt.Errorf("session: refund replay for %s returned status %q, want ended", shortInstance(pending), rcpt.Status)
+}
+
 // EndSession deletes the upstream session (if any) and clears the cache.
+// The DELETE receipt feeds the refund tracking; when there is no live slot
+// but a refund is still pending, the pending DELETE is replayed instead so
+// an outstanding settlement is never stranded by a slotless teardown.
 func (m *Manager) EndSession(ctx context.Context) error {
 	m.mu.Lock()
 	instanceID := ""
 	if s := m.state; s != nil {
 		instanceID = s.instanceID
 	}
+	pending := m.pendingRefund
 	m.commit(nil)
 	m.mu.Unlock()
 
 	if instanceID == "" {
+		if pending != "" {
+			return m.RefreshRefund(ctx)
+		}
 		return nil
 	}
 	slog.Debug("session ended", "instance_id", instanceID, "reason", reasonEnded)
 	// A superseded DELETE is the same "slot already gone" case as
 	// session-invalid (#119): swallow both so teardown never errors on a
-	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
+	// gone row (a nil receipt records nothing).
+	rcpt, err := m.client.EndSession(ctx, instanceID)
+	if err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
+	m.recordReleaseReceipt(instanceID, rcpt)
 	return nil
 }
 
@@ -667,8 +764,10 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	// callFreebuffSession sends it on DELETE when known). The cached state
 	// is kept in-memory so the store entry stays; the process is exiting.
 	slog.Debug("session ended on shutdown", "instance_id", shortInstance(instanceID), "reason", reasonShutdown)
-	if err := m.client.EndSession(ctx, instanceID); err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
+	rcpt, err := m.client.EndSession(ctx, instanceID)
+	if err != nil && !errors.Is(err, upstream.ErrSessionInvalid) && !errors.Is(err, upstream.ErrSessionSuperseded) {
 		return err
 	}
+	m.recordReleaseReceipt(instanceID, rcpt)
 	return nil
 }
