@@ -1,8 +1,14 @@
 // quota_smartprobe.go — activity-aware adaptive quota prober.
 //
 // Probe often when busy, once-and-sleep when idle, self-healing on boot.
-// The scheduler rides the maintain tick (no new goroutine) and picks its
-// cadence from pool traffic (lastActive, written by every successful
+// The scheduler decides on the maintain tick (cheap timestamp checks only)
+// and dispatches each round to a detached worker-pool goroutine (issue
+// #484): a ~10min fleet round must never stall the maintain goroutine's
+// session-liveness poll grid and rotation. Dispatch is single-flight — a
+// round already in flight suppresses the next tick — and every round is
+// wg-tracked under a pool-rooted context Shutdown cancels and waits for.
+//
+// Cadence tiers from pool traffic (lastActive, written by every successful
 // Acquire/AcquireBridge):
 //
 //	ACTIVE: traffic <2m ago → probe every QUOTA_PROBE_ACTIVE_INTERVAL (60s).
@@ -17,9 +23,16 @@
 //
 // Per-round guards: locked, quarantined, banned, cooling and
 // country-blocked tokens are skipped (same health gates as the maturity
-// tick); token probes stagger 1–3s apart with jitter; the first upstream
-// 429 aborts the round and doubles the effective interval (cap 30m, reset
-// to the base cadence on the next 429-free round).
+// tick), as are tokens whose cached quota is still fresh (refreshed within
+// quotaProbeFreshWindow by any probe/admission/seed write — a fully-fresh
+// roster yields a cheap no-op round). The round probes with a small fixed
+// worker pool under a round-level deadline instead of a sequential
+// stagger. The first upstream 429 aborts the round and doubles the
+// effective interval (cap 30m, reset to the base cadence on the next
+// 429-free full round); a fleet-wide 503 overload (WaitingRoom) aborts the
+// same way and additionally damps the next round to a sparse canary sample
+// for the first minute, so a still-saturated upstream sees a trickle, not
+// an immediate full-roster re-burst.
 //
 // Probe traffic is internal: the session-less ProbeToken path never touches
 // the usage ledgers, lastActive, or requestsServed, so probes neither feed
@@ -58,8 +71,43 @@ const (
 	defaultQuotaProbeIdleHeartbeat  = 30 * time.Minute
 )
 
-// quotaProbeFireTimeout bounds one token's session-less probe.
-const quotaProbeFireTimeout = 10 * time.Second
+// quotaProbeFireTimeout bounds one token's session-less probe (25s: raised
+// from 10s for slow upstream tails on large fleets, still under the 30s
+// SESSION_CALL_TIMEOUT envelope). A named const, not a knob: the config
+// catalog spans eight files per key, which is not trivial for a tuning
+// constant with a safe static value.
+const quotaProbeFireTimeout = 25 * time.Second
+
+// smartProbeWorkers is the round's fixed probe concurrency (issue #484): a
+// small bounded pool replaces the strictly-sequential 1–3s stagger, so
+// round latency scales sub-linearly with fleet size without bursting
+// upstream like an unbounded fan-out would.
+const smartProbeWorkers = 4
+
+// quotaProbeRoundTimeout bounds a whole round: a wedged tail (every probe
+// timing out at quotaProbeFireTimeout on a large fleet) aborts instead of
+// holding the single-flight slot — and Shutdown — open indefinitely. Sized
+// above the worst case for a large pooled fleet (80 tokens / 4 workers ×
+// 25s ≈ 8m would need every probe to time out; the timeout only fires
+// past that).
+const quotaProbeRoundTimeout = 10 * time.Minute
+
+// quotaProbeFreshWindow is how long a token's cached quota counts as fresh:
+// a token probed (or admitted, or boot-seeded) within this window sits out
+// the next round. Matches the default active cadence, so a steady-state
+// fleet still probes every due round (quota ages exactly one interval),
+// while out-of-band refreshes (manual Probe-all, visit auto-probe) spare
+// their tokens and a fully-fresh roster yields a no-op round.
+const quotaProbeFreshWindow = 60 * time.Second
+
+// smartProbeOverloadSparseWindow is how long after a fleet-wide overload
+// abort (503/WaitingRoom) rounds stay sparse: the next round inside this
+// window probes at most smartProbeOverloadSparseCap tokens instead of the
+// full roster, so a still-saturated upstream sees a canary trickle.
+const smartProbeOverloadSparseWindow = time.Minute
+
+// smartProbeOverloadSparseCap caps the probes of one sparse round.
+const smartProbeOverloadSparseCap = 2
 
 // maxSmartProbeBackoff bounds the doubling multiplier (the effective
 // interval is capped independently, so this only guards the shift).
@@ -156,6 +204,15 @@ type smartProbeState struct {
 	// stretch: further ticks sleep until traffic resumes (wake) or the
 	// heartbeat elapses.
 	idleSlept bool
+	// inflight marks a dispatched round still running: ticks while set
+	// suppress the next round (single-flight) without consuming the
+	// kick, so a membership change mid-round still fires after it.
+	inflight bool
+	// overloadedAt is when the last round aborted on a fleet-wide
+	// overload (503/WaitingRoom): rounds inside
+	// smartProbeOverloadSparseWindow after it probe at most
+	// smartProbeOverloadSparseCap tokens (sparse canary sample).
+	overloadedAt time.Time
 }
 
 func (s *smartProbeState) mult() int {
@@ -163,19 +220,6 @@ func (s *smartProbeState) mult() int {
 		return 1
 	}
 	return s.backoff
-}
-
-// quotaProbeStagger sleeps between token probes inside one round (1–3s with
-// jitter from the pool's crypto-rand source), so a fleet restart never
-// fires as a burst. A var so tests stub it to a no-op.
-var quotaProbeStagger = func(ctx context.Context) {
-	d := time.Second + time.Duration(sessionRand()%uint64(2*time.Second))
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-	case <-t.C:
-	}
 }
 
 // smartProbeKick forces the next maintain tick to run a probe round
@@ -203,9 +247,20 @@ func (p *Pool) smartProbeTick(ctx context.Context) {
 }
 
 // smartProbeTickAt is smartProbeTick with the clock injected (tests).
+//
+// The tick itself never probes: it runs only the cheap scheduler decision
+// on the maintain goroutine and dispatches a due round to a detached
+// goroutine (single-flight, wg-tracked, Shutdown-cancelable), so a slow
+// fleet round never blocks maintainTick's rotation and liveness work.
 func (p *Pool) smartProbeTickAt(ctx context.Context, now time.Time) {
 	cfg := p.cfg.Load()
 	if cfg == nil || !cfg.QuotaAutoProbe {
+		return
+	}
+	// Shutdown is terminal: never dispatch past it. Shutdown wg-waits the
+	// in-flight rounds, so a wg.Add after its Wait observed zero would be
+	// a WaitGroup-misuse panic; draining is set before Shutdown waits.
+	if p.draining.Load() {
 		return
 	}
 	toks := p.roster.Load()
@@ -235,86 +290,201 @@ func (p *Pool) smartProbeTickAt(ctx context.Context, now time.Time) {
 		p.smartProbe.mu.Unlock()
 		return
 	}
-	p.smartProbe.kick = false
-	p.smartProbe.bootDone = true
-	p.smartProbe.mu.Unlock()
-
-	fired, limited, canceled := p.smartProbeRound(ctx, *toks, now)
-
-	p.smartProbe.mu.Lock()
-	defer p.smartProbe.mu.Unlock()
-	p.smartProbe.lastProbe = now
-	if canceled {
+	// Single-flight: a round already in flight suppresses this tick. The
+	// kick/wake/lastProbe state is deliberately left untouched, so a
+	// membership kick that landed mid-round still forces the tick after
+	// this round lands (the new member is not in this round's snapshot).
+	if p.smartProbe.inflight {
+		p.smartProbe.mu.Unlock()
+		p.logger.Debug("pool: smart probe round already in flight, tick suppressed")
 		return
 	}
-	if limited {
-		if p.smartProbe.backoff < 1 {
-			p.smartProbe.backoff = 2
-		} else if p.smartProbe.backoff < maxSmartProbeBackoff {
-			p.smartProbe.backoff *= 2
+	p.smartProbe.kick = false
+	p.smartProbe.bootDone = true
+	// A fleet-wide overload abort damps the next round: inside the sparse
+	// window the round samples at most a couple of tokens instead of
+	// re-bursting the whole roster at a still-saturated upstream.
+	sparse := !p.smartProbe.overloadedAt.IsZero() &&
+		now.Before(p.smartProbe.overloadedAt.Add(smartProbeOverloadSparseWindow))
+	p.smartProbe.inflight = true
+	p.wg.Add(1)
+	roundCtx, roundCancel := context.WithTimeout(p.probeCtx, quotaProbeRoundTimeout)
+	p.smartProbe.mu.Unlock()
+
+	snapshot := *toks
+	go func() {
+		defer p.wg.Done()
+		defer roundCancel()
+		fired, limited, overloaded, canceled := p.smartProbeRound(roundCtx, snapshot, now, sparse)
+
+		p.smartProbe.mu.Lock()
+		defer p.smartProbe.mu.Unlock()
+		p.smartProbe.inflight = false
+		if canceled {
+			return
 		}
-	} else if fired > 0 {
-		p.smartProbe.backoff = 1
-	}
-	if tier == quotaTierIdle {
-		p.smartProbe.idleSlept = true
-	} else {
-		p.smartProbe.idleSlept = false
-	}
+		p.smartProbe.lastProbe = time.Now()
+		if limited || overloaded {
+			if p.smartProbe.backoff < 1 {
+				p.smartProbe.backoff = 2
+			} else if p.smartProbe.backoff < maxSmartProbeBackoff {
+				p.smartProbe.backoff *= 2
+			}
+		} else if fired > 0 && !sparse {
+			// Only a full clean round resets the backoff: a sparse
+			// canary sample is not evidence the fleet is healthy.
+			p.smartProbe.backoff = 1
+		}
+		if overloaded {
+			p.smartProbe.overloadedAt = time.Now()
+		}
+		if tier == quotaTierIdle {
+			p.smartProbe.idleSlept = true
+		} else {
+			p.smartProbe.idleSlept = false
+		}
+	}()
 }
 
-// smartProbeRound probes every eligible token once, staggering between
-// probes. The first upstream 429 aborts the round (the remaining tokens
-// wait for the doubled interval). A 429 arrives two ways: an unparseable
-// body classifies to ErrRateLimited, while a structured quota body parses
-// into a SessionState with Status "rate_limited" (the quota it carries is
-// still cached by ProbeToken — the abort only spares the other tokens).
-// Returns the success count plus whether the round hit a 429 or the
-// context died mid-round.
-func (p *Pool) smartProbeRound(ctx context.Context, toks []*tokenEntry, now time.Time) (fired int, limited, canceled bool) {
-	staggered := false
+// smartProbeInflight reports whether a probe round is currently running.
+// Production only logs it; tests poll it to await a dispatched round.
+func (p *Pool) smartProbeInflight() bool {
+	p.smartProbe.mu.Lock()
+	defer p.smartProbe.mu.Unlock()
+	return p.smartProbe.inflight
+}
+
+// smartProbeRound probes each eligible token once with a small fixed worker
+// pool under the round context's deadline. Tokens are fed in roster order,
+// so an abort spares the highest indexes first. The first upstream 429
+// aborts the round (the remaining tokens wait for the doubled interval); a
+// fleet-wide 503 overload (WaitingRoom) aborts the same way and is
+// reported separately so the scheduler can damp the next round. A 429
+// arrives two ways: an unparseable body classifies to ErrRateLimited, while
+// a structured quota body parses into a SessionState with Status
+// "rate_limited" (the quota it carries is still cached by ProbeToken — the
+// abort only spares the other tokens). Returns the success count plus
+// whether the round hit a 429, a fleet overload, or the context died
+// mid-round (Shutdown/round deadline: no backoff change, the next tick
+// retries on the stale timer).
+func (p *Pool) smartProbeRound(ctx context.Context, toks []*tokenEntry, now time.Time, sparse bool) (fired int, limited, overloaded, canceled bool) {
+	eligible := make([]int, 0, len(toks))
 	for i, tok := range toks {
-		if ctx.Err() != nil {
-			return fired, false, true
-		}
 		if smartProbeSkipToken(tok, now) {
 			continue
 		}
-		if staggered {
-			quotaProbeStagger(ctx)
-			if ctx.Err() != nil {
-				return fired, false, true
-			}
-		}
-		staggered = true
-		st, err := p.smartProbeOne(ctx, i, tok)
-		if err != nil {
-			if errors.Is(err, upstream.ErrRateLimited) {
-				return fired, true, false
-			}
+		if !smartProbeQuotaStale(tok, now) {
 			continue
 		}
-		if st != nil && st.Status == "rate_limited" {
-			return fired, true, false
-		}
-		fired++
+		eligible = append(eligible, i)
 	}
-	return fired, false, false
+	if len(eligible) == 0 {
+		p.logger.Debug("pool: smart probe round skipped, roster quota fresh")
+		return 0, false, false, false
+	}
+	if sparse && len(eligible) > smartProbeOverloadSparseCap {
+		p.logger.Info("pool: smart probe sparse round after overload abort, sampling roster",
+			"probes", smartProbeOverloadSparseCap, "eligible", len(eligible))
+		eligible = eligible[:smartProbeOverloadSparseCap]
+	}
+
+	roundCtx, abort := context.WithCancel(ctx)
+	defer abort()
+	jobs := make(chan int)
+	var mu sync.Mutex
+	aborted := false
+	var wg sync.WaitGroup
+	for w := 0; w < smartProbeWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				if roundCtx.Err() != nil {
+					return
+				}
+				st, err := p.smartProbeOne(roundCtx, i, toks[i])
+				mu.Lock()
+				switch {
+				case roundCtx.Err() != nil || aborted:
+					// The round outcome is already decided (abort or
+					// parent cancel): record nothing more.
+				case err != nil && errors.Is(err, upstream.ErrRateLimited):
+					limited = true
+					aborted = true
+					abort()
+				case err != nil && errors.Is(err, upstream.ErrWaitingRoom):
+					overloaded = true
+					aborted = true
+					abort()
+				case err != nil:
+					// Warn-only failure (logged in smartProbeOne):
+					// the round continues with the next token.
+				case st != nil && st.Status == "rate_limited":
+					limited = true
+					aborted = true
+					abort()
+				default:
+					fired++
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+feed:
+	for _, i := range eligible {
+		select {
+		case <-roundCtx.Done():
+			break feed
+		case jobs <- i:
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	if ctx.Err() != nil && !aborted {
+		return fired, false, false, true
+	}
+	return fired, limited, overloaded, false
+}
+
+// smartProbeQuotaStale reports whether the token's cached quota is too old
+// to trust. A token with no quota data (never probed, or a probe that
+// carried none) is always stale. Freshness is judged against the session's
+// own QuotaSavedAt — the existing last-probe timestamp stamped by every
+// probe/admission/seed write — so out-of-band refreshes (manual Probe-all,
+// visit auto-probe, boot seed) spare the token in the next scheduled round.
+func smartProbeQuotaStale(tok *tokenEntry, now time.Time) bool {
+	snap := tok.session.Snapshot()
+	if len(snap.QuotaByModel) == 0 || snap.QuotaSavedAt.IsZero() {
+		return true
+	}
+	age := now.Sub(snap.QuotaSavedAt)
+	if age < 0 {
+		age = 0
+	}
+	return age >= quotaProbeFreshWindow
 }
 
 // smartProbeOne issues one session-less ProbeToken with a bounded context,
 // warn-only on failure. It never records usage: probes stay out of the
 // ledgers, lastActive, and requestsServed by construction. The live state
-// rides along so the round can spot a 429 that parsed as quota data.
+// rides along so the round can spot a 429 that parsed as quota data. The
+// probe runs against the snapshot entry directly (not a roster index), so
+// a membership change mid-round can never mis-target another account.
 func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) (*upstream.SessionState, error) {
 	label := tokenEntryLabel(tok)
 	fire, cancel := context.WithTimeout(ctx, quotaProbeFireTimeout)
-	st, err := p.ProbeToken(fire, i)
+	st, err := tok.client.ProbeAccount(fire)
+	if err == nil && st != nil {
+		tok.session.UpdateQuotaFromProbe(st)
+	}
 	cancel()
 	if err != nil {
-		if errors.Is(err, upstream.ErrRateLimited) {
+		switch {
+		case errors.Is(err, upstream.ErrRateLimited):
 			p.logger.Warn("pool: smart probe rate-limited, aborting round", "token", i+1, "token_label", label, "err", err)
-		} else {
+		case errors.Is(err, upstream.ErrWaitingRoom):
+			p.logger.Warn("pool: smart probe overloaded, aborting round", "token", i+1, "token_label", label, "err", err)
+		default:
 			p.logger.Warn("pool: smart probe failed", "token", i+1, "token_label", label, "err", err)
 		}
 		return nil, err

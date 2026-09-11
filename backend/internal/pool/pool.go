@@ -170,8 +170,9 @@ type TokenSnapshot struct {
 	// dashboard synthesizes the z-ai/glm-5.2 promo quota row from it.
 	GlmPromo string
 	// QuotaStale marks quota restored from the on-disk session entry after
-	// a restart (no live admission yet this process); QuotaSavedAt is when
-	// that entry was last polled. The dashboard labels it last-seen.
+	// a restart (no live admission yet this process); QuotaSavedAt is the
+	// last quota refresh (restore poll time, seed probe time, or live
+	// probe write time). The dashboard labels it last-seen.
 	QuotaStale   bool
 	QuotaSavedAt time.Time
 	// Standing is the upstream account standing block (issue #96); nil until
@@ -279,6 +280,12 @@ type Pool struct {
 	once   sync.Once
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	// probeCtx roots every detached smart-probe round (issue #484): rounds
+	// run off the maintain goroutine but stay wg-tracked, and Shutdown
+	// cancels this context (then wg-waits), so a wedged probe can neither
+	// outlive the pool nor hold Shutdown open past the round deadline.
+	probeCtx    context.Context
+	probeCancel context.CancelFunc
 	// draining is set at the START of Shutdown: request-path admissions are
 	// refused from then on, so no session POST or run START can land after
 	// the shutdown drain has released the upstream sessions (post-drain
@@ -645,6 +652,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 	}
 
 	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]*admissionGate), burstHits: make(map[string][]burstHit), burstOn: make(map[string]bool)}
+	p.probeCtx, p.probeCancel = context.WithCancel(context.Background())
 	p.cfg.Store(cfg)
 	p.gate = newCreateGate(cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
 	p.chatGate = newChatGate()

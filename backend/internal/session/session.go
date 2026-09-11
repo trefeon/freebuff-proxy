@@ -130,8 +130,10 @@ func (e *WaitingRoomError) Error() string {
 type snapshotState struct {
 	savedQuota map[string]upstream.ModelQuota
 	// savedQuotaStale marks quota restored from the on-disk entry after a
-	// restart (no live admission yet this process); savedQuotaAt is when
-	// that entry was last polled. Cleared by the first live quota commit.
+	// restart (no live admission yet this process); savedQuotaAt is the
+	// last quota refresh — the on-disk poll time after a restore, the
+	// probe time after a boot seed, the write time after a live probe
+	// commit. Cleared by the first live quota commit.
 	savedQuotaStale bool
 	savedQuotaAt    time.Time
 	// savedQuotaSrcAt records, per model, the source time (Unix millis) of
@@ -519,6 +521,9 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 		// re-stamps the source times, so a later boot seed compares
 		// against this write (never downgrades it with an older row).
 		m.snap.savedQuotaStale = false
+		// The pool's staleness gate reads QuotaSavedAt as the last-probe
+		// timestamp (issue #484): a live probe is a last probe.
+		m.snap.savedQuotaAt = m.now()
 		m.stampQuotaSourceLocked(m.now())
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel

@@ -345,7 +345,10 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// Smart quota probe rides every pass alongside maturity — including
 	// idle stretches, whose first tick runs the idle single-probe so quota
 	// is fresh when traffic resumes. Session-less ProbeToken, warn-only;
-	// QUOTA_AUTO_PROBE=false skips the pass entirely.
+	// QUOTA_AUTO_PROBE=false skips the pass entirely. The tick only runs
+	// the cheap scheduler decision (issue #484): a due round dispatches to
+	// a detached single-flight worker-pool goroutine, so maintainTick never
+	// blocks on probe traffic.
 	p.smartProbeTick(ctx)
 	// Burst balance (ADR-0023): prune out-of-window admission hits and fire
 	// exit edges for recovered episodes. Pure memory + WARN logging (no

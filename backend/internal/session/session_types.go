@@ -45,7 +45,8 @@ type SessionSnapshot struct {
 	Entitlement  map[string]float64
 	// QuotaStale reports the quota map was restored from the on-disk entry
 	// after a restart (no live admission yet this process); QuotaSavedAt is
-	// when that entry was last polled. The dashboard labels it last-seen.
+	// the last quota refresh (restore poll time, seed probe time, or live
+	// probe write time). The dashboard labels it last-seen.
 	QuotaStale   bool
 	QuotaSavedAt time.Time
 	// GlmPromo carries the raw upstream glmPromo block ({dailySessions,
