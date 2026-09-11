@@ -50,7 +50,7 @@ var randCounter atomic.Uint64
 // request to chat params, then route through chatCore with a Responses wire
 // relay. The model is optional per the Responses spec; the reference
 // defaults it, and probeModel picks the same safest default the smoke test
-// uses (deepseek-v4-flash when present).
+// uses (cheapest served free row when present).
 func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 	body, err := io.ReadAll(r.Body)

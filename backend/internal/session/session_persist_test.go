@@ -560,8 +560,8 @@ func TestPersistAdoptThenModelUnavailableDropsSlot(t *testing.T) {
 	mu.Lock()
 	gotModels := append([]string(nil), createdModels...)
 	mu.Unlock()
-	if len(gotModels) != 2 || gotModels[0] != "rare/model" || gotModels[1] != DefaultFallbackModel {
-		t.Errorf("created models = %v, want [rare/model %s]", gotModels, DefaultFallbackModel)
+	if len(gotModels) != 2 || gotModels[0] != "rare/model" || gotModels[1] != DefaultFallbackModel() {
+		t.Errorf("created models = %v, want [rare/model %s]", gotModels, DefaultFallbackModel())
 	}
 }
 

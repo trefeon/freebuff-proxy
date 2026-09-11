@@ -8,6 +8,26 @@ import (
 	"freebuff-proxy/backend/internal/upstream"
 )
 
+// liveFallbackMeter extracts the live Freebucks meter (prices + exemption)
+// from an upstream session state for cheapest-fallback resolution.
+// Nil-safe: no meter yet means every static unmetered served row is a
+// candidate.
+func liveFallbackMeter(st *upstream.SessionState) (map[string]float64, bool) {
+	if st == nil || st.Freebucks == nil {
+		return nil, false
+	}
+	return st.Freebucks.Prices, st.Freebucks.QuotaExempt
+}
+
+// cachedFallbackMeter is the cached-state variant for the short-circuit
+// path, which runs before any upstream response exists.
+func cachedFallbackMeter(cs *cachedState) (map[string]float64, bool) {
+	if cs == nil || cs.freebucks == nil {
+		return nil, false
+	}
+	return cs.freebucks.Prices, cs.freebucks.QuotaExempt
+}
+
 // modelUnavailableEntry is one cached model_unavailable refusal (issue
 // #158): until is when the proxy stops skipping admissions for the model
 // (the earlier of the parsed availability window's next opening and
@@ -64,9 +84,9 @@ func (m *Manager) recordModelUnavailable(model string, w *upstream.AvailabilityW
 
 // modelUnavailableUntil returns when the skip window for model ends (issue
 // #158); ok is false when the model is not cached as unavailable or the
-// entry has expired. Never skips the guaranteed-available fallback model.
+// entry has expired. Never skips the static fallback model.
 func (m *Manager) modelUnavailableUntil(model string, now time.Time) (time.Time, bool) {
-	if model == "" || model == DefaultFallbackModel {
+	if model == "" || model == DefaultFallbackModel() {
 		return time.Time{}, false
 	}
 	m.mu.Lock()
@@ -79,10 +99,11 @@ func (m *Manager) modelUnavailableUntil(model string, now time.Time) (time.Time,
 }
 
 // modelUnavailableShortCircuit applies the issue #158 skip in place: when
-// *target is cached as unavailable it is rewritten to the fallback model and
-// true is returned when the caller must stop immediately (a usable fallback
-// session was reused with zero upstream calls). Without reuse the cached row
-// is dropped (mirroring the 409 path) so the fallback admission runs fresh.
+// *target is cached as unavailable it is rewritten to the cheapest served
+// unmetered fallback for the cached live meter and true is returned when
+// the caller must stop immediately (a usable fallback session was reused
+// with zero upstream calls). Without reuse the cached row is dropped
+// (mirroring the 409 path) so the fallback admission runs fresh.
 // Every skip is counted on /metrics as
 // freebuff_proxy_model_unavailable_skips_total. Logs at DEBUG — the
 // frequent path; a real 409 is now rare (once per TTL per model).
@@ -93,7 +114,15 @@ func (m *Manager) modelUnavailableShortCircuit(target *string) bool {
 	}
 	m.mu.Lock()
 	cached := m.state
-	reuse := cached != nil && cached.model == DefaultFallbackModel && sessionUsable(cached)
+	prices, exempt := cachedFallbackMeter(cached)
+	fallback := DefaultFallbackModelFor(prices, exempt)
+	if *target == fallback {
+		// Already asking for the fallback: nothing to rewrite to, and
+		// retrying the same id would spin on the refusal.
+		m.mu.Unlock()
+		return false
+	}
+	reuse := cached != nil && cached.model == fallback && sessionUsable(cached)
 	if !reuse {
 		// Mirror the 409 path: the cached row belongs to the unavailable
 		// model (or is unusable) — drop it so the fallback admission runs
@@ -107,8 +136,8 @@ func (m *Manager) modelUnavailableShortCircuit(target *string) bool {
 			"requested", *target, "model", cached.model, "skip_until", skipUntil.Format(time.RFC3339))
 	} else {
 		slog.Debug("session: model cached unavailable, falling back without admission",
-			"requested", *target, "fallback", DefaultFallbackModel, "skip_until", skipUntil.Format(time.RFC3339))
+			"requested", *target, "fallback", fallback, "skip_until", skipUntil.Format(time.RFC3339))
 	}
-	*target = DefaultFallbackModel
+	*target = fallback
 	return reuse
 }

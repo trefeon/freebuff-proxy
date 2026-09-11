@@ -9,7 +9,11 @@
   import BatchTestPanel from "../components/BatchTestPanel.svelte";
   import { fetchAPI, postAPI } from "../api/client.js";
   import { adminApi, adminActions, tokenActions } from "../api/paths.js";
-  import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import {
+    fallbackModelOptions,
+    fetchModelOptions,
+    cheapestFreeOption,
+  } from "../modelOptions.js";
   import { spawnIntent } from "../utils/freebucks.js";
   import { isDevToolsEnabled } from "../utils/devtools.js";
   import {
@@ -29,7 +33,7 @@
   let devToolsEnabled = $state(false);
 
   // --- State for Chat Playground ---
-  let selectedModel = $state("mimo/mimo-v2.5");
+  let selectedModel = $state(cheapestFreeOption(fallbackModelOptions));
   let protocol = $state("openai"); // 'openai' | 'anthropic'
   let streamMode = $state(true);
   let promptText = $state(
@@ -90,7 +94,11 @@
     const unsubErr = tokensErrorStore.subscribe((err) => {
       if (err) loadingTokens = false;
     });
-    fetchModelOptions().then((rows) => (modelsList = rows));
+    fetchModelOptions().then((rows) => {
+      modelsList = rows;
+      const pick = cheapestFreeOption(rows);
+      if (pick) selectedModel = pick;
+    });
     (async () => {
       try {
         const cfgRes = await fetchAPI(adminApi.config);

@@ -36,7 +36,7 @@ func TestSetupAiderConfigPreservesUserConfig(t *testing.T) {
 		"some-other-setting: true",
 		"openai-api-base: http://localhost:3457/v1",
 		"openai-api-key: not-needed",
-		"model: openai/deepseek/deepseek-v4-flash",
+		"model: openai/upstage/solar-pro4",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q; got:\n%s", want, got)
@@ -79,13 +79,13 @@ func TestSetupAiderConfigAppendsMissingKeys(t *testing.T) {
 		"custom-setting: keep-me",
 		"openai-api-base: http://localhost:3457/v1",
 		"openai-api-key: not-needed",
-		"model: openai/deepseek/deepseek-v4-flash",
+		"model: openai/upstage/solar-pro4",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q; got:\n%s", want, got)
 		}
 	}
-	if !strings.HasSuffix(strings.TrimRight(got, "\n"), "model: openai/deepseek/deepseek-v4-flash") {
+	if !strings.HasSuffix(strings.TrimRight(got, "\n"), "model: openai/upstage/solar-pro4") {
 		t.Errorf("missing proxy keys should be appended at the end; got:\n%s", got)
 	}
 }
@@ -109,7 +109,7 @@ func TestSetupAiderConfigFreshFile(t *testing.T) {
 	for _, want := range []string{
 		"openai-api-base: http://localhost:3457/v1",
 		"openai-api-key: not-needed",
-		"model: openai/deepseek/deepseek-v4-flash",
+		"model: openai/upstage/solar-pro4",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q; got:\n%s", want, got)
@@ -120,7 +120,7 @@ func TestSetupAiderConfigFreshFile(t *testing.T) {
 func TestSetupAiderConfigShortCircuitsWhenAlreadyConfigured(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, ".aider.conf.yml")
-	original := "theme: dracula\nopenai-api-base: http://localhost:3457/v1\nopenai-api-key: not-needed\nmodel: openai/deepseek/deepseek-v4-flash\ncustom: keep-me\n"
+	original := "theme: dracula\nopenai-api-base: http://localhost:3457/v1\nopenai-api-key: not-needed\nmodel: openai/upstage/solar-pro4\ncustom: keep-me\n"
 	if err := os.WriteFile(cfgPath, []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestMergeAiderConfigPreservesLineEndings(t *testing.T) {
 	lines := []string{
 		"openai-api-base: http://localhost:3457/v1",
 		"openai-api-key: not-needed",
-		"model: openai/deepseek/deepseek-v4-flash",
+		"model: openai/upstage/solar-pro4",
 	}
 	got := mergeAiderConfig(original, lines)
 	if !strings.Contains(got, "\r\n") {
@@ -152,7 +152,7 @@ func TestMergeAiderConfigPreservesLineEndings(t *testing.T) {
 	if !strings.Contains(got, "theme: dracula\r\n") {
 		t.Errorf("unrelated CRLF line not preserved:\n%q", got)
 	}
-	if !strings.Contains(got, "model: openai/deepseek/deepseek-v4-flash\r\n") {
+	if !strings.Contains(got, "model: openai/upstage/solar-pro4\r\n") {
 		t.Errorf("replaced model line missing or wrong line ending:\n%q", got)
 	}
 }
@@ -189,8 +189,8 @@ func TestSetupContinueYamlConfigMergesIntoExistingModels(t *testing.T) {
 		"# trailing comment",
 		"agents:",
 		`  - name: "Agent"`,
-		`  - title: "FreeBuff DeepSeek Flash"`,
-		`    model: "deepseek/deepseek-v4-flash"`,
+		`  - title: "FreeBuff Solar"`,
+		`    model: "upstage/solar-pro4"`,
 		`    apiBase: "http://localhost:3457/v1"`,
 	} {
 		if !strings.Contains(got, want) {
@@ -200,7 +200,7 @@ func TestSetupContinueYamlConfigMergesIntoExistingModels(t *testing.T) {
 
 	// The FreeBuff item goes at the END of the existing models: list: after
 	// the user's last model, before the next top-level key/comment.
-	idxFree := strings.Index(got, `  - title: "FreeBuff DeepSeek Flash"`)
+	idxFree := strings.Index(got, `  - title: "FreeBuff Solar"`)
 	idxExisting := strings.Index(got, `  - title: "Existing Model"`)
 	idxAgents := strings.Index(got, "agents:")
 	idxComment := strings.Index(got, "# trailing comment")
@@ -242,7 +242,7 @@ func TestSetupContinueYamlConfigAppendsWhenNoModelsKey(t *testing.T) {
 	for _, want := range []string{
 		"name: My Workspace",
 		"version: 1.0",
-		`  - title: "FreeBuff DeepSeek Flash"`,
+		`  - title: "FreeBuff Solar"`,
 		`    apiBase: "http://localhost:3457/v1"`,
 	} {
 		if !strings.Contains(got, want) {
@@ -340,8 +340,8 @@ func TestSetupOpencodeConfigAddsFreebuffProvider(t *testing.T) {
 // continueItems is the FreeBuff list item used by the pure
 // mergeContinueYamlModels tests (setupContinueYamlConfig builds its own).
 var continueItems = []string{
-	`  - title: "FreeBuff DeepSeek Flash"`,
-	`    model: "deepseek/deepseek-v4-flash"`,
+	`  - title: "FreeBuff Solar"`,
+	`    model: "upstage/solar-pro4"`,
 }
 
 var continueSnippet = "\nmodels:\n" + strings.Join(continueItems, "\n") + "\n"
@@ -407,7 +407,7 @@ func TestMergeContinueYamlModelsTrailingBlanks(t *testing.T) {
 		t.Fatal("merge ok=false, want true")
 	}
 	// The FreeBuff item directly follows the last model — no blank between.
-	if !strings.Contains(got, `  - title: "Old"`+"\n  - title: \"FreeBuff DeepSeek Flash\"\n") {
+	if !strings.Contains(got, `  - title: "Old"`+"\n  - title: \"FreeBuff Solar\"\n") {
 		t.Errorf("item not inserted right after the last model:\n%q", got)
 	}
 	// The trailing blank lines stay at the end, below the inserted item.
@@ -425,7 +425,7 @@ func TestMergeContinueYamlModelsTopLevelCommentAfterModels(t *testing.T) {
 	if !ok {
 		t.Fatal("merge ok=false, want true")
 	}
-	idxItem := strings.Index(got, `  - title: "FreeBuff DeepSeek Flash"`)
+	idxItem := strings.Index(got, `  - title: "FreeBuff Solar"`)
 	idxOld := strings.Index(got, `  - title: "Old"`)
 	idxComment := strings.Index(got, "# comment")
 	idxAgents := strings.Index(got, "agents:")
@@ -572,7 +572,7 @@ func TestSetupContinueConfigPreservesParsableConfig(t *testing.T) {
 	if _, ok := models[0].(map[string]any)["apiKey"]; !ok {
 		t.Errorf("existing model's apiKey lost:\n%s", out)
 	}
-	if !strings.Contains(string(out), "deepseek/deepseek-v4-flash") {
+	if !strings.Contains(string(out), "upstage/solar-pro4") {
 		t.Errorf("freebuff model missing:\n%s", out)
 	}
 }
@@ -641,9 +641,9 @@ func TestSetupAiderConfigUnreadableAborts(t *testing.T) {
 // but the helper is directly testable.)
 func TestMergeAiderConfigColonlessKey(t *testing.T) {
 	existing := "theme: dracula\nmodel: gpt-4o\n"
-	lines := []string{"openai-api-key", "model: openai/deepseek/deepseek-v4-flash"}
+	lines := []string{"openai-api-key", "model: openai/upstage/solar-pro4"}
 	got := mergeAiderConfig(existing, lines)
-	want := "openai-api-key\nmodel: openai/deepseek/deepseek-v4-flash\n"
+	want := "openai-api-key\nmodel: openai/upstage/solar-pro4\n"
 	if got != want {
 		t.Errorf("mergeAiderConfig = %q, want %q", got, want)
 	}
@@ -653,9 +653,9 @@ func TestMergeAiderConfigColonlessKey(t *testing.T) {
 // FIRST occurrence of an existing key is replaced; later duplicates stay.
 func TestMergeAiderConfigDuplicateKey(t *testing.T) {
 	existing := "model: gpt-4o\nmodel: gpt-4o-2\n"
-	lines := []string{"model: openai/deepseek/deepseek-v4-flash"}
+	lines := []string{"model: openai/upstage/solar-pro4"}
 	got := mergeAiderConfig(existing, lines)
-	want := "model: openai/deepseek/deepseek-v4-flash\nmodel: gpt-4o-2\n"
+	want := "model: openai/upstage/solar-pro4\nmodel: gpt-4o-2\n"
 	if got != want {
 		t.Errorf("mergeAiderConfig = %q, want %q", got, want)
 	}

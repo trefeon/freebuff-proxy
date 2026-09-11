@@ -178,15 +178,12 @@ type Config struct {
 	FallbackAfter time.Duration
 	// FallbackModels maps a requested model to the model served instead
 	// when the queue wait reaches FallbackAfter (issue #100,
-	// only when FALLBACK_MODEL is unset): the daily premium free-catalog rows
-	// (deepseek-v4-pro, gpt-5.6-luna) → deepseek/deepseek-v4-flash.
+	// FALLBACK_MODEL; default empty = no fallback). Operators opt in with
+	// their own pairs (e.g. meta/muse-spark-1.2-contributor=openai/gpt-5.6-luna).
 	// Referral-gated models (z-ai/glm-5.2) are handled via QUOTA_FALLBACK_MODELS.
 	// The proxy path fires only when the pool surfaces a waiting-room/queue delay ≥ FallbackAfter
 	// for the requested model (issue #100) — 429 quota exhaustion NEVER
-	// falls back (anti-ban invariant §10). The premium→flash targets
-	// mirror the CLI's getRecommendedFreebuffModelId hero pick; the
-	// muse→deepseek-v4-pro target mirrors the upstream
-	// MUSE_SPARK_FALLBACK_MODEL_ID.
+	// falls back (anti-ban invariant §10).
 	FallbackModels map[string]string
 	// QuotaFallbackModels maps a model to its fallback model when its session
 	// quota is exhausted or unentitled (QUOTA_FALLBACK_MODELS; comma-separated k=v pairs).
@@ -214,8 +211,8 @@ type Config struct {
 	// the dry-run log lines prove slots, skips and throttles behave.
 	MaturityDryRun bool
 	// MaturityTouchModel is the touch-model fallback for maturity touches
-	// (MATURITY_TOUCH_MODEL; default "auto"). "auto" (or "") resolves the
-	// cheapest served unmetered catalog row per token; an explicit
+	// (MATURITY_TOUCH_MODEL; default "" = auto). "" (or "auto") resolves
+	// the cheapest served unmetered catalog row per token; an explicit
 	// provider/model id overrides auto. Either way the touch never spends
 	// Freebucks (fail-closed on priced rows).
 	MaturityTouchModel string
@@ -473,7 +470,7 @@ func parseMap(value string) map[string]string {
 
 // parseModelLocks parses MODEL_LOCKS (issue #325): semicolon/newline
 // separated slot entries, each "<slot-index>:<model>[,<model>...]", e.g.
-// "0:z-ai/glm-5.2;1:deepseek/deepseek-v4-flash,mimo/mimo-v2.5". Slot indexes
+// "0:z-ai/glm-5.2;1:upstage/solar-pro4,mimo/mimo-v2.5". Slot indexes
 // address AUTH_TOKENS positions. Empty input yields nil (feature off).
 // Malformed entries (missing colon, bad index, empty model list) are an
 // error: a silently-ignored lock would route quota to the wrong account.

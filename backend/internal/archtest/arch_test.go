@@ -88,7 +88,7 @@ var allowed = map[string][]string{
 	},
 
 	// ---- layer 3: stateful middle ----
-	"internal/session": {"internal/telemetry", "internal/upstream"},
+	"internal/session": {"internal/modelcat", "internal/telemetry", "internal/upstream"},
 	"internal/runs":    {"internal/session", "internal/upstream"},
 
 	// ---- layer 4: orchestration ----

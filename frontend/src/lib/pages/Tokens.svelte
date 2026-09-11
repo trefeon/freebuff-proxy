@@ -21,6 +21,7 @@
   } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
   import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
+  import { fallbackModelOptions, cheapestFreeOption } from "../modelOptions.js";
   import { confirmAction } from "../stores/confirm.js";
   import {
     loadPageState,
@@ -214,7 +215,7 @@
     }
   }
   function handleSpawn(idx, model) {
-    const m = model || "mimo/mimo-v2.5";
+    const m = model || cheapestFreeOption(fallbackModelOptions);
     // Confirm-intent line (issue #350 — mirrors askLineFor): warn when the
     // pick spends wallet Freebucks or ends the live session.
     const token = data?.tokens?.find?.((t) => t.index === idx);

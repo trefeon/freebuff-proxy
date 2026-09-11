@@ -257,7 +257,7 @@ func (p *Pool) SetMaturity(token int, enabled bool, target int, mode string, tou
 		touchModel = ""
 	}
 	if touchModel != "" && !strings.Contains(touchModel, "/") {
-		return fmt.Errorf("pool: maturity touch model %q must be a provider/model id (e.g. deepseek/deepseek-v4-flash)", touchModel)
+		return fmt.Errorf("pool: maturity touch model %q must be a provider/model id (e.g. upstage/solar-pro4)", touchModel)
 	}
 	if target < 0 || target > 28 {
 		return fmt.Errorf("pool: maturity target %d out of range (want 0..28, 0 = global MATURITY_TARGET_DAYS default)", target)

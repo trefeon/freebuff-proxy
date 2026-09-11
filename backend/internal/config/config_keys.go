@@ -205,7 +205,7 @@ func defaultRawConfig() rawConfig {
 		QuotaAutoProbe:                   true,        // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
 		QuotaProbeActiveInterval:         "60s",       // busy-pool probe cadence
 		QuotaProbeIdleHeartbeat:          "30m",       // idle-pool probe heartbeat (also the 429-backoff ceiling)
-		MaturityTouchModel:               "auto",      // auto default: cheapest served unmetered row, explicit id overrides
+		MaturityTouchModel:               "",          // empty default (= auto): cheapest served unmetered row, explicit id overrides
 	}
 }
 

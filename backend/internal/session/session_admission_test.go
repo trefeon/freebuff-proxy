@@ -310,8 +310,8 @@ func TestModelUnavailableFallback(t *testing.T) {
 	if len(createdModels) != 2 {
 		t.Fatalf("createdModels = %v, want 2 attempts", createdModels)
 	}
-	if createdModels[0] != "rare/model" || createdModels[1] != "deepseek/deepseek-v4-flash" {
-		t.Errorf("createdModels = %v, want rare/model then fallback", createdModels)
+	if createdModels[0] != "rare/model" || createdModels[1] != DefaultFallbackModel() {
+		t.Errorf("createdModels = %v, want rare/model then cheapest fallback %s", createdModels, DefaultFallbackModel())
 	}
 }
 

@@ -3,7 +3,11 @@
   import Card from "./Card.svelte";
   import Button from "./Button.svelte";
   import { fetchAPI } from "../api/client.js";
-  import { fetchModelOptions, fallbackModelOptions } from "../modelOptions.js";
+  import {
+    fetchModelOptions,
+    fallbackModelOptions,
+    cheapestFreeOption,
+  } from "../modelOptions.js";
   import { adminApi } from "../api/paths.js";
   import { tr } from "../i18n.js";
 
@@ -16,11 +20,15 @@
   let batchRunning = $state(false);
   let batchLogs = $state([]);
   let batchSeq = 0;
-  let selectedModel = $state("mimo/mimo-v2.5");
+  let selectedModel = $state(cheapestFreeOption(fallbackModelOptions));
 
   let modelsList = $state(fallbackModelOptions);
 
-  fetchModelOptions().then((rows) => (modelsList = rows));
+  fetchModelOptions().then((rows) => {
+    modelsList = rows;
+    const pick = cheapestFreeOption(rows);
+    if (pick) selectedModel = pick;
+  });
   async function runBatchTraffic() {
     if (batchRunning) return;
     batchRunning = true;
