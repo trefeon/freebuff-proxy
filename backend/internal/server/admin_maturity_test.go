@@ -33,6 +33,20 @@ func TestTokenMaturityLifecycle(t *testing.T) {
 	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":true,"target":99}`); code != http.StatusBadRequest {
 		t.Errorf("target 99 status = %d, want 400", code)
 	}
+	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":true,"target":-1}`); code != http.StatusBadRequest {
+		t.Errorf("target -1 status = %d, want 400", code)
+	}
+	// Target 0 enrolls with the global MATURITY_TARGET_DAYS default
+	// (per-account targets are gone; the dashboard sends target 0).
+	if code, body := post("/admin/tokens/0/maturity", `{"enabled":true,"target":0}`); code != http.StatusOK {
+		t.Fatalf("target 0 status = %d, want 200: %s", code, body)
+	}
+	if got := p.Snapshot()[0].Maturity.Target; got != 7 {
+		t.Errorf("target-0 snapshot target = %d, want 7 (global default)", got)
+	}
+	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":false}`); code != http.StatusOK {
+		t.Fatalf("disable after target-0 status = %d, want 200", code)
+	}
 	// Unknown mode rejects.
 	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":true,"mode":"turbo"}`); code != http.StatusBadRequest {
 		t.Errorf("mode turbo status = %d, want 400", code)

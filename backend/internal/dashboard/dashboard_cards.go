@@ -419,9 +419,18 @@ type tokensData struct {
 	TokenRotation     string         `json:"token_rotation,omitempty"`
 	RateLimitFailover bool           `json:"rate_limit_failover"`
 	MaturityEnabled   bool           `json:"maturity_enabled"`
-	BurstEnabled      bool           `json:"burst_balance_enabled"`
-	ChatMaxMetered    int            `json:"chat_max_inflight_metered"`
-	ChatMaxUnmetered  int            `json:"chat_max_inflight_unmetered"`
+	// MaturityDryRun mirrors MATURITY_DRY_RUN for the Streak Maintenance
+	// dry-run badge (probe-only, zero session slots claimed).
+	MaturityDryRun bool `json:"maturity_dry_run"`
+	// MaturityWindowStart/End are tonight's maintenance window (the 60
+	// minutes before the Pacific-midnight reset, RFC3339 absolute
+	// instants): the SPA formats the next-run countdown from these, so
+	// the window math lives in one DST-safe place (pool.MaturityWindow).
+	MaturityWindowStart string `json:"maturity_window_start,omitempty"`
+	MaturityWindowEnd   string `json:"maturity_window_end,omitempty"`
+	BurstEnabled        bool   `json:"burst_balance_enabled"`
+	ChatMaxMetered      int    `json:"chat_max_inflight_metered"`
+	ChatMaxUnmetered    int    `json:"chat_max_inflight_unmetered"`
 }
 
 // tokenSessionQuota is the per-token session + quota block, identical on the
@@ -483,9 +492,15 @@ func (d *Dashboard) tokensData() tokensData {
 		TokenRotation:     cfg.TokenRotation,
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
+		MaturityDryRun:    cfg.MaturityDryRun,
 		BurstEnabled:      cfg.BurstBalanceEnabled,
 		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
 		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
+	}
+	wStart, wEnd := d.pool.MaturityWindow()
+	if !wStart.IsZero() && !wEnd.IsZero() {
+		td.MaturityWindowStart = wStart.Format(time.RFC3339)
+		td.MaturityWindowEnd = wEnd.Format(time.RFC3339)
 	}
 	// client cards. Pure bridge hides the (empty) pooled table; pure pooled
 	// has no bridge cards.

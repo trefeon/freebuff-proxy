@@ -48,7 +48,6 @@ func (m *memMaturityStore) LoadMaturity(tokenHash string) (string, []byte, bool,
 func TestMaturityRestartRestoresState(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	mock.StreakBody = streakBody(2, false)
 	mem := newMemMaturityStore()
 
 	p1 := newMaturityPool(t, mock, true)
@@ -56,7 +55,8 @@ func TestMaturityRestartRestoresState(t *testing.T) {
 	if err := p1.SetMaturity(0, true, 14, "", modelB); err != nil {
 		t.Fatalf("SetMaturity: %v", err)
 	}
-	now := time.Now()
+	now := windowNow()
+	seedStreak(p1, 0, 2, false, now)
 	setMaturitySlot(p1, 0, now.Add(-time.Hour), laDay(now))
 	p1.maturityTickAt(context.Background(), now)
 	if action, result := maturityResult(p1, 0); action != "probe" || result != "ok" {
@@ -226,7 +226,6 @@ func TestMaturityRelockRecoveryResetsCounter(t *testing.T) {
 func TestClearMaturityWarnRearms(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, true)
 	if err := p.SetMaturity(0, true, 7, "", modelB); err != nil {
 		t.Fatalf("SetMaturity: %v", err)
@@ -254,7 +253,8 @@ func TestClearMaturityWarnRearms(t *testing.T) {
 		t.Error("ClearMaturityWarn(99) = nil, want range error")
 	}
 	// The next due tick fires (probe) instead of stopping at the warning.
-	now := time.Now()
+	now := windowNow()
+	seedStreak(p, 0, 2, false, now)
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
 	p.maturityTickAt(context.Background(), now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {

@@ -134,7 +134,6 @@ func TestMaturityAutoSkipsPricedHead(t *testing.T) {
 func TestMaturityAutoFallbackClosed(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	mock.StreakBody = streakBody(2, false)
 	p := newMaturityPool(t, mock, false)
 	p.cfg.Load().MaturityTouchModel = "auto"
 	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
@@ -150,7 +149,8 @@ func TestMaturityAutoFallbackClosed(t *testing.T) {
 	(*toks)[0].sessionMgr().UpdateQuotaFromProbe(&upstream.SessionState{
 		Freebucks: &upstream.FreebucksInfo{Balance: 10, Prices: allPriced},
 	})
-	now := time.Now()
+	now := windowNow()
+	seedStreak(p, 0, 2, false, now)
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
 	p.maturityTickAt(context.Background(), now)
 	if _, result := maturityResult(p, 0); result != "skip:touch-model" {
