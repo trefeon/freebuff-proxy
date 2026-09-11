@@ -1,19 +1,35 @@
-# Upstream drift detection (CodebuffAI/freebuff).
+# Upstream drift detection (CodebuffAI/freebuff), version-gated on the
+# npm wrapper version (single source: scripts/vendor-version.txt).
+#
+#  The version_gate job compares the pinned wrapper version against the
+#  live `npm view freebuff version` (timeout 15, fail-open). Outputs:
+#  pinned_version / live_version (empty when unknown) / live_known /
+#  version_changed (true only when live_known && live != pinned) /
+#  skip (true only when live_known && pinned == live).
+#  skip=true means positively-confirmed SAME: every downstream job is
+#  gated behind `skip != 'true'`, so the run opens zero PRs after the
+#  gate summary. Unknown/empty live fails open (skip=false,
+#  version_changed=false) to a full classification run. PR creation is
+#  additionally gated on version_changed plus functional signals, and
+#  reuses any open PR whose title already carries the new version
+#  (per-version skip, never duplicate).
 #
 #  Wire drift is additionally classified by scripts/review-wire-drift.sh:
 #  COMMENT-ONLY (docs) vs FUNCTIONAL (needs a Go-side port).
 #  1. **Registry pin drift** (the 6 files in backend/internal/registry/testdata/upstream/):
 #     auto-open a PR that runs sync-upstream so the change lands in front of a
-#     human reviewer. Idempotent: reruns reuse the same branch + open PR.
-#  2. **Wire-shape file drift** (freebuff-trust.ts, foreign-client-signals.ts,
+#     human reviewer. Idempotent: reruns reuse the open PR carrying the new
+#     version in its title (per-version skip).
+#  2. **Wire-shape file drift** (freebuff-standing.ts, foreign-client-signals.ts,
 #     prompt-agent-stream.ts, etc.): auto-open a "needs port" PR carrying the
 #     refreshed wire baseline plus the classification report, so the Go-side
 #     port lands on the PR branch in front of a human reviewer. Idempotent:
-#     reruns reuse the same branch + open PR. Never auto-merge because the
-#     port needs human judgment.
-#  3. **Dashboard embed refresh**: a separate job always refreshes the JSON
-#     embedded in the dashboard binary so users see up-to-date sync status
-#     without a live network call at boot.
+#     reruns reuse the open PR carrying the new version (per-version skip).
+#     Never auto-merge because the port needs human judgment.
+#  3. **Dashboard embed refresh**: refreshes the JSON embedded in the
+#     dashboard binary so users see up-to-date sync status without a live
+#     network call at boot. Opens a PR only when the embed's semantic
+#     content (everything except checked_at) actually changed.
 # NOTE: all three PR-opening jobs need Settings -> Actions -> General ->
 # "Allow GitHub Actions to create and approve pull requests".
 name: upstream-drift
@@ -25,7 +41,7 @@ on:
     # batches near-daily. Each run diffs checkpoint -> HEAD, where the
     # checkpoint is the committed pin (snapshots.json upstream_sha), so the
     # report always covers last-recorded ver -> current ver with nothing
-    # missed between runs. Close-superseded steps keep one rolling PR per SHA.
+    # missed between runs. Close-superseded steps keep one rolling PR per wrapper version.
     - cron: '17 5,17 * * *'
 
 permissions:
@@ -37,8 +53,79 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version_gate:
+    name: Version gate (npm wrapper)
+    runs-on: ubuntu-latest
+    outputs:
+      pinned_version: ${{ steps.gate.outputs.pinned_version }}
+      live_version: ${{ steps.gate.outputs.live_version }}
+      live_known: ${{ steps.gate.outputs.live_known }}
+      version_changed: ${{ steps.gate.outputs.version_changed }}
+      skip: ${{ steps.gate.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compare pinned vs live wrapper version
+        id: gate
+        run: |
+          # Single source: scripts/vendor-version.txt. Live comes from
+          # `npm view freebuff version` with a 15s timeout, fail-open:
+          # unknown/empty live must never skip the full classification run.
+          # Version never affects script exit codes; the gate lives in
+          # workflow `if:` conditions only.
+          pinned=""
+          if [ -f scripts/vendor-version.txt ]; then
+            pinned="$(tr -d '\r\n \t' <scripts/vendor-version.txt || true)"
+          fi
+          live=""
+          if command -v npm >/dev/null 2>&1; then
+            if command -v timeout >/dev/null 2>&1; then
+              live="$(timeout 15 npm view freebuff version 2>/dev/null || true)"
+            else
+              live="$(npm view freebuff version 2>/dev/null || true)"
+            fi
+            live="$(printf '%s' "$live" | tr -d '\r\n \t' || true)"
+          fi
+          live_known="false"
+          if [ -n "$live" ]; then
+            live_known="true"
+          fi
+          version_changed="false"
+          if [ "$live_known" = "true" ] && [ "$live" != "$pinned" ]; then
+            version_changed="true"
+          fi
+          skip="false"
+          if [ "$live_known" = "true" ] && [ "$live" = "$pinned" ]; then
+            skip="true"
+          fi
+          {
+            echo "pinned_version=$pinned"
+            echo "live_version=$live"
+            echo "live_known=$live_known"
+            echo "version_changed=$version_changed"
+            echo "skip=$skip"
+          } >>"$GITHUB_OUTPUT"
+          echo "version_gate: pinned=${pinned:-unknown} live=${live:-unknown} live_known=$live_known version_changed=$version_changed skip=$skip"
+          {
+            echo "## Version gate"
+            echo ""
+            echo "pinned: \`${pinned:-unknown}\` live: \`${live:-unknown}\` live_known: \`$live_known\` version_changed: \`$version_changed\` skip: \`$skip\`"
+            echo ""
+            if [ "$skip" = "true" ]; then
+              echo "Wrapper version SAME ($pinned): positively confirmed, skipping classification and all PRs."
+            elif [ "$live_known" = "false" ]; then
+              echo "Live wrapper version unknown (fail open): running full classification."
+            else
+              echo "Wrapper bump $pinned -> $live: running full classification."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
   drift:
     name: Detect upstream drift
+    needs: version_gate
+    if: needs.version_gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     outputs:
       has_drift: ${{ steps.report.outputs.has_drift }}
@@ -155,9 +242,12 @@ jobs:
           TUI_REPORT: ${{ runner.temp }}/tui.json
           OLD_SHA: ${{ steps.exact.outputs.old_sha }}
           UPSTREAM_SHA: ${{ steps.report.outputs.upstream_sha }}
+          PINNED_VERSION: ${{ needs.version_gate.outputs.pinned_version }}
+          LIVE_VERSION: ${{ needs.version_gate.outputs.live_version }}
         run: |
           echo "## Upstream drift check" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vendor ${PINNED_VERSION:-unknown} -> ${LIVE_VERSION:-unknown} @ ${OLD_SHA:0:7}..${UPSTREAM_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
           echo "Checkpoint ${OLD_SHA:0:7} -> upstream ${UPSTREAM_SHA:0:7}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "check-upstream.sh exit code: ${script_rc:-unknown}" >> "$GITHUB_STEP_SUMMARY"
@@ -190,6 +280,8 @@ jobs:
 
   codegen-parity:
     name: Generated files match wiregen output
+    needs: version_gate
+    if: needs.version_gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -221,8 +313,8 @@ jobs:
 
   open-drift-pr:
     name: Open sync PR (registry drift)
-    needs: drift
-    if: needs.drift.outputs.has_registry_drift == 'true'
+    needs: [version_gate, drift]
+    if: needs.version_gate.outputs.skip != 'true' && needs.version_gate.outputs.version_changed == 'true' && needs.drift.outputs.has_registry_drift == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -276,8 +368,11 @@ jobs:
           else
             sha="${{ needs.drift.outputs.upstream_sha }}"
             short="${sha:0:7}"
-            git -c commit.gpgsign=false commit -m "chore(registry): sync pinned upstream models to vendor ${short}" \
+            old_ver="${{ needs.version_gate.outputs.pinned_version }}"
+            new_ver="${{ needs.version_gate.outputs.live_version }}"
+            git -c commit.gpgsign=false commit -m "chore(registry): sync ${old_ver} -> ${new_ver} (vendor ${short})" \
               -m "Automated sync triggered by .github/workflows/upstream-drift.yml." \
+              -m "Vendor ${old_ver} -> ${new_ver} @ ${{ needs.drift.outputs.old_sha }}..${sha}" \
               -m "Upstream SHA: ${sha}" \
               -m "Drift summary:" \
               -m "${{ needs.drift.outputs.drift_summary }}"
@@ -288,18 +383,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
         run: |
-          # One rolling sync PR per upstream SHA; an older open PR for a
-          # different SHA is stale the moment a newer SHA exists.
+          # One rolling sync PR per wrapper version; an older open PR for a
+          # different version is stale the moment a newer version exists.
+          # Titles carrying the new version are kept (per-version skip);
+          # legacy titles without a version fall back to the SHA branch check.
           gh pr list --state open --json number,title,headRefName \
-            --jq '.[] | select(.title | startswith("chore(registry): sync pinned upstream models to vendor")) | {number, title, branch: .headRefName}' \
+            --jq '.[] | select(.title | startswith("chore(registry): sync")) | {number, title, branch: .headRefName}' \
           | jq -c . \
           | while read -r pr; do
               num=$(echo "$pr" | jq -r .number)
+              title=$(echo "$pr" | jq -r .title)
               branch=$(echo "$pr" | jq -r .branch)
+              if [ -n "$NEW_VER" ] && printf '%s' "$title" | grep -Fq "$NEW_VER"; then
+                echo "Keeping #$num (matches version $NEW_VER); not superseded."
+                continue
+              fi
               case "$branch" in
                 chore/upstream-drift-"${UPSTREAM_SHA:0:7}"|chore/upstream-drift-"${UPSTREAM_SHA}") ;;
-                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7}; a fresh sync PR covers the current pin state." \
+                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7} ($NEW_VER); a fresh sync PR covers the current pin state." \
                      && git push origin --delete "$branch" || true ;;
               esac
             done
@@ -309,20 +412,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
           OLD_SHA: ${{ needs.drift.outputs.old_sha }}
+          OLD_VER: ${{ needs.version_gate.outputs.pinned_version }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
           DRIFT_SUMMARY: ${{ needs.drift.outputs.drift_summary }}
           EXACT_ANNOUNCE: ${{ needs.drift.outputs.exact_announce }}
           TUI_ANNOUNCE: ${{ needs.drift.outputs.tui_announce }}
           TUI_REFRESH: ${{ needs.drift.outputs.tui_refresh }}
         run: |
+          short="${UPSTREAM_SHA:0:7}"
+          title="chore(registry): sync ${OLD_VER} -> ${NEW_VER} (vendor ${short})"
           existing=$(gh pr list --state open --json number,title \
-            --jq ".[] | select(.title | startswith(\"chore(registry): sync pinned upstream models to vendor ${UPSTREAM_SHA:0:7}\")) | .number" | head -1)
+            --jq ".[] | select(.title | startswith(\"chore(registry): sync\") and contains(\"${NEW_VER}\")) | .number" | head -1)
           if [ -n "$existing" ]; then
-            echo "Existing sync PR #$existing already open for this upstream SHA; nothing to create."
+            echo "Existing sync PR #$existing already open for version ${NEW_VER}; reusing (per-version skip)."
             exit 0
           fi
           gh pr create --base main \
-            --title "chore(registry): sync pinned upstream models to vendor ${UPSTREAM_SHA:0:7}" \
-            --body "Checkpoint ${OLD_SHA:0:7} -> upstream ${UPSTREAM_SHA:0:7}
+            --title "$title" \
+            --body "Vendor ${OLD_VER} -> ${NEW_VER} @ ${OLD_SHA:0:7}..${UPSTREAM_SHA:0:7}
+          Checkpoint ${OLD_SHA:0:7} -> upstream ${UPSTREAM_SHA:0:7} (full: ${OLD_SHA} -> ${UPSTREAM_SHA})
 
           $DRIFT_SUMMARY
 
@@ -345,8 +453,8 @@ jobs:
 
   open-port-pr:
     name: Open port PR (wire drift)
-    needs: drift
-    if: needs.drift.outputs.has_wire_drift == 'true'
+    needs: [version_gate, drift]
+    if: needs.version_gate.outputs.skip != 'true' && needs.version_gate.outputs.version_changed == 'true' && needs.drift.outputs.exact_functional != '0'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -420,28 +528,37 @@ jobs:
           else
             sha="${{ needs.drift.outputs.upstream_sha }}"
             short="${sha:0:7}"
-            git -c commit.gpgsign=false commit -m "chore(wire): refresh baseline + drift report for vendor ${short}" \
+            old_ver="${{ needs.version_gate.outputs.pinned_version }}"
+            new_ver="${{ needs.version_gate.outputs.live_version }}"
+            git -c commit.gpgsign=false commit -m "chore(wire): refresh baseline + drift report for vendor ${short} ${old_ver} -> ${new_ver}" \
               -m "Automated refresh triggered by .github/workflows/upstream-drift.yml." \
+              -m "Vendor ${old_ver} -> ${new_ver} @ ${{ needs.drift.outputs.old_sha }}..${sha}" \
               -m "Upstream SHA: ${sha}"
           fi
           git push -u origin HEAD
-
       - name: Close superseded wire PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
         run: |
-          # One rolling wire PR per upstream SHA; an older open PR for a
-          # different SHA is stale the moment a newer SHA exists.
+          # One rolling wire PR per wrapper version; titles carrying the new
+          # version are kept (per-version skip); legacy titles without a
+          # version fall back to the SHA branch check.
           gh pr list --state open --json number,title,headRefName \
             --jq '.[] | select(.title | startswith("chore(wire): upstream drift needs porting") or startswith("chore(wire): upstream drift to vendor")) | {number, title, branch: .headRefName}' \
           | jq -c . \
           | while read -r pr; do
               num=$(echo "$pr" | jq -r .number)
+              title=$(echo "$pr" | jq -r .title)
               branch=$(echo "$pr" | jq -r .branch)
+              if [ -n "$NEW_VER" ] && printf '%s' "$title" | grep -Fq "$NEW_VER"; then
+                echo "Keeping #$num (matches version $NEW_VER); not superseded."
+                continue
+              fi
               case "$branch" in
                 chore/upstream-wire-"${UPSTREAM_SHA:0:7}"|chore/upstream-wire-"${UPSTREAM_SHA}") ;;
-                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7}; a fresh wire-drift PR covers the current pin state." \
+                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7} ($NEW_VER); a fresh wire-drift PR covers the current pin state." \
                      && git push origin --delete "$branch" || true ;;
               esac
             done
@@ -451,6 +568,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
           OLD_SHA: ${{ needs.drift.outputs.old_sha }}
+          OLD_VER: ${{ needs.version_gate.outputs.pinned_version }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
           DRIFT_SUMMARY: ${{ needs.drift.outputs.drift_summary }}
           CLASSIFICATION: ${{ steps.classify.outputs.classification }}
           EXACT_FUNCTIONAL: ${{ needs.drift.outputs.exact_functional }}
@@ -463,14 +582,15 @@ jobs:
           else
             kind="[comment-only]"
           fi
-          title="chore(wire): upstream drift to vendor ${short} ${kind}"
+          title="chore(wire): upstream drift to vendor ${short} ${kind} ${OLD_VER} -> ${NEW_VER}"
           existing=$(gh pr list --state open --json number,title \
-            --jq ".[] | select(.title | startswith(\"chore(wire): upstream drift to vendor ${short}\")) | .number" | head -1)
+            --jq ".[] | select(.title | startswith(\"chore(wire): upstream drift to vendor\") and contains(\"${NEW_VER}\")) | .number" | head -1)
           if [ -n "$existing" ]; then
-            echo "Existing wire-drift PR #$existing already open for this upstream SHA; nothing to create."
+            echo "Existing wire-drift PR #$existing already open for version ${NEW_VER}; reusing (per-version skip)."
             exit 0
           fi
-          body="Checkpoint ${OLD_SHA:0:7} -> upstream $UPSTREAM_SHA
+          body="Vendor ${OLD_VER} -> ${NEW_VER} @ ${OLD_SHA:0:7}..${UPSTREAM_SHA:0:7}
+          Checkpoint ${OLD_SHA:0:7} -> upstream $UPSTREAM_SHA (full: ${OLD_SHA} -> ${UPSTREAM_SHA})
 
           $DRIFT_SUMMARY
 
@@ -497,9 +617,10 @@ jobs:
 
   publish-drift-data:
     name: Publish drift JSON to dashboard embed
-    needs: drift
-    # Always runs (even when no drift) so the embedded checked_at stays
-    # current; the dashboard banner shows "last checked" even on clean runs.
+    needs: [version_gate, drift]
+    # Runs only on a positively-confirmed wrapper bump; the embed PR is
+    # additionally limited to semantic changes (see Refresh step).
+    if: needs.version_gate.outputs.skip != 'true' && needs.version_gate.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -514,23 +635,29 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Close superseded drift-data PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
         run: |
           # Mirror of the registry job's close-superseded: one rolling PR per
-          # upstream SHA; an older open PR for a different SHA is stale.
+          # wrapper version; titles carrying the new version are kept
+          # (per-version skip), legacy titles fall back to the SHA check.
           gh pr list --state open --json number,title,headRefName \
             --jq '.[] | select(.title | startswith("chore(dashboard): refresh upstream-drift embed to vendor")) | {number, title, branch: .headRefName}' \
           | jq -c . \
           | while read -r pr; do
               num=$(echo "$pr" | jq -r .number)
+              title=$(echo "$pr" | jq -r .title)
               branch=$(echo "$pr" | jq -r .branch)
+              if [ -n "$NEW_VER" ] && printf '%s' "$title" | grep -Fq "$NEW_VER"; then
+                echo "Keeping #$num (matches version $NEW_VER); not superseded."
+                continue
+              fi
               case "$branch" in
                 chore/upstream-drift-data-"${UPSTREAM_SHA:0:7}"|chore/upstream-drift-data-"${UPSTREAM_SHA}") ;;
-                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7}; a fresh drift-data PR covers the current embed." \
+                *) gh pr close "$num" --comment "Superseded by upstream ${UPSTREAM_SHA:0:7} ($NEW_VER); a fresh drift-data PR covers the current embed." \
                      && git push origin --delete "$branch" || true ;;
               esac
             done
@@ -563,6 +690,21 @@ jobs:
           # a drift report is exactly what the embed must publish.
           bash scripts/check-upstream.sh main || true
           head -20 backend/internal/dashboard/data/upstream_drift.json
+          # Semantic compare ignoring checked_at: the timestamp bumps every
+          # run, but only real content changes (pins, SHAs, versions) warrant
+          # a PR. Compare the refreshed file against the branch HEAD.
+          embed=backend/internal/dashboard/data/upstream_drift.json
+          if git cat-file -e "HEAD:$embed" 2>/dev/null; then
+            git show "HEAD:$embed" >"$RUNNER_TEMP/old_embed.json"
+            if jq 'del(.checked_at)' "$RUNNER_TEMP/old_embed.json" >"$RUNNER_TEMP/old.sem" 2>/dev/null \
+              && jq 'del(.checked_at)' "$embed" >"$RUNNER_TEMP/new.sem" 2>/dev/null; then
+              if diff -q "$RUNNER_TEMP/old.sem" "$RUNNER_TEMP/new.sem" >/dev/null; then
+                echo "Embed semantic content unchanged (only checked_at differs); skipping PR."
+                git checkout -- "$embed" || true
+                exit 0
+              fi
+            fi
+          fi
 
       - name: Verify the embed still parses
         run: |
@@ -572,6 +714,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM_SHA: ${{ needs.drift.outputs.upstream_sha }}
+          OLD_VER: ${{ needs.version_gate.outputs.pinned_version }}
+          NEW_VER: ${{ needs.version_gate.outputs.live_version }}
         run: |
           git add backend/internal/dashboard/data/upstream_drift.json
           if git diff --cached --quiet; then
@@ -584,18 +728,20 @@ jobs:
             echo "Branch already has refresh commits ahead of main; reusing them."
           else
             short="${UPSTREAM_SHA:0:7}"
-            git -c commit.gpgsign=false commit -m "chore(dashboard): refresh upstream-drift embed to vendor ${short}" \
+            git -c commit.gpgsign=false commit -m "chore(dashboard): refresh upstream-drift embed to vendor ${short} ${OLD_VER} -> ${NEW_VER}" \
               -m "Automated refresh by .github/workflows/upstream-drift.yml." \
+              -m "Vendor ${OLD_VER} -> ${NEW_VER} @ ${UPSTREAM_SHA}" \
               -m "Upstream SHA: ${UPSTREAM_SHA}"
           fi
           git push -u origin HEAD
+          short="${UPSTREAM_SHA:0:7}"
           existing=$(gh pr list --state open --json number,title \
-            --jq ".[] | select(.title | startswith(\"chore(dashboard): refresh upstream-drift embed to vendor ${short}\")) | .number" | head -1 || true)
+            --jq ".[] | select(.title | startswith(\"chore(dashboard): refresh upstream-drift embed to vendor\") and contains(\"${NEW_VER}\")) | .number" | head -1 || true)
           if [ -n "$existing" ]; then
-            echo "Existing drift-data PR #$existing already open; skipping."
+            echo "Existing drift-data PR #$existing already open for version ${NEW_VER}; reusing (per-version skip)."
             exit 0
           fi
           gh pr create --base main \
-            --title "chore(dashboard): refresh upstream-drift embed to vendor ${short}" \
-            --body "Refreshes backend/internal/dashboard/data/upstream_drift.json against CodebuffAI/freebuff @ ${UPSTREAM_SHA}." \
+            --title "chore(dashboard): refresh upstream-drift embed to vendor ${short} ${OLD_VER} -> ${NEW_VER}" \
+            --body "Vendor ${OLD_VER} -> ${NEW_VER} @ ${UPSTREAM_SHA}. Refreshes backend/internal/dashboard/data/upstream_drift.json against CodebuffAI/freebuff @ ${UPSTREAM_SHA}." \
             --label "dependencies"
