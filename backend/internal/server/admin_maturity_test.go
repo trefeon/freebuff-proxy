@@ -10,8 +10,9 @@ import (
 )
 
 // Maturity lifecycle over the admin API: enable keeps the token leasable,
-// bad params reject, manual touch fires the dry-run probe, disable stops
-// automation and never touches the lock.
+// bad params reject, manual touch fires the dry-run probe, disable only
+// flips the stored compat flag (the universal run ignores it) and never
+// touches the lock.
 func TestTokenMaturityLifecycle(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -56,7 +57,7 @@ func TestTokenMaturityLifecycle(t *testing.T) {
 		t.Errorf("missing enabled status = %d, want 400", code)
 	}
 
-	// Enable: arms automation, token stays leasable.
+	// Enable: stores the compat flag, token stays leasable.
 	if code, body := post("/admin/tokens/0/maturity", `{"enabled":true,"target":7,"mode":"unmetered"}`); code != http.StatusOK {
 		t.Fatalf("enable status = %d, want 200: %s", code, body)
 	}
@@ -78,7 +79,7 @@ func TestTokenMaturityLifecycle(t *testing.T) {
 		t.Errorf("SessionProbes = %d, want 1 manual probe", got)
 	}
 
-	// Disable: automation stops, lock untouched.
+	// Disable: flips only the stored compat flag, lock untouched.
 	if code, _ := post("/admin/tokens/0/maturity", `{"enabled":false}`); code != http.StatusOK {
 		t.Fatalf("disable status = %d, want 200", code)
 	}

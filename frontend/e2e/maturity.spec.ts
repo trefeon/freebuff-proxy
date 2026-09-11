@@ -96,7 +96,7 @@ async function gotoWarming(page) {
 }
 
 test.describe("streak maintenance", () => {
-  test("global board is read-only: state, rows, ledger, no controls", async ({
+  test("board carries the universal switch and nothing else", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -120,11 +120,11 @@ test.describe("streak maintenance", () => {
 
     await gotoWarming(page);
     await expect(page.getByText("Streak Maintenance")).toBeVisible();
-    // No controls on the board: master switch, touch-model select, and
-    // Touch-now buttons all moved out.
+    // The universal on/off switch is the ONLY control: no touch-model
+    // select, no Touch-now buttons anywhere on the board.
     await expect(
       page.getByRole("switch", { name: "Streak maintenance" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(page.getByLabel("Global touch model")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Touch now" })).toHaveCount(
       0,
@@ -137,11 +137,11 @@ test.describe("streak maintenance", () => {
     await expect(page.getByLabel("Next maintenance run")).toBeVisible();
     await expect(page.getByText(/Next run|In window/)).toBeVisible();
     // One row per account: touched with the resolved model id, skipped
-    // with the exact ledger reason, not-enrolled without a model.
+    // with the exact ledger reason, pending without a ledger.
     await expect(page.getByText("Touched").first()).toBeVisible();
     await expect(page.getByText("mimo/mimo-v2.5").first()).toBeVisible();
     await expect(page.getByText("Skipped · skip:cooling")).toBeVisible();
-    await expect(page.getByText("Not enrolled").first()).toBeVisible();
+    await expect(page.getByText("Pending").first()).toBeVisible();
     // Last-run ledger summary: time, touched, skipped with reasons.
     await expect(page.getByLabel("Last maintenance run")).toContainText(
       /touched\s+1/,
@@ -154,7 +154,43 @@ test.describe("streak maintenance", () => {
     );
   });
 
-  test("accounts rows carry the enrolled toggle and touch now", async ({
+  test("universal switch writes the global kill-switch", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(maintenanceTokens()),
+      });
+    });
+
+    const posts: Array<{ url: string; body: string }> = [];
+    await page.route("**/admin/api/settings", async (route) => {
+      if (route.request().method() === "POST") {
+        posts.push({
+          url: route.request().url(),
+          body: route.request().postData() ?? "",
+        });
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, message: "saved." }),
+      });
+    });
+
+    await gotoWarming(page);
+    const saveReq = page.waitForRequest(
+      (r) => r.method() === "POST" && r.url().includes("/admin/api/settings"),
+    );
+    await page.getByRole("switch", { name: "Streak maintenance" }).click();
+    await saveReq;
+    expect(posts[0].body).toContain("MATURITY_ENABLED");
+  });
+
+  test("accounts rows carry no maturity controls or chips", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -168,62 +204,23 @@ test.describe("streak maintenance", () => {
       });
     });
 
-    const posts: Array<{ url: string; body: string }> = [];
-    for (const suffix of ["maturity", "maturity/touch"]) {
-      await page.route(`**/admin/tokens/1/${suffix}`, async (route) => {
-        posts.push({
-          url: route.request().url(),
-          body: route.request().postData() ?? "",
-        });
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ ok: true, message: "done." }),
-        });
-      });
-    }
-    await page.route("**/admin/tokens/0/maturity/touch", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ ok: true, message: "done." }),
-      });
-    });
-
-    // Accounts tab (default): every row shows maturity status plus the
-    // relocated controls.
+    // Accounts tab (default): rows show serving status only — no maturity
+    // toggle, no Touch-now, no Cold/Warming/Not-enrolled chip. The streak
+    // day count stays as pure info where shown.
     await page.goto("http://127.0.0.1:4173/admin/#tokens");
     await expect(
       page.getByRole("heading", { name: "Tokens", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Warming").first()).toBeVisible();
-    await expect(page.getByText("Not enrolled").first()).toBeVisible();
-    await expect(page.getByText("Locked").first()).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "Maturity for Account #1" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("switch", { name: "Maturity for Account #2" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Touch now" }).first(),
-    ).toBeVisible();
-
-    // Enrolling posts enabled + target 0 (global MATURITY_TARGET_DAYS).
-    const saveReq = page.waitForRequest(
-      (r) =>
-        r.method() === "POST" && r.url().includes("/admin/tokens/1/maturity"),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Touch now" })).toHaveCount(
+      0,
     );
-    await page.getByRole("switch", { name: "Maturity for Account #2" }).click();
-    await saveReq;
-    expect(posts[0].body).toContain('"enabled":true');
-    expect(posts[0].body).toContain('"target":0');
-
-    // Touch now stays as the manual override.
-    const touchReq = page.waitForRequest(
-      (r) =>
-        r.method() === "POST" &&
-        r.url().includes("/admin/tokens/0/maturity/touch"),
-    );
-    await page.getByRole("button", { name: "Touch now" }).first().click();
-    await touchReq;
+    await expect(page.getByText("Locked").first()).toBeVisible();
   });
 
   test("settings advanced wires the dry-run toggle and touch model", async ({
@@ -319,8 +316,9 @@ test.describe("streak maintenance", () => {
     await expect(
       page.getByRole("button", { name: /Show \d+ more|Show less/ }),
     ).toHaveCount(0);
-    // Rows, badges, and the operator lock stay readable.
-    await expect(page.getByText("Warming").first()).toBeVisible();
+    // Rows, statuses, and the operator lock stay readable (no badge chips).
+    await expect(page.getByText("Touched").first()).toBeVisible();
+    await expect(page.getByText("Pending").first()).toBeVisible();
     await expect(page.getByText("Locked").first()).toBeVisible();
     await expect(page.getByText("mimo/mimo-v2.5").first()).toBeVisible();
   });

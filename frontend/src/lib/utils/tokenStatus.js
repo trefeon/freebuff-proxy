@@ -73,24 +73,6 @@ export function riskBadgeFor(token) {
   return null;
 }
 
-/** Maturity badge tone: Mature=good, Warming=warn, Cold=info, else idle. */
-export function maturityTone(badge) {
-  if (badge === "Mature") return "good";
-  if (badge === "Warming") return "warn";
-  if (badge === "Cold") return "info";
-  return "idle";
-}
-
-/**
- * Maturity chip for one pooled token. Always returns a chip: the server
- * badge when enrolled, otherwise an idle "Not enrolled" chip.
- */
-export function maturityBadgeFor(token) {
-  const badge = token.maturity?.badge;
-  if (badge) return { label: badge, tone: maturityTone(badge) };
-  return { label: t()("Not enrolled"), tone: "idle" };
-}
-
 /** Live cooldown countdown against the page clock (ms epoch). */
 export function cooldownLabel(token, now) {
   if (!token.cooldown_active || !token.cooldown_until) return "—";

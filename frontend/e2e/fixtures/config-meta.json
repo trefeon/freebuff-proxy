@@ -307,7 +307,7 @@
     "restart_only": false,
     "secret": false,
     "essential": true,
-    "description": "Global kill-switch for the nightly streak-maintenance run: enrolled tokens stay leasable and get one low-cost touch in the 60 minutes before the Pacific-midnight reset until they reach MATURITY_TARGET_DAYS. Default true (probes run in dry-run mode); set false to disable all automated touches."
+    "description": "Global kill-switch for the nightly streak-maintenance run (the ONLY streak control): every account is touched automatically once nightly in the 60 minutes before the Pacific-midnight reset. Default true (probes run in dry-run mode); set false to disable all automated touches."
   },
   {
     "key": "MATURITY_TARGET_DAYS",
@@ -317,7 +317,8 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Global streak target for every enrolled token (1-28 days; the dashboard enrolls with target 0 = this default, per-account targets are gone). A token whose streak reaches the target stops getting touches (automation disables itself)."
+    "hidden": true,
+    "description": "DEPRECATED (hidden): the streak is universally automatic now — per-account targets are dead, every account is touched nightly. Kept parsed for compat; this value is unused."
   },
   {
     "key": "MATURITY_TOUCH_MODEL",

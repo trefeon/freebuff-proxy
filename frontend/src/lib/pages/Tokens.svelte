@@ -210,15 +210,6 @@
           "danger",
           $tr("Remove"),
         );
-      case "maturity-toggle": {
-        const next = !(token.maturity?.enabled ?? false);
-        return triggerAction(tokenActions.maturity(idx), {
-          enabled: next,
-          target: 0,
-        });
-      }
-      case "maturity-touch":
-        return triggerAction(tokenActions.maturityTouch(idx), {});
       default:
         return;
     }

@@ -4,6 +4,9 @@
   import Card from "./Card.svelte";
   import Alert from "./Alert.svelte";
   import StatusBadge from "./StatusBadge.svelte";
+  import ToggleSwitch from "./ToggleSwitch.svelte";
+  import { postAPI } from "../api/client.js";
+  import { adminApi } from "../api/paths.js";
   import {
     tokensData as tokensStore,
     tokensError as tokensErrorStore,
@@ -12,10 +15,9 @@
   } from "../stores/tokens.js";
   import { tr } from "../i18n.js";
 
-  // Streak Maintenance status board (read-only): the nightly run state,
-  // one row per account, and the last-run ledger summary. Every control
-  // lives elsewhere — the enrolled toggle + Touch-now on the Accounts
-  // rows, the dry-run toggle + global touch model in Settings → Advanced.
+  // Streak Maintenance board: universal automatic, one switch. The global
+  // kill-switch is the ONLY control here — dry-run and touch-model knobs
+  // live in Settings → Advanced. Rows and ledger are read-only status.
 
   let data = $state(null);
   let loading = $state(true);
@@ -23,11 +25,11 @@
   let unsubStore = null;
   let unsubErr = null;
 
-  // Global kill-switch state (MATURITY_ENABLED, default true) and dry-run
-  // flag (MATURITY_DRY_RUN, default true): display only, wired in
-  // Settings → Advanced.
+  // Global kill-switch (MATURITY_ENABLED, default true): the ONLY streak
+  // control. Dry-run display only (MATURITY_DRY_RUN lives in Settings).
   let globalEnabled = $state(true);
   let globalLoaded = $state(false);
+  let savingGlobal = $state(false);
   let dryRun = $state(true);
   // Tonight's maintenance window (RFC3339 absolute instants from the
   // payload): the next-run countdown formats these, so the window math
@@ -59,13 +61,27 @@
     loading = false;
   }
 
-  function badgeTone(badge) {
-    if (badge === "Mature") return "good";
-    if (badge === "Warming") return "warn";
-    if (badge === "Cold") return "info";
-    return "idle";
+  // Universal on/off switch writes the global kill-switch through the
+  // settings overlay (same path as Settings → Advanced, hot-applied).
+  async function setGlobalEnabled(next) {
+    if (savingGlobal) return;
+    savingGlobal = true;
+    try {
+      const res = await postAPI(adminApi.settingsSave, {
+        key: "MATURITY_ENABLED",
+        value: next ? "true" : "false",
+      });
+      if (res && res.ok === false)
+        throw new Error(res.message || "Save rejected");
+      globalEnabled = next;
+      await refreshTokens();
+    } catch {
+      globalEnabled = !next;
+      await refreshTokens();
+    } finally {
+      savingGlobal = false;
+    }
   }
-
   function fmtTime(iso) {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -144,8 +160,10 @@
     return fallbackWindow(nowMs);
   }
 
-  function enrolledTokens() {
-    return tokens.filter((t) => t.maturity?.enabled);
+  // Universal automatic: every pooled account is covered, no enrollment
+  // filter anywhere on this board.
+  function coveredTokens() {
+    return tokens;
   }
 
   function touchedToday(t) {
@@ -159,20 +177,20 @@
     return isFinite(slot) && slot <= nowMs;
   }
 
-  // Per-account tonight status for the board rows: skipped carries the
+  // Per-account tonight status for the board rows (universal: no enabled
+  // gate — a missing ledger simply reads Pending). Skipped carries the
   // exact ledger reason, touched carries the touch time, eligible means
   // due now inside the window, pending means waiting for the slot/window.
   function rowStatus(t) {
     const m = t?.maturity;
-    if (!m?.enabled) return { kind: "unenrolled", text: $tr("Not enrolled") };
-    const result = m.last_result ?? "";
+    const result = m?.last_result ?? "";
     if (result.startsWith("skip:")) {
       return { kind: "skipped", text: `${$tr("Skipped")} · ${result}` };
     }
     if (touchedToday(t)) {
       return {
         kind: "touched",
-        text: `${$tr("Touched")} ${fmtTime(m.last_touch)}`,
+        text: `${$tr("Touched")} ${fmtTime(m?.last_touch)}`,
       };
     }
     const w = runWindow();
@@ -190,7 +208,7 @@
     return m?.effective_touch_model || m?.auto_touch_model || "";
   }
 
-  // Last-run ledger summary across enrolled accounts: latest touch time,
+  // Last-run ledger summary across covered accounts: latest touch time,
   // touch count, and skip counts grouped by exact reason.
   function ledgerSummary(list) {
     let touched = 0;
@@ -198,6 +216,7 @@
     const skips = {};
     for (const t of list) {
       const m = t.maturity;
+      if (!m) continue;
       if (m.last_result === "ok") touched += 1;
       else if ((m.last_result ?? "").startsWith("skip:")) {
         skips[m.last_result] = (skips[m.last_result] ?? 0) + 1;
@@ -212,12 +231,10 @@
       .map(([reason, n]) => (n > 1 ? `${reason} ×${n}` : reason));
     return { touched, skipped, reasons, latest };
   }
-
   function countdownText() {
     const w = runWindow();
-    const enrolled = enrolledTokens();
-    const skipped = enrolled.filter((t) => touchedToday(t)).length;
-    const eligible = enrolled.length - skipped;
+    const skipped = coveredTokens().filter((t) => touchedToday(t)).length;
+    const eligible = coveredTokens().length - skipped;
     const counts = `${eligible} eligible · ${skipped} skipped`;
     if (nowMs >= w.start && nowMs < w.end) {
       return `In window · ends ${fmtCountdown(w.end - nowMs)} · ${counts}`;
@@ -253,7 +270,7 @@
   });
 
   const tokens = $derived(data?.tokens ?? []);
-  const summary = $derived(ledgerSummary(enrolledTokens()));
+  const summary = $derived(ledgerSummary(coveredTokens()));
 </script>
 
 {#if loading}
@@ -270,7 +287,7 @@
   <Card
     title={$tr("Streak Maintenance")}
     description={$tr(
-      "Read-only status for the nightly run. Enroll accounts and fire manual touches from the Accounts tab; dry-run and touch-model knobs live in Settings.",
+      "Fully automatic: every account is touched nightly. The switch below is the only control; dry-run and touch-model knobs live in Settings.",
     )}
   >
     {#snippet actions()}
@@ -284,6 +301,15 @@
       </span>
     {/snippet}
     <div class="flex flex-col gap-2.5">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <ToggleSwitch
+          checked={globalEnabled}
+          disabled={!globalLoaded || !!savingGlobal}
+          saving={!!savingGlobal}
+          ariaLabel={$tr("Streak maintenance")}
+          onchange={(next) => setGlobalEnabled(next)}
+        />
+      </div>
       <p class="fp-num text-[11px] leading-relaxed text-[var(--fp-dim)]">
         {$tr("Nightly window 23:00–00:00 Pacific")}
         ·
@@ -328,7 +354,6 @@
         <div class="flex flex-col gap-1.5">
           {#each tokens as t (t.index ?? t.email)}
             {@const idx = t.index ?? 0}
-            {@const m = t.maturity}
             {@const st = rowStatus(t)}
             {@const model = resolvedModel(t)}
             <div
@@ -345,11 +370,6 @@
                   >
                 {/if}
               </span>
-              {#if m?.badge}
-                <StatusBadge tone={badgeTone(m.badge)} status={m.badge} />
-              {:else}
-                <StatusBadge tone="idle" status={$tr("Not enrolled")} />
-              {/if}
               {#if t.locked}
                 <StatusBadge tone="warn" status={$tr("Locked")} />
               {/if}

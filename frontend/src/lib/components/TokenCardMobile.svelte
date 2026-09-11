@@ -9,13 +9,11 @@
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
   import StatusBadge from "./StatusBadge.svelte";
-  import ToggleSwitch from "./ToggleSwitch.svelte";
   import TokenDetailsDrawer from "./TokenDetailsDrawer.svelte";
   import {
     statusFor,
     riskBadgeFor,
     cooldownLabel,
-    maturityBadgeFor,
   } from "../utils/tokenStatus.js";
   import { tr } from "../i18n.js";
 
@@ -87,7 +85,6 @@
   // Risk chip (moved from the standalone At-risk cards): shown when the
   // account carries a risk flag and no ban badge already claims the card.
   const riskBadge = $derived(riskBadgeFor(token));
-  const maturityBadge = $derived(maturityBadgeFor(token));
 </script>
 
 <div
@@ -128,7 +125,6 @@
       {#if token.session_model}
         <StatusBadge tone="info" status={token.session_model} />
       {/if}
-      <StatusBadge status={maturityBadge.label} tone={maturityBadge.tone} />
       {#if token.email || token.account_id}
         <span
           class="text-[11px] text-[var(--fp-muted)] truncate max-w-[160px]"
@@ -241,25 +237,6 @@
       />
     </div>
   {/if}
-  <!-- Warming controls: enrolled toggle + manual touch live on the row -->
-  <div class="flex items-center gap-2 flex-wrap">
-    <ToggleSwitch
-      checked={!!token.maturity?.enabled}
-      disabled={!!actionPending}
-      ariaLabel={$tr("Maturity for Account #{idx}", { idx: idx + 1 })}
-      onchange={() => onAction("maturity-toggle")}
-    />
-    <Button
-      variant="ghost"
-      size="sm"
-      disabled={!!actionPending || !token.maturity?.enabled}
-      onclick={() => onAction("maturity-touch")}
-      title={$tr("Fire one touch now (manual override)")}
-    >
-      {$tr("Touch now")}
-    </Button>
-  </div>
-
   <!-- Footer: expand chevron left, actions right -->
   <div
     class="flex items-center justify-between gap-2 pt-0.5 border-t border-[var(--fp-border)]"
