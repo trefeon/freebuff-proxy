@@ -11,7 +11,14 @@ test.describe("real-world data", () => {
   test("overview: KPIs, both notices, peak window, bridge card", async ({
     page,
   }) => {
-    await mockDashboard(page, loadFixtures(RW));
+    const f = loadFixtures(RW);
+    // Pin the peak window relative to now: the static fixture date would
+    // otherwise age the live countdown into fallback text on later runs.
+    const notices = JSON.parse(JSON.stringify(f.notices));
+    notices.peak_hours.next_window_at = new Date(
+      Date.now() + (19 * 3600 + 30) * 1000,
+    ).toISOString();
+    await mockDashboard(page, { ...f, notices });
     await page.goto(admin("overview"));
     await expect(page.getByText("Pool total")).toBeVisible();
     await expect(page.getByText("548")).toBeVisible();
@@ -19,7 +26,7 @@ test.describe("real-world data", () => {
       page.getByText("Official Upstream Announcement"),
     ).toBeVisible();
     await expect(page.getByText("DeepSeek peak pricing active")).toBeVisible();
-    await expect(page.getByText("Peak Window (19h 0m left)")).toBeVisible();
+    await expect(page.getByText(/Peak ends .*\(19h/)).toBeVisible();
     await expect(
       page
         .getByLabel("Client integration")
@@ -38,7 +45,7 @@ test.describe("real-world data", () => {
     ).toISOString();
     await mockDashboard(page, f, { notices });
     await page.goto(admin("overview"));
-    const badge = page.getByText(/Peak Window \(.+ left\)/);
+    const badge = page.getByText(/Peak (starts|ends) /);
     await expect(badge).toBeVisible();
     const first = await badge.textContent();
     await page.waitForTimeout(2200);
