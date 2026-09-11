@@ -245,6 +245,9 @@ const (
 	pinnedSolarNotice    = ""
 	pinnedGlm52Tagline   = "Referral reward"
 	pinnedGlm52Notice    = "Unlocked via referral code"
+	// Proxy-side display override: upstream still ships the dated
+	// "07/31" picker copy; the proxy surfaces the versioned name.
+	pinnedDeepseekV41Display = "DeepSeek V4.1 Flash"
 )
 
 // effortsPinned preserves the proxy single-rung ["high"] ladder for rows
@@ -288,6 +291,9 @@ func buildCatalogRows(c *catalogInputs) ([]catalogRow, error) {
 			return nil, fmt.Errorf("wiregen: freebuff-models.ts: row %s has no displayName literal at upstream commit %s", n, c.commit)
 		}
 		r.display = d
+		if id == "deepseek/deepseek-v4-flash" {
+			r.display = pinnedDeepseekV41Display
+		}
 		r.served = c.served[n]
 		if paused[id] {
 			r.pausedReplacement = c.defaultID

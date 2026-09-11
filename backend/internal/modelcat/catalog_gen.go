@@ -95,7 +95,7 @@ var Catalog = []ModelInfo{
 		Served:        true,
 		ContextWindow: 1000000,
 		Efforts:       []string{"low", "high", "max"}},
-	{ID: "deepseek/deepseek-v4-flash", DisplayName: "DeepSeek V4 Flash 07/31",
+	{ID: "deepseek/deepseek-v4-flash", DisplayName: "DeepSeek V4.1 Flash",
 		Tagline:       "Smart & Fast",
 		Badges:        []string{"Reasoning: high", "NEW"},
 		Notice:        "May use data for AI training",
