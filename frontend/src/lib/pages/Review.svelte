@@ -2,6 +2,7 @@
 <script>
   // REVIEW TEMP - TEMPORARY show-all page, WILL BE DELETED. Do not build on this.
   import { onMount } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import {
     fetchAPI,
     postAPI,
@@ -214,7 +215,7 @@
   // Secret values are NEVER shown: secret rows render masked dots only, and the
   // .env document (env_content) is never parsed or displayed here.
   let meta = $state([]);
-  let effectiveMap = $state.raw(new Map());
+  let effectiveMap = $state.raw(new SvelteMap());
   let settingSources = $state({});
   let settingsDegraded = $state(false);
   let settingsError = $state("");
@@ -237,7 +238,7 @@
         fetchAPI("/admin/api/config"),
       ]);
       meta = Array.isArray(metaRes) ? metaRes : (metaRes?.entries ?? []);
-      const m = new Map();
+      const m = new SvelteMap();
       for (const kv of cfgRes.effective ?? []) m.set(kv.key, kv);
       effectiveMap = m;
       const nextEdits = {};
@@ -321,11 +322,11 @@
   </div>
 
   <!-- REVIEW TEMP - try-it sections, one per area -->
-  {#each GROUPS as group, gi}
+  {#each GROUPS as group, gi (group.title)}
     <section aria-label={group.title} class="rounded border border-[var(--fp-border)] p-4">
       <h2 class="mb-3 text-base font-semibold">{group.title} ({group.rows.length})</h2>
       <div class="space-y-3">
-        {#each group.rows as row, ri}
+        {#each group.rows as row, ri (rowKey(gi, ri))}
           {@const k = rowKey(gi, ri)}
           <div class="rounded border border-[var(--fp-border)] p-3">
             <!-- REVIEW TEMP row -->
@@ -492,7 +493,7 @@
                         value={editVals[entry.key] ?? ""}
                         onchange={(e) => (editVals[entry.key] = e.currentTarget.value)}
                       >
-                        {#each entry.enum ?? [] as opt}
+                        {#each entry.enum ?? [] as opt (opt)}
                           <option value={opt}>{opt}</option>
                         {/each}
                       </select>
