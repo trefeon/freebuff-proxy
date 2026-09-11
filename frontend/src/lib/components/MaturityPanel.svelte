@@ -10,7 +10,7 @@
   import Pips from "./Pips.svelte";
   import { fetchAPI, postAPI } from "../api/client.js";
   import { adminApi, tokenActions } from "../api/paths.js";
-  import { fetchMaturityHistory, historyKindTone } from "../utils/history.js";
+  import { fetchMaturityHistory } from "../utils/history.js";
   import {
     touchOptions as sharedTouchOptions,
     touchLabel,
@@ -74,11 +74,11 @@
   let actionMessage = $state("");
   let actionOK = $state(true);
 
-  // Restart-surviving event timelines (ADR-0016): loaded once per token
-  // when its row renders, never on the 10s poll.
+  // Restart-surviving run records (ADR-0016): loaded once per token when
+  // its row renders, never on the 10s poll. They feed the 7-day strip and
+  // the touches/spend/projected ledger below — the per-account event list
+  // itself is intentionally not rendered.
   let histByIdx = $state({});
-  // History fold state per row (default folded, latest event visible).
-  let histOpen = $state({});
   let histPending = new SvelteSet();
 
   $effect(() => {
@@ -612,9 +612,6 @@
               {#if t.locked}
                 <StatusBadge tone="warn" status={$tr("Locked")} />
               {/if}
-              {#if m?.warn}
-                <StatusBadge tone="bad" status={$tr("Touch not advancing")} />
-              {/if}
               <Pips
                 value={t.streak ?? 0}
                 total={streakTarget}
@@ -641,7 +638,7 @@
               })}
               {#if t.today_used}
                 <span class="text-emerald-400">· {$tr("Active today")}</span>
-              {:else if m?.enabled && !m.warn}
+              {:else if m?.enabled}
                 <span>· {$tr("Needs activity today")}</span>
               {/if}
             </p>
@@ -709,45 +706,6 @@
                 </Button>
               </span>
             </div>
-            {#if (histByIdx[idx] ?? []).length > 0}
-              {@const evs = (histByIdx[idx] ?? []).slice(-5)}
-              {@const open = !!histOpen[idx]}
-              <ul
-                class="flex flex-col gap-1.5 border-t border-[var(--fp-border)]/60 pt-2.5"
-                aria-label={$tr("Maturity history for Account #{idx}", {
-                  idx: idx + 1,
-                })}
-              >
-                {#each open ? evs : evs.slice(-1) as ev (ev.ts + ev.kind + ev.detail)}
-                  <li
-                    class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs"
-                  >
-                    <StatusBadge
-                      tone={historyKindTone(ev.kind)}
-                      status={ev.kind}
-                    />
-                    <span class="text-[var(--fp-muted)] break-words min-w-0"
-                      >{ev.detail}</span
-                    >
-                    <span class="fp-num text-[var(--fp-dim)] ml-auto shrink-0"
-                      >{fmtTime(new Date(ev.ts).toISOString())}</span
-                    >
-                  </li>
-                {/each}
-              </ul>
-              {#if evs.length > 1}
-                <button
-                  type="button"
-                  class="self-start text-xs font-mono text-[var(--fp-dim)] hover:text-[var(--fp-fg)]"
-                  onclick={() => (histOpen[idx] = !open)}
-                  aria-expanded={open}
-                >
-                  {open
-                    ? $tr("Show less")
-                    : $tr("Show {n} more", { n: evs.length - 1 })}
-                </button>
-              {/if}
-            {/if}
           </div>
         </Card>
       {/each}

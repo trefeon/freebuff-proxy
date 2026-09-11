@@ -116,9 +116,10 @@ func TestMaturityDryRunProbeOnly(t *testing.T) {
 	}
 }
 
-// A live touch admits the unmetered touch model through the token's own
-// session manager — even though the warming token is locked out of serving.
-func TestMaturityLiveAdmitsWhileLocked(t *testing.T) {
+// Enrollment never locks: the account stays leasable in serving rotation
+// while automation touches it. A live touch admits the unmetered touch
+// model through the token's own session manager.
+func TestMaturityEnrollStaysLeasable(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	p := newMaturityPool(t, mock, false)
@@ -127,8 +128,21 @@ func TestMaturityLiveAdmitsWhileLocked(t *testing.T) {
 	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if !p.Snapshot()[0].Locked {
-		t.Fatal("SetMaturity(true) did not lock the token out of serving")
+	if p.Snapshot()[0].Locked {
+		t.Fatal("SetMaturity(true) locked the token out of serving")
+	}
+	// Acquire eligibility ignores maturity state: the enrolled token is
+	// in the lease order.
+	toks := p.roster.Load()
+	order, _ := p.acquireOrder(toks, 0, modelB)
+	found := false
+	for _, idx := range order {
+		if idx == 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("acquire order = %v, want token 0 eligible right after enroll", order)
 	}
 	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
 
@@ -141,9 +155,44 @@ func TestMaturityLiveAdmitsWhileLocked(t *testing.T) {
 	if action != "admit" || result != "ok" {
 		t.Errorf("last touch = %q/%q, want admit/ok", action, result)
 	}
-	// The lock still holds: warming accounts never serve client traffic.
-	if !p.Snapshot()[0].Locked {
-		t.Error("live touch unlocked the token before its target")
+	// Still leasable after the touch: the run never locks.
+	if p.Snapshot()[0].Locked {
+		t.Error("live touch locked the token out of serving")
+	}
+}
+
+// An operator-manually-locked token stays out of the nightly run: no touch
+// fires, the ledger records skip:locked, and the lock survives the pass.
+func TestMaturitySkipsLockedStaysLocked(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newMaturityPool(t, mock, false)
+	now := windowNow()
+	seedStreak(p, 0, 2, false, now)
+	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	toks := p.roster.Load()
+	(*toks)[0].locked.Store(true) // operator lock, not enrollment
+	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
+
+	p.maturityTickAt(context.Background(), now)
+
+	if got := mock.SessionCreatesSnapshot(); got != 0 {
+		t.Errorf("SessionCreates = %d, want 0 (locked account)", got)
+	}
+	if got := mock.SessionProbesSnapshot(); got != 0 {
+		t.Errorf("SessionProbes = %d, want 0 (locked account)", got)
+	}
+	if _, result := maturityResult(p, 0); result != "skip:locked" {
+		t.Errorf("result = %q, want skip:locked", result)
+	}
+	snap := p.Snapshot()[0]
+	if !snap.Locked {
+		t.Error("run unlocked the operator-locked token")
+	}
+	if snap.Maturity == nil || !snap.Maturity.Enabled {
+		t.Errorf("maturity snapshot = %+v, want still enabled (skip, not disable)", snap.Maturity)
 	}
 }
 
@@ -245,7 +294,7 @@ func TestMaturityGlobalKillSwitch(t *testing.T) {
 	}
 }
 
-// Target reached on a healthy account auto-releases the lock and stops.
+// Target reached on a healthy account disables automation and stops.
 func TestMaturityAutoReleaseAtTarget(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
@@ -255,15 +304,15 @@ func TestMaturityAutoReleaseAtTarget(t *testing.T) {
 	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if !p.Snapshot()[0].Locked {
-		t.Fatal("warming token must start locked")
+	if p.Snapshot()[0].Locked {
+		t.Fatal("enrolled token must stay leasable")
 	}
 
 	p.maturityTickAt(context.Background(), now)
 
 	snap := p.Snapshot()[0]
 	if snap.Locked {
-		t.Error("target reached but the lock still holds")
+		t.Error("target reached but the token is locked")
 	}
 	if snap.Maturity == nil || snap.Maturity.Enabled {
 		t.Fatalf("maturity snapshot = %+v, want disabled after release", snap.Maturity)
@@ -298,51 +347,6 @@ func TestMaturitySkipsCooling(t *testing.T) {
 	}
 	if _, result := maturityResult(p, 0); result != "skip:cooling" {
 		t.Errorf("result = %q, want skip:cooling", result)
-	}
-}
-
-// Three consecutive non-advancing days raise the warning and stop firing.
-func TestMaturityNoAdvanceWarnStops(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newMaturityPool(t, mock, true)
-	now := windowNow()
-	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
-		t.Fatal(err)
-	}
-	day := now
-	seedStreak(p, 0, 2, false, day)
-	setMaturitySlot(p, 0, day.Add(-time.Hour), laDay(day))
-	p.maturityTickAt(context.Background(), day) // day 1: probe fires
-
-	for i := 1; i <= 3; i++ {
-		// Next night's window by construction (never a blind +24h: DST
-		// Sundays are 23h/25h Pacific days).
-		_, e := maturityWindowFor(day.Add(24 * time.Hour))
-		day = e.Add(-30 * time.Minute)
-		// Streak stuck at 2 while touches fire daily.
-		seedStreak(p, 0, 2, false, day)
-		setMaturitySlot(p, 0, day.Add(-time.Hour), laDay(day))
-		p.maturityTickAt(context.Background(), day)
-	}
-
-	snap := p.Snapshot()[0]
-	if snap.Maturity == nil || !snap.Maturity.Warn {
-		t.Fatalf("maturity snapshot = %+v, want warn after 3 flat days", snap.Maturity)
-		return
-	}
-	if snap.Maturity.NoAdvanceDays != 3 {
-		t.Errorf("NoAdvanceDays = %d, want 3", snap.Maturity.NoAdvanceDays)
-	}
-	probes := mock.SessionProbesSnapshot()
-	// One more day: warned tokens never fire again.
-	_, e := maturityWindowFor(day.Add(24 * time.Hour))
-	day = e.Add(-30 * time.Minute)
-	seedStreak(p, 0, 2, false, day)
-	setMaturitySlot(p, 0, day.Add(-time.Hour), laDay(day))
-	p.maturityTickAt(context.Background(), day)
-	if got := mock.SessionProbesSnapshot(); got != probes {
-		t.Errorf("SessionProbes grew %d → %d after warn, want no more firing", probes, got)
 	}
 }
 

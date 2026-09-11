@@ -43,10 +43,10 @@ func TestMaturityCardFromSnapshot(t *testing.T) {
 		t.Errorf("maturity card touch = %+v, want probe/ok/yes", m)
 	}
 	live := liveCardFromSnapshot(pool.TokenSnapshot{
-		Maturity: &pool.MaturitySnapshot{Enabled: true, Target: 7, Mode: "unmetered", Badge: "Cold", Warn: true, NoAdvanceDays: 3},
+		Maturity: &pool.MaturitySnapshot{Enabled: true, Target: 7, Mode: "unmetered", Badge: "Cold"},
 	})
-	if live.Maturity == nil || !live.Maturity.Warn || live.Maturity.NoAdvanceDays != 3 || live.Maturity.Badge != "Cold" {
-		t.Errorf("live maturity card = %+v, want warn/3/Cold", live.Maturity)
+	if live.Maturity == nil || !live.Maturity.Enabled || live.Maturity.Target != 7 || live.Maturity.Badge != "Cold" {
+		t.Errorf("live maturity card = %+v, want enabled/7/Cold", live.Maturity)
 	}
 	// Never opted in: no maturity key on either card.
 	bare := cardFromSnapshot(pool.TokenSnapshot{})

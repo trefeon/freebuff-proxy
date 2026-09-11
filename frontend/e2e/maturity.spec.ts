@@ -288,7 +288,7 @@ test.describe("streak maintenance", () => {
     ).toBeVisible();
   });
 
-  test("account row renders the restart-surviving event timeline", async ({
+  test("account row renders no event timeline; ledger and controls stay", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -316,16 +316,25 @@ test.describe("streak maintenance", () => {
       });
     });
     await gotoWarming(page);
-    // Timeline folds by default: latest event visible, older events behind
-    // the expander (capped at 5 recent).
-    const timeline = page.getByRole("list", {
-      name: "Maturity history for Account #1",
-    });
-    await expect(timeline).toBeVisible();
-    await expect(timeline.getByText("enabled target=7")).toBeVisible();
-    await expect(timeline.getByText("admit ok")).toBeHidden();
-    await page.getByRole("button", { name: "Show 1 more" }).click();
-    await expect(timeline.getByText("admit ok")).toBeVisible();
+    // The per-account config/touch event list is gone even though history
+    // still serves (it feeds the ledger below).
+    await expect(
+      page.getByRole("list", { name: "Maturity history for Account #1" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /Show \d+ more|Show less/ }),
+    ).toHaveCount(0);
+    // Stats, badge, toggle, and manual override stay servable — including
+    // on the operator-locked enrolled account.
+    await expect(page.getByText("Warming spend (7d)").first()).toBeVisible();
+    await expect(page.getByText("Warming").first()).toBeVisible();
+    await expect(page.getByText("Locked").first()).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "Maturity for Account #1" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Touch now" }).first(),
+    ).toBeVisible();
   });
 
   test("account row shows the last-run ledger with spend", async ({ page }) => {
@@ -346,21 +355,19 @@ test.describe("streak maintenance", () => {
     await expect(page.getByText("day 3/7").first()).toBeVisible();
   });
 
-  test("shared harness renders the seeded maturity timeline without clipping", async ({
+  test("shared harness renders the seeded maturity ledger without clipping", async ({
     page,
   }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
     await gotoWarming(page);
     // Token #1 carries a maturity object in the shared tokens fixture, so
-    // the restart-surviving timeline renders with no bespoke mocks.
-    const timeline = page.getByRole("list", {
-      name: "Maturity history for Account #1",
-    });
-    await expect(timeline).toBeVisible();
-    await page.getByRole("button", { name: "Show 1 more" }).click();
-    await expect(timeline.getByText("admit ok")).toBeVisible();
-    // Long descriptions must wrap instead of clipping header actions
+    // the ledger renders with no bespoke mocks — and no event timeline.
+    await expect(
+      page.getByRole("list", { name: "Maturity history for Account #1" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Warming spend (7d)").first()).toBeVisible();
+    // Long ledger lines must wrap instead of clipping header actions
     // (Pips 0/7 case): no card header may overflow horizontally.
     const overflow = await page.evaluate(
       () =>

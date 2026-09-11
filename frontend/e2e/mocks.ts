@@ -132,11 +132,10 @@ export async function mockDashboard(
     });
   });
 
-  // Maturity history (ADR-0016 event timeline): the Maturity page fetches
-  // this once per maturity-bearing token. Served for every token so the
-  // seeded fixture token renders its timeline under the shared harness;
-  // specs needing bespoke events re-route after mockDashboard (their
-  // later route wins).
+  // Maturity history (ADR-0016 run records): the Maturity page fetches
+  // this once per maturity-bearing token for the 7-day strip and the
+  // touches/spend/projected ledger. Served for every token; specs needing
+  // bespoke events re-route after mockDashboard (their later route wins).
   await page.route("**/admin/api/maturity/history*", async (route) => {
     const url = new URL(route.request().url());
     const token = Number(url.searchParams.get("token") ?? 0);

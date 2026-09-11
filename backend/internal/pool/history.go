@@ -12,7 +12,7 @@ import (
 //
 // Kinds: "config" (enable/disable/target/mode change), "touch" (one fire
 // outcome, skips included), "advance" (streak moved), "release" (target
-// reached, lock auto-released), "warn" (touch stopped advancing).
+// reached, automation disabled).
 type MaturityHistoryEvent struct {
 	TS       int64
 	TokenIdx int
