@@ -85,7 +85,7 @@ test("quota visit: mount fires one silent auto probe", async ({ page }) => {
       r.url().includes("/admin/tokens/test-all?auto=1"),
   );
   await page.goto("http://127.0.0.1:4173/admin/#catalog");
-  await page.getByRole("button", { name: "Allowances" }).click();
+  await page.getByRole("button", { name: "Accounts" }).click();
   await expect(
     page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
@@ -115,7 +115,7 @@ test("quota visit: remount skips the probe when already fired", async ({
       r.url().includes("/admin/tokens/test-all?auto=1"),
   );
   await page.goto("http://127.0.0.1:4173/admin/#catalog");
-  await page.getByRole("button", { name: "Allowances" }).click();
+  await page.getByRole("button", { name: "Accounts" }).click();
   await expect(
     page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
@@ -129,7 +129,7 @@ test("quota visit: remount skips the probe when already fired", async ({
     page.getByRole("heading", { name: "Tokens", exact: true }),
   ).toBeVisible();
   await page.goto("http://127.0.0.1:4173/admin/#catalog");
-  await page.getByRole("button", { name: "Allowances" }).click();
+  await page.getByRole("button", { name: "Accounts" }).click();
   await expect(
     page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
@@ -159,7 +159,7 @@ test("quota visit: failed auto probe surfaces the error path", async ({
     });
   });
   await page.goto("http://127.0.0.1:4173/admin/#catalog");
-  await page.getByRole("button", { name: "Allowances" }).click();
+  await page.getByRole("button", { name: "Accounts" }).click();
   await expect(
     page.getByRole("heading", { name: "Catalog", exact: true }),
   ).toBeVisible();
