@@ -2,13 +2,13 @@
 // the 60 minutes before the Pacific-midnight reset, replacing the old
 // per-token all-day slots).
 //
-// Enrolled (maturity-enabled) tokens stay leasable at all times:
-// enrollment never locks an account out of serving rotation. Each enrolled
-// token gets one daily low-cost touch inside the pre-reset window unless
-// client traffic already used the account today. When the cached streak
-// reaches the global target automation disables itself (no lock
-// transitions anywhere — an operator-manually-locked token is skipped by
-// the run and stays locked).
+// Universal automatic: every account is enrolled, gated only by the global
+// MATURITY_ENABLED kill-switch. There is no per-account enrollment — the
+// stored per-token enabled flag is dead input (kept for API compat,
+// ignored by the run). Each account gets one daily low-cost touch inside
+// the pre-reset window unless client traffic already used the account
+// today. No lock transitions anywhere: an operator-manually-locked token
+// is skipped by the run and stays locked.
 //
 // Safety posture: global kill-switch (MATURITY_ENABLED, default on with
 // dry-run probes), dry-run default (probe-only, zero
@@ -188,13 +188,12 @@ func unmarshalMaturity(raw string) (maturityState, error) {
 	}, nil
 }
 
-// SetMaturity enrolls or disenrolls token in the nightly streak-maintenance
-// run. Enrollment never locks: the account stays leasable in serving
-// rotation while automation touches it. Disabling stops the touches and
-// never touches the lock either (only the operator locks/unlocks).
-// target <= 0 falls back to the global MATURITY_TARGET_DAYS default (the
-// dashboard enrolls with target 0: per-account targets are gone, one global
-// 7-day target covers every account); mode "" means unmetered.
+// SetMaturity stores per-token streak-maintenance preferences (compat API).
+// The run is universal automatic: the enabled flag is stored and served
+// but ignored by eligibility, which keys only on the global switch plus
+// the health gates. mode/touchModel still resolve per token; target is
+// stored but unused (MATURITY_TARGET_DAYS is hidden/deprecated).
+// mode "" means unmetered.
 // mode premium-short spends from the account's metered pool and stays opt-in
 // per token.
 // touchModel is the per-token touch-model override; "" (or "auto") selects
@@ -346,19 +345,19 @@ func (p *Pool) maturityTickAt(ctx context.Context, now time.Time) {
 // It reports whether the touch was rate-limited (429): the nightly walk
 // aborts on the first 429 and backs off instead of hammering.
 //
-// Bookkeeping (streak refresh, advance accounting, auto-disable) runs on
-// every pass, day and night — all local, zero upstream cost. The last-run
-// ledger (skips and touches) is only written inside the nightly window, so
-// the dashboard shows last night's outcome instead of all-day skip spam.
+// Bookkeeping (streak refresh, advance accounting) runs on every pass, day
+// and night — all local, zero upstream cost. The last-run ledger (skips
+// and touches) is only written inside the nightly window, so the dashboard
+// shows last night's outcome instead of all-day skip spam.
 func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel string, idx int, tok *tokenEntry, now time.Time) (rateLimited bool) {
-	// Persist-on-exit: every mutation below (skips, touches, disable)
-	// lands in the maturity_json blob on the way out. Never-enrolled
-	// tokens no-op inside saveMaturity.
+	// Persist-on-exit: every mutation below (skips, touches) lands in the
+	// maturity_json blob on the way out. Never-touched tokens no-op
+	// inside saveMaturity.
 	defer p.saveMaturity(idx, tok)
+	// Universal automatic: every account is enrolled. The per-token
+	// enabled flag is dead input (kept stored + served for API compat,
+	// ignored here); mode + touch-model override still resolve per token.
 	st := p.maturityCopy(tok)
-	if !st.enabled {
-		return false
-	}
 	label := tokenEntryLabel(tok)
 	inWindow := maturityInWindow(now)
 
@@ -418,31 +417,9 @@ func (p *Pool) maturityTickOne(ctx context.Context, dryRun bool, touchModel stri
 		}
 	}
 
-	target := st.target
-	if target <= 0 {
-		target = p.maturityDefaultTarget()
-	}
-
 	// Advance accounting: a touch that moved the streak records it for the
 	// ledger (last_advanced + the advance history event).
 	p.maturityAccountAdvance(idx, tok, cached)
-
-	// Auto-disable: target reached on a healthy account. This is a local
-	// state change (no upstream cost) so it runs in dry-run mode too.
-	// There is no lock to release — enrollment never locks, and a
-	// manually locked token never reaches this branch (locked gate above).
-	if cached.Streak >= target {
-		tok.maturityMu.Lock()
-		tok.maturity.enabled = false
-		tok.maturity.lastResult = "released:mature"
-		tok.maturity.lastAdvanced = "yes"
-		tok.maturity.lastStreak = cached.Streak
-		tok.maturityMu.Unlock()
-		p.emitMaturity(idx, "release", fmt.Sprintf("streak=%d target=%d", cached.Streak, target))
-		p.logger.Info("pool: maturity target reached, automation disabled",
-			"token", idx+1, "token_label", label, "streak", cached.Streak, "target", target)
-		return false
-	}
 
 	// Outside the nightly window: bookkeeping above stays fresh, but the
 	// last-run ledger is untouched until tonight.
@@ -647,10 +624,10 @@ func maturityGuardTouchModel(model string) string {
 }
 
 // MaturityTouchNow fires one manual maturity touch outside the nightly
-// window (the dashboard manual override). Slot wait, window gate, and 6h
+// window (API lever; no UI wires it). Slot wait, window gate, and 6h
 // throttle are bypassed; health gates, streak freshness, and todayUsed
-// still apply. The token must have maturity enabled. It returns the action
-// (probe/admit) and result for the dashboard confirmation line.
+// still apply. Universal automatic: the per-token enabled flag is ignored.
+// It returns the action (probe/admit) and result for the confirmation line.
 func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string, error) {
 	toks := p.roster.Load()
 	if toks == nil || token < 0 || token >= len(*toks) {
@@ -663,9 +640,6 @@ func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string,
 	tok := (*toks)[token]
 	now := time.Now()
 	st := p.maturityCopy(tok)
-	if !st.enabled {
-		return "", "", fmt.Errorf("pool: maturity is not enabled for token %d", token)
-	}
 	p.clearLiftedQuarantine(tok)
 	if q := tok.quarantine.Load(); q != nil {
 		return "", "skip:quarantined", fmt.Errorf("pool: token %d is quarantined (%s)", token, q.reason)
@@ -702,12 +676,10 @@ func (p *Pool) MaturityTouchNow(ctx context.Context, token int) (string, string,
 }
 
 // maturityRecord stores a skip/result marker without touching touch times.
+// Universal automatic: no enabled gate — every account is enrolled.
 func (p *Pool) maturityRecord(tok *tokenEntry, action, result, advanced string) {
 	tok.maturityMu.Lock()
 	defer tok.maturityMu.Unlock()
-	if !tok.maturity.enabled {
-		return
-	}
 	if action != "" {
 		tok.maturity.lastAction = action
 	}

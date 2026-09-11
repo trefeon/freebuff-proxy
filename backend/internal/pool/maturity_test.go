@@ -294,8 +294,10 @@ func TestMaturityGlobalKillSwitch(t *testing.T) {
 	}
 }
 
-// Target reached on a healthy account disables automation and stops.
-func TestMaturityAutoReleaseAtTarget(t *testing.T) {
+// Universal automatic: the old target disables nothing. A streak at/above
+// the stored target leaves the token enabled + leasable, and a stored
+// disabled flag is ignored — the window tick still fires.
+func TestMaturityUniversalIgnoresTarget(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mock.StreakBody = streakBody(7, false)
@@ -304,26 +306,38 @@ func TestMaturityAutoReleaseAtTarget(t *testing.T) {
 	if err := p.SetMaturity(0, true, 7, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if p.Snapshot()[0].Locked {
-		t.Fatal("enrolled token must stay leasable")
-	}
 
 	p.maturityTickAt(context.Background(), now)
 
 	snap := p.Snapshot()[0]
 	if snap.Locked {
-		t.Error("target reached but the token is locked")
+		t.Error("token is locked, want leasable")
 	}
-	if snap.Maturity == nil || snap.Maturity.Enabled {
-		t.Fatalf("maturity snapshot = %+v, want disabled after release", snap.Maturity)
-		return
+	if snap.Maturity == nil || !snap.Maturity.Enabled {
+		t.Fatalf("maturity snapshot = %+v, want still enabled (target disables nothing)", snap.Maturity)
 	}
-	if snap.Maturity.Badge != "Mature" {
-		t.Errorf("badge = %q, want Mature", snap.Maturity.Badge)
+}
+
+// A stored disabled flag is dead input: the window tick fires anyway.
+func TestMaturityUniversalIgnoresDisabledFlag(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newMaturityPool(t, mock, true)
+	now := windowNow()
+	seedStreak(p, 0, 2, false, now)
+	if err := p.SetMaturity(0, false, 0, "", ""); err != nil {
+		t.Fatal(err)
 	}
-	// Release is local state: no touch fires on the release pass.
-	if got := mock.SessionProbesSnapshot(); got != 0 {
-		t.Errorf("SessionProbes = %d, want 0 (release needs no touch)", got)
+	setMaturitySlot(p, 0, now.Add(-time.Hour), laDay(now))
+
+	p.maturityTickAt(context.Background(), now)
+
+	if got := mock.SessionProbesSnapshot(); got != 1 {
+		t.Errorf("SessionProbes = %d, want 1 (disabled flag ignored)", got)
+	}
+	action, result := maturityResult(p, 0)
+	if action != "probe" || result != "ok" {
+		t.Errorf("last touch = %q/%q, want probe/ok", action, result)
 	}
 }
 
