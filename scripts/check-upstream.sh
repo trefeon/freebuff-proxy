@@ -4,7 +4,7 @@
 #
 # Usage:
 #   scripts/check-upstream.sh [--update-wire-baseline] [--group <registry|wire>]
-#                             [ref] [clone-dir]
+#                             [--version-only] [ref] [clone-dir]
 #
 #   ref        upstream branch or full commit SHA to compare against
 #              (default: main). A full-SHA ref additionally gates on the
@@ -25,13 +25,23 @@
 #              content hash of every wire file, then exit 0 regardless of
 #              drift. Run this by hand after porting/reviewing an upstream
 #              wire change so future runs only flag genuinely new drift.
+#   --version-only
+#              Print the vendor npm wrapper version comparison
+#              (pinned_version/live_version/live_known/version_changed, one
+#              key=value per line) and exit 0 without cloning, checking
+#              files, or writing the report. Probe for the drift workflow
+#              version gate. Cannot combine with --update-wire-baseline.
 #
 # Prints one table row per pinned file: file | pinned-sha | vendor-sha |
 # status (SAME/DRIFT/MISSING). Exit codes: 0 all SAME, 1 any DRIFT/MISSING,
 # 2 environment error (incl. a full-SHA ref the snapshots manifest does not
-# pin). The JSON report also carries wiregen_sha (the snapshots manifest
-# SHA) so the dashboard embed surfaces the generator input alongside the
-# drift data.
+# pin). The npm wrapper version NEVER flips the exit code: a version bump
+# alone still exits 0 (informational "Update available" line only); only
+# file DRIFT/MISSING drives 0/1. An unknown live version (npm missing or
+# the registry unreachable/hung) fails open to the full file check. The
+# JSON report also carries wiregen_sha (the snapshots manifest SHA) so the
+# dashboard embed surfaces the generator input alongside the drift data,
+# plus version_changed (bool) for the version gate.
 #
 # Windows: run under Git Bash, e.g.
 #   "C:\Program Files\Git\bin\bash.exe" scripts/check-upstream.sh
@@ -47,20 +57,26 @@ die() {
 }
 
 UPDATE_BASELINE=0
-if [[ "${1:-}" == "--update-wire-baseline" ]]; then
-	UPDATE_BASELINE=1
-	shift
-fi
+VERSION_ONLY=0
 GROUP_FILTER=""
-if [[ "${1:-}" == "--group" ]]; then
-	shift
+while [[ $# -gt 0 ]]; do
 	case "${1:-}" in
-		registry|wire) GROUP_FILTER="$1"; shift ;;
-		*) die "unknown --group value '${1:-}' (expected 'registry' or 'wire')" ;;
+		--update-wire-baseline) UPDATE_BASELINE=1; shift ;;
+		--version-only) VERSION_ONLY=1; shift ;;
+		--group)
+			shift
+			case "${1:-}" in
+				registry|wire) GROUP_FILTER="$1"; shift ;;
+				*) die "unknown --group value '${1:-}' (expected 'registry' or 'wire')" ;;
+			esac ;;
+		*) break ;;
 	esac
-fi
+done
 if ((UPDATE_BASELINE)) && [[ -n "$GROUP_FILTER" && "$GROUP_FILTER" != "wire" ]]; then
 	die "--update-wire-baseline writes the wire baseline; cannot combine with --group $GROUP_FILTER"
+fi
+if ((VERSION_ONLY && UPDATE_BASELINE)); then
+	die "--version-only performs no file check; cannot combine with --update-wire-baseline"
 fi
 REF="${1:-main}"
 VENDOR_URL="https://github.com/CodebuffAI/freebuff.git"
@@ -115,6 +131,56 @@ WIRE_FILES=(
 	packages/agent-runtime/src/run-programmatic-step.ts
 	common/src/tools/constants.ts
 )
+
+# Vendor npm wrapper version, fetched FIRST (before any clone/fetch) so the
+# version signal prints even when the git network is down. Fail-open helper:
+# prints the live freebuff version or an empty string and never fails — npm
+# missing, the registry unreachable, or a hung request (timeout 15 guard)
+# all yield empty, i.e. live_known=false and the workflow runs the full
+# check. Version NEVER affects the exit code (see header).
+npm_live_version() {
+	if ! command -v npm >/dev/null 2>&1; then
+		return 0
+	fi
+	local ver=""
+	if command -v timeout >/dev/null 2>&1; then
+		ver="$(timeout 15 npm view freebuff version 2>/dev/null || true)"
+	else
+		ver="$(npm view freebuff version 2>/dev/null || true)"
+	fi
+	ver="$(printf '%s' "$ver" | tr -d '\r\n[:space:]')"
+	printf '%s' "$ver"
+}
+
+PINNED_VERSION=""
+if [[ -f "$VENDOR_VERSION_FILE" ]]; then
+	PINNED_VERSION="$(tr -d '\r\n' <"$VENDOR_VERSION_FILE")"
+fi
+NPM_VERSION="$(npm_live_version)"
+LIVE_KNOWN="false"
+VERSION_CHANGED="false"
+if [[ -n "$NPM_VERSION" ]]; then
+	LIVE_KNOWN="true"
+	if [[ "$NPM_VERSION" != "$PINNED_VERSION" ]]; then
+		VERSION_CHANGED="true"
+	fi
+fi
+if [[ "$VERSION_CHANGED" == "true" ]]; then
+	echo "check-upstream: Update available — npm freebuff@$NPM_VERSION != pinned ${PINNED_VERSION:-none} (scripts/vendor-version.txt)"
+elif [[ "$LIVE_KNOWN" == "true" ]]; then
+	echo "check-upstream: VERSION SAME — npm freebuff@$NPM_VERSION == pinned ${PINNED_VERSION:-none}"
+else
+	echo "check-upstream: version unknown — npm registry unreachable or npm missing; proceeding fail-open (full check)"
+fi
+
+# --version-only: version-gate probe. No clone, no table, no report write.
+if ((VERSION_ONLY)); then
+	printf 'pinned_version=%s\n' "$PINNED_VERSION"
+	printf 'live_version=%s\n' "$NPM_VERSION"
+	printf 'live_known=%s\n' "$LIVE_KNOWN"
+	printf 'version_changed=%s\n' "$VERSION_CHANGED"
+	exit 0
+fi
 
 command -v git >/dev/null 2>&1 || die "git not found on PATH"
 if command -v sha256sum >/dev/null 2>&1; then
@@ -258,24 +324,17 @@ if [[ -z "$GROUP_FILTER" || "$GROUP_FILTER" == "wire" ]]; then
 	done
 fi
 
-# Vendor npm wrapper version (informational; never fails the check).
-NPM_VERSION=""
-if command -v npm >/dev/null 2>&1; then
-	NPM_VERSION="$(npm view freebuff version 2>/dev/null || true)"
-fi
-PINNED_VERSION=""
-if [[ -f "$VENDOR_VERSION_FILE" ]]; then
-	PINNED_VERSION="$(tr -d '\r\n' <"$VENDOR_VERSION_FILE")"
-fi
+# Vendor npm wrapper version row (informational; fetched above before the
+# clone — reused here, never re-fetched, and never flips the exit code:
+# only file DRIFT/MISSING sets drift).
 if [[ -n "$NPM_VERSION" ]]; then
-	if [[ -n "$PINNED_VERSION" && "$NPM_VERSION" != "$PINNED_VERSION" ]]; then
+	if [[ "$VERSION_CHANGED" == "true" ]]; then
 		printf '%-12s %-64s %-14s %-14s %s\n' "npm" "freebuff" "${PINNED_VERSION:-none}" "$NPM_VERSION" "VERSION"
-		echo "check-upstream: npm freebuff@$NPM_VERSION != pinned ${PINNED_VERSION:-none} (scripts/vendor-version.txt) — record the bump on next sync"
 	else
 		printf '%-12s %-64s %-14s %-14s %s\n' "npm" "freebuff" "${PINNED_VERSION:-none}" "$NPM_VERSION" "SAME"
 	fi
 else
-	echo "check-upstream: npm not on PATH — skipping vendor npm version check"
+	echo "check-upstream: npm live version unknown — skipping vendor npm version row"
 fi
 
 # Emit machine-readable summary for the drift workflow. Path is honored
@@ -290,6 +349,7 @@ DRIFT_REPORT="${DRIFT_REPORT:-$REPO_ROOT/.drift-report.json}"
 	printf '  "wiregen_sha": "%s",\n' "$WIREGEN_SHA"
 	printf '  "vendor_version": "%s",\n' "$NPM_VERSION"
 	printf '  "vendor_version_pinned": "%s",\n' "$PINNED_VERSION"
+	printf '  "version_changed": %s,\n' "$VERSION_CHANGED"
 	printf '  "files": [\n'
 	i=0
 	for entry in "${JSON_ENTRIES[@]}"; do
