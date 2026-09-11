@@ -75,23 +75,6 @@
     }
     return "";
   }
-  // Serving accounts: 0-based pool indexes whose live freebucks.prices map
-  // carries this model id. Displayed 1-based as #N chips.
-  function servingAccounts(id) {
-    const out = [];
-    for (const [i, t] of (live?.tokens ?? []).entries()) {
-      if (t.freebucks?.prices?.[id] != null) out.push(t.index ?? i);
-    }
-    return out;
-  }
-  function expandAccount(idx) {
-    try {
-      sessionStorage.setItem("fp-tokens-expand", String(idx));
-    } catch {
-      // storage unavailable (private mode) — the hash nav still works
-    }
-    location.hash = "tokens";
-  }
   // Price staleness: the displayed price came from the live join, but every
   // contributing token is quota_stale (pool restarted since last probe).
   function priceIsStale(id) {
@@ -162,14 +145,12 @@
             <th scope="col">{$tr("Served")}</th>
             <th scope="col">{$tr("Agent")}</th>
             <th scope="col">{$tr("Price")}</th>
-            <th scope="col">{$tr("Accounts")}</th>
           </tr>
         </thead><tbody>
           {#each orderedModels as m (m.id)}
             {@const bound = Boolean(m.agent)}
             {@const st = modelState(m)}
             {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
-            {@const accounts = servingAccounts(m.id)}
             {@const stale = priceIsStale(m.id)}
             <tr>
               <td>
@@ -249,29 +230,6 @@
                   {/if}
                 </span></td
               >
-              <td>
-                {#if accounts.length > 0}
-                  <span class="inline-flex items-center gap-1 flex-wrap">
-                    {#each accounts as idx (idx)}
-                      <a
-                        href="#tokens"
-                        class="px-1.5 py-0.5 rounded text-[10px] font-mono border text-[var(--fp-muted)] bg-[var(--fp-surface)] border-[var(--fp-border)] hover:text-[var(--fp-text)] hover:border-[var(--fp-dim)]"
-                        title={$tr("Show account #{index} on the Tokens page", {
-                          index: idx + 1,
-                        })}
-                        onclick={(e) => {
-                          e.preventDefault();
-                          expandAccount(idx);
-                        }}
-                      >
-                        #{idx + 1}
-                      </a>
-                    {/each}
-                  </span>
-                {:else}
-                  <span class="text-[var(--fp-dim)]">—</span>
-                {/if}
-              </td>
             </tr>
           {/each}
         </tbody>
@@ -286,7 +244,6 @@
         {@const bound = Boolean(m.agent)}
         {@const st = modelState(m)}
         {@const effectivePrice = priceLabel(m.id) || m.price_label || "—"}
-        {@const accounts = servingAccounts(m.id)}
         {@const stale = priceIsStale(m.id)}
         <li class="fp-inset rounded p-3 flex flex-col gap-2 min-w-0">
           <div class="flex items-start justify-between gap-2 min-w-0">
@@ -361,32 +318,6 @@
                 class="fp-mono text-[var(--fp-muted)] text-right break-all min-w-0"
                 >{m.agent}</span
               >
-            {:else}
-              <span class="text-[var(--fp-dim)]">—</span>
-            {/if}
-          </div>
-          <div class="flex items-center justify-between gap-2 text-xs min-w-0">
-            <span class="text-[var(--fp-dim)] shrink-0">{$tr("Accounts")}</span>
-            {#if accounts.length > 0}
-              <span
-                class="inline-flex items-center justify-end gap-1 flex-wrap min-w-0"
-              >
-                {#each accounts as idx (idx)}
-                  <a
-                    href="#tokens"
-                    class="px-1.5 py-0.5 rounded text-[10px] font-mono border text-[var(--fp-muted)] bg-[var(--fp-surface)] border-[var(--fp-border)] hover:text-[var(--fp-text)] hover:border-[var(--fp-dim)]"
-                    title={$tr("Show account #{index} on the Tokens page", {
-                      index: idx + 1,
-                    })}
-                    onclick={(e) => {
-                      e.preventDefault();
-                      expandAccount(idx);
-                    }}
-                  >
-                    #{idx + 1}
-                  </a>
-                {/each}
-              </span>
             {:else}
               <span class="text-[var(--fp-dim)]">—</span>
             {/if}
