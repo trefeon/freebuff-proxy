@@ -172,9 +172,16 @@ func TestSmartProbeOverloadAbortSparseReburst(t *testing.T) {
 
 	ctx := context.Background()
 	probeTick(t, p, ctx, now)
-	for i, m := range []*testutil.MockUpstream{mock0, mock1, mock2} {
-		if got := m.RequestsSnapshot(); got != 1 {
-			t.Fatalf("token %d upstream hits = %d, want 1 (round reached every token)", i, got)
+	// mock0 is always hit exactly once (nothing else can complete first:
+	// the rest park behind the closed gate, so the abort always comes
+	// from mock0). Parked-probe arrival before the abort is
+	// load-dependent, so mocks1-2 are 0-or-1 here, never more.
+	if got := mock0.RequestsSnapshot(); got != 1 {
+		t.Fatalf("token0 upstream hits = %d, want 1 (round reached it)", got)
+	}
+	for i, m := range []*testutil.MockUpstream{mock1, mock2} {
+		if got := m.RequestsSnapshot(); got > 1 {
+			t.Fatalf("token %d upstream hits = %d, want <= 1 (abort spares the rest)", i+1, got)
 		}
 	}
 	if got := smartBackoff(p); got != 2 {
@@ -191,13 +198,16 @@ func TestSmartProbeOverloadAbortSparseReburst(t *testing.T) {
 	// The gate opens first so the canary probes answer at once.
 	mock0.SessionHandler = nil
 	close(gate)
+	before := [...]int{mock0.RequestsSnapshot(), mock1.RequestsSnapshot(), mock2.RequestsSnapshot()}
 	p.smartProbeKick()
 	probeTick(t, p, ctx, now.Add(30*time.Second))
-	if got := mock2.RequestsSnapshot(); got != 1 {
-		t.Errorf("token2 upstream hits = %d, want 1 (sparse round spares it)", got)
+	if got := mock2.RequestsSnapshot(); got != before[2] {
+		t.Errorf("token2 upstream hits = %d, want %d (sparse round spares it)", got, before[2])
 	}
-	if got := mock0.RequestsSnapshot() + mock1.RequestsSnapshot() + mock2.RequestsSnapshot(); got != 5 {
-		t.Errorf("roster upstream hits = %d, want 5 (3 + sparse canary of 2)", got)
+	// Eligible is all three (round 1 saved quota nowhere), sparse-capped
+	// to the first two in roster order; both serve clean.
+	if got, want := mock0.RequestsSnapshot()+mock1.RequestsSnapshot()+mock2.RequestsSnapshot(), before[0]+before[1]+before[2]+2; got != want {
+		t.Errorf("roster upstream hits = %d, want %d (sparse canary of exactly 2)", got, want)
 	}
 	// A sparse canary sample is not fleet-health evidence: the backoff
 	// survives the clean sparse round.

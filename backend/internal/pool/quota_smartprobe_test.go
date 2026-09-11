@@ -256,11 +256,21 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 
 	ctx := context.Background()
 	probeTick(t, p, ctx, now)
+	// mock0 is always hit exactly once (nothing else can complete first:
+	// the rest park behind the closed gate, so the abort always comes
+	// from mock0). How many of the parked probes ARRIVED before the
+	// abort is load-dependent — a worker descheduled past the abort
+	// never dispatches its job — so mocks1-3 are 0-or-1 here, never more.
 	if got := mocks[0].RequestsSnapshot(); got != 1 {
 		t.Fatalf("token0 upstream hits = %d, want 1 (round reached it)", got)
 	}
+	for i, m := range mocks[1:4] {
+		if got := m.RequestsSnapshot(); got > 1 {
+			t.Fatalf("token %d upstream hits = %d, want <= 1 (abort spares the rest)", i+1, got)
+		}
+	}
 	if got := mocks[4].RequestsSnapshot(); got != 0 {
-		t.Errorf("token4 upstream hits = %d, want 0 (429 aborted the round before dispatch)", got)
+		t.Errorf("token4 upstream hits = %d, want 0 (fifth job never frees a worker pre-abort)", got)
 	}
 	if got := smartBackoff(p); got != 2 {
 		t.Errorf("backoff = %d, want 2 (doubled on 429)", got)
@@ -270,6 +280,10 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 	probeTick(t, p, ctx, now.Add(61*time.Second))
 	if got := mocks[4].RequestsSnapshot(); got != 0 {
 		t.Errorf("token4 upstream hits = %d after 61s tick, want 0 (backoff holds)", got)
+	}
+	before := make([]int, len(mocks))
+	for i, m := range mocks {
+		before[i] = m.RequestsSnapshot()
 	}
 	// Past the doubled interval the round completes and resets. Traffic is
 	// still flowing (re-marked: without it the pool would have aged into
@@ -281,14 +295,10 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 	markPoolActive(p, now.Add(130*time.Second))
 	probeTick(t, p, ctx, now.Add(130*time.Second))
 	for i, m := range mocks {
-		// Tokens 0-3 were hit in the aborted round and again here; token
-		// 4 was spared by the abort, so the recovery round is its first
-		// hit. All five carry quota afterwards (full roster covered).
-		want := 2
-		if i == 4 {
-			want = 1
-		}
-		if got := m.RequestsSnapshot(); got != want {
+		// The recovery round is abort-free, so every stale token is fed
+		// and hit exactly once more (round 1 saved no quota anywhere:
+		// the 429 and the canceled parks carry none).
+		if got, want := m.RequestsSnapshot(), before[i]+1; got != want {
 			t.Errorf("token %d upstream hits = %d, want %d (recovered full round)", i, got, want)
 		}
 	}
