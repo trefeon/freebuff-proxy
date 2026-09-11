@@ -3,6 +3,14 @@
 # files (backend/internal/registry/testdata/upstream/), review wire drift,
 # extract new CLI/model features, verify hash parity, and run tests.
 #
+# Exit rule: --check exits nonzero on pinned-FILE drift only. The npm wrapper
+# version (freebuff CLI package) is informational — it prints a VERSION row
+# but never increments drift_count and never affects the exit code. Version
+# gating lives in the workflow (version_gate job); this script just reports.
+# In sync mode the npm pin (scripts/vendor-version.txt) and the
+# snapshots.json vendor_version stamp update together from the same
+# NPM_VERSION before the parity check, so the two pins never skew.
+#
 # Usage:
 #   scripts/sync-upstream.sh [options] [ref] [clone-dir]
 #
@@ -178,6 +186,8 @@ echo "    Target upstream commit: $COMMIT_SUMMARY"
 if [[ -n "$PREV_UPSTREAM_SHA" && "$PREV_UPSTREAM_SHA" != "$UPSTREAM_SHA" ]]; then
 	COMMIT_COUNT="$(git -C "$CLONE_DIR" rev-list --count "${PREV_UPSTREAM_SHA}..${UPSTREAM_SHA}" 2>/dev/null || echo "several")"
 	echo "    Upstream progressed by $COMMIT_COUNT commit(s) (${PREV_UPSTREAM_SHA:0:7} -> ${UPSTREAM_SHA:0:7})"
+	# Log range for the bump commit body (capped; full history stays in the clone).
+	git -C "$CLONE_DIR" log --oneline --reverse "${PREV_UPSTREAM_SHA}..${UPSTREAM_SHA}" 2>/dev/null | head -50 | sed 's/^/      /' || true
 fi
 echo
 
@@ -279,11 +289,14 @@ for f in "${FILES[@]}"; do
 	printf '%-26s %-14s %-14s %s\n' "$f" "$pinned_sha" "$vendor_sha" "$status"
 done
 
-echo
-
-# 2b. Vendor npm wrapper version (freebuff CLI package). Best-effort: npm
-#     not on PATH is fine; in sync mode the pin auto-updates.
+# 2b. Vendor npm wrapper version (freebuff CLI package). Informational only:
+#     prints a VERSION row but never touches drift_count and never affects
+#     --check exit. Version gating lives in the workflow version_gate job.
+#     In sync mode the pin (scripts/vendor-version.txt) and the
+#     snapshots.json vendor_version stamp update together from the same
+#     NPM_VERSION before the parity check below, so the two pins never skew.
 VENDOR_VERSION_FILE="$REPO_ROOT/scripts/vendor-version.txt"
+WIRE_SNAPSHOTS_FILE="$REPO_ROOT/backend/internal/wirefacts/testdata/wire/snapshots.json"
 NPM_VERSION=""
 if command -v npm >/dev/null 2>&1; then
 	NPM_VERSION="$(npm view freebuff version 2>/dev/null || true)"
@@ -292,17 +305,24 @@ PINNED_VERSION=""
 if [[ -f "$VENDOR_VERSION_FILE" ]]; then
 	PINNED_VERSION="$(tr -d '\r\n' <"$VENDOR_VERSION_FILE")"
 fi
+VERSION_UPDATED=0
 if [[ -n "$NPM_VERSION" ]]; then
 	if [[ "$NPM_VERSION" == "$PINNED_VERSION" ]]; then
-		echo "Vendor npm package: $NPM_VERSION (SAME)"
+		printf '%-26s %-14s %-14s %s\n' "VERSION" "${PINNED_VERSION:-none}" "$NPM_VERSION" "SAME"
 	else
+		printf '%-26s %-14s %-14s %s\n' "VERSION" "${PINNED_VERSION:-none}" "$NPM_VERSION" "VERSION"
 		if ((CHECK_ONLY)); then
-			echo "Vendor npm package: $NPM_VERSION (DRIFT from pinned $PINNED_VERSION)"
-			drift_count=$((drift_count + 1))
+			echo "Vendor npm package: $NPM_VERSION differs from pinned ${PINNED_VERSION:-none} (version-only; ignored by --check exit)"
 		else
 			printf '%s\n' "$NPM_VERSION" >"$VENDOR_VERSION_FILE"
-			echo "Vendor npm package: updated $PINNED_VERSION -> $NPM_VERSION"
+			if [[ -f "$WIRE_SNAPSHOTS_FILE" ]]; then
+				WIRE_SNAPSHOTS_TMP="$(mktemp)"
+				sed 's/"vendor_version"[[:space:]]*:[[:space:]]*"[^"]*"/"vendor_version": "'"$NPM_VERSION"'"/' "$WIRE_SNAPSHOTS_FILE" >"$WIRE_SNAPSHOTS_TMP" &&
+					mv "$WIRE_SNAPSHOTS_TMP" "$WIRE_SNAPSHOTS_FILE"
+			fi
+			echo "Vendor npm package: updated ${PINNED_VERSION:-none} -> $NPM_VERSION (vendor-version.txt + snapshots.json stamped together)"
 			updated_count=$((updated_count + 1))
+			VERSION_UPDATED=1
 		fi
 	fi
 else
@@ -313,14 +333,14 @@ echo
 # 3. If in check-only mode and drift found, exit
 if ((CHECK_ONLY)); then
 	if ((drift_count > 0)); then
-		echo "sync-upstream: DRIFT detected in $drift_count file(s)/pin(s). Run without --check to synchronize."
+		echo "sync-upstream: DRIFT detected in $drift_count pinned file(s). Run without --check to synchronize. (npm VERSION drift never affects this exit)"
 		exit 1
 	else
 		echo "sync-upstream: All pinned files match upstream perfectly."
 	fi
 else
 	if ((updated_count > 0)); then
-		echo "==> 3. Updated $updated_count pinned file(s) in backend/internal/registry/testdata/upstream/"
+		echo "==> 3. Updated $updated_count pinned file(s)/pin(s) in backend/internal/registry/testdata/upstream/"
 	else
 		echo "==> 3. All pinned files are already up-to-date (0 files updated)."
 	fi
@@ -383,13 +403,13 @@ fi
 # 6. Show git status summary of changes
 echo
 echo "==> Upstream Sync Complete!"
-if git -C "$REPO_ROOT" diff --quiet backend/internal/registry/testdata/upstream; then
+if git -C "$REPO_ROOT" diff --quiet backend/internal/registry/testdata/upstream scripts/vendor-version.txt backend/internal/wirefacts/testdata/wire/snapshots.json; then
 	echo "No working tree changes (pins were already identical to upstream)."
 else
-	echo "Working tree changes in backend/internal/registry/testdata/upstream/:"
-	git -C "$REPO_ROOT" status --short backend/internal/registry/testdata/upstream
+	echo "Working tree changes in pins:"
+	git -C "$REPO_ROOT" status --short backend/internal/registry/testdata/upstream scripts/vendor-version.txt backend/internal/wirefacts/testdata/wire/snapshots.json
 	echo
 	echo "Suggested commit command:"
-	echo "  git add backend/internal/registry/testdata/upstream"
+	echo "  git add backend/internal/registry/testdata/upstream scripts/vendor-version.txt backend/internal/wirefacts/testdata/wire/snapshots.json"
 	echo "  git commit -m \"chore(registry): sync pinned upstream models to vendor ${UPSTREAM_SHA:0:7}\""
 fi
