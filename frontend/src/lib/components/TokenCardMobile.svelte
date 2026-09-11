@@ -163,8 +163,8 @@
     </div>
   </div>
 
-  <!-- Usage stats: cooldown banner, then msgs / runs+reqs / Freebucks in
-       one grid; the Freebucks today fraction is a bar, not a text row. -->
+  <!-- Usage stats: cooldown banner, then msgs / runs+reqs in one grid.
+       Freebucks live on the Plans page. -->
   <div class="flex flex-col gap-2">
     {#if token.cooldown_active}
       {@const cd = cooldownLabel(token, now)}
@@ -175,7 +175,7 @@
       </div>
     {/if}
     <div class="fp-inset px-2.5 py-2 text-xs">
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-2 gap-2">
         <div class="min-w-0 text-[var(--fp-muted)]">
           {#if token.daily_limit > 0}
             <span class="fp-num text-[var(--fp-text)]"
@@ -209,45 +209,6 @@
             {/if}</span
           >
         </div>
-        {#if token.freebucks}
-          {@const fbBal = Math.max(
-            0,
-            Math.round(token.freebucks.balance ?? token.freebucks.Balance ?? 0),
-          )}
-          {@const fbDaily =
-            token.freebucks.daily ?? token.freebucks.Daily ?? {}}
-          {@const fbRem = Math.max(
-            0,
-            Math.round(fbDaily.remaining ?? fbDaily.Remaining ?? 0),
-          )}
-          {@const fbLim = Math.max(
-            0,
-            Math.round(fbDaily.limit ?? fbDaily.Limit ?? 0),
-          )}
-          <div class="min-w-0">
-            <span class="fp-num text-[var(--fp-accent)] font-semibold"
-              >{fbBal} {$tr("Freebucks")}</span
-            >
-            {#if fbLim > 0}
-              <span class="text-[var(--fp-muted)]">
-                · {fbRem}/{fbLim} {$tr("today")}</span
-              >
-              <div
-                class="mt-1 h-1 rounded bg-[var(--fp-surface)]"
-                role="progressbar"
-                aria-valuemin="0"
-                aria-valuemax={fbLim}
-                aria-valuenow={fbLim - fbRem}
-                aria-label={$tr("Freebucks today")}
-              >
-                <div
-                  class="h-full rounded bg-[var(--fp-accent)]"
-                  style={`width: ${fbLim > 0 ? Math.min(100, Math.round(((fbLim - fbRem) / fbLim) * 100)) : 0}%`}
-                ></div>
-              </div>
-            {/if}
-          </div>
-        {/if}
       </div>
     </div>
   </div>
