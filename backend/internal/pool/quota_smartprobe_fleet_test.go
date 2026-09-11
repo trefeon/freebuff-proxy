@@ -143,25 +143,32 @@ func TestSmartProbeOverloadAbortSparseReburst(t *testing.T) {
 	defer mock1.Close()
 	mock2 := testutil.NewMock()
 	defer mock2.Close()
-	p := newTestPool(t, mock0, mock1, mock2)
-	setQuotaAutoProbe(p, true)
-	now := time.Now()
-	markPoolActive(p, now)
-	// token0 hits a saturated upstream instantly; the rest answer slowly
-	// so the abort deterministically lands first.
+	// token0 hits a saturated upstream instantly; the rest park behind a
+	// test-owned gate, so the abort deterministically lands first by
+	// construction, not by a timing margin (they can only leave via the
+	// client's post-abort cancel while the gate stays closed).
 	mock0.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = io.WriteString(w, `{"error":"service_overloaded","message":"upstream saturated, try again later"}`)
 	}
-	slowProbe := func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(300 * time.Millisecond)
+	gate := make(chan struct{})
+	gatedProbe := func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-gate:
+		case <-r.Context().Done():
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"status":"active","instanceId":"","rateLimitsByModel":{"deepseek/deepseek-v4-flash":{"model":"deepseek/deepseek-v4-flash","limit":6,"recentCount":1}}}`)
 	}
-	mock1.SessionHandler = slowProbe
-	mock2.SessionHandler = slowProbe
+	mock1.SessionHandler = gatedProbe
+	mock2.SessionHandler = gatedProbe
+	p := newTestPool(t, mock0, mock1, mock2)
+	setQuotaAutoProbe(p, true)
+	now := time.Now()
+	markPoolActive(p, now)
 
 	ctx := context.Background()
 	probeTick(t, p, ctx, now)
@@ -181,7 +188,9 @@ func TestSmartProbeOverloadAbortSparseReburst(t *testing.T) {
 	}
 	// The fleet recovers; the kicked round inside the sparse window must
 	// sample at most the sparse cap instead of re-bursting the roster.
+	// The gate opens first so the canary probes answer at once.
 	mock0.SessionHandler = nil
+	close(gate)
 	p.smartProbeKick()
 	probeTick(t, p, ctx, now.Add(30*time.Second))
 	if got := mock2.RequestsSnapshot(); got != 1 {

@@ -233,17 +233,25 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 	now := time.Now()
 	markPoolActive(p, now)
 	mocks[0].SetRateLimit(true)
-	// The rest answer slowly: token0's instant 429 lands before any worker
-	// frees up for the fifth token, so the abort deterministically spares
-	// it (jobs feed in roster order; only a finished job frees a worker).
-	slowProbe := func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(300 * time.Millisecond)
+	// The rest park behind a test-owned gate instead of answering: with
+	// the gate closed they can only leave via the client's cancel, which
+	// fires after token0's instant 429 records the abort — so the abort
+	// deterministically spares the fifth token by construction, not by a
+	// timing margin (jobs feed in roster order; only a finished job frees
+	// a worker, and every finish happens-after the abort).
+	gate := make(chan struct{})
+	gatedProbe := func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-gate:
+		case <-r.Context().Done():
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"status":"active","instanceId":"","rateLimitsByModel":{"deepseek/deepseek-v4-flash":{"model":"deepseek/deepseek-v4-flash","limit":6,"recentCount":1}}}`)
 	}
 	for _, m := range mocks[1:] {
-		m.SessionHandler = slowProbe
+		m.SessionHandler = gatedProbe
 	}
 
 	ctx := context.Background()
@@ -267,7 +275,9 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 	// still flowing (re-marked: without it the pool would have aged into
 	// WARM, whose doubled 10m cadence correctly holds much longer). Every
 	// token is stale again (quota older than the fresh window), so the
-	// full roster probes.
+	// full roster probes. The gate opens first so every probe answers at
+	// once — no timing involved anywhere in this test.
+	close(gate)
 	markPoolActive(p, now.Add(130*time.Second))
 	probeTick(t, p, ctx, now.Add(130*time.Second))
 	for i, m := range mocks {
