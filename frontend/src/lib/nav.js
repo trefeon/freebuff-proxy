@@ -75,7 +75,7 @@ export const NAV_ITEMS = [
 export const LEGACY_PAGE_REDIRECTS = {
   setup: "overview",
   maturity: { page: "tokens", tab: "warming" },
-  quota: { page: "catalog", tab: "allowances" },
+  quota: { page: "catalog", tab: "accounts" },
   models: { page: "catalog", tab: "models" },
   logs: "activity",
   metrics: { page: "activity", tab: "metrics" },

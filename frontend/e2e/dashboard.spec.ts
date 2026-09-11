@@ -171,7 +171,7 @@ test.describe("dashboard hermetic mocks", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await page
       .waitForResponse(
         (r) => r.url().includes("/admin/api/tokens") && r.status() === 200,
@@ -220,13 +220,12 @@ test.describe("dashboard hermetic mocks", () => {
     expect(tokensCount).toBeGreaterThanOrEqual(2);
   });
 
-  test("Quota Tracker served list hides models the gateway cannot admit", async ({
+  test("Models tab renders the served list once, cheapest first", async ({
     page,
   }) => {
     const f = loadFixtures();
-    // Upstream prices maps carry models with no gateway agent binding
-    // (unusable rows the user flagged); the catalog fixture binds agents
-    // only for the 7 usable models.
+    // Upstream prices maps carry models with no gateway agent binding;
+    // the Models tab renders the catalog once with live prices joined in.
     const pricedTokens = JSON.parse(JSON.stringify(f.tokens));
     pricedTokens.tokens[0].freebucks = {
       balance: 20,
@@ -236,26 +235,31 @@ test.describe("dashboard hermetic mocks", () => {
       prices: {
         "upstage/solar-pro4": 0,
         "deepseek/deepseek-v4-flash": 15,
-        "openai/gpt-5.6-luna-es": 20,
-        "crof/kimi-k3-eco": 101,
       },
     };
     await mockDashboard(page, f, { tokens: pricedTokens });
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Models" }).click();
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Served models").first()).toBeVisible();
+    // Single shared note: live upstream values are identical for every
+    // account in the region (no per-account model lists anymore).
+    await expect(page.getByTestId("models-note")).toContainText(
+      "identical for every account in the region",
+    );
     await expect(page.getByText("upstage/solar-pro4").first()).toBeVisible();
     await expect(
       page.getByText("deepseek/deepseek-v4-flash").first(),
     ).toBeVisible();
-    await expect(page.getByText("openai/gpt-5.6-luna-es")).toHaveCount(0);
-    await expect(page.getByText("crof/kimi-k3-eco")).toHaveCount(0);
+    // Cheapest first: the 0-price row sorts above the priced row.
+    const ids = await page.locator("table.fp-table td code").allTextContents();
+    expect(ids.indexOf("upstage/solar-pro4")).toBeLessThan(
+      ids.indexOf("deepseek/deepseek-v4-flash"),
+    );
   });
 
-  test("Quota Tracker labels restart-restored quota as last-seen", async ({
+  test("Accounts rows render without per-card reset lines", async ({
     page,
   }) => {
     const f = loadFixtures();
@@ -266,25 +270,25 @@ test.describe("dashboard hermetic mocks", () => {
     await mockDashboard(page, f, { tokens: staleTokens });
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
     ).toBeVisible();
-    // Stale note renders; session/premium bars are gone so the token shows
-    // the Freebucks empty-state hint. Legacy per-model rows are gone, so
-    // no model ids render from quota rows.
-    await expect(page.getByText("before restart").first()).toBeVisible();
+    // Compact rows carry no per-card reset explainer: the restart note and
+    // the legacy session/premium bars are gone from this page.
+    await expect(page.getByText("before restart")).toHaveCount(0);
     await expect(page.getByText("Shared pool")).toHaveCount(0);
   });
-  test("Quota Tracker header carries the reset countdown when given a clock", async ({
+  test("Accounts reset strip carries the shared countdown", async ({
     page,
   }) => {
     const f = loadFixtures();
-    // Metered account (issue #364): the header joins the daily figures with
-    // the live "resets in" countdown once the page clock is passed in.
+    // Metered account (issue #364): the row keeps the daily figures and
+    // wallet; the live "resets in" countdown renders once in the global
+    // strip, shared for all accounts.
     const meteredTokens = JSON.parse(JSON.stringify(f.tokens));
     meteredTokens.tokens[0].freebucks = {
       balance: 50,
@@ -296,48 +300,15 @@ test.describe("dashboard hermetic mocks", () => {
     await mockDashboard(page, f, { tokens: meteredTokens });
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Account #1" }),
     ).toBeVisible();
     const header = page.getByTestId("freebucks-header").first();
     await expect(header).toContainText("30/75 Freebucks daily");
-    await expect(header).toContainText("resets in");
     await expect(header).toContainText("20 in wallet");
-  });
-  test("Quota Tracker renders a usage sparkline from quota history", async ({
-    page,
-  }) => {
-    const f = loadFixtures();
-    await mockDashboard(page, f);
-    await page.route("**/admin/api/quota/history*", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          enabled: true,
-          token: 0,
-          model: "deepseek/deepseek-v4-flash",
-          snapshots: [
-            { ts: 1785892800000, limit: 75, recent: 28, reset_at: 0 },
-            { ts: 1785896400000, limit: 75, recent: 30, reset_at: 0 },
-            { ts: 1785900000000, limit: 75, recent: 31, reset_at: 0 },
-          ],
-        }),
-      });
-    });
-
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Account #1" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("img", { name: "Session usage history" }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByText("3 samples · latest 31/75").first(),
-    ).toBeVisible();
+    await expect(header).not.toContainText("resets in");
+    await expect(page.getByTestId("reset-strip")).toContainText("resets in");
   });
 
   test("Settings renders catalog groups and saves a toggled bool into the .env", async ({
@@ -754,14 +725,14 @@ test.describe("dashboard hermetic mocks", () => {
     await mockDashboard(page, f);
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Models" }).click();
     await page
       .waitForResponse(
         (r) => r.url().includes("/admin/api/models") && r.status() === 200,
         { timeout: 5000 },
       )
       .catch(() => {});
-    // Models is the default Catalog tab: table assertions stay, scoped to
-    // the merged page.
+    // Models tab: table assertions stay, scoped to the merged page.
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
@@ -805,6 +776,7 @@ test.describe("dashboard hermetic mocks", () => {
     await mockDashboard(page, f, { tokens: pricedTokens });
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
+    await page.getByRole("button", { name: "Models" }).click();
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();

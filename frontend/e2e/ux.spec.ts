@@ -737,7 +737,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     );
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
@@ -761,31 +761,21 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     await expect(
       page.getByRole("heading", { name: "Session quota by model" }),
     ).toHaveCount(0);
-    // The accounting revamp notice renders once at page level, not per
-    // account card (the per-card unmetered models section was removed to
-    // keep cards compact — issue #332/#335 section dropped).
-    await expect(page.getByText("Meet Freebucks")).toHaveCount(1);
+    // The accounting revamp notice is gone from this page (no per-card
+    // explainers; the served-models list lives once on the Models tab).
+    await expect(page.getByText("Meet Freebucks")).toHaveCount(0);
     await expect(page.getByText("Unmetered Models")).toHaveCount(0);
-    // Per-account request-limit chips render per card; a day-capped account
-    // shows the Pacific-midnight reset countdown.
-    await expect(page.getByText("req/min")).toHaveCount(2);
-    await expect(page.getByText("req/day")).toHaveCount(2);
-    await expect(page.getByText("5/1500")).toHaveCount(1);
-    await expect(page.getByText("12/30")).toHaveCount(1);
-    await expect(page.getByText("1500/1500")).toHaveCount(1);
-    await expect(page.getByText(/daily limit reached — resets 1h/)).toHaveCount(
-      1,
-    );
+    // Compact rows: one per pooled account; a day-capped account keeps the
+    // status chip while the countdown lives once in the shared strip.
+    await expect(page.getByTestId("account-row")).toHaveCount(2);
+    await expect(page.getByText("daily limit reached")).toHaveCount(1);
+    await expect(page.getByTestId("reset-strip")).toHaveCount(0);
   });
 
   // ---------------------------------------------------------------------------
-  // 10b. Quota Tracker: request-limit chips survive the ?view=live hot poll
+  // 10b. Quota Tracker: compact account rows survive the ?view=live hot poll
   // ---------------------------------------------------------------------------
-  // Regression: requests_per_* rode the full shape only, so the first live
-  // poll wiped the req/min + req/day chips until the next full refresh.
-  test("quota: request-limit chips survive the live hot poll", async ({
-    page,
-  }) => {
+  test("quota: account rows survive the live hot poll", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(
       page,
@@ -806,8 +796,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       { loginPage: true },
     );
     // Live-shape override (registered after mockDashboard so it wins for the
-    // hot-poll URL): the true live card carries session/quota rows plus the
-    // request-limit counters — and nothing account-stable.
+    // hot-poll URL): the true live card carries session/quota rows — and
+    // nothing account-stable.
     await page.route("**/admin/api/tokens?view=live", async (route) => {
       await route.fulfill({
         status: 200,
@@ -842,9 +832,11 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     });
 
     await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
-    await expect(page.getByText("req/min")).toBeVisible();
-    // Wait for the 10s hot poll to land, then prove the chips persist.
+    await page.getByRole("button", { name: "Accounts" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    // Wait for the 10s hot poll to land, then prove the row persists.
     await page.waitForResponse(
       (r) =>
         r.url().includes("/admin/api/tokens") &&
@@ -852,43 +844,14 @@ test.describe("operator UX journey (hermetic mocks)", () => {
         r.status() === 200,
       { timeout: 15000 },
     );
-    await expect(page.getByText("req/min")).toBeVisible();
-    await expect(page.getByText("req/day")).toBeVisible();
-    await expect(page.getByText("5/1500")).toBeVisible();
-    await expect(page.getByText("2/30")).toBeVisible();
-  });
-
-  test("quota: streak indicator renders progress dots and perk countdown", async ({
-    page,
-  }) => {
-    const f = loadFixtures();
-    await mockDashboard(
-      page,
-      f,
-      {
-        tokens: tokensPayload([
-          tokenRow(0, {
-            streak: 5,
-            today_used: true,
-          }),
-          tokenRow(1, {
-            streak: 12,
-            today_used: false,
-          }),
-        ]),
-      },
-      { loginPage: true },
-    );
-
-    await page.goto("http://127.0.0.1:4173/admin/#catalog");
-    await page.getByRole("button", { name: "Allowances" }).click();
-    await expect(page.getByText("5 day streak")).toBeVisible();
-    await expect(page.getByText("Active today")).toBeVisible();
-    await expect(page.getByText(/2 more day.*to complete/)).toBeVisible();
-
-    await expect(page.getByText("12 day streak")).toBeVisible();
-    await expect(page.getByText("Needs activity today")).toBeVisible();
-    await expect(page.getByText("7 day streak complete")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "No Freebucks data — run a request or Probe all to populate.",
+      ),
+    ).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------

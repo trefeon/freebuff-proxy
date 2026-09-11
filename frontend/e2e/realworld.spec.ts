@@ -137,41 +137,40 @@ test.describe("real-world data", () => {
       .toEqual({ model: options[1] });
   });
 
-  test("quota: streak, freebucks, traffic chips, cap banner, bridge note", async ({
+  test("quota: compact account rows plus shared reset strip", async ({
     page,
   }) => {
     await mockDashboard(page, loadFixtures(RW));
     await page.goto(admin("catalog"));
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await expect(
       page.getByRole("heading", { name: "Catalog", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("5 day streak")).toBeVisible();
-    await expect(page.getByText("Active today")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    await expect(page.getByText("dev@example.com").first()).toBeVisible();
     await expect(page.getByText("Balance 7.5")).toBeVisible();
     await expect(page.getByText("Used 2.5 / 10")).toBeVisible();
     await expect(page.getByText("Used 42 / 300")).toBeVisible();
-    await expect(page.getByText("req/min")).toHaveCount(5);
-    await expect(page.getByText("req/day")).toHaveCount(5);
-    await expect(page.getByText("2/30")).toHaveCount(1);
-    // Upstream header line (issue #354): daily · countdown · wallet ·
-    // monthly, rendered per metered token above its quota bar.
+    // Row header line (issue #364): daily fraction · wallet · monthly.
+    // The "resets in" countdown renders once in the shared strip, never
+    // per row.
     await expect(
       page.locator('[data-testid="freebucks-header"]').first(),
     ).toContainText(
-      /7\.5\/10 Freebucks daily · resets in .* · 5 in wallet · \$258 monthly usage left/,
+      /7\.5\/10 Freebucks daily · 5 in wallet · \$258 monthly usage left/,
     );
-    await expect(page.getByText("1500/1500")).toHaveCount(1);
     await expect(
-      page.getByText("daily limit reached — resets 1h"),
-    ).toBeVisible();
-    await expect(page.getByText("Served models").first()).toBeVisible();
-    await expect(
-      page.getByText(/client\(s\) report quota — see the Tokens page/),
-    ).toBeVisible();
+      page.locator('[data-testid="freebucks-header"]').first(),
+    ).not.toContainText("resets in");
+    await expect(page.getByTestId("reset-strip")).toContainText("resets in");
+    // Day-capped account keeps the status chip; the countdown lives in the
+    // strip (streaks moved to the Tokens Warming tab).
+    await expect(page.getByText("daily limit reached")).toBeVisible();
   });
 
-  test("quota: served rows show bare ids plus priced Freebucks suffix", async ({
+  test("quota: models tab shows ids plus priced Freebucks suffix", async ({
     page,
   }) => {
     const f = loadFixtures(RW);
@@ -184,8 +183,10 @@ test.describe("real-world data", () => {
     ];
     await mockDashboard(page, f, { tokens });
     await page.goto(admin("catalog"));
-    await page.getByRole("button", { name: "Allowances" }).click();
-    await expect(page.getByText("Served models").first()).toBeVisible();
+    await page.getByRole("button", { name: "Models" }).click();
+    await expect(page.getByTestId("models-note")).toContainText(
+      "identical for every account in the region",
+    );
     // Cost-class badge is gone: no Free/Premium word renders on served rows.
     await expect(page.getByText("Free", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Premium", { exact: true })).toHaveCount(0);
@@ -198,6 +199,7 @@ test.describe("real-world data", () => {
   }) => {
     await mockDashboard(page, loadFixtures(RW));
     await page.goto(admin("catalog"));
+    await page.getByRole("button", { name: "Models" }).click();
     await expect(page.getByText("Fast & Direct").first()).toBeVisible();
     await expect(page.getByText("0 Freebucks/hr").first()).toBeVisible();
     await expect(page.getByText("20 Freebucks/hr").first()).toBeVisible();

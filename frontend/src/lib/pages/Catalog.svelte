@@ -7,14 +7,14 @@
   import { tr } from "../i18n.js";
   import { recordPageVisit } from "../stores/pageState.js";
 
-  let tab = $state("models");
+  let tab = $state("accounts");
 
   onMount(() => {
     recordPageVisit("models");
     try {
       const pending = sessionStorage.getItem("fp-page-tab:catalog");
       sessionStorage.removeItem("fp-page-tab:catalog");
-      if (pending === "models" || pending === "allowances") tab = pending;
+      if (pending === "models" || pending === "accounts") tab = pending;
     } catch {
       // storage unavailable — stay on the default tab
     }
@@ -24,16 +24,14 @@
 <PageShell
   crumb="freebuff-proxy / Admin / catalog.conf"
   title={$tr("Catalog")}
-  description={$tr(
-    "Served models, serving accounts, and Freebucks allowances.",
-  )}
+  description={$tr("Serving accounts and served models.")}
 >
   <div class="flex flex-wrap items-center gap-2">
     <SegmentedControl
       bind:value={tab}
       options={[
+        { id: "accounts", label: $tr("Accounts") },
         { id: "models", label: $tr("Models") },
-        { id: "allowances", label: $tr("Allowances") },
       ]}
       ariaLabel={$tr("Catalog section")}
     />

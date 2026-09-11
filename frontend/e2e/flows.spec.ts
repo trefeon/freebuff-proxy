@@ -8,6 +8,7 @@ test.describe("user flows", () => {
   test("models: copy model ID confirms Copied", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
     await page.goto(admin("catalog"));
+    await page.getByRole("button", { name: "Models" }).click();
     await page.getByText("deepseek/deepseek-v4-flash").first().waitFor();
     await page.getByRole("button", { name: "Copy model ID" }).first().click();
     await expect(page.getByText("Copied").first()).toBeVisible();
@@ -31,28 +32,28 @@ test.describe("user flows", () => {
       }
     });
     await page.goto(admin("catalog"));
-    await expect(page.getByText("Failed to load models")).toBeVisible();
+    await page.getByRole("button", { name: "Models" }).click();
     await page.getByRole("button", { name: "Retry" }).click();
     await expect(
       page.getByText("deepseek/deepseek-v4-flash").first(),
     ).toBeVisible();
   });
 
-  test("quota: refresh button refetches tokens", async ({ page }) => {
+  test("quota: reset strip renders the shared pacific-midnight countdown", async ({
+    page,
+  }) => {
     await mockDashboard(page, loadFixtures(RW));
-    let hits = 0;
-    await page.route("**/admin/api/tokens*", async (route) => {
-      hits += 1;
-      await route.fallback();
-    });
     await page.goto(admin("catalog"));
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await page.getByText("Account #1").first().waitFor();
-    const before = hits;
-    await page.getByRole("button", { name: "Refresh" }).first().click();
-    await expect
-      .poll(async () => hits, { timeout: 5000 })
-      .toBeGreaterThan(before);
+    // One strip for the whole page (first account reset time, shared
+    // countdown) — no per-row Refresh/Probe buttons remain here.
+    await expect(page.getByTestId("reset-strip")).toHaveCount(1);
+    await expect(page.getByTestId("reset-strip")).toContainText("resets in");
+    await expect(page.getByRole("button", { name: "Refresh" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Probe all" })).toHaveCount(
+      0,
+    );
   });
 
   test("quota: exempt account shows quota exempt chip", async ({ page }) => {
@@ -72,7 +73,7 @@ test.describe("user flows", () => {
       });
     });
     await page.goto(admin("catalog"));
-    await page.getByRole("button", { name: "Allowances" }).click();
+    await page.getByRole("button", { name: "Accounts" }).click();
     await expect(page.getByText("quota exempt").first()).toBeVisible();
   });
   test("tokens: paywalled model disables spawn", async ({ page }) => {

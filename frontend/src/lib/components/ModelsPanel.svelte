@@ -148,6 +148,9 @@
     tone={servedCount > 0 ? "good" : "idle"}
     big
   />
+  <p class="text-xs text-[var(--fp-muted)]" data-testid="models-note">
+    {$tr("Live upstream values — identical for every account in the region.")}
+  </p>
 
   <Card title={$tr("Model Catalog")} pad="none">
     <!-- Desktop: table (md+) -->
