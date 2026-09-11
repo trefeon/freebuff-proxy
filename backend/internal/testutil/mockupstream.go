@@ -748,6 +748,14 @@ func (m *MockUpstream) SessionProbesSnapshot() int {
 	return m.SessionProbes
 }
 
+// SessionEndsSnapshot returns a locked copy of the session-DELETE counter
+// (see StartedRunsSnapshot).
+func (m *MockUpstream) SessionEndsSnapshot() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.SessionEnds
+}
+
 // StreakHitsSnapshot returns a locked copy of the streak-GET counter.
 func (m *MockUpstream) StreakHitsSnapshot() int {
 	m.mu.Lock()

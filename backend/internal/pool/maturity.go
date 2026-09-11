@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -533,8 +534,10 @@ func (p *Pool) maturityAccountAdvance(idx int, tok *tokenEntry, cached *upstream
 }
 
 // maturityFire performs one touch: dry-run probes (zero-cost, never claims
-// a slot); live mode admits the touch model through the token's own session
-// manager — wire-identical to a user opening the CLI. It reports whether
+// a slot); live mode runs admit → one minimal turn → release through the
+// token's own session manager and upstream client — wire-identical to a user
+// opening the CLI and sending one message, because upstream advances streaks
+// on agent-run message rows, not bare admission. It reports whether
 // the touch was rate-limited (429): the nightly walk aborts on the first
 // 429 and backs off. The IsServedModel honeypot rejection and the
 // fail-closed priced-touch skips above stay untouched.
@@ -581,7 +584,7 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 		action = "probe"
 		_, err = tok.client.ProbeAccount(fire)
 	} else {
-		_, err = tok.session.EnsureSessionForModel(fire, model)
+		err = p.maturityTouchRun(fire, tok, model, idx, label, now)
 	}
 	result := "ok"
 	if err != nil {
@@ -610,6 +613,127 @@ func (p *Pool) maturityFire(ctx context.Context, dryRun bool, touchModel string,
 	p.logger.Info("pool: maturity touch fired", "token", idx+1, "token_label", label,
 		"action", action, "model", model, "streak", cached.Streak)
 	return false
+}
+
+const (
+	// maturityTouchPrompt is the trivial touch-turn user message: it exists
+	// only to leave one agent-run message row upstream (bare admission
+	// leaves none, so it never advances the streak).
+	maturityTouchPrompt = "ping"
+	// maturityRefundReplays bounds the pending-refund DELETE replay loop
+	// after a touch release: the manager parks a pending receipt for later
+	// EndSessions anyway, so the touch replays inline a few times and leaves
+	// the rest to that path.
+	maturityRefundReplays = 3
+)
+
+// maturityTouchRun performs the live streak touch: admit the touch model,
+// run one minimal agent turn bound to the session instance (effort none —
+// the reasoning_effort key stays absent, the silent-turn contract), finish
+// the run, then release the session with pending-refund replay. The turn is
+// the load-bearing step: upstream advances streaks on agent-run message
+// rows, not bare admission.
+//
+// The turn rides the token's upstream client directly — never Pool.Chat —
+// so it cannot feed the Pacific-day activity ledger (recordDayRequest): the
+// client-active skip stays a pure client-traffic signal. A failed turn keeps
+// the admitted session for real traffic to reuse (the old admit-only
+// behavior); only a successful turn releases it, through the session
+// manager's real refund handler (the vendor port's recordReleaseReceipt +
+// RefreshRefund), never a body-discarding DELETE.
+func (p *Pool) maturityTouchRun(ctx context.Context, tok *tokenEntry, model string, idx int, label string, now time.Time) error {
+	instanceID, err := tok.session.EnsureSessionForModel(ctx, model)
+	if err != nil {
+		return err
+	}
+	agentID := ""
+	if p.reg != nil {
+		if a, aerr := p.reg.AgentForModel(model); aerr == nil {
+			agentID = a
+		}
+	}
+	if agentID == "" {
+		p.logger.Warn("pool: maturity touch has no agent for model, keeping session for reuse",
+			"token", idx+1, "token_label", label, "model", model)
+		return fmt.Errorf("pool: maturity touch: no agent for model %s", model)
+	}
+	runID, err := tok.client.StartRun(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	turnErr := p.maturityTouchTurn(ctx, tok, model, agentID, runID, instanceID)
+	finStatus := "completed"
+	if turnErr != nil {
+		finStatus = "failed"
+	}
+	step := upstream.RunStep{
+		ID:         fmt.Sprintf("maturity-touch-%d", now.UnixNano()),
+		StepNumber: 1,
+		Status:     finStatus,
+		StartTime:  now.UTC().Format(time.RFC3339Nano),
+	}
+	// Every START gets its FINISH (the runs drain path does the same): the
+	// failure path still closes the run, best-effort, without masking the
+	// turn error.
+	ferr := tok.client.FinishRun(ctx, runID, finStatus, 1, []upstream.RunStep{step}, "")
+	if turnErr != nil {
+		return turnErr
+	}
+	if ferr != nil {
+		return ferr
+	}
+	if rerr := p.maturityReleaseTouch(ctx, tok, label, idx); rerr != nil {
+		// The streak goal (one message row) is already met and the manager
+		// keeps any parked refund replayable — release trouble stays
+		// warn-only.
+		p.logger.Warn("pool: maturity touch release troubled, streak turn already landed",
+			"token", idx+1, "token_label", label, "err", rerr)
+	}
+	return nil
+}
+
+// maturityTouchTurn sends the one minimal touch turn: a trivial prompt with
+// no reasoning_effort key (effort none), bound to the admitted instance and
+// the fresh run. The response body is drained (bounded) and closed; only its
+// 2xx matters — the message row it leaves upstream is the streak advance.
+func (p *Pool) maturityTouchTurn(ctx context.Context, tok *tokenEntry, model, agentID, runID, instanceID string) error {
+	body, err := json.Marshal(map[string]any{
+		"model":    model,
+		"stream":   false,
+		"messages": []map[string]string{{"role": "user", "content": maturityTouchPrompt}},
+	})
+	if err != nil {
+		return err
+	}
+	rc, err := tok.client.ChatCompletions(ctx, upstream.ChatOptions{
+		Model:             model,
+		RunID:             runID,
+		SessionInstanceID: instanceID,
+		AgentID:           agentID,
+		StepNumber:        1,
+	}, body)
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(rc, 64*1024))
+	_ = rc.Close()
+	return nil
+}
+
+// maturityReleaseTouch releases the touch session through the session
+// manager — the port's real refund handler — then replays a parked
+// pending-refund DELETE inline (bounded): a settled replay records
+// lastRefund, a still-pending one stays parked for a later EndSession.
+func (p *Pool) maturityReleaseTouch(ctx context.Context, tok *tokenEntry, label string, idx int) error {
+	if err := tok.session.EndSession(ctx); err != nil {
+		return err
+	}
+	for i := 0; i < maturityRefundReplays && tok.session.Snapshot().PendingRefund != ""; i++ {
+		if err := tok.session.RefreshRefund(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // maturityGuardTouchModel fails a misconfigured unmetered touch model
