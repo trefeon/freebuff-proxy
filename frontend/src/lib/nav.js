@@ -9,7 +9,7 @@ import {
 } from "@lucide/svelte";
 import Overview from "./pages/Overview.svelte";
 import Tokens from "./pages/Tokens.svelte";
-import Catalog from "./pages/Catalog.svelte";
+import Plans from "./pages/Plans.svelte";
 import Activity from "./pages/Activity.svelte";
 import Settings from "./pages/Settings.svelte";
 import DevTools from "./pages/DevTools.svelte";
@@ -31,7 +31,7 @@ import Review from "./pages/Review.svelte";
 //
 // Removed pages redirect via LEGACY_PAGE_REDIRECTS below (consumed by
 // App.svelte): setup -> overview, maturity -> tokens/warming,
-// quota+models -> catalog, logs+metrics+traces -> activity,
+// quota+models -> plans, logs+metrics+traces -> activity,
 // playground -> devtools, config -> settings.
 export const NAV_ITEMS = [
   {
@@ -41,7 +41,7 @@ export const NAV_ITEMS = [
     icon: LayoutDashboard,
   },
   { id: "tokens", component: Tokens, label: "Tokens", icon: Key },
-  { id: "catalog", component: Catalog, label: "Catalog", icon: Cpu },
+  { id: "plans", component: Plans, label: "Plans", icon: Cpu },
   { id: "activity", component: Activity, label: "Activity", icon: FileText },
   {
     id: "settings",
@@ -75,8 +75,8 @@ export const NAV_ITEMS = [
 export const LEGACY_PAGE_REDIRECTS = {
   setup: "overview",
   maturity: { page: "tokens", tab: "warming" },
-  quota: { page: "catalog", tab: "accounts" },
-  models: { page: "catalog", tab: "models" },
+  quota: { page: "plans", tab: "accounts" },
+  models: { page: "plans", tab: "models" },
   logs: "activity",
   metrics: { page: "activity", tab: "metrics" },
   traces: { page: "activity", tab: "traces" },

@@ -7,7 +7,7 @@ const admin = (hash) => `http://127.0.0.1:4173/admin/#${hash}`;
 test.describe("user flows", () => {
   test("models: copy model ID confirms Copied", async ({ page }) => {
     await mockDashboard(page, loadFixtures());
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Models" }).click();
     await page.getByText("deepseek/deepseek-v4-flash").first().waitFor();
     await page.getByRole("button", { name: "Copy model ID" }).first().click();
@@ -31,7 +31,7 @@ test.describe("user flows", () => {
         });
       }
     });
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Models" }).click();
     await page.getByRole("button", { name: "Retry" }).click();
     await expect(
@@ -43,7 +43,7 @@ test.describe("user flows", () => {
     page,
   }) => {
     await mockDashboard(page, loadFixtures(RW));
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Accounts" }).click();
     await page.getByText("Account #1").first().waitFor();
     // One strip for the whole page (first account reset time, shared
@@ -72,7 +72,7 @@ test.describe("user flows", () => {
         body: JSON.stringify(tokens),
       });
     });
-    await page.goto(admin("catalog"));
+    await page.goto(admin("plans"));
     await page.getByRole("button", { name: "Accounts" }).click();
     await expect(page.getByText("quota exempt").first()).toBeVisible();
   });

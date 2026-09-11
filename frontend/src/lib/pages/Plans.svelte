@@ -12,8 +12,8 @@
   onMount(() => {
     recordPageVisit("models");
     try {
-      const pending = sessionStorage.getItem("fp-page-tab:catalog");
-      sessionStorage.removeItem("fp-page-tab:catalog");
+      const pending = sessionStorage.getItem("fp-page-tab:plans");
+      sessionStorage.removeItem("fp-page-tab:plans");
       if (pending === "models" || pending === "accounts") tab = pending;
     } catch {
       // storage unavailable — stay on the default tab
@@ -22,8 +22,8 @@
 </script>
 
 <PageShell
-  crumb="freebuff-proxy / Admin / catalog.conf"
-  title={$tr("Catalog")}
+  crumb="freebuff-proxy / Admin / plans.conf"
+  title={$tr("Plans")}
   description={$tr("Serving accounts and served models.")}
 >
   <div class="flex flex-wrap items-center gap-2">
