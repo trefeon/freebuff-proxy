@@ -9,7 +9,11 @@
     Lock,
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
-  import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import {
+    fallbackModelOptions,
+    fetchModelOptions,
+    cheapestFreeOption,
+  } from "../modelOptions.js";
   import { fetchAPI, postForm } from "../api/client.js";
   import { adminApi, adminActions } from "../api/paths.js";
   import { refreshTokens } from "../stores/tokens.js";
@@ -49,7 +53,7 @@
   // options disable in place; the Make Session button refuses a paywalled
   // pick where the balance is already on screen.
   let selectedIntent = $derived(
-    spawnIntent(token, spawnModel || "mimo/mimo-v2.5"),
+    spawnIntent(token, spawnModel || cheapestFreeOption(modelOptions)),
   );
   // --- Per-token model-lock editor (MODEL_LOCKS slot syntax) ---
   // Reads/writes the canonical .env through the existing config endpoints
@@ -206,7 +210,8 @@
                 balance: token?.freebucks?.balance ?? 0,
               })
             : $tr("Make Session")}
-          onclick={() => onSpawn?.(spawnModel || "mimo/mimo-v2.5")}
+          onclick={() =>
+            onSpawn?.(spawnModel || cheapestFreeOption(modelOptions))}
         >
           <Zap size={12} />
           <span>{$tr("Make Session")}</span>

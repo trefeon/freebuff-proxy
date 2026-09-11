@@ -686,8 +686,9 @@ func TestRateLimiterCoversAllV1Surface(t *testing.T) {
 }
 
 // TestProbeModelNeverGated pins the smoke-probe default: with the fallback
-// registry the guaranteed model wins; a regression to alphabetical
-// models[0] would return the capacity-gated anthropic/claude-fable-5.
+// registry the cheapest served free row wins; a regression to alphabetical
+// models[0] would return the capacity-gated anthropic/claude-fable-5, and a
+// regression to the old pinned id would return deepseek-v4-flash.
 func TestProbeModelNeverGated(t *testing.T) {
 	testutil.UnsetConfigEnv(t)
 	reg := registry.New(&config.Config{}, nil)
@@ -699,7 +700,10 @@ func TestProbeModelNeverGated(t *testing.T) {
 	if !modelcat.IsServed(got) {
 		t.Errorf("probeModel = %q, want a served model (never an alphabetically-first gated id)", got)
 	}
-	if got != session.DefaultFallbackModel {
-		t.Errorf("probeModel = %q, want the guaranteed model %q", got, session.DefaultFallbackModel)
+	if want := session.DefaultFallbackModel(); got != want {
+		t.Errorf("probeModel = %q, want the cheapest served free model %q", got, want)
+	}
+	if got == "deepseek/deepseek-v4-flash" {
+		t.Errorf("probeModel = %q, want cheapest-first (solar-pro4), never the old pinned id", got)
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"time"
 
+	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/upstream"
 )
 
@@ -32,11 +33,37 @@ const (
 	// a pathological upstream (always-expired or never-advancing queue)
 	// cannot spin forever.
 	maxOuterIterations = 10
-	// DefaultFallbackModel is the guaranteed-available model used when a
-	// requested model is temporarily unavailable upstream, and the default
-	// probe target for token tests / smoke: every account can use it, unlike
-	// an alphabetical-first catalog pick.
-	DefaultFallbackModel = "deepseek/deepseek-v4-flash"
+)
+
+// DefaultFallbackModelFor resolves the guaranteed-available fallback
+// model at call time: the cheapest served 0-Freebucks row for the
+// live meter (prices/exempt), else the picker-lead catalog default,
+// else the first SERVED row in catalog order. Never a pinned id and
+// never an unserved row: the Served gate applies at every step.
+//
+// Callers pass the admitting token's live Freebucks meter (nil prices =
+// no live meter yet: every static unmetered served row is a candidate).
+func DefaultFallbackModelFor(prices map[string]float64, exempt bool) string {
+	if m, _ := modelcat.AutoUnmeteredTouchModel(prices, exempt); m != "" {
+		return m
+	}
+	if modelcat.IsServed(modelcat.DefaultModelID) {
+		return modelcat.DefaultModelID
+	}
+	if ids := modelcat.ServedIDs(); len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
+// DefaultFallbackModel is the static (no live meter) fallback model: the
+// cheapest served unmetered catalog row. Resolved at call time so the
+// default tracks the served catalog, never a pinned model id.
+func DefaultFallbackModel() string {
+	return DefaultFallbackModelFor(nil, false)
+}
+
+const (
 	// asyncReAdmitTimeout bounds the background pre-emptive re-admit
 	// (issue #99) so a hung upstream never leaks a goroutine.
 	asyncReAdmitTimeout = time.Minute

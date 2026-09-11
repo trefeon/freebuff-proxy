@@ -33,16 +33,29 @@ export const fallbackModelOptions = [
     tag: "free",
   },
   {
-    id: "deepseek/deepseek-v4-flash",
-    label: "deepseek/deepseek-v4-flash",
-    tag: "free",
-  },
-  {
     id: "z-ai/glm-5.2",
     label: "z-ai/glm-5.2",
     tag: "referral",
   },
+  {
+    id: "deepseek/deepseek-v4-flash",
+    label: "deepseek/deepseek-v4-flash",
+    tag: "free",
+  },
 ];
+
+// cheapestFreeOption returns the default spawn/playground pick for an
+// option list: the first tag=free row (live prices already drive tags),
+// else the first non-premium row, else the first row. Never a pinned id —
+// the default tracks the cheapest free row wherever the list comes from.
+export function cheapestFreeOption(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const free = list.find((m) => m?.tag === "free");
+  if (free?.id) return free.id;
+  const unmetered = list.find((m) => m?.tag !== "premium");
+  if (unmetered?.id) return unmetered.id;
+  return list[0]?.id ?? "";
+}
 
 // tag derives from the server-side Freebucks price label so chips track the
 // meter, not legacy session pools: referral grant / 0 Freebucks/hr / priced

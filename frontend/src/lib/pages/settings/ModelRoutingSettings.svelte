@@ -59,7 +59,7 @@
     "Wraps internal reasoning inside <think>...</think> tags in the message body for older AI clients that do not support dedicated reasoning stream blocks.";
   const LOCKS_LABEL = "Model Token Locks";
   const LOCKS_DESC =
-    "Optionally reserve specific pool token slots for dedicated models (e.g. 0:z-ai/glm-5.2;1:deepseek/deepseek-v4-flash). Unpinned slots serve any model.";
+    "Optionally reserve specific pool token slots for dedicated models (e.g. 0:z-ai/glm-5.2;1:upstage/solar-pro4,mimo/mimo-v2.5). Unpinned slots serve any model.";
 
   let q = $derived(query.trim().toLowerCase());
   function hit(...parts) {
@@ -280,7 +280,7 @@
             type="text"
             aria-label="MODEL_LOCKS"
             class="fp-input w-full !text-xs !py-1.5"
-            placeholder="e.g. 0:z-ai/glm-5.2;1:deepseek/deepseek-v4-flash"
+            placeholder="e.g. 0:z-ai/glm-5.2;1:upstage/solar-pro4,mimo/mimo-v2.5"
             value={modelLocks}
             oninput={(e) => onField("MODEL_LOCKS", e.currentTarget.value)}
           />

@@ -58,8 +58,8 @@ func TestModelUnavailableCacheSkipsRepeatedAdmissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first admission: %v", err)
 	}
-	if len(*created) != 2 || (*created)[0] != "rare/model" || (*created)[1] != DefaultFallbackModel {
-		t.Fatalf("creates = %v, want [rare/model, %s]", *created, DefaultFallbackModel)
+	if len(*created) != 2 || (*created)[0] != "rare/model" || (*created)[1] != DefaultFallbackModel() {
+		t.Fatalf("creates = %v, want [rare/model, %s]", *created, DefaultFallbackModel())
 	}
 
 	// Second admission: cache hit — no new create, fallback session reused.
@@ -109,7 +109,7 @@ func TestModelUnavailableCacheTTLExpiryReprobes(t *testing.T) {
 	if len(*created) != 4 {
 		t.Fatalf("creates = %v, want 4 (re-probe + fallback)", *created)
 	}
-	if (*created)[2] != "rare/model" || (*created)[3] != DefaultFallbackModel {
+	if (*created)[2] != "rare/model" || (*created)[3] != DefaultFallbackModel() {
 		t.Errorf("creates = %v, want re-probe of rare/model then fallback", *created)
 	}
 }
@@ -151,7 +151,7 @@ func TestModelUnavailableCacheWindowBoundaryReprobes(t *testing.T) {
 	if len(*created) != 4 {
 		t.Fatalf("creates = %v, want 4 (re-probe + fallback after window opens)", *created)
 	}
-	if (*created)[2] != "rare/model" || (*created)[3] != DefaultFallbackModel {
+	if (*created)[2] != "rare/model" || (*created)[3] != DefaultFallbackModel() {
 		t.Errorf("creates = %v, want re-probe of rare/model then fallback", *created)
 	}
 }

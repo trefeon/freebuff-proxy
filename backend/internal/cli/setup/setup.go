@@ -63,7 +63,7 @@ func Run(autoYes bool) {
 		} else {
 			fmt.Println("    [skipped] Left Continue config untouched.")
 			fmt.Println("    Manual snippet for ~/.continue/config.yaml:")
-			fmt.Println("    models:\n      - title: \"FreeBuff DeepSeek\"\n        provider: \"openai\"\n        model: \"deepseek/deepseek-v4-flash\"\n        apiBase: \"http://localhost:3457/v1\"\n        apiKey: \"not-needed\"")
+			fmt.Println("    models:\n      - title: \"FreeBuff Solar\"\n        provider: \"openai\"\n        model: \"upstage/solar-pro4\"\n        apiBase: \"http://localhost:3457/v1\"\n        apiKey: \"not-needed\"")
 		}
 	} else {
 		fmt.Println("[-] Continue (~/.continue/) not found on this system")
@@ -161,9 +161,9 @@ func setupContinueYamlConfig(p string) bool {
 	// One source of truth: used both to build the fresh-config snippet and to
 	// insert into an existing models: list (see mergeContinueYamlModels).
 	freebuffModel := []string{
-		`  - title: "FreeBuff DeepSeek Flash"`,
+		`  - title: "FreeBuff Solar"`,
 		`    provider: "openai"`,
-		`    model: "deepseek/deepseek-v4-flash"`,
+		`    model: "upstage/solar-pro4"`,
 		`    apiBase: "http://localhost:3457/v1"`,
 		`    apiKey: "not-needed"`,
 	}
@@ -281,9 +281,9 @@ func setupContinueConfig(p string) bool {
 
 	if !hasFreebuff {
 		newModel := map[string]any{
-			"title":    "FreeBuff DeepSeek Flash",
+			"title":    "FreeBuff Solar",
 			"provider": "openai",
-			"model":    "deepseek/deepseek-v4-flash",
+			"model":    "upstage/solar-pro4",
 			"apiBase":  "http://localhost:3457/v1",
 			"apiKey":   "not-needed",
 		}
@@ -336,7 +336,7 @@ func setupOpencodeConfig(p string) bool {
 			"apiKey":  "not-needed",
 		},
 		"models": []map[string]any{
-			{"id": "deepseek/deepseek-v4-flash", "name": "DeepSeek Flash"},
+			{"id": "upstage/solar-pro4", "name": "Solar Pro 4"},
 			{"id": "z-ai/glm-5.2", "name": "GLM 5.2"},
 		},
 	}
@@ -353,7 +353,7 @@ func setupAiderConfig(p string) bool {
 	newLines := []string{
 		"openai-api-base: http://localhost:3457/v1",
 		"openai-api-key: not-needed",
-		"model: openai/deepseek/deepseek-v4-flash",
+		"model: openai/upstage/solar-pro4",
 	}
 	if fileExists(p) {
 		existing, err := os.ReadFile(p)

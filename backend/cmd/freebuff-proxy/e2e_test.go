@@ -705,7 +705,7 @@ func TestE2ESetupYes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(merged, []byte("deepseek/deepseek-v4-flash")) {
+	if !bytes.Contains(merged, []byte("upstage/solar-pro4")) {
 		t.Errorf("continue config.yaml missing freebuff model:\n%s", merged)
 	}
 	if !bytes.Contains(merged, []byte("gpt-4o")) {

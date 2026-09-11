@@ -414,20 +414,16 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	// an empty map applied silently was dead machinery).
 	modelAliases := parseMap(raw.ModelAliases)
 
-	// FALLBACK_MODEL defaults (issue #100): when unset, the premium free-
-	// catalog rows fall back to the always-available flash model once their
-	// queue wait passes FALLBACK_AFTER_MS (mirrors the CLI hero flip,
-	// reference freebuff-models.ts getRecommendedFreebuffModelId: premium
-	// exhausted → unlimited flash). Operators extend with their own
-	// capacity-gated rows (e.g. meta/muse-spark-* → deepseek-v4-pro per the
-	// reference MUSE_SPARK_FALLBACK_MODEL_ID).
+	// FALLBACK_MODEL (issue #100): explicit operator pairs only; empty
+	// default = no queue-wait fallback. Operators extend with their own
+	// pairs (e.g. meta/muse-spark-1.2-contributor=openai/gpt-5.6-luna).
 	fallbackModels := parseMap(raw.FallbackModels)
 	if len(fallbackModels) == 0 {
 		fallbackModels = defaultFallbackModels()
 	}
 
-	// QUOTA_FALLBACK_MODELS defaults (issue #155): when a model's session
-	// quota is exhausted, fall back to an unlimited model (flash → mimo).
+	// QUOTA_FALLBACK_MODELS (issue #155): explicit operator pairs only;
+	// empty default = quota exhaustion surfaces an honest 429.
 	quotaFallbackModels := parseMap(string(raw.QuotaFallbackModels))
 	if len(quotaFallbackModels) == 0 && string(raw.QuotaFallbackModels) == "" {
 		quotaFallbackModels = defaultQuotaFallbackModels()
@@ -479,10 +475,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if raw.MaturityTargetDays != nil {
 		maturityTargetDays = *raw.MaturityTargetDays
 	}
+	// MATURITY_TOUCH_MODEL defaults to "" (= auto): the cheapest served
+	// unmetered row per token. "auto" is accepted as an explicit alias;
+	// an explicit provider/model id overrides auto.
 	maturityTouchModel := strings.TrimSpace(raw.MaturityTouchModel)
-	if maturityTouchModel == "" {
-		maturityTouchModel = "auto"
-	}
 	// BURST_WINDOW is zero-tolerant: "" falls back to the 1m default (a zero
 	// window would trip on every admission past the threshold count of zero
 	// history); an explicit non-positive value falls back the same way.

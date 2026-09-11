@@ -8,7 +8,6 @@ import (
 	"freebuff-proxy/backend/internal/modelcat"
 	"freebuff-proxy/backend/internal/pool"
 	"freebuff-proxy/backend/internal/registry"
-	"freebuff-proxy/backend/internal/session"
 )
 
 // ModelUnavailableMessage formats the rejection error message for
@@ -47,30 +46,36 @@ func (s *Server) servedModelCount() int {
 	return len(s.servedModels())
 }
 
-// probeModel returns a default model for smoke-test paths: the guaranteed
-// fallback (deepseek-v4-flash — the model every account gets) when registered
-// and served, else the catalog default (modelcat.DefaultModelID, the picker
-// lead the upstream CLI resolves a blank pick to), else the first SERVED
-// model. Never alphabetical models[0] alone: that would pick
-// anthropic/claude-fable-5, a capacity-gated offer model that makes smoke
-// tests fail on most accounts. The served gating means probes never target
-// an id the gateway itself would refuse.
+// probeModel returns a default model for smoke-test paths: the cheapest
+// served 0-Freebucks row in the registry (the model every account gets)
+// when present, else the catalog default (modelcat.DefaultModelID, the
+// picker lead the upstream CLI resolves a blank pick to), else the first
+// SERVED row in catalog order. Never alphabetical models[0] alone: that
+// would pick anthropic/claude-fable-5, a capacity-gated offer model that
+// makes smoke tests fail on most accounts. The served gating means probes
+// never target an id the gateway itself would refuse.
 func probeModel(reg *registry.Registry) string {
 	models := reg.Models()
 	if len(models) == 0 {
 		return ""
 	}
-	for _, id := range models {
-		if id == session.DefaultFallbackModel && modelcat.IsServed(id) {
-			return id
-		}
+	if m := modelcat.CheapestFreeIn(models, nil, false); m != "" {
+		return m
 	}
 	for _, id := range models {
 		if id == modelcat.DefaultModelID && modelcat.IsServed(id) {
 			return id
 		}
 	}
+	registered := make(map[string]struct{}, len(models))
 	for _, id := range models {
+		registered[id] = struct{}{}
+	}
+	for i := range modelcat.Catalog {
+		id := modelcat.Catalog[i].ID
+		if _, ok := registered[id]; !ok {
+			continue
+		}
 		if modelcat.IsServed(id) {
 			return id
 		}

@@ -5,19 +5,27 @@
   import { tokenActions } from "../api/paths.js";
   import { tr } from "../i18n.js";
   import { confirmAction } from "../stores/confirm.js";
-  import { fallbackModelOptions, fetchModelOptions } from "../modelOptions.js";
+  import {
+    fallbackModelOptions,
+    fetchModelOptions,
+    cheapestFreeOption,
+  } from "../modelOptions.js";
   import { onMount } from "svelte";
   import { spawnIntent, intentAskLine } from "../utils/freebucks.js";
 
   let { idx, token = null, onSpawn } = $props();
 
-  let spawnModel = $state("mimo/mimo-v2.5");
+  let spawnModel = $state(cheapestFreeOption(fallbackModelOptions));
 
   let intent = $derived(spawnIntent(token, spawnModel));
 
   let modelOptions = $state(fallbackModelOptions);
   onMount(() => {
-    fetchModelOptions().then((rows) => (modelOptions = rows));
+    fetchModelOptions().then((rows) => {
+      modelOptions = rows;
+      const pick = cheapestFreeOption(rows);
+      if (pick) spawnModel = pick;
+    });
   });
   let actionPending = $state(false);
 

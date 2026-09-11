@@ -567,15 +567,18 @@ func (m *Manager) refresh(ctx context.Context, requestedModel string, preemptive
 			_ = m.client.EndSession(ctx, releaseID)
 			slog.Debug("session released on model lock, retrying", "reason", reasonModelLock, "current", st.CurrentModel, "target", targetModel)
 		case "model_unavailable":
-			// Requested model is not available; fall back to default model.
+			// Requested model is not available; fall back to the cheapest
+			// served unmetered model for this token's live Freebucks meter
+			// (resolved at call time, never a pinned id).
 			// Issue #158: cache the refusal (with its availability window,
 			// when the body carries one) so subsequent admissions for this
 			// model short-circuit to the fallback without the 409
 			// roundtrip. A live refusal is now rare (once per TTL per
 			// model); the frequent skip path logs at DEBUG in refresh.
 			m.recordModelUnavailable(targetModel, st.UnavailableWindow, st.AvailableHours)
-			slog.Warn("session: model unavailable upstream, falling back to default", "requested", targetModel, "fallback", DefaultFallbackModel, "available_hours", st.AvailableHours)
-			targetModel = DefaultFallbackModel
+			fallbackPrices, fallbackExempt := liveFallbackMeter(st)
+			fallback := DefaultFallbackModelFor(fallbackPrices, fallbackExempt)
+			targetModel = fallback
 			m.mu.Lock()
 			m.commit(nil)
 			m.mu.Unlock()

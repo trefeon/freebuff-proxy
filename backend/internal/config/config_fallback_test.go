@@ -126,8 +126,8 @@ func TestFallbackModelsExplicitSuppressesDefaults(t *testing.T) {
 	if got := cfg.FallbackModels["openai/gpt-5.6-luna"]; got != "deepseek/deepseek-v4-flash" {
 		t.Errorf("FallbackModels[gpt-5.6-luna] = %q, want explicit", got)
 	}
-	// With v4-pro's default fallback removed (paused), luna→flash is the only
-	// built-in; an explicit FALLBACK_MODEL replaces the defaults wholesale.
+	// Built-in defaults are empty (no automatic fallback); an explicit
+	// FALLBACK_MODEL replaces the defaults wholesale.
 	if len(cfg.FallbackModels) != 1 {
 		t.Errorf("FallbackModels = %v, want exactly the explicit entry", cfg.FallbackModels)
 	}

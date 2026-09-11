@@ -780,15 +780,16 @@ func TestModelsAllowEmptyIsOpen(t *testing.T) {
 }
 
 // TestSmokeDefaultsToFallbackModel verifies the smoke test with no explicit
-// model probes the guaranteed fallback (deepseek-v4-flash), not the
-// alphabetical-first catalog model (anthropic/claude-fable-5, a gated offer).
+// model probes the cheapest served free row (upstage/solar-pro4), not the
+// alphabetical-first catalog model (anthropic/claude-fable-5, a gated offer)
+// and not the old pinned id.
 func TestSmokeDefaultsToFallbackModel(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mock.ChatBody = testutil.SSEEvent(chunk("chatcmpl-sm", 1, `"choices":[{"index":0,"delta":{"content":"ping"},"finish_reason":"stop"}]`))
 	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) { c.AdminToken = "secret" }, mock)
 
-	// Smoke with no model field: server picks the fallback.
+	// Smoke with no model field: server picks the cheapest fallback.
 	cookie := authedCookie(t, ts)
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/admin/smoke", []byte(`{"prompt":"ping"}`), map[string]string{"Cookie": cookie})
 	if resp.StatusCode != http.StatusOK {
@@ -805,8 +806,8 @@ func TestSmokeDefaultsToFallbackModel(t *testing.T) {
 	if len(mock.RecordedChatBodies) == 0 {
 		t.Fatal("no upstream chat body recorded")
 	}
-	if !strings.Contains(mock.RecordedChatBodies[0], `"model":"deepseek/deepseek-v4-flash"`) {
-		t.Errorf("smoke probe body missing model deepseek/deepseek-v4-flash: %s", mock.RecordedChatBodies[0])
+	if !strings.Contains(mock.RecordedChatBodies[0], `"model":"upstage/solar-pro4"`) {
+		t.Errorf("smoke probe body missing model upstage/solar-pro4: %s", mock.RecordedChatBodies[0])
 	}
 }
 
