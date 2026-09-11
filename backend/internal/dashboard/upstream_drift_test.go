@@ -65,6 +65,67 @@ func TestParseUpstreamSyncMalformed(t *testing.T) {
 	}
 }
 
+// TestParseUpstreamSyncVersionChanged pins the version-gated banner signal:
+// version_changed decodes when stamped, derives when versions differ but the
+// bool is absent (old reports), and stays false on SAME or unknown (empty)
+// versions. Absent fields must decode fine with no behavior change.
+func TestParseUpstreamSyncVersionChanged(t *testing.T) {
+	cases := []struct {
+		name        string
+		raw         string
+		wantChanged bool
+		wantLive    string
+		wantPinned  string
+	}{
+		{
+			name:        "stamped true",
+			raw:         `{"upstream_sha":"(not yet reported)","vendor_version":"0.0.173","vendor_version_pinned":"0.0.172","version_changed":true,"files":[]}`,
+			wantChanged: true, wantLive: "0.0.173", wantPinned: "0.0.172",
+		},
+		{
+			name:        "derived when bool absent but versions differ",
+			raw:         `{"upstream_sha":"(not yet reported)","vendor_version":"0.0.173","vendor_version_pinned":"0.0.172","files":[]}`,
+			wantChanged: true, wantLive: "0.0.173", wantPinned: "0.0.172",
+		},
+		{
+			name:        "same versions stay false",
+			raw:         `{"upstream_sha":"(not yet reported)","vendor_version":"0.0.172","vendor_version_pinned":"0.0.172","files":[]}`,
+			wantChanged: false, wantLive: "0.0.172", wantPinned: "0.0.172",
+		},
+		{
+			name:        "unknown live stays false",
+			raw:         `{"upstream_sha":"(not yet reported)","vendor_version":"","vendor_version_pinned":"0.0.172","files":[]}`,
+			wantChanged: false, wantLive: "", wantPinned: "0.0.172",
+		},
+		{
+			name:        "absent fields decode fine with no behavior change",
+			raw:         `{"upstream_sha":"(not yet reported)","files":[]}`,
+			wantChanged: false, wantLive: "", wantPinned: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseUpstreamSync([]byte(tc.raw))
+			if got == nil {
+				t.Fatal("parseUpstreamSync returned nil")
+				return
+			}
+			if got.VersionChanged != tc.wantChanged {
+				t.Errorf("VersionChanged = %v, want %v", got.VersionChanged, tc.wantChanged)
+			}
+			if got.VendorVersion != tc.wantLive {
+				t.Errorf("VendorVersion = %q, want %q", got.VendorVersion, tc.wantLive)
+			}
+			if got.VendorVersionPinned != tc.wantPinned {
+				t.Errorf("VendorVersionPinned = %q, want %q", got.VendorVersionPinned, tc.wantPinned)
+			}
+			if got.HasDrift {
+				t.Errorf("empty files must report no drift: %+v", got)
+			}
+		})
+	}
+}
+
 // TestUpstreamEndpointJSON: upstreamData returns the raw embedded JSON under
 // the `drift` key, round-tripped as json.RawMessage so the client can parse
 // it. The standalone /admin/api/upstream-drift route is gone; Overview

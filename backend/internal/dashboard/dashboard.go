@@ -215,10 +215,13 @@ func (d *Dashboard) upstreamData() map[string]any {
 // the two stay lock-step (a parse failure here is a deploy-time regression
 // caught by `go build`).
 type upstreamReport struct {
-	Upstream    string            `json:"upstream"`
-	UpstreamSHA string            `json:"upstream_sha"`
-	CheckedAt   string            `json:"checked_at"`
-	Files       []upstreamFileRaw `json:"files"`
+	Upstream            string            `json:"upstream"`
+	UpstreamSHA         string            `json:"upstream_sha"`
+	CheckedAt           string            `json:"checked_at"`
+	VendorVersion       string            `json:"vendor_version"`
+	VendorVersionPinned string            `json:"vendor_version_pinned"`
+	VersionChanged      bool              `json:"version_changed"`
+	Files               []upstreamFileRaw `json:"files"`
 }
 
 type upstreamFileRaw struct {
@@ -278,6 +281,13 @@ func parseUpstreamSync(raw []byte) *upstreamSync {
 		sync.UpstreamSHA = sync.UpstreamSHA[:12]
 	}
 	sync.CheckedAt = rep.CheckedAt
+	sync.VendorVersion = rep.VendorVersion
+	sync.VendorVersionPinned = rep.VendorVersionPinned
+	// version_changed rides the report JSON when the version-gated workflow
+	// stamps it; derive the same signal when it is absent so old reports
+	// (vendor_version/vendor_version_pinned only) still light the banner.
+	// Empty on either side means unknown — never claim a change.
+	sync.VersionChanged = rep.VersionChanged || (rep.VendorVersion != "" && rep.VendorVersionPinned != "" && rep.VendorVersion != rep.VendorVersionPinned)
 	for _, f := range rep.Files {
 		if f.Status == "SAME" {
 			continue

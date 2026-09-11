@@ -282,6 +282,12 @@
         title={$tr("Upstream has updates — your build is behind")}
       >
         <p class="mb-2">
+          {#if us.version_changed}
+            {$tr("Update available: vendor {pinned} → {live}.", {
+              pinned: us.vendor_version_pinned ?? "?",
+              live: us.vendor_version ?? "?",
+            })}
+          {/if}
           {$tr(
             "CodebuffAI/freebuff moved past vendor {sha} (checked {when}). This build knows about {pinned} upstream SHAs; a newer one is on main.",
             {
@@ -310,6 +316,24 @@
           {$tr(
             "Registry pin drift can land via the auto-synced PR; wire-shape drift needs a human to port (the upstream-drift workflow opens a needs-port issue for each).",
           )}
+        </p>
+        <a
+          href={us.releases_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-2 inline-flex items-center gap-1 text-xs text-[var(--fp-accent)] hover:underline"
+        >
+          {$tr("Open releases page")}
+          <ExternalLink size={12} />
+        </a>
+      </Alert>
+    {:else if us.version_changed}
+      <Alert tone="info" title={$tr("Upstream vendor update available")}>
+        <p class="mb-2">
+          {$tr("Update available: vendor {pinned} → {live}.", {
+            pinned: us.vendor_version_pinned ?? "?",
+            live: us.vendor_version ?? "?",
+          })}
         </p>
         <a
           href={us.releases_url}

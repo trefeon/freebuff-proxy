@@ -73,6 +73,17 @@ dotenv → static → live → SSE hash → store refresh.
    `review-wire-drift.sh` reports all-SAME against the new anchors and hides
    FUNCTIONAL rows. LF-normalize `snapshots.json` comparisons (CRLF checkouts
    fake drift). Merge drift PRs serially wire → registry → dashboard.
+   Version-gated bot: the `version_gate` job runs FIRST and only signals —
+   `pinned_version` (scripts/vendor-version.txt), `live_version` (npm,
+   empty when unknown), `live_known`, `version_changed` (true only when
+   live is known AND differs), `skip` (true only on positively-confirmed
+   SAME: live known AND equal). Unknown/empty live fails OPEN to a full run
+   (skip=false). Full classification + PRs run only on a confirmed wrapper
+   bump; per-version PRs are reused by title match on the new version, never
+   duplicated. The version signal NEVER changes script exit codes — the gate
+   lives in workflow `if:` conditions only. Dual pins
+   (vendor-version.txt + snapshots.json vendor_version) land atomically in
+   the same bump commit before the wiregen SHA gate.
 7. Upstream-first: start any wire/registry/model work by updating `upstream/freebuff` to latest `origin/main` (`git -C upstream/freebuff fetch origin main`, checkout `origin/main`). Nothing gates or pre-approves this update. If it moved past the recorded pins, classify with `check-upstream.sh` + `review-wire-drift.sh` and carry any port/re-pin through the drift PR flow.
 
 ## 5. Budgets and freezes (as observed)
