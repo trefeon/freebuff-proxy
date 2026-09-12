@@ -1,7 +1,7 @@
 package server_test
 
 // Hermetic "real client" conformance tests for the codex CLI harness
-// (reference/harnesses/codex/WIRE-NOTES.md §1-§7) against the proxy's
+// (reference/agents/codex/WIRE-NOTES.md §1-§7) against the proxy's
 // /v1/responses surface. The codex CLI speaks ONLY the OpenAI Responses
 // API: wire_api "chat" is a hard config error (WIRE-NOTES.md §1), requests
 // carry Authorization: Bearer, tool_choice "auto", store:false,

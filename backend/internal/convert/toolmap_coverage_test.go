@@ -165,7 +165,7 @@ func TestComprehensiveToolClassification(t *testing.T) {
 		{"SWE-agent", "insert", classPassthru, ""},
 		{"SWE-agent", "exit_forfeit", classPassthru, ""},
 
-		// ── plandex server (reference/harnesses/plandex): forced
+		// ── plandex server (reference/agents/plandex): forced
 		//    structured-output tools MUST stay unmapped (server-side consume) ──
 		{"Plandex", "namePlan", classPassthru, ""},
 		{"Plandex", "namePipedData", classPassthru, ""},
@@ -173,7 +173,7 @@ func TestComprehensiveToolClassification(t *testing.T) {
 		{"Plandex", "describePlan", classPassthru, ""},
 		{"Plandex", "didFinishSubtask", classPassthru, ""},
 
-		// ── DeepSeek-Reasonix (reference/harnesses/DeepSeek-Reasonix) ──
+		// ── DeepSeek-Reasonix (reference/agents/DeepSeek-Reasonix) ──
 		{"Reasonix", "read_file", classMapped, "read_files"},
 		{"Reasonix", "edit_file", classMapped, "str_replace"},
 		{"Reasonix", "bash", classMapped, "run_terminal_command"},
@@ -187,7 +187,7 @@ func TestComprehensiveToolClassification(t *testing.T) {
 		{"Reasonix", "run_skill", classPassthru, ""},
 		{"Reasonix", "explore", classPassthru, ""},
 
-		// ── jcode (reference/harnesses/jcode crates/jcode-app-core) ──
+		// ── jcode (reference/agents/jcode crates/jcode-app-core) ──
 		{"Jcode", "read", classMapped, "read_files"},
 		{"Jcode", "write", classMapped, "write_file"},
 		{"Jcode", "edit", classMapped, "str_replace"},
@@ -207,7 +207,7 @@ func TestComprehensiveToolClassification(t *testing.T) {
 		{"Jcode", "skill_manage", classPassthru, ""},
 		{"Jcode", "session_search", classPassthru, ""},
 
-		// ── Codewhale (reference/harnesses/Codewhale crates/tui/src/tools) ──
+		// ── Codewhale (reference/agents/Codewhale crates/tui/src/tools) ──
 		{"Codewhale", "read", classMapped, "read_files"},
 		{"Codewhale", "write", classMapped, "write_file"},
 		{"Codewhale", "edit", classMapped, "str_replace"},

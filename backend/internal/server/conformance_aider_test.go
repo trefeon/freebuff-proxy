@@ -2,7 +2,7 @@ package server_test
 
 // Conformance replay for aider against the OpenAI chat/completions surface.
 // aider declares exactly ONE function tool and FORCES it via tool_choice
-// (reference/harnesses/aider/WIRE-NOTES.md §5: tools=[{type:"function",
+// (reference/agents/aider/WIRE-NOTES.md §5: tools=[{type:"function",
 // function:{...}}] + tool_choice={"type":"function","function":{"name":…}},
 // models.py:1006-1009). Multi-tool / auto tool_choice is never used.
 //

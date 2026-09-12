@@ -37,7 +37,7 @@ type codexTruncationPolicy struct {
 // deserializer wrapper rejects any row missing both base_instructions and
 // model_messages.instructions_template (openai_models.rs:791-822). A minimal
 // {id,…} row fails serde and codex silently falls back to its bundled catalog
-// (reference/harnesses/codex/WIRE-NOTES.md §8), so each fixed value below is
+// (reference/agents/codex/WIRE-NOTES.md §8), so each fixed value below is
 // the minimal honest choice.
 type codexModelInfo struct {
 	Slug                       string                       `json:"slug"`

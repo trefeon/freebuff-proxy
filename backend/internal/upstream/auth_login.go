@@ -4,13 +4,13 @@
 // proxy's own transport/stealth wiring (a token-less Client built by
 // NewForAuth). Port of:
 //
-//   - reference/freebuff-reverse/internal/channels/freebuff/account_login.go
+//   - reference/gateways/freebuff-reverse/internal/channels/freebuff/account_login.go
 //     (startGitHubLoginWithProfile + pollGitHubLogin), and
 //   - reference/freebuff2api-chenjh/src/login.ts (device-code login).
 //
 // The protocol login (ProtocolGitHubLogin) additionally walks GitHub's own
 // HTML forms with a cookie jar — password + TOTP per
-// reference/freebuff-reverse .../github_protocol_login.go — before the same
+// reference/gateways/freebuff-reverse .../github_protocol_login.go — before the same
 // status poll, so the CLI can refresh a token non-interactively.
 package upstream
 

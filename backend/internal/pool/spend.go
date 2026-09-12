@@ -7,7 +7,7 @@ package pool
 // 07:00/08:00 UTC by DST, matching the CLI's getZonedDayBounds /
 // getZonedWeekBounds, upstream/freebuff/common/src/util/zoned-time.ts:78-92,
 // and the upstream wire periods pacific_day / pacific_week), mirroring the
-// reference account quota bookkeeping (reference/freebuff-reverse
+// reference account quota bookkeeping (reference/gateways/freebuff-reverse
 // internal/accounts/record.go QuotaUsed/QuotaPeriodStart and
 // internal/quota/quota.go BucketStart/NeedsRollover). Updated from chat
 // usage (pool.RecordSpend, fed by the server's parsed usage blocks) and

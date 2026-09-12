@@ -1,6 +1,6 @@
 package registry
 
-// Port of reference/proxy-freebuff/lib/registry.js parsing (the authoritative
+// Port of reference/gateways/proxy-freebuff/lib/registry.js parsing (the authoritative
 // spec): a text-based extractor for the Codebuff TS constants files. It is
 // deliberately regex-shaped like the JS original rather than a real TS parser,
 // so the two stay behavior-identical — including quirks (computed keys without

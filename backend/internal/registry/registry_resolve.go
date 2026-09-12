@@ -41,7 +41,7 @@ func (r *Registry) ResolveModel(model string) string {
 	// and mirrors the capability in anthropic-beta. The marker is a client-side
 	// context hint, not part of the upstream model id — strip it so alias
 	// lookup and the served-model gate resolve the bare id. Mirrors 9router's
-	// stripModelContextMarker (reference/agents/9router).
+	// stripModelContextMarker (reference/routers/9router).
 	if strings.HasSuffix(model, "]") {
 		if idx := strings.LastIndex(model, "["); idx > 0 {
 			tag := strings.ToLower(strings.TrimSpace(model[idx+1 : len(model)-1]))

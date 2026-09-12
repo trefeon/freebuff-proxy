@@ -2,7 +2,7 @@ package server_test
 
 // Conformance replay for qwen-code's OpenAI-compatible path against the
 // chat/completions surface. qwen-code is strict about two transport-level
-// contracts (reference/harnesses/qwen-code/WIRE-NOTES.md §10):
+// contracts (reference/agents/qwen-code/WIRE-NOTES.md §10):
 //   1. SSE content-type gate (pipeline.ts:197-205): an HTTP 200 streaming
 //      response must be text/event-stream (or ndjson); anything else
 //      throws NonSSEResponseError.

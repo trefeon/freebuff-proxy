@@ -66,8 +66,8 @@ func usageTotalTokens(usage any) int64 {
 // The 15s cadence must stay below every client chunk/idle timeout: harness
 // stall detectors abort a stream that merely goes silent even when keepalive
 // frames are tolerated — kilocode's per-chunk SSE idle timeout (chunkTimeout,
-// when configured; reference/harnesses/kilocode/WIRE-NOTES.md aisdk.ts:54-82)
-// and codex's 5-minute stream idle timeout (reference/harnesses/codex/
+// when configured; reference/agents/kilocode/WIRE-NOTES.md aisdk.ts:54-82)
+// and codex's 5-minute stream idle timeout (reference/agents/codex/
 // WIRE-NOTES.md). At 15s two orphan keepalives always land inside a 30s+
 // window, so a keepalive-only gap can never trip one.
 var keepaliveInterval = 15 * time.Second
