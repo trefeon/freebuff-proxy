@@ -52,12 +52,24 @@ type FreebucksPriceChange struct {
 	Tagline string  `json:"tagline"`
 }
 
+// FreebucksUpgrade is the upstream upgrade nudge carried on the Freebucks
+// block (vendor af898dc): kind limited_offer is the DeepSeek discount for an
+// unpaid limited account (modelId names the discounted row), kind upgrade is
+// the plain prompt for an unpaid full-access account.
+type FreebucksUpgrade struct {
+	Kind    string `json:"kind"`
+	CTA     string `json:"cta"`
+	Tooltip string `json:"tooltip"`
+	ModelID string `json:"modelId,omitempty"`
+}
+
 // FreebucksInfo is the caller's Freebucks position (issue #232, shape
 // issue #321): spendable balance (= daily.remaining + wallet.balance) +
 // the daily pool + the never-expiring wallet + the USD spend ceiling +
 // the plan id ("" when the account is on the free allowance) +
 // the server-authorized quota exemption + per-model prices with their
-// display copy + the announced repricing schedule (issue #350).
+// display copy + the announced repricing schedule (issue #350) +
+// claimable earned grants and the upgrade nudge (vendor af898dc).
 type FreebucksInfo struct {
 	Balance float64         `json:"balance"`
 	Daily   FreebucksWindow `json:"daily"`
@@ -76,6 +88,26 @@ type FreebucksInfo struct {
 	// copy (mirrors taglineFor in freebuff-model-selector.tsx).
 	PriceNotices map[string]string      `json:"priceNotices,omitempty"`
 	PriceChanges []FreebucksPriceChange `json:"priceChanges,omitempty"`
+	// ClaimableGrant mirrors claimableGrantFreebucks (vendor af898dc):
+	// eligible earned grants admission may convert. Excluded from the
+	// server's spendable balance display but counted toward canStart
+	// (getFreebucksModelMeter: balance + claimable >= price).
+	ClaimableGrant float64 `json:"claimableGrantFreebucks,omitempty"`
+	// Upgrade mirrors the upgrade nudge (vendor af898dc); nil when the
+	// server sends none.
+	Upgrade *FreebucksUpgrade `json:"upgrade,omitempty"`
+}
+
+// Spendable is the admission-time spendable amount: the server-computed
+// balance plus eligible earned grants admission may convert (mirrors
+// getFreebucksModelMeter in freebuff-session.ts: canStart when exempt or
+// balance + claimableGrantFreebucks >= price). Nil-safe: no block means
+// nothing spendable.
+func (f *FreebucksInfo) Spendable() float64 {
+	if f == nil {
+		return 0
+	}
+	return f.Balance + f.ClaimableGrant
 }
 
 // ApplyFreebucksPriceChanges applies the server's announced repricing
@@ -145,22 +177,33 @@ type rawFreebucksMonthlyAllowance struct {
 	ResetAt      any     `json:"resetAt"`
 }
 
+// rawFreebucksUpgrade mirrors FreebuffFreebucksUpgrade (vendor af898dc).
+type rawFreebucksUpgrade struct {
+	Kind    string `json:"kind"`
+	CTA     string `json:"cta"`
+	Tooltip string `json:"tooltip"`
+	ModelID string `json:"modelId"`
+}
+
 // rawFreebucks mirrors upstream FreebuffFreebucksInfo (issue #321 wire
-// drift, #350 for exemption/notices/schedule): spendable balance + the
+// drift, #350 for exemption/notices/schedule, af898dc for claimable
+// grants and the upgrade nudge): spendable balance + the
 // daily pool window + the never-expiring wallet + the USD spend ceiling +
 // the monthly allowance + the plan id + the quota exemption + per-model
 // price-notice copy + the announced repricing schedule.
 type rawFreebucks struct {
-	Balance      float64                       `json:"balance"`
-	Daily        rawFreebucksWindow            `json:"daily"`
-	Wallet       *rawFreebucksWallet           `json:"wallet"`
-	Spend        *rawFreebucksSpendCeiling     `json:"spend"`
-	Monthly      *rawFreebucksMonthlyAllowance `json:"monthly"`
-	PlanID       *string                       `json:"planId"`
-	QuotaExempt  *bool                         `json:"quotaExempt"`
-	Prices       map[string]float64            `json:"prices"`
-	PriceNotices map[string]string             `json:"priceNotices"`
-	PriceChanges []rawFreebucksPriceChange     `json:"priceChanges"`
+	Balance        float64                       `json:"balance"`
+	ClaimableGrant float64                       `json:"claimableGrantFreebucks"`
+	Daily          rawFreebucksWindow            `json:"daily"`
+	Wallet         *rawFreebucksWallet           `json:"wallet"`
+	Spend          *rawFreebucksSpendCeiling     `json:"spend"`
+	Monthly        *rawFreebucksMonthlyAllowance `json:"monthly"`
+	PlanID         *string                       `json:"planId"`
+	QuotaExempt    *bool                         `json:"quotaExempt"`
+	Prices         map[string]float64            `json:"prices"`
+	PriceNotices   map[string]string             `json:"priceNotices"`
+	PriceChanges   []rawFreebucksPriceChange     `json:"priceChanges"`
+	Upgrade        *rawFreebucksUpgrade          `json:"upgrade"`
 }
 
 // rawFreebucksPriceChange mirrors FreebuffPriceChange (issue #350).

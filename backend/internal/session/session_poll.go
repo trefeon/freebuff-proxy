@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -92,6 +93,34 @@ func statusError(status string, st *upstream.SessionState) error {
 			}
 		}
 		return fmt.Errorf("session: unknown upstream status %q", status)
+	case "consent_required":
+		// 409 wallet-consent demand (vendor af898dc): the balance moved
+		// since the spend limit was confirmed. Terminal for the request —
+		// the CLI drops to the picker with retry:null (use-freebuff-session
+		// .ts nextDelayMs) — so surface 409 with the confirm copy, never a
+		// cooldown and never a retry.
+		spend := 0.0
+		if st.WalletConsent != nil {
+			spend = st.WalletConsent.WalletSpend
+		}
+		return &upstream.UpstreamError{
+			Status: http.StatusConflict,
+			Body:   fmt.Sprintf("upstream balance changed: re-confirm %g wallet Freebucks to admit (consent_required)", spend),
+		}
+	case "purchase_claim_released", "purchase_in_use", "purchase_capacity":
+		// Desktop purchase-flow admission shapes (vendor af898dc): terminal
+		// session failures (nextDelayMs returns null = stop polling). The
+		// proxy runs no purchase flow, so surface the honest upstream
+		// status with its message — no cooldown, no retry, no WireCode.
+		code := st.HTTPStatus
+		if code == 0 {
+			code = http.StatusConflict
+		}
+		msg := st.Message
+		if msg == "" {
+			msg = "upstream purchase flow blocked admission (" + status + ")"
+		}
+		return &upstream.UpstreamError{Status: code, Body: msg}
 	}
 	return nil
 }

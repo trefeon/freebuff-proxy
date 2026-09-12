@@ -30,11 +30,16 @@ export function spawnIntent(token, modelId) {
   const price = modelPrice(fb, modelId);
   if (!fb || price === undefined)
     return { kind: "allow", price, walletSpend: 0 };
-  const balance = fb.balance ?? fb.Balance ?? 0;
+  // Spendable counts claimable earned grants toward admission (vendor
+  // af898dc getFreebucksModelMeter: balance + claimable >= price).
+  const spendable =
+    (fb.balance ?? fb.Balance ?? 0) +
+    (fb.claimableGrantFreebucks ?? fb.ClaimableGrant ?? 0);
   if (fb.quota_exempt ?? fb.quotaExempt ?? false)
     return { kind: "allow", price, walletSpend: 0 };
-  // `<` not `<=`: a balance that exactly equals the price BUYS the session.
-  if (balance < price) return { kind: "paywall", price, walletSpend: 0 };
+  // `<` not `<=`: a spendable amount that exactly equals the price BUYS
+  // the session.
+  if (spendable < price) return { kind: "paywall", price, walletSpend: 0 };
   const dailyRemaining = fb.daily?.remaining ?? fb.Daily?.Remaining ?? 0;
   const walletSpend = Math.max(0, price - dailyRemaining);
   const activeModel = token?.session_model;
@@ -71,7 +76,7 @@ export const MODEL_METADATA = {
   "deepseek/deepseek-v4-flash": {
     displayName: "DeepSeek V4.1 Flash",
     tagline: "Smart & Fast",
-    badges: ["Reasoning: high", "NEW"],
+    badges: ["Reasoning: high", "Images", "NEW"],
     disclaimer: "May use data for AI training",
   },
   "meta/muse-spark-1.2-contributor": {
@@ -167,9 +172,13 @@ export function modelDisplayInfo(modelId, freebucks, names) {
   const customNotice = freebucks?.price_notices?.[modelId];
   const notice = customNotice || meta.disclaimer || "";
   const balance = freebucks?.balance ?? freebucks?.Balance ?? 0;
+  const claimable =
+    freebucks?.claimableGrantFreebucks ?? freebucks?.ClaimableGrant ?? 0;
   const exempt = freebucks?.quota_exempt ?? freebucks?.quotaExempt ?? false;
-  const canStart = exempt || balance >= price;
-  const shortfall = Math.max(0, price - balance);
+  // canStart counts claimable earned grants (vendor af898dc
+  // getFreebucksModelMeter).
+  const canStart = exempt || balance + claimable >= price;
+  const shortfall = Math.max(0, price - balance - claimable);
   return {
     id: modelId,
     displayName,

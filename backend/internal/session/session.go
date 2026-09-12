@@ -130,8 +130,10 @@ func (e *WaitingRoomError) Error() string {
 type snapshotState struct {
 	savedQuota map[string]upstream.ModelQuota
 	// savedQuotaStale marks quota restored from the on-disk entry after a
-	// restart (no live admission yet this process); savedQuotaAt is when
-	// that entry was last polled. Cleared by the first live quota commit.
+	// restart (no live admission yet this process); savedQuotaAt is the
+	// last quota refresh — the on-disk poll time after a restore, the
+	// probe time after a boot seed, the write time after a live probe
+	// commit. Cleared by the first live quota commit.
 	savedQuotaStale bool
 	savedQuotaAt    time.Time
 	// savedQuotaSrcAt records, per model, the source time (Unix millis) of
@@ -391,15 +393,17 @@ func (m *Manager) Snapshot() SessionSnapshot {
 			}
 		}
 		return SessionSnapshot{
-			Refreshing:   m.refreshing,
-			QuotaByModel: quota,
-			QuotaStale:   m.snap.savedQuotaStale && len(quota) > 0,
-			QuotaSavedAt: m.snap.savedQuotaAt,
-			GlmPromo:     m.snap.savedGlmPromo,
-			RemainingMs:  m.snap.savedRemainingMs,
-			Referral:     m.snap.savedReferral,
-			AccessTier:   m.snap.savedAccessTier,
-			Freebucks:    m.snap.savedFreebucks,
+			Refreshing:    m.refreshing,
+			QuotaByModel:  quota,
+			QuotaStale:    m.snap.savedQuotaStale && len(quota) > 0,
+			QuotaSavedAt:  m.snap.savedQuotaAt,
+			GlmPromo:      m.snap.savedGlmPromo,
+			RemainingMs:   m.snap.savedRemainingMs,
+			Referral:      m.snap.savedReferral,
+			AccessTier:    m.snap.savedAccessTier,
+			Freebucks:     m.snap.savedFreebucks,
+			LastRefund:    m.lastRefund,
+			PendingRefund: m.pendingRefund,
 		}
 	}
 	quota := make(map[string]QuotaSnapshot, len(m.state.quotaByModel))
@@ -448,6 +452,8 @@ func (m *Manager) Snapshot() SessionSnapshot {
 		Freebucks:     m.state.freebucks,
 		UpgradeHint:   m.state.upgradeHint,
 		ServerMessage: m.state.serverMessage,
+		LastRefund:    m.lastRefund,
+		PendingRefund: m.pendingRefund,
 	}
 }
 
@@ -519,6 +525,9 @@ func (m *Manager) UpdateQuotaFromProbe(st *upstream.SessionState) {
 		// re-stamps the source times, so a later boot seed compares
 		// against this write (never downgrades it with an older row).
 		m.snap.savedQuotaStale = false
+		// The pool's staleness gate reads QuotaSavedAt as the last-probe
+		// timestamp (issue #484): a live probe is a last probe.
+		m.snap.savedQuotaAt = m.now()
 		m.stampQuotaSourceLocked(m.now())
 		if m.state != nil {
 			m.state.quotaByModel = st.RateLimitsByModel

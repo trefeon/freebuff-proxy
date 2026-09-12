@@ -179,12 +179,14 @@ func parseGenericToolNames(src []byte, commit string) ([]string, error) {
 // fails (upstream added a shape we do not handle), missing fails (upstream
 // removed one we may reference). The purchase_* trio are Desktop purchase-
 // flow admission shapes (78a7ab4); they ride the default TokenOK path at
-// runtime, never a WireCode.
+// runtime, never a WireCode. consent_required (af898dc) is the 409
+// wallet-consent admission shape, handled from the parsed session status.
 var pinnedSessionStatuses = []string{
 	"none", "active", "ended", "country_blocked", "model_locked",
 	"model_unavailable", "banned", "ip_capped", "rate_limited",
 	"spend_limited", "premium_slot_taken", "superseded",
 	"purchase_claim_released", "purchase_in_use", "purchase_capacity",
+	"consent_required",
 }
 
 // verifySessionStatuses checks the status envelope; it emits nothing and

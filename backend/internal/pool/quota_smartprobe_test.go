@@ -7,6 +7,8 @@ package pool
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -22,12 +24,26 @@ func setQuotaAutoProbe(p *Pool, on bool) {
 	p.cfg.Store(cfg)
 }
 
-// stubProbeStagger disables the inter-probe sleep for fast tests.
-func stubProbeStagger(t *testing.T) {
+// waitSmartProbeIdle blocks until the dispatched round (if any) completes.
+// Ticks dispatch asynchronously (single-flight off the maintain goroutine),
+// so every firing tick must settle before the test asserts probe counts; a
+// non-firing tick returns immediately.
+func waitSmartProbeIdle(t *testing.T, p *Pool) {
 	t.Helper()
-	old := quotaProbeStagger
-	quotaProbeStagger = func(context.Context) {}
-	t.Cleanup(func() { quotaProbeStagger = old })
+	deadline := time.Now().Add(10 * time.Second)
+	for p.smartProbeInflight() {
+		if time.Now().After(deadline) {
+			t.Fatal("smart probe round still in flight after 10s")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// probeTick runs one scheduler pass and settles the dispatched round.
+func probeTick(t *testing.T, p *Pool, ctx context.Context, now time.Time) {
+	t.Helper()
+	p.smartProbeTickAt(ctx, now)
+	waitSmartProbeIdle(t, p)
 }
 
 // markPoolActive sets the pool traffic timestamp (what a successful
@@ -105,22 +121,21 @@ func TestSmartProbeActiveTierCadence(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	markPoolActive(p, now)
 
 	ctx := context.Background()
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Fatalf("SessionProbes = %d, want 1 (active tick probes)", got)
 	}
 	// 30s later the active interval has not elapsed: silence.
-	p.smartProbeTickAt(ctx, now.Add(30*time.Second))
+	probeTick(t, p, ctx, now.Add(30*time.Second))
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Errorf("SessionProbes = %d after 30s re-tick, want 1 (60s cadence)", got)
 	}
 	// Past the interval the next tick probes again.
-	p.smartProbeTickAt(ctx, now.Add(61*time.Second))
+	probeTick(t, p, ctx, now.Add(61*time.Second))
 	if got := mock.SessionProbesSnapshot(); got != 2 {
 		t.Errorf("SessionProbes = %d after 61s tick, want 2 (interval elapsed)", got)
 	}
@@ -131,18 +146,17 @@ func TestSmartProbeWarmTierCadence(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	markPoolActive(p, now.Add(-5*time.Minute)) // WARM window
 
 	ctx := context.Background()
 	setSmartLastProbe(p, now.Add(-time.Minute))
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock.SessionProbesSnapshot(); got != 0 {
 		t.Fatalf("SessionProbes = %d, want 0 (warm probe 1m old, 5m cadence)", got)
 	}
 	setSmartLastProbe(p, now.Add(-6*time.Minute))
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Errorf("SessionProbes = %d, want 1 (warm interval elapsed)", got)
 	}
@@ -153,22 +167,21 @@ func TestSmartProbeIdleOnceThenSilent(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	markPoolActive(p, now.Add(-20*time.Minute)) // IDLE window
 
 	ctx := context.Background()
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Fatalf("SessionProbes = %d, want 1 (idle single probe)", got)
 	}
 	// The next tick sleeps: no traffic, heartbeat far off.
-	p.smartProbeTickAt(ctx, now.Add(time.Minute))
+	probeTick(t, p, ctx, now.Add(time.Minute))
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Errorf("SessionProbes = %d after idle re-tick, want 1 (sleep until heartbeat)", got)
 	}
 	// Past the heartbeat the pool re-probes.
-	p.smartProbeTickAt(ctx, now.Add(31*time.Minute))
+	probeTick(t, p, ctx, now.Add(31*time.Minute))
 	if got := mock.SessionProbesSnapshot(); got != 2 {
 		t.Errorf("SessionProbes = %d after heartbeat tick, want 2", got)
 	}
@@ -179,17 +192,16 @@ func TestSmartProbeBootFires(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	// Simulate Start without goroutines: a boot time with zero traffic.
 	p.quotaBootAt = now.Add(-time.Hour)
 
-	p.smartProbeTickAt(context.Background(), now)
+	probeTick(t, p, context.Background(), now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Fatalf("SessionProbes = %d, want 1 (boot round bypasses timer)", got)
 	}
 	// The boot round arms the idle sleep: the next quiet tick is silent.
-	p.smartProbeTickAt(context.Background(), now.Add(time.Minute))
+	probeTick(t, p, context.Background(), now.Add(time.Minute))
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Errorf("SessionProbes = %d after post-boot tick, want 1 (idle sleep)", got)
 	}
@@ -199,57 +211,96 @@ func TestSmartProbeDisabledSkips(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	p := newTestPool(t, mock)
-	stubProbeStagger(t)
 	now := time.Now()
 	// Kill-switch off (zero-value test Config): boot force and traffic
 	// alike must not probe — pre-scheduler behavior.
 	p.quotaBootAt = now.Add(-time.Hour)
 	markPoolActive(p, now)
-	p.smartProbeTickAt(context.Background(), now)
+	probeTick(t, p, context.Background(), now)
 	if got := mock.SessionProbesSnapshot(); got != 0 {
 		t.Errorf("SessionProbes = %d with kill-switch off, want 0", got)
 	}
 }
 
 func TestSmartProbeBackoffOn429(t *testing.T) {
-	mock0 := testutil.NewMock()
-	defer mock0.Close()
-	mock1 := testutil.NewMock()
-	defer mock1.Close()
-	p := newTestPool(t, mock0, mock1)
+	mocks := make([]*testutil.MockUpstream, 5)
+	for i := range mocks {
+		mocks[i] = testutil.NewMock()
+		defer mocks[i].Close()
+	}
+	p := newTestPool(t, mocks...)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	markPoolActive(p, now)
-	mock0.SetRateLimit(true)
+	mocks[0].SetRateLimit(true)
+	// The rest park behind a test-owned gate instead of answering: with
+	// the gate closed they can only leave via the client's cancel, which
+	// fires after token0's instant 429 records the abort — so the abort
+	// deterministically spares the fifth token by construction, not by a
+	// timing margin (jobs feed in roster order; only a finished job frees
+	// a worker, and every finish happens-after the abort).
+	gate := make(chan struct{})
+	gatedProbe := func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-gate:
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"status":"active","instanceId":"","rateLimitsByModel":{"deepseek/deepseek-v4-flash":{"model":"deepseek/deepseek-v4-flash","limit":6,"recentCount":1}}}`)
+	}
+	for _, m := range mocks[1:] {
+		m.SessionHandler = gatedProbe
+	}
 
 	ctx := context.Background()
-	p.smartProbeTickAt(ctx, now)
-	if got := mock0.RequestsSnapshot(); got != 1 {
+	probeTick(t, p, ctx, now)
+	// mock0 is always hit exactly once (nothing else can complete first:
+	// the rest park behind the closed gate, so the abort always comes
+	// from mock0). How many of the parked probes ARRIVED before the
+	// abort is load-dependent — a worker descheduled past the abort
+	// never dispatches its job — so mocks1-3 are 0-or-1 here, never more.
+	if got := mocks[0].RequestsSnapshot(); got != 1 {
 		t.Fatalf("token0 upstream hits = %d, want 1 (round reached it)", got)
 	}
-	if got := mock1.RequestsSnapshot(); got != 0 {
-		t.Errorf("token1 upstream hits = %d, want 0 (429 aborts the round)", got)
+	for i, m := range mocks[1:4] {
+		if got := m.RequestsSnapshot(); got > 1 {
+			t.Fatalf("token %d upstream hits = %d, want <= 1 (abort spares the rest)", i+1, got)
+		}
+	}
+	if got := mocks[4].RequestsSnapshot(); got != 0 {
+		t.Errorf("token4 upstream hits = %d, want 0 (fifth job never frees a worker pre-abort)", got)
 	}
 	if got := smartBackoff(p); got != 2 {
 		t.Errorf("backoff = %d, want 2 (doubled on 429)", got)
 	}
 	// The doubled active interval (2m) holds the next tick quiet.
-	mock0.SetRateLimit(false)
-	p.smartProbeTickAt(ctx, now.Add(61*time.Second))
-	if got := mock1.RequestsSnapshot(); got != 0 {
-		t.Errorf("token1 upstream hits = %d after 61s tick, want 0 (backoff holds)", got)
+	mocks[0].SetRateLimit(false)
+	probeTick(t, p, ctx, now.Add(61*time.Second))
+	if got := mocks[4].RequestsSnapshot(); got != 0 {
+		t.Errorf("token4 upstream hits = %d after 61s tick, want 0 (backoff holds)", got)
+	}
+	before := make([]int, len(mocks))
+	for i, m := range mocks {
+		before[i] = m.RequestsSnapshot()
 	}
 	// Past the doubled interval the round completes and resets. Traffic is
 	// still flowing (re-marked: without it the pool would have aged into
-	// WARM, whose doubled 10m cadence correctly holds much longer).
-	markPoolActive(p, now.Add(121*time.Second))
-	p.smartProbeTickAt(ctx, now.Add(121*time.Second))
-	if got := mock0.SessionProbesSnapshot(); got != 1 {
-		t.Errorf("token0 probes = %d, want 1 (recovered)", got)
-	}
-	if got := mock1.SessionProbesSnapshot(); got != 1 {
-		t.Errorf("token1 probes = %d, want 1 (round completed past abort)", got)
+	// WARM, whose doubled 10m cadence correctly holds much longer). Every
+	// token is stale again (quota older than the fresh window), so the
+	// full roster probes. The gate opens first so every probe answers at
+	// once — no timing involved anywhere in this test.
+	close(gate)
+	markPoolActive(p, now.Add(130*time.Second))
+	probeTick(t, p, ctx, now.Add(130*time.Second))
+	for i, m := range mocks {
+		// The recovery round is abort-free, so every stale token is fed
+		// and hit exactly once more (round 1 saved no quota anywhere:
+		// the 429 and the canceled parks carry none).
+		if got, want := m.RequestsSnapshot(), before[i]+1; got != want {
+			t.Errorf("token %d upstream hits = %d, want %d (recovered full round)", i, got, want)
+		}
 	}
 	if got := smartBackoff(p); got != 1 {
 		t.Errorf("backoff = %d, want 1 (reset on 429-free round)", got)
@@ -259,7 +310,6 @@ func TestSmartProbeBackoffOn429(t *testing.T) {
 func TestSmartProbeSkipsUnhealthy(t *testing.T) {
 	cases := map[string]func(t *testing.T, p *Pool){
 		"locked": func(t *testing.T, p *Pool) {
-			t.Helper()
 			(*p.roster.Load())[0].locked.Store(true)
 		},
 		"cooling": func(t *testing.T, p *Pool) {
@@ -279,12 +329,11 @@ func TestSmartProbeSkipsUnhealthy(t *testing.T) {
 			defer mock1.Close()
 			p := newTestPool(t, mock0, mock1)
 			setQuotaAutoProbe(p, true)
-			stubProbeStagger(t)
 			now := time.Now()
 			markPoolActive(p, now)
 			bad(t, p)
 
-			p.smartProbeTickAt(context.Background(), now)
+			probeTick(t, p, context.Background(), now)
 			if got := mock0.RequestsSnapshot(); got != 0 {
 				t.Errorf("flagged token upstream hits = %d, want 0 (skipped)", got)
 			}
@@ -300,11 +349,10 @@ func TestSmartProbeNotCountedAsUsage(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	p.quotaBootAt = now.Add(-time.Hour)
 
-	p.smartProbeTickAt(context.Background(), now)
+	probeTick(t, p, context.Background(), now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Fatalf("SessionProbes = %d, want 1 (probe fired)", got)
 	}
@@ -329,12 +377,11 @@ func TestSmartProbeRemoveKicks(t *testing.T) {
 	defer mock1.Close()
 	p := newTestPool(t, mock0, mock1)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	now := time.Now()
 	markPoolActive(p, now)
 
 	ctx := context.Background()
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock0.SessionProbesSnapshot() + mock1.SessionProbesSnapshot(); got != 2 {
 		t.Fatalf("probes = %d, want 2 (one per token)", got)
 	}
@@ -342,10 +389,28 @@ func TestSmartProbeRemoveKicks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 10s later the active interval has not elapsed, but the membership
-	// change bypasses the timer.
-	p.smartProbeTickAt(ctx, now.Add(10*time.Second))
-	if got := mock0.SessionProbesSnapshot(); got != 2 {
-		t.Errorf("remaining token probes = %d, want 2 (remove kicked a round)", got)
+	// change bypasses the timer: the kicked round still runs, finds the
+	// remaining token's quota fresh, and probes nothing new.
+	probeTick(t, p, ctx, now.Add(10*time.Second))
+	if got := mock0.SessionProbesSnapshot(); got != 1 {
+		t.Errorf("remaining token probes = %d, want 1 (fresh quota skips the kicked round)", got)
+	}
+	// A newly added token has no quota data (stale): the next kicked
+	// round probes exactly it and still spares the fresh member.
+	mock2 := testutil.NewMock()
+	defer mock2.Close()
+	cfg := p.cfg.Load()
+	cfg.UpstreamBaseURL = mock2.URL()
+	p.cfg.Store(cfg)
+	if _, err := p.AddToken("tok-new"); err != nil {
+		t.Fatal(err)
+	}
+	probeTick(t, p, ctx, now.Add(20*time.Second))
+	if got := mock0.SessionProbesSnapshot(); got != 1 {
+		t.Errorf("remaining token probes = %d, want still 1 (fresh member spared)", got)
+	}
+	if got := mock2.SessionProbesSnapshot(); got != 1 {
+		t.Errorf("new token probes = %d, want 1 (stale newcomer probed on kick)", got)
 	}
 }
 
@@ -354,7 +419,6 @@ func TestSmartProbeManualStamps(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	markPoolActive(p, time.Now())
 
 	if out := p.ProbeAll(context.Background()); len(out) != 1 {
@@ -363,7 +427,7 @@ func TestSmartProbeManualStamps(t *testing.T) {
 	before := mock.SessionProbesSnapshot()
 	// The manual pass restarts the scheduler timer: the next tick inside
 	// the active interval stays quiet.
-	p.smartProbeTickAt(context.Background(), time.Now().Add(10*time.Second))
+	probeTick(t, p, context.Background(), time.Now().Add(10*time.Second))
 	if got := mock.SessionProbesSnapshot(); got != before {
 		t.Errorf("SessionProbes = %d, want %d (manual pass counts as a round)", got, before)
 	}
@@ -374,7 +438,6 @@ func TestSmartProbeFirstRequestAfterIdleWakes(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	// A slow active cadence proves the wake is the event trigger, not the
 	// interval: 2m after the idle probe the 5m timer is nowhere near due.
 	cfg := p.cfg.Load()
@@ -384,18 +447,18 @@ func TestSmartProbeFirstRequestAfterIdleWakes(t *testing.T) {
 	now := time.Now()
 	markPoolActive(p, now.Add(-20*time.Minute))
 	ctx := context.Background()
-	p.smartProbeTickAt(ctx, now)
+	probeTick(t, p, ctx, now)
 	if got := mock.SessionProbesSnapshot(); got != 1 {
 		t.Fatalf("SessionProbes = %d, want 1 (idle single probe)", got)
 	}
 	// Traffic resumes a minute later; the next tick wakes past the timer.
 	markPoolActive(p, now.Add(time.Minute))
-	p.smartProbeTickAt(ctx, now.Add(2*time.Minute))
+	probeTick(t, p, ctx, now.Add(2*time.Minute))
 	if got := mock.SessionProbesSnapshot(); got != 2 {
 		t.Errorf("SessionProbes = %d, want 2 (first request after idle bypasses timer)", got)
 	}
 	// With traffic flowing the wake is spent: the cadence holds again.
-	p.smartProbeTickAt(ctx, now.Add(3*time.Minute))
+	probeTick(t, p, ctx, now.Add(3*time.Minute))
 	if got := mock.SessionProbesSnapshot(); got != 2 {
 		t.Errorf("SessionProbes = %d after follow-up tick, want 2 (wake fires once)", got)
 	}
@@ -406,17 +469,18 @@ func TestSmartProbeRidesMaintainTick(t *testing.T) {
 	defer mock.Close()
 	p := newTestPool(t, mock)
 	setQuotaAutoProbe(p, true)
-	stubProbeStagger(t)
 	markPoolActive(p, time.Now())
 
 	before := mock.SessionProbesSnapshot()
 	p.maintainTick(context.Background())
+	waitSmartProbeIdle(t, p)
 	if got := mock.SessionProbesSnapshot(); got != before+1 {
 		t.Fatalf("maintainTick probes delta = %d, want 1 (scheduler rides the tick)", got-before)
 	}
 	// The round stamps the timer: the immediate next pass is quiet.
 	before = mock.SessionProbesSnapshot()
 	p.maintainTick(context.Background())
+	waitSmartProbeIdle(t, p)
 	if got := mock.SessionProbesSnapshot(); got != before {
 		t.Errorf("maintainTick probes delta = %d, want 0 (timer holds)", got-before)
 	}

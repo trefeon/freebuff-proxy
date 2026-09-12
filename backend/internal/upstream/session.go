@@ -3,40 +3,86 @@ package upstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// CreateSession POSTs /api/v1/freebuff/session with no body.
+// Session wire vocabulary shared with the upstream CLI and desktop clients
+// (vendor af898dc, common/src/constants/freebuff-models.ts): the dedicated
+// admission/reuse routes and their headers. Dedicated routes fail closed on
+// servers predating these guarantees — never fall back to the legacy path.
+const (
+	// SessionAdmissionPath is the dedicated session-create route.
+	SessionAdmissionPath = "/api/v1/freebuff/session/admission"
+	// SessionReusePath reuses an exact live single-session instance without
+	// buying or taking over. No proxy caller needs it yet (the CLI does
+	// not call it either); pinned so every client agrees on the string.
+	SessionReusePath = "/api/v1/freebuff/session/reuse"
+	// ReuseInstanceHeader names the exact live instance to reuse.
+	ReuseInstanceHeader = "x-freebuff-reuse-instance-id"
+	// WalletSpendLimitHeader carries the per-request wallet spend cap on
+	// admission. The proxy holds no user-confirmed limit, so it always
+	// sends the server default, exactly like a CLI POST with no explicit
+	// model pick (callFreebuffSession sends String(walletSpendLimit ?? 0)).
+	WalletSpendLimitHeader = "x-freebuff-wallet-spend-limit"
+	// DefaultWalletSpendLimit is the unset spend limit the proxy sends.
+	DefaultWalletSpendLimit = "0"
+	// SessionUnsupportedMessage is the verbatim fail-closed copy for
+	// servers predating the admission route
+	// (FREEBUFF_SESSION_UNSUPPORTED_MESSAGE).
+	SessionUnsupportedMessage = "This server cannot safely start or resume your session yet. Reload or update Freebuff and try again shortly. No purchase was made."
+)
+
+// isSessionAdmissionRequest reports whether req targets the dedicated
+// admission route (suffix match: the client base URL may carry a prefix).
+func isSessionAdmissionRequest(req *http.Request) bool {
+	return req != nil && req.URL != nil && strings.HasSuffix(req.URL.Path, SessionAdmissionPath)
+}
+
+// SessionRefundReceipt is the parsed session-DELETE receipt (vendor
+// af898dc): the release confirmation plus the early-end refund. Refund
+// carries the settled freebucksRefund (including zero); nil when the server
+// sent none. Pending mirrors freebucksRefundPending: final usage is still
+// outstanding and the DELETE must be replayed with the same instance id.
+type SessionRefundReceipt struct {
+	Status  string
+	Refund  *float64
+	Pending bool
+}
+
+// CreateSession POSTs the admission route with no body.
 func (c *Client) CreateSession(ctx context.Context) (*SessionState, error) {
 	return c.CreateSessionForModel(ctx, "")
 }
 
-// CreateSessionForModel POSTs /api/v1/freebuff/session with the requested
-// model header. The POST carries NO body and therefore no Content-Type
-// (#120): the CLI's session POST is a bare fetch with Authorization + the
-// optional x-freebuff-model header only (upstream/freebuff
-// freebuff-session-api.ts callFreebuffSession; codebuff-api.ts sets the
-// same request shape).
-
+// CreateSessionForModel POSTs the dedicated admission route with the
+// requested model header. The POST carries NO body and therefore no
+// Content-Type (#120): the CLI's session POST is a bare fetch with
+// Authorization + the optional x-freebuff-model header plus the wallet
+// spend-limit header (upstream/freebuff freebuff-session-api.ts
+// callFreebuffSession; codebuff-api.ts sets the same request shape).
 func (c *Client) CreateSessionForModel(ctx context.Context, model string) (*SessionState, error) {
 	if c.mock != nil {
 		return c.mock.CreateSession(c.token, model)
 	}
-	req, err := c.newRequest(ctx, http.MethodPost, "/api/v1/freebuff/session", nil)
+	req, err := c.newRequest(ctx, http.MethodPost, SessionAdmissionPath, nil)
 	if err != nil {
 		return nil, err
 	}
 	if model != "" {
 		req.Header.Set("x-freebuff-model", model)
 	}
+	req.Header.Set(WalletSpendLimitHeader, DefaultWalletSpendLimit)
 	return c.sessionCall(req)
 }
 
 // GetSession polls /api/v1/freebuff/session for the given instance. A poll
 // 404 maps to Status "ended" (the session vanished upstream; the session
-// manager re-creates it). Only a CREATE 404 maps to "disabled".
+// manager re-creates it). An admission-route create never maps 404 to
+// "disabled" — it fails closed with ErrSessionAdmissionUnsupported.
 func (c *Client) GetSession(ctx context.Context, instanceID string) (*SessionState, error) {
 	return c.GetSessionWithOpts(ctx, instanceID, false)
 }
@@ -167,19 +213,22 @@ func (c *Client) GetStreak(ctx context.Context) (*StreakInfo, error) {
 	}, nil
 }
 
-// EndSession DELETE /api/v1/freebuff/session; 404 is tolerated. The DELETE
-// carries x-freebuff-instance-id when the caller holds one (vendor parity:
+// EndSession DELETEs /api/v1/freebuff/session and parses the release
+// receipt (vendor af898dc: {status:'ended', freebucksRefund?,
+// freebucksRefundPending?}). A 404 is tolerated (nil receipt — the row is
+// already gone, nothing to record). The DELETE carries
+// x-freebuff-instance-id when the caller holds one (vendor parity:
 // cli/src/utils/freebuff-session-api.ts callFreebuffSession sends the
 // instance header on GET/DELETE when known; the session POST carries
 // x-freebuff-model and never the instance id). An empty instanceID omits
 // the header (the caller genuinely holds no slot).
-func (c *Client) EndSession(ctx context.Context, instanceID string) error {
+func (c *Client) EndSession(ctx context.Context, instanceID string) (*SessionRefundReceipt, error) {
 	if c.mock != nil {
 		return c.mock.EndSession(c.token, instanceID)
 	}
 	req, err := c.newRequest(ctx, http.MethodDelete, "/api/v1/freebuff/session", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if instanceID != "" {
 		req.Header.Set("x-freebuff-instance-id", instanceID)
@@ -187,17 +236,29 @@ func (c *Client) EndSession(ctx context.Context, instanceID string) error {
 
 	resp, cancel, classErr := c.do(req, c.sessionCallTimeout)
 	if classErr != nil && resp == nil {
-		return classErr
+		return nil, classErr
 	}
 	defer releaseCancel(cancel)
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 404 {
-		return nil // nothing to end
+		return nil, nil // nothing to end
 	}
-	if classErr != nil {
-		return classErr
+	body := drainBody(resp.Body)
+	// Same precedence as sessionCall: a structured body wins (the ended
+	// receipt carries the refund), an unparseable one falls back to the
+	// classified error do() already produced (issue #305).
+	state, perr := c.parseSessionResponse(req, resp, body)
+	if perr != nil {
+		if classErr != nil {
+			return nil, classErr
+		}
+		return nil, perr
 	}
-	return nil
+	return &SessionRefundReceipt{
+		Status:  state.Status,
+		Refund:  state.FreebucksRefund,
+		Pending: state.FreebucksRefundPending,
+	}, nil
 }
 
 // StartRun POSTs /api/v1/agent-runs with action START and returns the run id.
@@ -350,12 +411,18 @@ func (c *Client) sessionCall(req *http.Request) (*SessionState, error) {
 	// A session control call always tries to parse the body first: a
 	// structured 4xx/5xx carries the session status the callers switch on
 	// (model_locked/model_unavailable/ip_capped/spend_limited/...), and a
-	// 404 maps through parseSessionResponse (create -> disabled, poll/probe
-	// -> ended). Only an unparseable body falls back to the classified
-	// error do() already produced (issue #305).
+	// 404 maps through parseSessionResponse (legacy create -> disabled,
+	// poll/probe -> ended; admission-route POST -> fail closed). Only an
+	// unparseable body falls back to the classified error do() already
+	// produced (issue #305) — except the admission fail-closed signal,
+	// which outranks do()'s already-classified 404: do() cannot know the
+	// POST targeted the dedicated route.
 	state, perr := c.parseSessionResponse(req, resp, body)
 	if perr == nil {
 		return state, nil
+	}
+	if errors.Is(perr, ErrSessionAdmissionUnsupported) {
+		return nil, perr
 	}
 	if classErr != nil {
 		return nil, classErr

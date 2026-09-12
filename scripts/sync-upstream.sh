@@ -266,24 +266,31 @@ for f in "${FILES[@]}"; do
 		pinned_sha=$(pin_hash "$pinned_file" | awk '{print substr($1,1,12)}')
 	fi
 
-	vendor_file="$CLONE_DIR/$UPSTREAM_PREFIX/$f"
-	if [[ ! -f "$vendor_file" ]]; then
+	# Blob-authoritative read: never the working tree (a Windows checkout
+	# materializes CRLF and a fetched clone's HEAD lags the requested ref).
+	# LF-normalized like the wire snapshot refresh in repin-all.sh so the
+	# mirror stays clean under the repo's eol=lf rule.
+	vendor_file="$(mktemp)"
+	if ! git -C "$CLONE_DIR" show "$UPSTREAM_SHA:$UPSTREAM_PREFIX/$f" 2>/dev/null | tr -d '\r' >"$vendor_file"; then
 		vendor_sha="-"
 		status="MISSING"
 		drift_count=$((drift_count + 1))
+		rm -f "$vendor_file"
 	else
 		vendor_sha=$(pin_hash "$vendor_file" | awk '{print substr($1,1,12)}')
 		if [[ "$pinned_sha" == "$vendor_sha" ]]; then
 			status="SAME"
+			rm -f "$vendor_file"
 		else
 			status="DRIFT"
 			drift_count=$((drift_count + 1))
 			if ((!CHECK_ONLY)); then
-				cp "$vendor_file" "$pinned_file"
+				cat "$vendor_file" >"$pinned_file"
 				pinned_sha="$vendor_sha"
 				status="UPDATED"
 				updated_count=$((updated_count + 1))
 			fi
+			rm -f "$vendor_file"
 		fi
 	fi
 	printf '%-26s %-14s %-14s %s\n' "$f" "$pinned_sha" "$vendor_sha" "$status"

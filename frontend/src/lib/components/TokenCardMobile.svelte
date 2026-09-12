@@ -3,6 +3,7 @@
     ChevronUp,
     ChevronDown,
     ChevronDown as ChevronExpand,
+    Flame,
     Unlock,
     Lock,
     Trash2,
@@ -13,6 +14,7 @@
   import {
     statusFor,
     riskBadgeFor,
+    streakBadgeFor,
     cooldownLabel,
   } from "../utils/tokenStatus.js";
   import { tr } from "../i18n.js";
@@ -85,6 +87,7 @@
   // Risk chip (moved from the standalone At-risk cards): shown when the
   // account carries a risk flag and no ban badge already claims the card.
   const riskBadge = $derived(riskBadgeFor(token));
+  const streak = $derived(streakBadgeFor(token));
 </script>
 
 <div
@@ -133,6 +136,15 @@
           {token.email || token.account_id}
         </span>
       {/if}
+      <span
+        class="inline-flex items-center gap-1 text-[11px] {streak.active
+          ? 'text-[var(--fp-accent)]'
+          : 'text-[var(--fp-dim)]'}"
+        aria-label={streak.aria}
+      >
+        <Flame size={11} aria-hidden="true" />
+        {streak.label}
+      </span>
     </div>
     <div class="flex items-center gap-1 shrink-0">
       {#if totalTokens > 1}
@@ -210,33 +222,6 @@
     </div>
   </div>
 
-  <!-- Details (secondary info + drawer) behind the expand chevron -->
-  {#if expanded}
-    <div class="flex flex-col gap-2">
-      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
-        <span class="text-[var(--fp-muted)]">{$tr("Instance")}</span>
-        <span class="min-w-0">
-          {#if token.session_instance}
-            <code class="fp-num break-all select-all"
-              >{token.session_instance}</code
-            >
-          {:else}
-            <span class="text-[var(--fp-dim)]">—</span>
-          {/if}
-        </span>
-      </div>
-      <TokenDetailsDrawer
-        {token}
-        bind:spawnModel
-        {actionPending}
-        {devToolsEnabled}
-        {onSpawn}
-        {onRefresh}
-        {onDropSession}
-        {sessionRemaining}
-      />
-    </div>
-  {/if}
   <!-- Footer: expand chevron left, actions right -->
   <div
     class="flex items-center justify-between gap-2 pt-0.5 border-t border-[var(--fp-border)]"
@@ -302,4 +287,31 @@
       </Button>
     </div>
   </div>
+  <!-- Details (secondary info + drawer) behind the expand chevron -->
+  {#if expanded}
+    <div class="flex flex-col gap-2">
+      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <span class="text-[var(--fp-muted)]">{$tr("Instance")}</span>
+        <span class="min-w-0">
+          {#if token.session_instance}
+            <code class="fp-num break-all select-all"
+              >{token.session_instance}</code
+            >
+          {:else}
+            <span class="text-[var(--fp-dim)]">—</span>
+          {/if}
+        </span>
+      </div>
+      <TokenDetailsDrawer
+        {token}
+        bind:spawnModel
+        {actionPending}
+        {devToolsEnabled}
+        {onSpawn}
+        {onRefresh}
+        {onDropSession}
+        {sessionRemaining}
+      />
+    </div>
+  {/if}
 </div>

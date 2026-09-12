@@ -61,7 +61,7 @@ func (u *recordingUpstream) handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `data: {"id":"x","object":"chat.completion.chunk","choices":[]}`+"\n\n")
 		_, _ = io.WriteString(w, "data: [DONE]\n\n")
-	case r.URL.Path == "/api/v1/freebuff/session" && r.Method == http.MethodPost:
+	case r.URL.Path == "/api/v1/freebuff/session/admission" && r.Method == http.MethodPost:
 		writeBodyJSON(w, 200, `{"status":"active","instanceId":"inst-1","expiresAt":"2030-01-01T00:00:00Z"}`)
 	case r.URL.Path == "/api/v1/freebuff/session" && r.Method == http.MethodGet:
 		writeBodyJSON(w, 200, `{"status":"active","instanceId":"inst-1","expiresAt":"2030-01-01T00:00:00Z"}`)
@@ -121,7 +121,7 @@ func TestSignalGuardNoProxySignalHeaders(t *testing.T) {
 	if _, err := client.ProbeAccount(ctx); err != nil {
 		t.Fatalf("ProbeAccount: %v", err)
 	}
-	if err := client.EndSession(ctx, "inst-1"); err != nil {
+	if _, err := client.EndSession(ctx, "inst-1"); err != nil {
 		t.Fatalf("EndSession: %v", err)
 	}
 	if _, err := client.StartRun(ctx, "agent-1"); err != nil {
@@ -203,7 +203,7 @@ func TestSignalGuardSessionPostsModelHeader(t *testing.T) {
 	reqs := srv.snapshot()
 	var withModel, withoutModel *recordedReq
 	for i := range reqs {
-		if reqs[i].path == "/api/v1/freebuff/session" && reqs[i].method == http.MethodPost {
+		if reqs[i].path == "/api/v1/freebuff/session/admission" && reqs[i].method == http.MethodPost {
 			if reqs[i].header.Get("x-freebuff-model") != "" {
 				withModel = &reqs[i]
 			} else {

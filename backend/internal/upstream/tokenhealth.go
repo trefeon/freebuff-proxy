@@ -343,6 +343,8 @@ func (c *Client) probeSession(ctx context.Context) (TokenHealthState, string) {
 		return TokenUnknown, "upstream waiting room (transient; retry later)"
 	case errors.Is(err, ErrFreeModeCLIRequired):
 		return TokenUnknown, "free-mode CLI envelope rejected (403 free_mode_cli_required)"
+	case errors.Is(err, ErrFreeModeInvalidAgentHierarchy):
+		return TokenUnknown, "free-mode subagent hierarchy rejected (403 free_mode_invalid_agent_hierarchy)"
 	case errors.Is(err, ErrSessionInvalid):
 		return TokenUnknown, "session invalid upstream (stale row; refresh on demand)"
 	default:

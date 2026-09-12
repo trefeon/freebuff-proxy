@@ -425,6 +425,12 @@ func (p *Pool) Shutdown(ctx context.Context) {
 	if p.cancel != nil {
 		p.cancel()
 	}
+	// Cancel detached smart-probe rounds (issue #484) before waiting: a
+	// wedged round holds the single-flight slot and a wg count, so the
+	// Wait below would hang until the round deadline without this.
+	if p.probeCancel != nil {
+		p.probeCancel()
+	}
 	p.wg.Wait()
 	// Best-effort runtime persist flush: the maintain loop is stopped, so
 	// the counters are stable. A DB failure stays live-only (warned

@@ -21,8 +21,9 @@ type MockUpstream interface {
 	// Probe simulates the zero-cost token probe.
 	Probe(token string) (*SessionState, error)
 	// EndSession simulates the session DELETE for the instance ("" = no
-	// instance header, the caller holds no slot).
-	EndSession(token, instanceID string) error
+	// instance header, the caller holds no slot). A nil receipt with a nil
+	// error is the tolerated-404 path (row already gone).
+	EndSession(token, instanceID string) (*SessionRefundReceipt, error)
 	// StartRun simulates an agent-run START.
 	StartRun(token, agentID string) (string, error)
 	// FinishRun simulates an agent-run FINISH.

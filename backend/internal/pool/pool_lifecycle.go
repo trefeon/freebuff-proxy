@@ -121,6 +121,13 @@ func pollSession(ctx context.Context, sess *session.Manager, cfg *config.Config,
 // nothing else.
 func (p *Pool) Start(ctx context.Context) {
 	p.once.Do(func() {
+		// Restore the persisted runtime state first (pool_state): the
+		// smart-probe timer plus the live per-token quota cache, so a
+		// restart resumes warm — the boot round below still fires as an
+		// event but probes nothing while the restored cache is fresh.
+		// Missing rows are a fresh boot (current behavior); a nil store
+		// is a no-op; restore never fails the boot (warn-only).
+		p.RestorePoolPersist()
 		// Anchor the smart-probe boot round before the maintain loop
 		// launches (spawn happens-before the first tick).
 		p.quotaBootAt = time.Now()
@@ -345,7 +352,10 @@ func (p *Pool) maintainTick(ctx context.Context) {
 	// Smart quota probe rides every pass alongside maturity — including
 	// idle stretches, whose first tick runs the idle single-probe so quota
 	// is fresh when traffic resumes. Session-less ProbeToken, warn-only;
-	// QUOTA_AUTO_PROBE=false skips the pass entirely.
+	// QUOTA_AUTO_PROBE=false skips the pass entirely. The tick only runs
+	// the cheap scheduler decision (issue #484): a due round dispatches to
+	// a detached single-flight worker-pool goroutine, so maintainTick never
+	// blocks on probe traffic.
 	p.smartProbeTick(ctx)
 	// Burst balance (ADR-0023): prune out-of-window admission hits and fire
 	// exit edges for recovered episodes. Pure memory + WARN logging (no

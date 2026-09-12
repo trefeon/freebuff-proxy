@@ -856,7 +856,7 @@ func TestFullChatLifecycleChained(t *testing.T) {
 	if err := client.FinishRun(ctx, runID, "completed", 3, nil, ""); err != nil {
 		t.Fatalf("FinishRun: %v", err)
 	}
-	if err := client.EndSession(ctx, st.InstanceID); err != nil {
+	if _, err := client.EndSession(ctx, st.InstanceID); err != nil {
 		t.Fatalf("EndSession: %v", err)
 	}
 

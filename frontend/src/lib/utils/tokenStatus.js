@@ -91,3 +91,20 @@ export function cooldownLabel(token, now) {
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
 }
+
+/**
+ * Little streak chip for the account cell: flame + day count while the
+ * upstream streak is alive, dim "no streak" otherwise (never hidden, so a
+ * missing streak reads as state, not as a missing widget).
+ */
+export function streakBadgeFor(token) {
+  const days = Number(token.streak) || 0;
+  if (days > 0) {
+    return {
+      label: t()("{days}d streak", { days }),
+      aria: t()("Streak {days} days", { days }),
+      active: true,
+    };
+  }
+  return { label: t()("no streak"), aria: t()("No streak"), active: false };
+}

@@ -34,6 +34,11 @@ var (
 	// ErrFreeModeCLIRequired: the free tier refused the request because it
 	// did not carry the CLI request envelope (403 free_mode_cli_required).
 	ErrFreeModeCLIRequired = errors.New("upstream free mode requires CLI request envelope")
+	// ErrFreeModeInvalidAgentHierarchy: the free tier refused the request
+	// because the subagent id is not in its root's allowlist (403
+	// free_mode_invalid_agent_hierarchy; vendor free-agents.ts hierarchy
+	// gate, mirrored in backend/internal/registry/testdata/upstream).
+	ErrFreeModeInvalidAgentHierarchy = errors.New("upstream free mode subagent hierarchy rejected")
 	// ErrCredits: 402 payment required — the account has no credits / free
 	// quota left to spend.
 	ErrCredits = errors.New("upstream payment required")
@@ -104,6 +109,14 @@ var (
 	// upstream message goes to the client verbatim so the agent sees the
 	// loop warning and starts a fresh turn.
 	ErrTurnSpendLimited = errors.New("upstream turn spend limited")
+	// ErrSessionAdmissionUnsupported: the session admission POST hit
+	// 404/405 — the server predates the dedicated admission route
+	// (vendor af898dc) and cannot safely start or resume sessions.
+	// Fail closed: never fall back to the legacy session POST (which
+	// predates the purchase/takeover guarantees) and never map to
+	// "disabled" (upstream freebuff-session-api.ts
+	// FREEBUFF_SESSION_UNSUPPORTED_MESSAGE).
+	ErrSessionAdmissionUnsupported = errors.New("upstream session admission unsupported")
 )
 
 // WaitingRoomError is the concrete value behind ErrWaitingRoom; callers
