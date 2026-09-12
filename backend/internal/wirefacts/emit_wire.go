@@ -52,6 +52,7 @@ var wireCodes = []wireCode{
 	{"WireCodeWaitingRoomRequired", "waiting_room_required", "WireCodeWaitingRoomRequired: the account must walk the pre-session ad-chain + streak flow (428).", wireSessionFile},
 	{"WireCodeSessionModelMismatch", "session_model_mismatch", "WireCodeSessionModelMismatch: the session row is bound to a different model (with a \"limited\" marker for the egress-IP case).", wireSessionFile},
 	{"WireCodeFreeModeInvalidAgentModel", "free_mode_invalid_agent_model", "WireCodeFreeModeInvalidAgentModel: the (agent, model) pair is not in the allowlist. Also the RateLimitError.Status for the refusal.", ""},
+	{"WireCodeFreeModeInvalidAgentHierarchy", "free_mode_invalid_agent_hierarchy", "WireCodeFreeModeInvalidAgentHierarchy: the subagent id is not in its root's allowlist (hierarchy gate).", ""},
 	{"WireCodeSessionSuperseded", "session_superseded", "WireCodeSessionSuperseded: another instance took over the account (409).", wireSessionFile},
 	{"WireCodeTurnSpendLimit", "turn_spend_limit", "WireCodeTurnSpendLimit: upstream killed a runaway turn (429 per-turn spend ceiling, usually a stuck agent loop).", ""},
 	{"WireCodeFreebuffUpdateRequired", "freebuff_update_required", "WireCodeFreebuffUpdateRequired: the CLI app version is out of date.", ""},
