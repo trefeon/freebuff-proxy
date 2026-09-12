@@ -12,6 +12,7 @@
   import Button from "./Button.svelte";
   import Alert from "./Alert.svelte";
   import EmptyState from "./EmptyState.svelte";
+  import RefundLines from "./RefundLines.svelte";
   import {
     tokensData,
     tokensError,
@@ -280,13 +281,11 @@
             {$tr("No Freebucks data — run a request or Probe all to populate.")}
           </p>
         {/if}
-        {#if token.pending_refund}
-          <p class="text-xs text-[var(--fp-warning)]" data-testid="refund-line">
-            {$tr(
-              "Your refund is awaiting final usage, once settled it will appear in your wallet",
-            )}
-          </p>
-        {/if}
+        <RefundLines
+          {token}
+          pendingClass="text-xs text-[var(--fp-warning)]"
+          settledClass="text-xs text-[var(--fp-success)]"
+        />
       </li>
     {/each}
   </ul>

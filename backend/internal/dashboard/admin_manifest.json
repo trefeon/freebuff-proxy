@@ -50,6 +50,7 @@
   {"method": "POST", "path": "/admin/bridge-tokens/{key}/unlock", "auth": "sensitive", "js": null},
   {"method": "POST", "path": "/admin/tokens/{id}/finish", "auth": "sensitive", "js": {"export": "tokenActions", "key": "finish"}},
   {"method": "POST", "path": "/admin/tokens/{id}/drop-session", "auth": "sensitive", "js": {"export": "tokenActions", "key": "dropSession"}},
+  {"method": "POST", "path": "/admin/tokens/{id}/refund-refresh", "auth": "sensitive", "js": {"export": "tokenActions", "key": "refundRefresh"}},
   {"method": "POST", "path": "/admin/tokens/{id}/test", "auth": "sensitive", "js": {"export": "tokenActions", "key": "test"}},
   {"method": "POST", "path": "/admin/tokens/{id}/session", "auth": "sensitive", "js": {"export": "tokenActions", "key": "session"}},
   {"method": "POST", "path": "/admin/tokens/test-all", "auth": "sensitive", "js": {"export": "adminActions", "key": "tokenTestAll"}},

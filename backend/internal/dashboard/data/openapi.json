@@ -4106,6 +4106,42 @@
         ]
       }
     },
+    "/admin/tokens/{id}/refund-refresh": {
+      "post": {
+        "operationId": "tokenRefundRefresh",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultEnvelope"
+                }
+              }
+            },
+            "description": "Replay one token's parked pending-refund DELETE (same instance; drops the result if the account changed)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Replay one token's parked pending-refund DELETE (same instance; drops the result if the account changed)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
     "/admin/tokens/{id}/session": {
       "post": {
         "operationId": "tokenSpawnSession",

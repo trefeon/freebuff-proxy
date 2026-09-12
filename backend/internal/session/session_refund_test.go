@@ -258,3 +258,49 @@ func TestRefreshRefundKeepsPendingOnError(t *testing.T) {
 		}
 	})
 }
+
+// TestRefreshRefundZeroSettles pins that a zero refund is a real receipt
+// (CLI refreshRefund ?? 0): an ended replay without a freebucksRefund amount
+// clears the parked instance and records lastRefund 0 (non-nil) instead of
+// leaving the refund pending or unknown.
+func TestRefreshRefundZeroSettles(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	mgr := newTestManager(t, mock)
+	if _, err := mgr.EnsureSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deletes := 0
+	mock.SessionHandler = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.NotFound(w, r)
+			return
+		}
+		deletes++
+		w.Header().Set("Content-Type", "application/json")
+		if deletes == 1 {
+			_, _ = io.WriteString(w, `{"status":"ended","instanceId":"inst-abc-123","freebucksRefundPending":true}`)
+		} else {
+			_, _ = io.WriteString(w, `{"status":"ended","instanceId":"inst-abc-123"}`)
+		}
+	}
+	if err := mgr.EndSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := mgr.Snapshot().PendingRefund; got == "" {
+		t.Fatal("PendingRefund empty after pending receipt, want parked instance")
+	}
+	if err := mgr.RefreshRefund(context.Background()); err != nil {
+		t.Fatalf("RefreshRefund: %v", err)
+	}
+	snap := mgr.Snapshot()
+	if snap.PendingRefund != "" {
+		t.Errorf("PendingRefund = %q, want cleared after zero receipt", snap.PendingRefund)
+	}
+	if snap.LastRefund == nil {
+		t.Fatal("LastRefund = nil after zero receipt, want non-nil 0 (a real receipt)")
+	}
+	if *snap.LastRefund != 0 {
+		t.Errorf("LastRefund = %v, want 0", *snap.LastRefund)
+	}
+}
