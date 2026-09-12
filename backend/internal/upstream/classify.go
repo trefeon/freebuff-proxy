@@ -80,6 +80,15 @@ func classifyError(status int, body string, hdr http.Header) error {
 		// lease/session — never a token cooldown, never a session
 		// invalidation (reference/freebuff-proxy-hengxin proxy.js:652-668).
 		return &CapacityDeferredError{Status: status, Body: truncate(body, 500), RetryAfter: retryAfter}
+	case containsAny(lower, string(WireCodeTurnSpendLimit)):
+		// turn_spend_limit is a distinctive loop-protection literal and it is
+		// terminal on WHATEVER status carries it: upstream attaches it to
+		// 429 canonically, but retrying the same turn re-trips the breaker
+		// instantly (live 20+ minutes of 60s re-trips), so it must never
+		// become a RateLimitError cooldown drumbeat and never the generic
+		// 502. The incoming status is preserved for telemetry; the server
+		// still surfaces 429 turn_spend_limited with no Retry-After.
+		return &TurnSpendLimitError{Status: status, Body: truncate(body, 200)}
 	case status == http.StatusUnauthorized:
 		return fmt.Errorf("%w: %d %s", ErrAuthRejected, status, truncate(body, 200))
 	case status == http.StatusServiceUnavailable:
@@ -95,6 +104,13 @@ func classifyError(status int, body string, hdr http.Header) error {
 		return &SessionLimitError{Status: status, Body: truncate(body, 200)}
 	case status == http.StatusForbidden && strings.Contains(lower, string(WireCodeFreeModeCLIRequired)):
 		return fmt.Errorf("%w: %d %s", ErrFreeModeCLIRequired, status, truncate(body, 200))
+	case status == http.StatusForbidden && strings.Contains(lower, string(WireCodeFreeModeInvalidAgentHierarchy)):
+		// free_mode_invalid_agent_hierarchy: the subagent id is not in its
+		// root's allowlist (vendor free-agents.ts hierarchy gate). Dedicated
+		// 403 sentinel mirroring free_mode_cli_required: a config refusal,
+		// never a cooldown, never the generic 502. The 403 gate stays
+		// tight — the same marker on any other status falls to default.
+		return fmt.Errorf("%w: %d %s", ErrFreeModeInvalidAgentHierarchy, status, truncate(body, 200))
 	case status == http.StatusForbidden && strings.Contains(lower, string(WireCodeCountryBlocked)):
 		return parseCountryBlock(body)
 	case containsAny(lower, string(WireCodeIpCapped)):
@@ -177,11 +193,14 @@ func classifyError(status int, body string, hdr http.Header) error {
 			RetryAfter: LoadShedCooldown,
 			Body:       truncate(body, 200),
 		}
-	case status == http.StatusTooManyRequests && containsAny(lower, string(WireCodePeakHours)):
+	case status == http.StatusTooManyRequests && containsAny(lower, string(WireCodePeakHours), string(WireCodePeakHoursStatus)):
 		// #133: "Usage is temporarily limited during peak hours, when
-		// upstream model prices double…". The peak end is unknowable from
-		// the body: bounded conservative cooldown instead of locking the
-		// token until Pacific midnight (the peak is hours, not a day).
+		// upstream model prices double…". Both the space body form ("peak
+		// hours") and the underscore form ("peak_hours") share this arm;
+		// the RateLimitError.Status stays the underscore constant. The peak
+		// end is unknowable from the body: bounded conservative cooldown
+		// instead of locking the token until Pacific midnight (the peak is
+		// hours, not a day).
 		return &RateLimitError{
 			Status:     string(WireCodePeakHoursStatus),
 			RetryAfter: PeakHoursCooldown,
@@ -190,6 +209,14 @@ func classifyError(status int, body string, hdr http.Header) error {
 	case status == http.StatusTooManyRequests || containsAny(lower, string(WireCodeRateLimited), string(WireCodeSpendLimited)):
 		return parseRateLimit(body, parseRetryAfter(hdr))
 	default:
+		// Vendor-UI copy only, never a classify marker: purchase / consent /
+		// terms / purchasesPaused strings (availability labels, Desktop
+		// updateRequired/purchasesPaused session flags, wallet-consent prose)
+		// ride UI copy or session-parse flags, never a chat/body status
+		// literal — and the wiregen guard fails loud on any new snapshot
+		// literal. Until vendor ships one, bodies carrying only those
+		// strings stay this default 502 upstream_unavailable. Do NOT invent
+		// arms for them here.
 		return &UpstreamError{Status: status, Body: truncate(body, 500), RetryAfter: retryAfter}
 	}
 }

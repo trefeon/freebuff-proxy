@@ -34,6 +34,11 @@ var (
 	// ErrFreeModeCLIRequired: the free tier refused the request because it
 	// did not carry the CLI request envelope (403 free_mode_cli_required).
 	ErrFreeModeCLIRequired = errors.New("upstream free mode requires CLI request envelope")
+	// ErrFreeModeInvalidAgentHierarchy: the free tier refused the request
+	// because the subagent id is not in its root's allowlist (403
+	// free_mode_invalid_agent_hierarchy; vendor free-agents.ts hierarchy
+	// gate, mirrored in backend/internal/registry/testdata/upstream).
+	ErrFreeModeInvalidAgentHierarchy = errors.New("upstream free mode subagent hierarchy rejected")
 	// ErrCredits: 402 payment required — the account has no credits / free
 	// quota left to spend.
 	ErrCredits = errors.New("upstream payment required")
