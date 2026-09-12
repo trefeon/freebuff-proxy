@@ -209,14 +209,7 @@
             reqs <span class="fp-num text-[var(--fp-text)]"
               >{token.requests}</span
             >
-            {#if token.requests_per_minute_limit > 0 || token.requests_per_day_limit > 0}
-              <span class="text-[10px] text-[var(--fp-muted)]">
-                ({#if token.requests_per_minute_limit > 0}{token.requests_per_minute}/{token.requests_per_minute_limit}m{/if}{#if token.requests_per_minute_limit > 0 && token.requests_per_day_limit > 0}
-                  ·
-                {/if}{#if token.requests_per_day_limit > 0}{token.requests_per_day}/{token.requests_per_day_limit}d{/if})</span
-              >
-            {/if}</span
-          >
+          </span>
         </div>
       </div>
     </div>
