@@ -36,8 +36,12 @@
 //
 // Probe traffic is internal: the session-less ProbeToken path never touches
 // the usage ledgers, lastActive, or requestsServed, so probes neither feed
-// the tier classifier nor count as client usage. All scheduler state is
-// in-memory only (a restart re-probes on the next due tick); the
+// the tier classifier nor count as client usage. The scheduler timer
+// (lastProbe, backoff, overloadedAt, idleSlept) and the live per-token
+// quota cache (QuotaByModel + QuotaSavedAt) persist in pool_state under
+// pool/probe/* keys (see pool_persist.go): a restart resumes warm — the
+// boot round still fires as an event but probes nothing while the cache
+// is fresh — and a missing row reads as a fresh boot. The
 // quota_snapshots wallet persistence path is untouched.
 package pool
 
@@ -186,10 +190,14 @@ func effectiveQuotaProbeInterval(base time.Duration, backoff int) time.Duration 
 	return eff
 }
 
-// smartProbeState is the scheduler's in-memory-only state. Guarded by mu;
-// AddToken/Remove/ProbeAll (request goroutines) mutate kick/lastProbe while
-// the maintain goroutine owns the tick, so every access takes mu and the
-// probes themselves always run outside it.
+// smartProbeState is the scheduler's state. Guarded by mu; AddToken/Remove/
+// ProbeAll (request goroutines) mutate kick/lastProbe while the maintain
+// goroutine owns the tick, so every access takes mu and the probes
+// themselves always run outside it. The timer fields (lastProbe, backoff,
+// idleSlept, overloadedAt) persist in pool_state and reload at Start;
+// kick, inflight and bootDone are transient per process (restore
+// hard-resets kick/inflight; bootDone always re-arms so the restart
+// replays the boot round event).
 type smartProbeState struct {
 	mu sync.Mutex
 	// lastProbe is when the last round ran (forced or due, any outcome).
@@ -239,6 +247,9 @@ func (p *Pool) smartProbeNoteManual(now time.Time) {
 	p.smartProbe.kick = false
 	p.smartProbe.idleSlept = true
 	p.smartProbe.mu.Unlock()
+	// The timer moved: arm the background flush so the restart resumes
+	// from this round instead of re-probing on the next tick.
+	p.markPersistDirty()
 }
 
 // smartProbeTick runs one scheduler pass on the maintain clock.
@@ -343,6 +354,10 @@ func (p *Pool) smartProbeTickAt(ctx context.Context, now time.Time) {
 		} else {
 			p.smartProbe.idleSlept = false
 		}
+		// The timer moved: arm the background flush (lock-free, safe
+		// under mu) so a restart resumes from this round. The canceled
+		// path above returns early with the timer untouched.
+		p.markPersistDirty()
 	}()
 }
 
@@ -476,6 +491,11 @@ func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) (*upst
 	st, err := tok.client.ProbeAccount(fire)
 	if err == nil && st != nil {
 		tok.session.UpdateQuotaFromProbe(st)
+		// The live quota cache moved: arm the background flush so the
+		// restart restores this write instead of re-probing the fleet.
+		// Still no ledger/lastActive/requestsServed touch — the cache
+		// write stays out of the usage accounts by construction.
+		p.markPersistDirty()
 	}
 	cancel()
 	if err != nil {
@@ -497,11 +517,22 @@ func (p *Pool) smartProbeOne(ctx context.Context, i int, tok *tokenEntry) (*upst
 	return st, nil
 }
 
-// smartProbeSkipToken reports whether the token sits out this round: the
-// administrative lock plus the same health gates as the maturity tick
-// (quarantined, banned, cooling, country-blocked accounts are never poked).
-// Health state is set by the request path; a probe never sets it (probe
-// failures stay warn-only so scheduler work cannot change serving).
+// smartProbeSkipToken reports whether the token sits out this round.
+// Decision order (cheap to costly):
+//
+//  1. Gates: the administrative lock plus the same health gates as the
+//     maturity tick (quarantined, banned, cooling, country-blocked
+//     accounts are never poked). Health state is set by the request
+//     path; a probe never sets it (probe failures stay warn-only so
+//     scheduler work cannot change serving).
+//  2. In-use: a token with in-flight runs is mid-chat — the upstream
+//     allows one client per account at a time, so a probe landing
+//     mid-chat can kick the active session (same
+//     runs.InflightCount()>0 rule as sessionPollTick/maintainTick; no
+//     new busy signal). Busy tokens stay fresh through the request
+//     path's own quota write, so skipping never starves them.
+//  3. Staleness (not here): the caller applies smartProbeQuotaStale, so
+//     a token whose cached quota is still fresh sits out the round.
 func smartProbeSkipToken(tok *tokenEntry, now time.Time) bool {
 	if tok == nil {
 		return true
@@ -520,6 +551,12 @@ func smartProbeSkipToken(tok *tokenEntry, now time.Time) bool {
 		return true
 	}
 	if tok.runs.CountryBlockedError() != nil {
+		return true
+	}
+	// In-use (decision step 2): a token with in-flight runs is mid-chat;
+	// probing now could kick the active session, so it sits out until
+	// the lease drains.
+	if tok.runs.InflightCount() > 0 {
 		return true
 	}
 	return false

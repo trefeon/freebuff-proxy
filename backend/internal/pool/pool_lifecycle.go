@@ -121,6 +121,13 @@ func pollSession(ctx context.Context, sess *session.Manager, cfg *config.Config,
 // nothing else.
 func (p *Pool) Start(ctx context.Context) {
 	p.once.Do(func() {
+		// Restore the persisted runtime state first (pool_state): the
+		// smart-probe timer plus the live per-token quota cache, so a
+		// restart resumes warm — the boot round below still fires as an
+		// event but probes nothing while the restored cache is fresh.
+		// Missing rows are a fresh boot (current behavior); a nil store
+		// is a no-op; restore never fails the boot (warn-only).
+		p.RestorePoolPersist()
 		// Anchor the smart-probe boot round before the maintain loop
 		// launches (spawn happens-before the first tick).
 		p.quotaBootAt = time.Now()
