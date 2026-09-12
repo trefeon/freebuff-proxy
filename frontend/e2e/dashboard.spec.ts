@@ -104,6 +104,21 @@ test.describe("dashboard hermetic mocks", () => {
     );
   });
 
+  test("Tokens rows show the streak badge per account", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+
+    await page.goto("http://127.0.0.1:4173/admin/#tokens");
+    const table = page.locator("table.fp-table");
+    await expect(table.getByText("Account #1")).toBeVisible({ timeout: 10000 });
+    // Fixture token 0 carries streak 7; token 1 carries none.
+    const first = table.locator("tbody tr").filter({ hasText: "Account #1" });
+    await expect(first.getByLabel("Streak 7 days")).toBeVisible();
+    await expect(first.getByLabel("Streak 7 days")).toContainText("7d streak");
+    const second = table.locator("tbody tr").filter({ hasText: "Account #2" });
+    await expect(second.getByLabel("No streak")).toBeVisible();
+  });
+
   test("Tokens drawer shows pinned models for locked slots", async ({
     page,
   }) => {
