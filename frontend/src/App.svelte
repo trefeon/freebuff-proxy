@@ -201,7 +201,7 @@
     >
       {#if $sessionExpired && activeTab !== "login"}
         <div class="space-y-6 page-enter">
-          <Alert tone="error" title={$tr("Session expired")}>
+          <Alert tone="error" title={$tr("Session expired")} sticky>
             <div
               class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
             >
