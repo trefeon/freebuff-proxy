@@ -985,6 +985,52 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(traceCards.getByText("upstream timeout")).toBeVisible();
   });
 
+  test("Traces tab survives duplicate timestamps and phase names", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+    await page.unroute("**/admin/api/traces");
+    const dup = {
+      enabled: true,
+      traces: [
+        {
+          time: "2026-08-27T10:00:00Z",
+          token: "0",
+          model: "dup-model-a",
+          status: "ok",
+          ms: "10ms",
+          phases: [
+            { name: "proxy", ms: 1 },
+            { name: "proxy", ms: 2 },
+          ],
+        },
+        {
+          time: "2026-08-27T10:00:00Z",
+          token: "1",
+          model: "dup-model-b",
+          status: "ok",
+          ms: "20ms",
+          phases: [{ name: "proxy", ms: 3 }],
+        },
+      ],
+    };
+    await page.route("**/admin/api/traces", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(dup),
+      });
+    });
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
+    await page.getByRole("button", { name: "Traces" }).click();
+    await expect(page.locator("table tbody tr")).toHaveCount(2);
+    await expect(page.locator("table").getByText("dup-model-b")).toBeVisible();
+    expect(errors.join("\n")).not.toContain("each_key_duplicate");
+  });
+
   test("Traces error shows a titled alert with retry", async ({ page }) => {
     const f = loadFixtures();
     await mockDashboard(page, f);
