@@ -2,7 +2,7 @@
 
 Machine-readable rules for agents working in this repo. Human overview lives in
 `README.md`; visual grammar in `DESIGN.md`; multi-agent workflow in
-`docs/AGENTIC-WORKFLOW.md`.
+`devdocs/AGENTIC-WORKFLOW.md`.
 
 ## 1. Identity
 
@@ -89,7 +89,7 @@ dotenv → static → live → SSE hash → store refresh.
 ## 5. Budgets and freezes (as observed)
 
 - Autonomy under ~10-step rails; fan out via isolated lanes (see
-  `docs/AGENTIC-WORKFLOW.md` §1).
+  `devdocs/AGENTIC-WORKFLOW.md` §1).
 - Request limits default 30/min, 1500/day Pacific; `SAFE_MODE=true` is the
   anti-ban preset (`.env.example`); `COST_MODE=free`.
 - Test flake policy: single FAIL with greens before/after (e.g. wall-clock
