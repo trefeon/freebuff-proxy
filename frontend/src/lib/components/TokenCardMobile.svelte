@@ -222,33 +222,6 @@
     </div>
   </div>
 
-  <!-- Details (secondary info + drawer) behind the expand chevron -->
-  {#if expanded}
-    <div class="flex flex-col gap-2">
-      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
-        <span class="text-[var(--fp-muted)]">{$tr("Instance")}</span>
-        <span class="min-w-0">
-          {#if token.session_instance}
-            <code class="fp-num break-all select-all"
-              >{token.session_instance}</code
-            >
-          {:else}
-            <span class="text-[var(--fp-dim)]">—</span>
-          {/if}
-        </span>
-      </div>
-      <TokenDetailsDrawer
-        {token}
-        bind:spawnModel
-        {actionPending}
-        {devToolsEnabled}
-        {onSpawn}
-        {onRefresh}
-        {onDropSession}
-        {sessionRemaining}
-      />
-    </div>
-  {/if}
   <!-- Footer: expand chevron left, actions right -->
   <div
     class="flex items-center justify-between gap-2 pt-0.5 border-t border-[var(--fp-border)]"
@@ -314,4 +287,31 @@
       </Button>
     </div>
   </div>
+  <!-- Details (secondary info + drawer) behind the expand chevron -->
+  {#if expanded}
+    <div class="flex flex-col gap-2">
+      <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <span class="text-[var(--fp-muted)]">{$tr("Instance")}</span>
+        <span class="min-w-0">
+          {#if token.session_instance}
+            <code class="fp-num break-all select-all"
+              >{token.session_instance}</code
+            >
+          {:else}
+            <span class="text-[var(--fp-dim)]">—</span>
+          {/if}
+        </span>
+      </div>
+      <TokenDetailsDrawer
+        {token}
+        bind:spawnModel
+        {actionPending}
+        {devToolsEnabled}
+        {onSpawn}
+        {onRefresh}
+        {onDropSession}
+        {sessionRemaining}
+      />
+    </div>
+  {/if}
 </div>

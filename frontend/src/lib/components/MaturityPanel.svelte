@@ -177,13 +177,53 @@
     return isFinite(slot) && slot <= nowMs;
   }
 
+  // Pacific-day label for an instant ("Sep 11"): the day key the streak
+  // walk counts, so run times read against the reset that matters.
+  function fmtPacificDay(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      month: "short",
+      day: "numeric",
+    }).format(d);
+  }
+
+  // Where today's usage happened: proxy-routed traffic lands in the local
+  // day ledger (requests_per_day), anything else means the account was
+  // used outside this proxy (app, CLI, or direct).
+  function usageSource(t) {
+    const n = Number(t?.requests_per_day) || 0;
+    if (n > 0) return $tr("used here ({n} today)", { n });
+    return $tr("used outside this proxy");
+  }
+
+  function lastActivity(t) {
+    return t?.last_usage || t?.maturity?.last_touch || "";
+  }
+
   // Per-account tonight status for the board rows (universal: no enabled
   // gate — a missing ledger simply reads Pending). Skipped carries the
-  // exact ledger reason, touched carries the touch time, eligible means
+  // human reason plus the exact ledger code plus when/where the account
+  // was last active; touched carries the touch time, eligible means
   // due now inside the window, pending means waiting for the slot/window.
   function rowStatus(t) {
     const m = t?.maturity;
     const result = m?.last_result ?? "";
+    if (result === "skip:today-used") {
+      const when = fmtPacificDay(lastActivity(t));
+      return {
+        kind: "skipped",
+        text: `${$tr("Skipped")} · ${$tr("day already used")}${when ? ` · ${$tr("last activity {day}", { day: when })}` : ""} · ${usageSource(t)} · ${result}`,
+      };
+    }
+    if (result === "skip:client-active") {
+      return {
+        kind: "skipped",
+        text: `${$tr("Skipped")} · ${$tr("you used it today via this proxy")} · ${result}`,
+      };
+    }
     if (result.startsWith("skip:")) {
       return { kind: "skipped", text: `${$tr("Skipped")} · ${result}` };
     }
@@ -231,15 +271,20 @@
       .map(([reason, n]) => (n > 1 ? `${reason} ×${n}` : reason));
     return { touched, skipped, reasons, latest };
   }
+  function nextReset() {
+    const r = pacificMidnight(nowMs, 0);
+    return r > nowMs ? r : pacificMidnight(nowMs, 1);
+  }
   function countdownText() {
     const w = runWindow();
     const skipped = coveredTokens().filter((t) => touchedToday(t)).length;
     const eligible = coveredTokens().length - skipped;
     const counts = `${eligible} eligible · ${skipped} skipped`;
+    const reset = ` · ${$tr("reset")} ${fmtCountdown(nextReset() - nowMs)}`;
     if (nowMs >= w.start && nowMs < w.end) {
-      return `In window · ends ${fmtCountdown(w.end - nowMs)} · ${counts}`;
+      return `In window · ends ${fmtCountdown(w.end - nowMs)} · ${counts}${reset}`;
     }
-    return `Next run ${fmtCountdown(w.start - nowMs)} · ${counts}`;
+    return `Next run ${fmtCountdown(w.start - nowMs)} · ${counts}${reset}`;
   }
 
   onMount(() => {
@@ -313,6 +358,10 @@
       <p class="fp-num text-[11px] leading-relaxed text-[var(--fp-dim)]">
         {$tr("Nightly window 23:00–00:00 Pacific")}
         ·
+        {$tr(
+          "one touch per Pacific day, placed just before reset to rescue the expiring day",
+        )}
+        ·
         {$tr("client request activity since the last Pacific reset skips")}
       </p>
       <p
@@ -337,7 +386,9 @@
       >
         <p class="fp-num text-[11px] text-[var(--fp-dim)]">
           {$tr("Last run")}
-          {fmtTime(summary.latest)} · {$tr("touched")}
+          {fmtTime(summary.latest)}{fmtPacificDay(summary.latest)
+            ? ` · ${$tr("for the {day} Pacific day", { day: fmtPacificDay(summary.latest) })}`
+            : ""} · {$tr("touched")}
           {summary.touched}
           · {$tr("skipped")}
           {summary.skipped}
