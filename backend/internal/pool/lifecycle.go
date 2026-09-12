@@ -24,6 +24,10 @@ func (p *Pool) LeaseRelease(lease *Lease) {
 	// discipline, never by index — mirrors the run release above). Nil-safe:
 	// unlimited caps and synthetic leases carry no permit.
 	lease.chat.Release()
+	// Release the smart-routing live-turn slot the same way (nil-safe:
+	// legacy/off-path and synthetic leases carry no permit). The release
+	// wakes the token's FIFO head when waiters park.
+	lease.routeSlot.Release()
 	// A lease on a removed token (RemoveLastToken swapped the snapshot out
 	// from under a concurrent Acquire) releases through its own entry — the
 	// bounds-checked index path would no-op and leak the run's inflight, or
@@ -59,6 +63,9 @@ func (p *Pool) LeaseAbandon(lease *Lease) {
 	// until process restart (the waiter parks on gate release, not on run
 	// teardown).
 	lease.chat.Release()
+	// A cancelled chat frees its live-turn slot too (same leak discipline
+	// as the lane above; wakes the FIFO head when waiters park).
+	lease.routeSlot.Release()
 }
 
 // RecordRunStep records a completed chat step on the lease's run (issue

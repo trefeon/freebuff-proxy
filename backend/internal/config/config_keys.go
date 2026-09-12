@@ -108,6 +108,18 @@ type rawConfig struct {
 	CompressPrompt                   string                  `json:"COMPRESS_PROMPT"`
 	CacheControlInjection            string                  `json:"CACHE_CONTROL_INJECTION"`
 	ReasoningInContent               string                  `json:"REASONING_IN_CONTENT"`
+	// RoutingSmart records ROUTING_SMART (default true via
+	// defaultRawConfig): the smart-routing master switch.
+	RoutingSmart bool `json:"ROUTING_SMART"`
+	// TokenMaxConcurrent records TOKEN_MAX_CONCURRENT (default 2, floor
+	// 1): the per-token live-turn cap.
+	TokenMaxConcurrent *int `json:"TOKEN_MAX_CONCURRENT"`
+	// QueueWait records QUEUE_WAIT (default "30s"): the FIFO slot-queue
+	// wait bound.
+	QueueWait string `json:"QUEUE_WAIT"`
+	// QueueDepth records QUEUE_DEPTH (default 16): the per-token FIFO
+	// queue depth cap.
+	QueueDepth *int `json:"QUEUE_DEPTH"`
 }
 
 // modelsAllowList is the raw MODELS_ALLOW value. The README documents list
@@ -200,6 +212,10 @@ func defaultRawConfig() rawConfig {
 		BurstWindow:                      "1m",        // sliding window for counting same-model admissions toward BURST_THRESHOLD
 		BurstThreshold:                   ptrInt(20),  // same-model admissions inside BURST_WINDOW that trip spreading for that model
 		BurstMaxTokens:                   ptrInt(2),   // distinct accounts one model's burst spreads across (minimum 2)
+		RoutingSmart:                     true,        // smart pool routing on by default; false restores the legacy acquire path
+		TokenMaxConcurrent:               ptrInt(2),   // per-token live turns (floor 1; bunker strictness is 1)
+		QueueWait:                        "30s",       // FIFO slot-queue wait bound per parked Acquire
+		QueueDepth:                       ptrInt(16),  // parked FIFO waiters per token (0 = fail over at once when full)
 		MaturityEnabled:                  true,        // streak-maturity automation on by default; dry-run probes prove schedule before live touches
 		MaturityDryRun:                   true,        // maturity touches probe only until the operator proves the schedule
 		QuotaAutoProbe:                   true,        // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
