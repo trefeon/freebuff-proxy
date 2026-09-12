@@ -403,8 +403,8 @@ test.describe("operator interactions (hermetic mocks)", () => {
     await expect(
       page.locator("section", { hasText: "Pool Tokens" }).locator("table"),
     ).toBeHidden();
-    // The expand chevron lives in the card footer on mobile: tapping it
-    // reveals the behind-chevron detail (instance row).
+    // The expand chevron lives in the pinned action row above the drawer:
+    // tapping it reveals the behind-chevron detail (instance row).
     await page
       .locator("section", { hasText: "Pool Tokens" })
       .locator('button[aria-label*="Expand details"]')
@@ -418,6 +418,21 @@ test.describe("operator interactions (hermetic mocks)", () => {
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
+    // The action row (expand chevron + Lock/Remove) sits above the drawer:
+    // expanding grows the card downward without moving the buttons.
+    const lockBox = await page
+      .locator("section", { hasText: "Pool Tokens" })
+      .getByRole("button", { name: "Lock" })
+      .filter({ visible: true })
+      .first()
+      .boundingBox();
+    const instanceBox = await page
+      .locator("section", { hasText: "Pool Tokens" })
+      .getByText("Instance", { exact: true })
+      .filter({ visible: true })
+      .first()
+      .boundingBox();
+    expect(lockBox && instanceBox && lockBox.y < instanceBox.y).toBe(true);
     const pageOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );
