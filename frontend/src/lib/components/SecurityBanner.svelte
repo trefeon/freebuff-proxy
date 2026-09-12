@@ -7,7 +7,7 @@
   let { onChangePassword } = $props();
 </script>
 
-<Alert tone="warning" title={$tr("Default password in use")}>
+<Alert tone="warning" title={$tr("Default password in use")} sticky>
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <p class="text-sm text-[var(--fp-muted)]">
       {$tr(
