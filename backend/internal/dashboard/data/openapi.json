@@ -1461,6 +1461,10 @@
                 "index": {
                   "type": "integer"
                 },
+                "last_refund": {
+                  "nullable": true,
+                  "type": "number"
+                },
                 "last_usage": {
                   "type": "string"
                 },
@@ -1525,6 +1529,9 @@
                 },
                 "messages_24h": {
                   "type": "integer"
+                },
+                "pending_refund": {
+                  "type": "string"
                 },
                 "queue_depth": {
                   "type": "integer"
@@ -1727,6 +1734,15 @@
               },
               "upstream_sha": {
                 "type": "string"
+              },
+              "vendor_version": {
+                "type": "string"
+              },
+              "vendor_version_pinned": {
+                "type": "string"
+              },
+              "version_changed": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -1735,7 +1751,8 @@
               "has_registry_drift",
               "has_wire_drift",
               "releases_url",
-              "upstream_sha"
+              "upstream_sha",
+              "version_changed"
             ],
             "type": "object"
           },

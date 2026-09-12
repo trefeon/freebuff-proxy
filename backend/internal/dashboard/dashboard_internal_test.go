@@ -286,6 +286,43 @@ func TestCardFromSnapshotAllowlist(t *testing.T) {
 	}
 }
 
+// TestCardFromSnapshotRefund pins the pending-refund card fields: a parked
+// release (pending instance id, no settled amount) lands pending_refund on
+// both the full and live cards, a settled receipt lands last_refund, and a
+// snapshot with neither leaves both cards zero-valued (omitempty).
+func TestCardFromSnapshotRefund(t *testing.T) {
+	settled := 1.5
+	snap := pool.TokenSnapshot{
+		Token:         0,
+		RiskLevel:     "low",
+		LastRefund:    &settled,
+		PendingRefund: "inst-abc-123",
+	}
+	card := cardFromSnapshot(snap)
+	if card.PendingRefund != "inst-abc-123" {
+		t.Errorf("PendingRefund = %q, want inst-abc-123 (parked release)", card.PendingRefund)
+	}
+	if card.LastRefund == nil || *card.LastRefund != 1.5 {
+		t.Errorf("LastRefund = %+v, want 1.5 (settled receipt)", card.LastRefund)
+	}
+	live := liveCardFromSnapshot(snap)
+	if live.PendingRefund != "inst-abc-123" {
+		t.Errorf("live PendingRefund = %q, want inst-abc-123", live.PendingRefund)
+	}
+	if live.LastRefund == nil || *live.LastRefund != 1.5 {
+		t.Errorf("live LastRefund = %+v, want 1.5", live.LastRefund)
+	}
+
+	plain := cardFromSnapshot(pool.TokenSnapshot{Token: 1, RiskLevel: "low"})
+	if plain.PendingRefund != "" || plain.LastRefund != nil {
+		t.Errorf("refund fields = %+v/%q without a receipt, want nil/empty", plain.LastRefund, plain.PendingRefund)
+	}
+	livePlain := liveCardFromSnapshot(pool.TokenSnapshot{Token: 1, RiskLevel: "low"})
+	if livePlain.PendingRefund != "" || livePlain.LastRefund != nil {
+		t.Errorf("live refund fields = %+v/%q without a receipt, want nil/empty", livePlain.LastRefund, livePlain.PendingRefund)
+	}
+}
+
 // TestCardFromSnapshotBanAndLocked pins the #198/#199 ban mapping: an active
 // temporary ban lands ban_type + RFC3339 banned_until on the card, a hard
 // ban carries only the type, and Locked is copied through (previously

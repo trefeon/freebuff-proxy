@@ -1366,6 +1366,7 @@ export interface components {
         has_referral: boolean;
         has_standing: boolean;
         index: number;
+        last_refund?: number | null;
         last_usage?: string;
         locked: boolean;
         maturity?: {
@@ -1386,6 +1387,7 @@ export interface components {
           touch_model?: string;
         } | null;
         messages_24h: number;
+        pending_refund?: string;
         queue_depth: number;
         queue_position: number;
         referral_code?: string;
@@ -1437,6 +1439,9 @@ export interface components {
         has_wire_drift: boolean;
         releases_url: string;
         upstream_sha: string;
+        vendor_version?: string;
+        vendor_version_pinned?: string;
+        version_changed: boolean;
       } | null;
       uptime: string;
     };
@@ -1524,7 +1529,10 @@ export interface components {
       chat_max_inflight_unmetered: number;
       has_tokens: boolean;
       in_bridge: boolean;
+      maturity_dry_run: boolean;
       maturity_enabled: boolean;
+      maturity_window_end?: string;
+      maturity_window_start?: string;
       mode: string;
       rate_limit_failover: boolean;
       show_bridge: boolean;

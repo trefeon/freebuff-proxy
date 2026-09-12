@@ -224,6 +224,8 @@ func (p *Pool) Snapshot() []TokenSnapshot {
 			Standing:                ss.Standing,
 			Referral:                ss.Referral,
 			Freebucks:               ss.Freebucks,
+			LastRefund:              ss.LastRefund,
+			PendingRefund:           ss.PendingRefund,
 			Streak:                  streak,
 			TodayUsed:               todayUsed,
 			LastUsageDate:           lastUsage,

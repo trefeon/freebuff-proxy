@@ -163,13 +163,11 @@
                     </strong>
                     {#if m.badges?.length}
                       {#each m.badges as badge (badge)}
-                        {#if badge !== "NEW"}
-                          <span
-                            class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]"
-                          >
-                            {badge}
-                          </span>
-                        {/if}
+                        <span
+                          class="px-1 py-0.2 rounded text-[9px] uppercase tracking-wider border text-[var(--fp-dim)] bg-[var(--fp-surface)] border-[var(--fp-border)]"
+                        >
+                          {badge}
+                        </span>
                       {/each}
                     {/if}
                   </div>
@@ -269,14 +267,12 @@
                   <span class="text-[var(--fp-muted)]">{m.tagline}</span>
                 {/if}
                 {#each m.badges ?? [] as badge (badge)}
-                  {#if badge !== "NEW"}
-                    <span>·</span>
-                    <span
-                      class="px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wider border bg-[var(--fp-surface)] border-[var(--fp-border)]"
-                    >
-                      {badge}
-                    </span>
-                  {/if}
+                  <span>·</span>
+                  <span
+                    class="px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wider border bg-[var(--fp-surface)] border-[var(--fp-border)]"
+                  >
+                    {badge}
+                  </span>
                 {/each}
                 {#if m.notice}
                   <span>·</span>

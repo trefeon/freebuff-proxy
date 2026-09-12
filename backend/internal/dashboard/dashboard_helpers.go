@@ -75,6 +75,8 @@ func cardFromSnapshot(t pool.TokenSnapshot) tokenCard {
 	if t.Freebucks != nil {
 		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
 	}
+	card.LastRefund = t.LastRefund
+	card.PendingRefund = t.PendingRefund
 	if t.Streak > 0 {
 		card.Streak = t.Streak
 		card.TodayUsed = t.TodayUsed
@@ -153,7 +155,12 @@ type tokenLiveCard struct {
 	TransientRetries       int64  `json:"transient_retries"`
 	// AllowlistSkips is live (like TransientRetries): every poll refreshes
 	// it, so it stays out of the SPA's static cache.
-	AllowlistSkips  int64          `json:"allowlist_skips,omitempty"`
+	AllowlistSkips int64 `json:"allowlist_skips,omitempty"`
+	// LastRefund / PendingRefund ride the hot poll like Freebucks: a
+	// release or replay can settle or park a refund between full fetches,
+	// and the account card reads the merged view.
+	LastRefund      *float64       `json:"last_refund,omitempty"`
+	PendingRefund   string         `json:"pending_refund,omitempty"`
 	Freebucks       *freebucksCard `json:"freebucks,omitempty"`
 	Streak          int            `json:"streak,omitempty"`
 	TodayUsed       bool           `json:"today_used,omitempty"`
@@ -197,6 +204,8 @@ func liveCardFromSnapshot(t pool.TokenSnapshot) tokenLiveCard {
 	if t.Freebucks != nil {
 		card.Freebucks = freebucksCardFromInfo(t.Freebucks)
 	}
+	card.LastRefund = t.LastRefund
+	card.PendingRefund = t.PendingRefund
 	if t.Streak > 0 {
 		card.Streak = t.Streak
 		card.TodayUsed = t.TodayUsed
