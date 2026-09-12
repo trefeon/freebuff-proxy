@@ -326,6 +326,59 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(page.getByTestId("reset-strip")).toContainText("resets in");
   });
 
+  test("Accounts row renders the tier prefix and pending-refund line", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    // Full-tier account with a parked release: the header carries the
+    // server-driven tier plus the daily fraction, and the refund line
+    // renders once for the parked account only.
+    const refundTokens = JSON.parse(JSON.stringify(f.tokens));
+    refundTokens.tokens[0].access_tier = "full";
+    refundTokens.tokens[0].freebucks = {
+      balance: 50,
+      daily: { remaining: 95, limit: 100, reset_at: "2030-01-01T00:00:00Z" },
+      wallet: { balance: 2.5 },
+      prices: {},
+    };
+    refundTokens.tokens[0].pending_refund = "inst-abc-123";
+    await mockDashboard(page, f, { tokens: refundTokens });
+
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
+    await page.getByRole("button", { name: "Accounts" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Account #1" }),
+    ).toBeVisible();
+    const header = page.getByTestId("freebucks-header").first();
+    await expect(header).toContainText("FULL");
+    await expect(header).toContainText("95/100 Freebucks daily");
+    const refund = page.getByTestId("refund-line");
+    await expect(refund).toHaveCount(1);
+    await expect(refund).toContainText("awaiting final usage");
+  });
+
+  test("Models rows render NEW markers and training warnings", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
+    await page.getByRole("button", { name: "Models" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Plans", exact: true }),
+    ).toBeVisible();
+    // Vendor-catalog copy renders verbatim: the freshness marker, the
+    // data-training warning, and the single-label reasoning chip.
+    await expect(page.getByText("NEW", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("May use data for AI training").first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Reasoning: max*", { exact: true }).first(),
+    ).toBeVisible();
+  });
+
   test("Settings renders catalog groups and saves a toggled bool into the .env", async ({
     page,
   }) => {

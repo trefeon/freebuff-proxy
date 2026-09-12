@@ -202,6 +202,15 @@ func TestMaturityTouchReplaysPendingRefund(t *testing.T) {
 	if snap.LastRefund == nil || *snap.LastRefund != 1.5 {
 		t.Errorf("LastRefund = %+v, want 1.5 (settled replay receipt)", snap.LastRefund)
 	}
+	// The settled refund reaches the pool snapshot (and from there the
+	// dashboard token card): the session manager is not the only reader.
+	psnap := p.Snapshot()[0]
+	if psnap.PendingRefund != "" {
+		t.Errorf("pool PendingRefund = %q, want cleared after settle", psnap.PendingRefund)
+	}
+	if psnap.LastRefund == nil || *psnap.LastRefund != 1.5 {
+		t.Errorf("pool LastRefund = %+v, want 1.5 (mirrored session snapshot)", psnap.LastRefund)
+	}
 	action, result := maturityResult(p, 0)
 	if action != "admit" || result != "ok" {
 		t.Errorf("last touch = %q/%q, want admit/ok (replay is warn-only)", action, result)

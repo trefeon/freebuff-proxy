@@ -184,6 +184,14 @@ type TokenSnapshot struct {
 	// Freebucks is the upstream Freebucks allowance block (issue #232); nil until
 	// the session reports it.
 	Freebucks *upstream.FreebucksInfo `json:"freebucks,omitempty"`
+	// LastRefund is the last settled session-DELETE freebucksRefund (vendor
+	// af898dc); nil when no DELETE receipt carried one. PendingRefund is
+	// the instance id of a release whose receipt reported
+	// freebucksRefundPending ("" when none): replayed by RefreshRefund.
+	// Both mirror session.SessionSnapshot so the dashboard token card can
+	// render the pending-refund line.
+	LastRefund    *float64 `json:"last_refund,omitempty"`
+	PendingRefund string   `json:"pending_refund,omitempty"`
 	// UpgradeHint is the upstream upgradeHint block ({url, message})
 	// broadcast by the session server; nil when absent.
 	UpgradeHint *upstream.SessionUpgradeHint `json:"upgrade_hint,omitempty"`

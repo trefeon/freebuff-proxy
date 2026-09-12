@@ -261,6 +261,16 @@
       <span class="fp-num">{fmtCountdown(sessionRemaining)}</span>
     </div>
   {/if}
+  {#if token.pending_refund}
+    <p
+      class="mb-2 px-2 py-1 rounded bg-[var(--fp-warning)]/10 text-xs text-[var(--fp-warning)]"
+      data-testid="refund-line"
+    >
+      {$tr(
+        "Your refund is awaiting final usage, once settled it will appear in your wallet",
+      )}
+    </p>
+  {/if}
   {#if token.session_remaining_seconds > 0}
     <div class="mb-2 flex justify-end">
       <Button

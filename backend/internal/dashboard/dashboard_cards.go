@@ -116,6 +116,14 @@ type tokenCard struct {
 	ReferralSessionsLeft   int    `json:"referral_sessions_left"`
 	ReferralGithubLinked   bool   `json:"referral_github_linked"`
 	ReferralResetAt        string `json:"referral_reset_at,omitempty"`
+	// LastRefund is the last settled session-DELETE freebucksRefund (vendor
+	// af898dc); nil when no DELETE receipt carried one. PendingRefund is
+	// the instance id of a release whose receipt reported
+	// freebucksRefundPending ("" when none). Both mirror
+	// pool.TokenSnapshot so the account card can render the
+	// pending-refund line.
+	LastRefund    *float64 `json:"last_refund,omitempty"`
+	PendingRefund string   `json:"pending_refund,omitempty"`
 	// Freebucks (issue #232): balance + daily/weekly/monthly windows +
 	// bindingWindow + prices. Nil when the session has not reported it.
 	Freebucks *freebucksCard `json:"freebucks,omitempty"`
