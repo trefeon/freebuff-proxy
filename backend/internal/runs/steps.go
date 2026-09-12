@@ -43,7 +43,7 @@ type Run struct {
 	// TraceSessionID is minted once per run (crypto/rand UUID) and reused
 	// across the run's requests as codebuff_metadata["trace_session_id"],
 	// exactly like the CLI (run.ts: previousRun?.traceSessionId ??
-	// randomUUID; reference/proxy-freebuff lib/runs.js:43-46).
+	// randomUUID; reference/gateways/proxy-freebuff lib/runs.js:43-46).
 	TraceSessionID string
 
 	// ClientID is codebuff_metadata["client_id"], minted once per run and

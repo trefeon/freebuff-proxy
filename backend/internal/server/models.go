@@ -180,7 +180,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		// protocol ModelsResponse wrapper, protocol/src/openai_models.rs:745-
 		// 750); the {"object":"list","data":…} OpenAI shape errors on the
 		// missing `models` field and codex silently falls back to its bundled
-		// catalog (reference/harnesses/codex/WIRE-NOTES.md §8).
+		// catalog (reference/agents/codex/WIRE-NOTES.md §8).
 		rows := make([]codexModelInfo, 0, len(listed))
 		for _, id := range listed {
 			rows = append(rows, codexModelRow(id))

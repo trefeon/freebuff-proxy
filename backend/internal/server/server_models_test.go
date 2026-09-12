@@ -142,8 +142,8 @@ func TestModelsEndpoint(t *testing.T) {
 }
 
 // codexModelInfoStrict mirrors the serde-required ModelInfo rows codex-rs
-// demands (codex-rs/protocol/src/openai_models.rs:392-483; reference/
-// harnesses/codex/WIRE-NOTES.md §8). DisallowUnknownFields decoding proves
+// demands (codex-rs/protocol/src/openai_models.rs:392-483; reference/agents/
+// codex/WIRE-NOTES.md §8). DisallowUnknownFields decoding proves
 // the wire rows are exactly this set — no legacy {id,object,…} fields leak in.
 type codexModelInfoStrict struct {
 	Slug                     string `json:"slug"`
@@ -167,7 +167,7 @@ type codexModelInfoStrict struct {
 }
 
 // TestConformanceCodexModelsStrictModelInfo pins the Codex /v1/models wire
-// (reference/harnesses/codex/WIRE-NOTES.md §8): with a client_version query
+// (reference/agents/codex/WIRE-NOTES.md §8): with a client_version query
 // param (codex always sends it — codex-rs codex-api/src/endpoint/models.rs:
 // 31-35) the endpoint must return strict ModelInfo rows under the
 // {"models": […]} envelope. A minimal {id,object,…} shape fails codex serde

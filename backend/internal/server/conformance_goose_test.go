@@ -2,7 +2,7 @@ package server_test
 
 // Conformance replay for goose's declarative OpenAI-compatible path against
 // the chat/completions surface. goose sets NO tool_choice at all
-// (reference/harnesses/goose/WIRE-NOTES.md: formats/openai.rs:1704-1712 —
+// (reference/agents/goose/WIRE-NOTES.md: formats/openai.rs:1704-1712 —
 // the model may pick zero or many tools), always sends
 // stream_options:{include_usage:true} (formats/openai.rs:1766-1768), and
 // consumes usage from a trailing choices:[] chunk (1279-1291).

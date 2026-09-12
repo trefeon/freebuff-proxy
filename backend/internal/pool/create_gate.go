@@ -2,7 +2,7 @@ package pool
 
 // Session-create admission gate (issue #86): bounds concurrent in-flight
 // session admissions so a burst of requests cannot hammer the upstream
-// create endpoint. Mirrors reference/freebuff-reverse/internal/session/
+// create endpoint. Mirrors reference/gateways/freebuff-reverse/internal/session/
 // create_gate.go: per-model (and global) in-flight counters, wait-or-503 —
 // an acquire parks on a broadcast channel until a slot frees or its context
 // expires (the caller's deadline becomes the 503).
@@ -16,7 +16,7 @@ import (
 )
 
 // Default session-create gate caps (issue #86), matching
-// reference/freebuff-reverse .../create_gate.go defaults.
+// reference/gateways/freebuff-reverse .../create_gate.go defaults.
 const (
 	defaultMaxParallelCreatesGlobal   = 128
 	defaultMaxParallelCreatesPerModel = 32

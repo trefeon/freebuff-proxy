@@ -3,7 +3,7 @@ package server_test
 // Conformance replay for the opencode CLI (sst/opencode) against the proxy's
 // native surfaces, in the exact wire shapes opencode's default AI-SDK runtime
 // and its native @opencode-ai/llm runtime both carry (WIRE-NOTES:
-// reference/harnesses/opencode/WIRE-NOTES.md):
+// reference/agents/opencode/WIRE-NOTES.md):
 //
 //   - OpenAI provider -> POST /v1/responses (packages/opencode/src/provider/
 //     provider.ts:208-212 pins @ai-sdk/openai to sdk.responses(modelID)) with

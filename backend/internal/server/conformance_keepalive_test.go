@@ -5,10 +5,10 @@ package server
 // the relay must keep writing liveness frames to the client so a harness
 // per-chunk idle timeout never aborts the stream on a keepalive-only gap.
 // Grounding: kilocode's per-chunk SSE idle timeout (chunkTimeout, when
-// configured) aborts on sparse keep-alives (reference/harnesses/kilocode/
+// configured) aborts on sparse keep-alives (reference/agents/kilocode/
 // WIRE-NOTES.md aisdk.ts:54-82), yet its SSE decoder tolerates comment
-// keep-alive lines (reference/harnesses/kilocode/WIRE-NOTES.md shared.ts:261-267);
-// codex aborts a stream idle past 5 minutes (reference/harnesses/codex/
+// keep-alive lines (reference/agents/kilocode/WIRE-NOTES.md shared.ts:261-267);
+// codex aborts a stream idle past 5 minutes (reference/agents/codex/
 // WIRE-NOTES.md). The test drives the live HTTP chat surface end-to-end with
 // the mock upstream, with no network.
 
@@ -28,7 +28,7 @@ import (
 // in a client SSE body. On the OpenAI-compatible wire the relay's liveness
 // signal is an SSE comment frame (the Anthropic wire uses an "event: ping");
 // comment frames are exactly the keep-alive token harnesses like kilocode
-// tolerate as liveness (reference/harnesses/kilocode/WIRE-NOTES.md shared.ts).
+// tolerate as liveness (reference/agents/kilocode/WIRE-NOTES.md shared.ts).
 func keepalivePingsOf(t *testing.T, body string) int {
 	t.Helper()
 	return strings.Count(body, ": keepalive\n\n")

@@ -1,7 +1,7 @@
 package server_test
 
 // Hermetic "real user usage" conformance tests for the Continue harness
-// (reference/harnesses/continue/WIRE-NOTES.md) against the proxy's OpenAI
+// (reference/agents/continue/WIRE-NOTES.md) against the proxy's OpenAI
 // chat and Anthropic /v1/messages surfaces. Continue's OpenAI adapter sends
 // BOTH x-api-key AND Authorization: Bearer with the SAME key
 // (openai-adapters/src/apis/OpenAI.ts:159-169), forces

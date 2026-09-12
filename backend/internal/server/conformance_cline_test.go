@@ -2,7 +2,7 @@ package server_test
 
 // Conformance replays for Cline (cline/cline) — a Vercel AI SDK v7 client,
 // so the proxy must speak the real vendor wire verbatim. There are three
-// distinct surfaces (reference/harnesses/cline/WIRE-NOTES.md §1, §10):
+// distinct surfaces (reference/agents/cline/WIRE-NOTES.md §1, §10):
 //
 //   - openai-compatible: POST {baseUrl}/v1/chat/completions with
 //     `includeUsage: true` (vendors/openai-compatible.ts:243-249) and, for

@@ -3,7 +3,7 @@ package server_test
 // Conformance replay for Kilo Code (Kilo-Org/kilocode, an opencode-derived
 // fork that reuses the same packages/llm wire layer) against the proxy's
 // Anthropic Messages surface, in the exact kilocode wire shape (WIRE-NOTES:
-// reference/harnesses/kilocode/WIRE-NOTES.md):
+// reference/agents/kilocode/WIRE-NOTES.md):
 //
 //   - x-api-key auth (runner/model.ts:168-175, providers/anthropic.ts:26-30)
 //     + anthropic-version 2023-06-01 (anthropic-messages.ts:849) +

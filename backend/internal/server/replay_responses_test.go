@@ -494,7 +494,7 @@ func TestReplayCodexResponses401(t *testing.T) {
 // must terminate the stream, and the reasoning item's output_item.done must
 // be spec-shaped (id + summary + content[{type:reasoning_text,text}]) with
 // no encrypted_content field. Grounded in
-// reference/harnesses/codex/WIRE-NOTES.md:158 ("include:
+// reference/agents/codex/WIRE-NOTES.md:158 ("include:
 // ['reasoning.encrypted_content'] is always sent; the encrypted_content is
 // optional on the Reasoning item, so a proxy may omit it.") and the
 // reference reasoning output_item.done shape
@@ -559,7 +559,7 @@ func TestResponsesIncludeIgnoredContract(t *testing.T) {
 	// (c) The reasoning item's output_item.done is spec-shaped (id +
 	// summary + content[{type:reasoning_text,text}]) with no
 	// encrypted_content field — a proxy may omit encrypted_content
-	// (reference/harnesses/codex/WIRE-NOTES.md:158).
+	// (reference/agents/codex/WIRE-NOTES.md:158).
 	var foundReasoning bool
 	for _, ev := range events {
 		if t, _ := ev["type"].(string); t != "response.output_item.done" {

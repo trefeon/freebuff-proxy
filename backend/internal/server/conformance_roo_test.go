@@ -2,7 +2,7 @@ package server_test
 
 // Conformance replay for Roo Code's strict function tools against the
 // OpenAI chat/completions surface. Roo converts every function schema for
-// OpenAI strict mode (reference/harnesses/Roo-Code/WIRE-NOTES.md §5:
+// OpenAI strict mode (reference/agents/Roo-Code/WIRE-NOTES.md §5:
 // base-provider.ts:33-110 — strict:true, all props in required, nullable
 // types unwrapped, additionalProperties:false). A proxy whose schema
 // normalization strips or rewrites those strict markers silently downgrades
