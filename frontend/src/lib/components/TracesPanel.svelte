@@ -133,7 +133,7 @@
               </tr>
             </thead>
             <tbody>
-              {#each visibleTraces as t (t.time)}
+              {#each visibleTraces as t, i (t.time + "|" + (rowReqId(t) ?? "") + "|" + i)}
                 {@const tidx = accIndex(t.token)}
                 {@const reqId = rowReqId(t)}
                 <tr class={highlightRow(t) ? "bg-amber-500/5" : ""}>
@@ -168,7 +168,7 @@
                   <td>
                     {#if t.phases?.length}
                       <div class="flex flex-wrap gap-1">
-                        {#each t.phases as ph (ph.name)}
+                        {#each t.phases as ph, j (ph.name + "|" + j)}
                           <span
                             class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]"
                           >
@@ -202,7 +202,7 @@
           class="md:hidden flex flex-col gap-2.5 p-3.5"
           aria-label={$tr("Chat traces")}
         >
-          {#each visibleTraces as t (t.time)}
+          {#each visibleTraces as t, i (t.time + "|" + (rowReqId(t) ?? "") + "|" + i)}
             {@const tidx = accIndex(t.token)}
             {@const reqId = rowReqId(t)}
             <li class="fp-inset rounded p-3 flex flex-col gap-2 min-w-0">
@@ -249,7 +249,7 @@
               </div>
               {#if t.phases?.length}
                 <div class="flex flex-wrap gap-1">
-                  {#each t.phases as ph (ph.name)}
+                  {#each t.phases as ph, j (ph.name + "|" + j)}
                     <span
                       class="px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] bg-[var(--fp-surface-2)] text-[10px] font-mono text-[var(--fp-muted)]"
                     >
