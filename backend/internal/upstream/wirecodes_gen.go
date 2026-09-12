@@ -40,6 +40,9 @@ const (
 	// WireCodeFreeModeInvalidAgentModel: the (agent, model) pair is not in the allowlist. Also the RateLimitError.Status for the refusal.
 	// pinned server-observed body marker (absent from the snapshots).
 	WireCodeFreeModeInvalidAgentModel WireCode = "free_mode_invalid_agent_model"
+	// WireCodeFreeModeInvalidAgentHierarchy: the subagent id is not in its root's allowlist (hierarchy gate).
+	// pinned server-observed body marker (absent from the snapshots).
+	WireCodeFreeModeInvalidAgentHierarchy WireCode = "free_mode_invalid_agent_hierarchy"
 	// WireCodeSessionSuperseded: another instance took over the account (409).
 	// snapshot: common/src/types/freebuff-session.ts.
 	WireCodeSessionSuperseded WireCode = "session_superseded"

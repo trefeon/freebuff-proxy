@@ -354,6 +354,9 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error, m
 	case errors.Is(err, upstream.ErrFreeModeCLIRequired):
 		status, code = http.StatusForbidden, "free_mode_cli_required"
 		message = err.Error()
+	case errors.Is(err, upstream.ErrFreeModeInvalidAgentHierarchy):
+		status, code = http.StatusForbidden, "free_mode_invalid_agent_hierarchy"
+		message = err.Error()
 	case errors.As(err, &ce):
 		// 402 "Out of credits": surfacing the upstream body verbatim keeps
 		// the quota detail (limit/recent/reset) for the client.
