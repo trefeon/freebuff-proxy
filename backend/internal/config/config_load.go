@@ -122,10 +122,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.SessionPersist, "SESSION_PERSIST")
 	overrideString(&raw.SessionStateFile, "SESSION_STATE_FILE")
 	overrideBool(&raw.HTTP2Upstream, "HTTP2_UPSTREAM")
-	overrideInt(&raw.SessionCreateMaxParallelGlobal, "SESSION_CREATE_MAX_PARALLEL_GLOBAL")
-	overrideInt(&raw.SessionCreateMaxParallelPerModel, "SESSION_CREATE_MAX_PARALLEL_PER_MODEL")
-	overrideInt(&raw.ChatMaxInflightMetered, "CHAT_MAX_INFLIGHT_METERED")
-	overrideInt(&raw.ChatMaxInflightUnmetered, "CHAT_MAX_INFLIGHT_UNMETERED")
 	overrideInt(&raw.RunFinishQueueSize, "RUN_FINISH_QUEUE_SIZE")
 	overrideString(&raw.RunFinishInlineTimeout, "RUN_FINISH_INLINE_TIMEOUT")
 	overrideInt(&raw.RunsDrainQueueCap, "RUNS_DRAIN_QUEUE_CAP")
@@ -249,25 +245,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		if modelUnavailableCacheTTL <= 0 {
 			modelUnavailableCacheTTL = time.Hour
 		}
-	}
-	sessionCreateMaxGlobal := 0
-	if raw.SessionCreateMaxParallelGlobal != nil {
-		sessionCreateMaxGlobal = *raw.SessionCreateMaxParallelGlobal
-	}
-	sessionCreateMaxPerModel := 0
-	if raw.SessionCreateMaxParallelPerModel != nil {
-		sessionCreateMaxPerModel = *raw.SessionCreateMaxParallelPerModel
-	}
-	// SESSION_CREATE_MAX_PARALLEL_* and CHAT_MAX_INFLIGHT_* default to 0 =
-	// unlimited: the upstream quota/429 is the natural brake, and no local
-	// concurrency cap applies unless the operator sets one explicitly.
-	chatMaxInflightMetered := 0
-	if raw.ChatMaxInflightMetered != nil {
-		chatMaxInflightMetered = *raw.ChatMaxInflightMetered
-	}
-	chatMaxInflightUnmetered := 0
-	if raw.ChatMaxInflightUnmetered != nil {
-		chatMaxInflightUnmetered = *raw.ChatMaxInflightUnmetered
 	}
 	runFinishQueueSize := 64
 	if raw.RunFinishQueueSize != nil {
@@ -531,85 +508,81 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
-		UpstreamBaseURL:                  upstreamBaseURL,
-		AuthTokens:                       dedupeStrings(raw.AuthTokens),
-		RotationInterval:                 rotationInterval,
-		RequestTimeout:                   requestTimeout,
-		HTTPReadTimeout:                  httpReadTimeout,
-		SessionCallTimeout:               sessionCallTimeout,
-		TokenRotation:                    tokenRotation,
-		ModelLocks:                       modelLocks,
-		APIKeys:                          dedupeStrings(raw.APIKeys),
-		AdminToken:                       adminToken,
-		DashboardRequireLogin:            dashboardRequireLogin,
-		HTTP2Upstream:                    raw.HTTP2Upstream,
-		CostMode:                         strings.TrimSpace(raw.CostMode),
-		ActingUserID:                     strings.TrimSpace(raw.ActingUserID),
-		TLSFingerprint:                   strings.TrimSpace(raw.TLSFingerprint),
-		RegistryRefresh:                  registryRefresh,
-		DebugDump:                        raw.DebugDump,
-		DevToolsEnabled:                  raw.DevToolsEnabled,
-		LogFile:                          strings.TrimSpace(raw.LogFile),
-		LogLevel:                         strings.TrimSpace(raw.LogLevel),
-		LogFormat:                        logFormat,
-		LogAccess:                        raw.LogAccess,
-		LogRingSize:                      logRingSize,
-		MaxMessagesPerDay:                maxMessagesPerDay,
-		MaxRequestsPerDay:                maxRequestsPerDay,
-		MaxRequestsPerMinute:             maxRequestsPerMinute,
-		BridgeDailyLimit:                 bridgeDailyLimit,
-		MaxSpendPerDay:                   maxSpendPerDay,
-		BridgeEnabled:                    raw.BridgeEnabled,
-		BridgeIdleEvict:                  bridgeIdleEvict,
-		IdleRotationTimeout:              idleRotationTimeout,
-		SessionIdleEnd:                   sessionIdleEnd,
-		SafeMode:                         raw.SafeMode,
-		ModelsHideUnavailable:            raw.ModelsHideUnavailable,
-		ModelsAllow:                      splitList(string(raw.ModelsAllow)),
-		CORSAllowedOrigin:                strings.TrimSpace(raw.CORSAllowedOrigin),
-		RequestJitter:                    requestJitter,
-		CLIVersion:                       strings.TrimSpace(raw.CLIVersion),
-		ModelAliases:                     modelAliases,
-		TransientRetries:                 transientRetries,
-		SessionPersist:                   raw.SessionPersist,
-		SessionStateFile:                 strings.TrimSpace(raw.SessionStateFile),
-		SessionCreateMaxParallelGlobal:   sessionCreateMaxGlobal,
-		SessionCreateMaxParallelPerModel: sessionCreateMaxPerModel,
-		ChatMaxInflightMetered:           chatMaxInflightMetered,
-		ChatMaxInflightUnmetered:         chatMaxInflightUnmetered,
-		RunFinishQueueSize:               runFinishQueueSize,
-		RunFinishInlineTimeout:           runFinishInlineTimeout,
-		RunsDrainQueueCap:                runsDrainQueueCap,
-		RunsDrainTTL:                     runsDrainTTL,
-		SessionReAdmitLead:               sessionReAdmitLead,
-		SessionProbeCacheTTL:             sessionProbeCacheTTL,
-		ModelUnavailableCacheTTL:         modelUnavailableCacheTTL,
-		WebhookURL:                       strings.TrimSpace(raw.WebhookURL),
-		FallbackAfter:                    fallbackAfter,
-		FallbackModels:                   fallbackModels,
-		AdoptCLISession:                  raw.AdoptCLISession,
-		MaturityEnabled:                  raw.MaturityEnabled,
-		MaturityDryRun:                   raw.MaturityDryRun,
-		MaturityTouchModel:               maturityTouchModel,
-		MaturityTargetDays:               maturityTargetDays,
-		QuotaAutoProbe:                   raw.QuotaAutoProbe,
-		QuotaProbeActiveInterval:         quotaProbeActiveInterval,
-		QuotaProbeIdleHeartbeat:          quotaProbeIdleHeartbeat,
-		RoutingSmart:                     raw.RoutingSmart,
-		TokenMaxConcurrent:               tokenMaxConcurrent,
-		QueueWait:                        queueWait,
-		QueueDepth:                       queueDepth,
-		QuotaFallbackModels:              quotaFallbackModels,
-		WaitingRoomChain:                 raw.WaitingRoomChain,
-		RateLimitPerIP:                   rateLimitPerIP,
-		RateLimitBurst:                   rateLimitBurst,
-		DashboardEnabled:                 raw.DashboardEnabled,
-		EnvFile:                          envFileUsed,
-		CompressPrompt:                   parseCompressPrompt(raw.CompressPrompt),
-		CacheControlInjection:            parseCacheControlInjection(raw.CacheControlInjection),
-		ReasoningInContent:               parseReasoningInContent(raw.ReasoningInContent),
-		RateLimitFailover:                raw.RateLimitFailover == nil || *raw.RateLimitFailover,
+		ListenAddr:               strings.TrimSpace(raw.ListenAddr),
+		UpstreamBaseURL:          upstreamBaseURL,
+		AuthTokens:               dedupeStrings(raw.AuthTokens),
+		RotationInterval:         rotationInterval,
+		RequestTimeout:           requestTimeout,
+		HTTPReadTimeout:          httpReadTimeout,
+		SessionCallTimeout:       sessionCallTimeout,
+		TokenRotation:            tokenRotation,
+		ModelLocks:               modelLocks,
+		APIKeys:                  dedupeStrings(raw.APIKeys),
+		AdminToken:               adminToken,
+		DashboardRequireLogin:    dashboardRequireLogin,
+		HTTP2Upstream:            raw.HTTP2Upstream,
+		CostMode:                 strings.TrimSpace(raw.CostMode),
+		ActingUserID:             strings.TrimSpace(raw.ActingUserID),
+		TLSFingerprint:           strings.TrimSpace(raw.TLSFingerprint),
+		RegistryRefresh:          registryRefresh,
+		DebugDump:                raw.DebugDump,
+		DevToolsEnabled:          raw.DevToolsEnabled,
+		LogFile:                  strings.TrimSpace(raw.LogFile),
+		LogLevel:                 strings.TrimSpace(raw.LogLevel),
+		LogFormat:                logFormat,
+		LogAccess:                raw.LogAccess,
+		LogRingSize:              logRingSize,
+		MaxMessagesPerDay:        maxMessagesPerDay,
+		MaxRequestsPerDay:        maxRequestsPerDay,
+		MaxRequestsPerMinute:     maxRequestsPerMinute,
+		BridgeDailyLimit:         bridgeDailyLimit,
+		MaxSpendPerDay:           maxSpendPerDay,
+		BridgeEnabled:            raw.BridgeEnabled,
+		BridgeIdleEvict:          bridgeIdleEvict,
+		IdleRotationTimeout:      idleRotationTimeout,
+		SessionIdleEnd:           sessionIdleEnd,
+		SafeMode:                 raw.SafeMode,
+		ModelsHideUnavailable:    raw.ModelsHideUnavailable,
+		ModelsAllow:              splitList(string(raw.ModelsAllow)),
+		CORSAllowedOrigin:        strings.TrimSpace(raw.CORSAllowedOrigin),
+		RequestJitter:            requestJitter,
+		CLIVersion:               strings.TrimSpace(raw.CLIVersion),
+		ModelAliases:             modelAliases,
+		TransientRetries:         transientRetries,
+		SessionPersist:           raw.SessionPersist,
+		SessionStateFile:         strings.TrimSpace(raw.SessionStateFile),
+		RunFinishQueueSize:       runFinishQueueSize,
+		RunFinishInlineTimeout:   runFinishInlineTimeout,
+		RunsDrainQueueCap:        runsDrainQueueCap,
+		RunsDrainTTL:             runsDrainTTL,
+		SessionReAdmitLead:       sessionReAdmitLead,
+		SessionProbeCacheTTL:     sessionProbeCacheTTL,
+		ModelUnavailableCacheTTL: modelUnavailableCacheTTL,
+		WebhookURL:               strings.TrimSpace(raw.WebhookURL),
+		FallbackAfter:            fallbackAfter,
+		FallbackModels:           fallbackModels,
+		AdoptCLISession:          raw.AdoptCLISession,
+		MaturityEnabled:          raw.MaturityEnabled,
+		MaturityDryRun:           raw.MaturityDryRun,
+		MaturityTouchModel:       maturityTouchModel,
+		MaturityTargetDays:       maturityTargetDays,
+		QuotaAutoProbe:           raw.QuotaAutoProbe,
+		QuotaProbeActiveInterval: quotaProbeActiveInterval,
+		QuotaProbeIdleHeartbeat:  quotaProbeIdleHeartbeat,
+		RoutingSmart:             raw.RoutingSmart,
+		TokenMaxConcurrent:       tokenMaxConcurrent,
+		QueueWait:                queueWait,
+		QueueDepth:               queueDepth,
+		QuotaFallbackModels:      quotaFallbackModels,
+		WaitingRoomChain:         raw.WaitingRoomChain,
+		RateLimitPerIP:           rateLimitPerIP,
+		RateLimitBurst:           rateLimitBurst,
+		DashboardEnabled:         raw.DashboardEnabled,
+		EnvFile:                  envFileUsed,
+		CompressPrompt:           parseCompressPrompt(raw.CompressPrompt),
+		CacheControlInjection:    parseCacheControlInjection(raw.CacheControlInjection),
+		ReasoningInContent:       parseReasoningInContent(raw.ReasoningInContent),
+		RateLimitFailover:        raw.RateLimitFailover == nil || *raw.RateLimitFailover,
 	}
 
 	// Auto-discover CLI token if a discovery hook was wired (LoadOpts,
@@ -781,10 +754,6 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideBoolFrom(&raw.SessionPersist, get, "SESSION_PERSIST")
 	overrideStringFrom(&raw.SessionStateFile, get, "SESSION_STATE_FILE")
 	overrideBoolFrom(&raw.HTTP2Upstream, get, "HTTP2_UPSTREAM")
-	overrideIntFrom(&raw.SessionCreateMaxParallelGlobal, get, "SESSION_CREATE_MAX_PARALLEL_GLOBAL")
-	overrideIntFrom(&raw.SessionCreateMaxParallelPerModel, get, "SESSION_CREATE_MAX_PARALLEL_PER_MODEL")
-	overrideIntFrom(&raw.ChatMaxInflightMetered, get, "CHAT_MAX_INFLIGHT_METERED")
-	overrideIntFrom(&raw.ChatMaxInflightUnmetered, get, "CHAT_MAX_INFLIGHT_UNMETERED")
 	overrideIntFrom(&raw.RunFinishQueueSize, get, "RUN_FINISH_QUEUE_SIZE")
 	overrideStringFrom(&raw.RunFinishInlineTimeout, get, "RUN_FINISH_INLINE_TIMEOUT")
 	overrideIntFrom(&raw.RunsDrainQueueCap, get, "RUNS_DRAIN_QUEUE_CAP")

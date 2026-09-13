@@ -437,8 +437,6 @@ type tokensData struct {
 	// the window math lives in one DST-safe place (pool.MaturityWindow).
 	MaturityWindowStart string `json:"maturity_window_start,omitempty"`
 	MaturityWindowEnd   string `json:"maturity_window_end,omitempty"`
-	ChatMaxMetered      int    `json:"chat_max_inflight_metered"`
-	ChatMaxUnmetered    int    `json:"chat_max_inflight_unmetered"`
 }
 
 // tokenSessionQuota is the per-token session + quota block, identical on the
@@ -501,8 +499,6 @@ func (d *Dashboard) tokensData() tokensData {
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
 		MaturityDryRun:    cfg.MaturityDryRun,
-		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
-		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}
 	wStart, wEnd := d.pool.MaturityWindow()
 	if !wStart.IsZero() && !wEnd.IsZero() {
@@ -657,8 +653,6 @@ type tokensLiveData struct {
 	TokenRotation     string            `json:"token_rotation,omitempty"`
 	RateLimitFailover bool              `json:"rate_limit_failover"`
 	MaturityEnabled   bool              `json:"maturity_enabled"`
-	ChatMaxMetered    int               `json:"chat_max_inflight_metered"`
-	ChatMaxUnmetered  int               `json:"chat_max_inflight_unmetered"`
 }
 
 // tokensLiveData builds the 10s hot-poll payload directly from pool
@@ -674,8 +668,6 @@ func (d *Dashboard) tokensLiveData() tokensLiveData {
 		TokenRotation:     cfg.TokenRotation,
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
-		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
-		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}
 	showBridge := mode == "bridge" || mode == "hybrid"
 	live.BridgeTokenCards = d.bridgeCards(showBridge)

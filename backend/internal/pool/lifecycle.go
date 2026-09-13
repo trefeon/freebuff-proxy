@@ -20,13 +20,10 @@ func (p *Pool) LeaseRelease(lease *Lease) {
 		return // synthetic lease without a backing entry or bridge
 	}
 	t.runs.Release(lease.Run)
-	// Release the burst-queue lane slot through the lease (entry-pointer
-	// discipline, never by index — mirrors the run release above). Nil-safe:
-	// unlimited caps and synthetic leases carry no permit.
-	lease.chat.Release()
-	// Release the smart-routing live-turn slot the same way (nil-safe:
-	// legacy/off-path and synthetic leases carry no permit). The release
-	// wakes the token's FIFO head when waiters park.
+	// Release the smart-routing live-turn slot through the lease (keyed by
+	// the lease's own entry pointer, never by index). Nil-safe:
+	// legacy/off-path and synthetic leases carry no permit. The release
+	// wakes the lane's FIFO head when waiters park.
 	lease.routeSlot.Release()
 	// A lease on a removed token (RemoveLastToken swapped the snapshot out
 	// from under a concurrent Acquire) releases through its own entry — the
@@ -59,12 +56,9 @@ func (p *Pool) LeaseAbandon(lease *Lease) {
 		return
 	}
 	t.runs.ReleaseAbandoned(lease.Run)
-	// A cancelled chat frees its burst-queue lane too, or the slot leaks
-	// until process restart (the waiter parks on gate release, not on run
-	// teardown).
-	lease.chat.Release()
-	// A cancelled chat frees its live-turn slot too (same leak discipline
-	// as the lane above; wakes the FIFO head when waiters park).
+	// A cancelled chat frees its live-turn slot too, or the slot leaks
+	// until process restart (the waiter parks on slot release, not on run
+	// teardown; wakes the FIFO head when waiters park).
 	lease.routeSlot.Release()
 }
 

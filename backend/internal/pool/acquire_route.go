@@ -374,11 +374,11 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			}
 		}
 
-		// Session-create admission gate (issue #86): concurrent session
-		// creates are bounded globally and per model; when the gate is at
-		// capacity the acquire waits (the caller's deadline surfaces as
-		// 503). The permit is held only for the admission call, never
-		// across the upstream chat.
+		// Session admission: the pre-registered per-model leader slot is
+		// updated with the actual token index so sibling waiters can reuse
+		// the admitted session. The smart-path live-turn slot above is the
+		// only local concurrency bound here (the retired create gate used
+		// to cap concurrent admits).
 		p.admissionsMu.Lock()
 		if p.admissions == nil {
 			p.admissions = make(map[string]int)
@@ -388,17 +388,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		p.admissionsMu.Unlock()
 		p.markPersistDirty()
 
-		permit, err := p.gate.acquire(ctx, model)
-		if err != nil {
-			p.admissionsMu.Lock()
-			if p.admissions != nil && (p.admissions[model] == idx || p.admissions[model] == -1) {
-				delete(p.admissions, model)
-			}
-			p.admissionsMu.Unlock()
-			p.markPersistDirty()
-			routeSlot.Release()
-			return nil, err
-		}
 		// Re-validate the entry is still current BEFORE the admission POST:
 		// a concurrent RemoveLastToken/RemoveAllTokens must never admit a
 		// NEW session for an entry the pool no longer owns — a drained
@@ -426,7 +415,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			tok.client.FireWaitingRoomChain(ctx)
 		}
 		instanceID, err := tok.session.EnsureSessionForModel(ctx, model)
-		permit.Release()
 		p.admissionsMu.Lock()
 		if p.admissions != nil && (p.admissions[model] == idx || p.admissions[model] == -1) {
 			delete(p.admissions, model)
@@ -590,28 +578,13 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		}
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
 			"country", ss.CountryCode)
-		// Per-(token,model) in-flight chat lease cap (burst queue): at most cap
-		// concurrent leases may hold this token+model lane; excess waiters park
-		// until a slot frees or their context expires (wait-or-503, mirroring
-		// the create gate). Metered vs unmetered follows the Freebucks price
-		// table (nil price = unmetered). The permit rides the lease and is
-		// released through the entry pointer (LeaseRelease/LeaseAbandon), never
-		// by index. A removal racing the wait skips the token (the retired
-		// entry drains on its last release) instead of leasing a dead account.
-		chatPermit, _, err := p.chatGate.acquire(ctx, tok, effectiveModel, chatCap(cfg, chatMetered(tok, effectiveModel)))
-		if err != nil {
-			tok.runs.Release(run)
-			routeSlot.Release()
-			return nil, err
-		}
 		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
 			tok.runs.Release(run)
-			chatPermit.Release()
 			routeSlot.Release()
 			continue
 		}
 		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			entry: tok, chat: chatPermit, routeSlot: routeSlot, AcquiredAt: time.Now()}
+			entry: tok, routeSlot: routeSlot, AcquiredAt: time.Now()}
 		if cfg.RoutingSmart {
 			p.routeNoteGranted(tok)
 		}

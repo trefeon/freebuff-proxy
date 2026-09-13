@@ -78,16 +78,12 @@ type Lease struct {
 	// reused by a later AddToken), and a bounds-checked release would leak
 	// the run's inflight or hit an unrelated manager.
 	entry *tokenEntry
-	// chat is the per-(token,model) in-flight chat slot held for this lease
-	// (burst queue). Set at grant time; released through the lease by
-	// LeaseRelease/LeaseAbandon via the entry pointer, never by index. Nil
-	// when the caps are off (unlimited) or the lease is synthetic.
-	chat *chatPermit
-	// routeSlot is the smart-routing per-token live-turn slot held for
-	// this lease (route_smart.go, TOKEN_MAX_CONCURRENT). Set at grant
-	// time on the smart path only; released through the lease by
-	// LeaseRelease/LeaseAbandon. Nil on the legacy path (ROUTING_SMART
-	// off), when the caps are off, or for synthetic leases.
+	// routeSlot is the smart-routing live-turn slot held for this lease
+	// (route_smart.go, TOKEN_MAX_CONCURRENT). Set at grant time on the
+	// smart path only, for pooled AND bridge leases; released through the
+	// lease by LeaseRelease/LeaseAbandon. Nil on the legacy path
+	// (ROUTING_SMART off), when the cap is unlimited, or for synthetic
+	// leases.
 	routeSlot *routeSlotPermit
 	// AcquiredAt is when this lease was handed out (per acquire attempt,
 	// not per run — a chat retry re-acquires and gets a fresh timestamp).
@@ -306,17 +302,6 @@ type Pool struct {
 	// re-admission gate). Never cleared — Shutdown is terminal.
 	draining atomic.Bool
 
-	// createGate bounds concurrent session admissions (issue #86): per-model
-	// and global in-flight create counters with wait-or-503, wired from
-	// SESSION_CREATE_MAX_PARALLEL_GLOBAL/PER_MODEL.
-	gate *createGate
-	// chatGate bounds concurrent in-flight chat leases per (token, model)
-	// lane (burst queue): per-lane in-flight counters with wait-or-503,
-	// wired from CHAT_MAX_INFLIGHT_METERED/UNMETERED. Caps ride the
-	// per-request config load, so the gate stores no limits and needs no
-	// reload wiring.
-	chatGate *chatGate
-
 	// Idle rotation (IDLE_ROTATION_TIMEOUT): last successful Acquire and
 	// whether the maintain loop already FINISHed all runs for the current
 	// idle stretch. Guarded by lastActiveMu.
@@ -452,15 +437,16 @@ type Pool struct {
 	randMu  sync.Mutex
 	randGen *rand.Rand
 
-	// Smart routing state (route_smart.go, step 1): per-token live-turn
-	// slot semaphores with FIFO waiter queues (routeSlots, keyed by entry
-	// pointer so dashboard reorders never merge lanes) plus the
-	// consecutive-turn anti-clump cursor (routePrev). Guarded by routeMu.
-	// In-memory only: a restart resets every counter to zero (same
-	// discipline as the probe scheduler's transient flags) — no
+	// Smart routing state (route_smart.go): per-lane live-turn slot
+	// semaphores with FIFO waiter queues (routeSlots, keyed by the lane's
+	// entry pointer — *tokenEntry pooled, *bridgeEntry bridge — so
+	// dashboard reorders and concurrent clients never merge lanes) plus
+	// the consecutive-turn anti-clump cursor (routePrev). Guarded by
+	// routeMu. In-memory only: a restart resets every counter to zero
+	// (same discipline as the probe scheduler's transient flags) — no
 	// pool_state rows, no SQL.
 	routeMu    sync.Mutex
-	routeSlots map[*tokenEntry]*routeSlotState
+	routeSlots map[any]*routeSlotState
 	routePrev  *tokenEntry
 }
 
@@ -693,8 +679,6 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]*admissionGate)}
 	p.probeCtx, p.probeCancel = context.WithCancel(context.Background())
 	p.cfg.Store(cfg)
-	p.gate = newCreateGate(cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
-	p.chatGate = newChatGate()
 	toks := make([]*tokenEntry, 0, len(cfg.AuthTokens))
 	for i := range cfg.AuthTokens {
 		if sessions[i] == nil || clients[i] == nil {
@@ -735,11 +719,8 @@ func runOptions(cfg *config.Config) runs.Options {
 func (p *Pool) SetConfig(cfg *config.Config) {
 	p.cfg.Store(cfg)
 
-	// Runtime-adjustable knobs: the create gate caps (#86) and the session
-	// re-admit lead / probe cache TTL (#99/#60) follow config reloads.
-	if p.gate != nil {
-		p.gate.setLimits(cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
-	}
+	// Runtime-adjustable knobs: the session re-admit lead / probe cache TTL
+	// (#99/#60) follow config reloads.
 	toks := p.roster.Load()
 	for _, tok := range *toks {
 		tok.session.SetReAdmitLead(cfg.SessionReAdmitLead)

@@ -27,6 +27,14 @@
 //   - ROUTING_SMART off == the legacy path: the order is unmodified and
 //     the loop's slot/tracking hooks are skipped, so observable behavior
 //     is byte-identical.
+//   - Bridge mode gets the SAME hard wall: one slot state per bridge entry
+//     (keyed by *bridgeEntry exactly as a pooled lane is keyed by
+//     *tokenEntry), cap from TOKEN_MAX_CONCURRENT, FIFO queue with
+//     QUEUE_WAIT/QUEUE_DEPTH, acquired before any upstream session or run
+//     work. Bridge has no pool ordering, so only the slot/queue half
+//     applies — the scorer is pooled-only. With ROUTING_SMART off the
+//     bridge path keeps its per-entry single-flight alone (no slots, no
+//     queueing), exactly as before.
 //
 // Slot/queue/scorer state is in-memory only and resets to zero on restart
 // (same discipline as the probe scheduler's transient kick/inflight flags):
@@ -82,24 +90,30 @@ const (
 // the hint only paces single-token pools).
 const routeQueueHint = time.Second
 
-// routeQueueExhaustedError is the typed queue-exhausted signal: a token's
+// routeQueueExhaustedError is the typed queue-exhausted signal: a lane's
 // live-turn slots were full and the waiter either found a full queue
 // (reason "full") or ran out of QUEUE_WAIT (reason "timeout"). The failover
 // loop maps it to the existing 429 rate-limit shape; it never reaches a
-// client verbatim.
+// client verbatim. Token is the 1-based pooled display index; 0 means the
+// lane has no index to name (bridge entries), and the message then omits
+// the token scope.
 type routeQueueExhaustedError struct {
 	Reason string // "full" or "timeout"
-	Token  int    // 1-based display index
+	Token  int    // 1-based display index; 0 = unnamed lane (bridge)
 	Cap    int    // live-turn cap in force
 	Live   int    // live turns observed
 	Wait   time.Duration
 }
 
 func (e *routeQueueExhaustedError) Error() string {
-	if e.Reason == "timeout" {
-		return fmt.Sprintf("pool: token-%d live-turn queue wait (%s) elapsed with %d live turns (cap %d)", e.Token, e.Wait, e.Live, e.Cap)
+	scope := ""
+	if e.Token > 0 {
+		scope = fmt.Sprintf("token-%d ", e.Token)
 	}
-	return fmt.Sprintf("pool: token-%d live-turn queue full (%d live turns, cap %d)", e.Token, e.Live, e.Cap)
+	if e.Reason == "timeout" {
+		return fmt.Sprintf("pool: %slive-turn queue wait (%s) elapsed with %d live turns (cap %d)", scope, e.Wait, e.Live, e.Cap)
+	}
+	return fmt.Sprintf("pool: %slive-turn queue full (%d live turns, cap %d)", scope, e.Live, e.Cap)
 }
 
 // routeSlotParams resolves the live slot cap, queue depth and wait bound
@@ -147,7 +161,7 @@ type routeSlotState struct {
 // no permit) and idempotent.
 type routeSlotPermit struct {
 	pool     *Pool
-	entry    *tokenEntry
+	key      any // *tokenEntry (pooled) or *bridgeEntry (bridge)
 	released atomic.Bool
 }
 
@@ -160,7 +174,7 @@ func (s *routeSlotPermit) Release() {
 	p := s.pool
 	p.routeMu.Lock()
 	defer p.routeMu.Unlock()
-	st, ok := p.routeSlots[s.entry]
+	st, ok := p.routeSlots[s.key]
 	if !ok || st == nil {
 		return
 	}
@@ -175,20 +189,20 @@ func (s *routeSlotPermit) Release() {
 		st.live--
 	}
 	if st.live == 0 {
-		delete(p.routeSlots, s.entry)
+		delete(p.routeSlots, s.key)
 	}
 }
 
-// routeSlotStateLocked returns the entry's slot state, creating it. Caller
+// routeSlotStateLocked returns the key's slot state, creating it. Caller
 // holds p.routeMu.
-func (p *Pool) routeSlotStateLocked(entry *tokenEntry) *routeSlotState {
+func (p *Pool) routeSlotStateLocked(key any) *routeSlotState {
 	if p.routeSlots == nil {
-		p.routeSlots = make(map[*tokenEntry]*routeSlotState)
+		p.routeSlots = make(map[any]*routeSlotState)
 	}
-	st, ok := p.routeSlots[entry]
+	st, ok := p.routeSlots[key]
 	if !ok || st == nil {
 		st = &routeSlotState{waiters: list.New()}
-		p.routeSlots[entry] = st
+		p.routeSlots[key] = st
 	}
 	if st.waiters == nil {
 		st.waiters = list.New()
@@ -196,14 +210,16 @@ func (p *Pool) routeSlotStateLocked(entry *tokenEntry) *routeSlotState {
 	return st
 }
 
-// routeSlotAcquire takes one live-turn slot for entry, parking FIFO when
-// full. The fast path (free slot) grants immediately; otherwise the caller
-// queues behind earlier waiters until the head is granted, the caller ctx
-// expires, or wait elapses. It returns the permit, whether the caller
-// parked, and either a *routeQueueExhaustedError (full queue or wait
-// elapsed — the caller maps it to the existing 429 shape) or ctx.Err()
-// (the caller's own deadline, matching today's gate behavior).
-func (p *Pool) routeSlotAcquire(ctx context.Context, entry *tokenEntry, displayIdx int, cap, depth int, wait time.Duration) (*routeSlotPermit, bool, error) {
+// routeSlotAcquire takes one live-turn slot for the key — a pooled
+// *tokenEntry or a bridge *bridgeEntry — parking FIFO when full. The fast
+// path (free slot) grants immediately; otherwise the caller queues behind
+// earlier waiters until the head is granted, the caller ctx expires, or
+// wait elapses. It returns the permit, whether the caller parked, and
+// either a *routeQueueExhaustedError (full queue or wait elapsed — the
+// caller maps it to the existing 429 shape) or ctx.Err() (the caller's own
+// deadline, matching the retired gates' behavior). displayIdx is the
+// pooled 1-based token number for the error message; bridge passes 0.
+func (p *Pool) routeSlotAcquire(ctx context.Context, key any, displayIdx int, cap, depth int, wait time.Duration) (*routeSlotPermit, bool, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -211,11 +227,11 @@ func (p *Pool) routeSlotAcquire(ctx context.Context, entry *tokenEntry, displayI
 		cap = 1
 	}
 	p.routeMu.Lock()
-	st := p.routeSlotStateLocked(entry)
+	st := p.routeSlotStateLocked(key)
 	if st.live < cap {
 		st.live++
 		p.routeMu.Unlock()
-		return &routeSlotPermit{pool: p, entry: entry}, false, nil
+		return &routeSlotPermit{pool: p, key: key}, false, nil
 	}
 	if depth <= 0 || st.waiters.Len() >= depth {
 		qerr := &routeQueueExhaustedError{Reason: "full", Token: displayIdx, Cap: cap, Live: st.live}
@@ -231,12 +247,12 @@ func (p *Pool) routeSlotAcquire(ctx context.Context, entry *tokenEntry, displayI
 	defer timer.Stop()
 	select {
 	case <-w.ch:
-		return &routeSlotPermit{pool: p, entry: entry}, true, nil
+		return &routeSlotPermit{pool: p, key: key}, true, nil
 	case <-ctx.Done():
 		p.routeMu.Lock()
 		if w.granted {
 			p.routeMu.Unlock()
-			return &routeSlotPermit{pool: p, entry: entry}, true, nil
+			return &routeSlotPermit{pool: p, key: key}, true, nil
 		}
 		if w.element != nil {
 			st.waiters.Remove(w.element)
@@ -248,7 +264,7 @@ func (p *Pool) routeSlotAcquire(ctx context.Context, entry *tokenEntry, displayI
 		p.routeMu.Lock()
 		if w.granted {
 			p.routeMu.Unlock()
-			return &routeSlotPermit{pool: p, entry: entry}, true, nil
+			return &routeSlotPermit{pool: p, key: key}, true, nil
 		}
 		if w.element != nil {
 			st.waiters.Remove(w.element)
@@ -259,22 +275,22 @@ func (p *Pool) routeSlotAcquire(ctx context.Context, entry *tokenEntry, displayI
 	}
 }
 
-// routeSlotLive reports the entry's current live-turn count (tests and the
+// routeSlotLive reports the key's current live-turn count (tests and the
 // scorer's free-slot partition).
-func (p *Pool) routeSlotLive(entry *tokenEntry) int {
+func (p *Pool) routeSlotLive(key any) int {
 	p.routeMu.Lock()
 	defer p.routeMu.Unlock()
-	if st, ok := p.routeSlots[entry]; ok && st != nil {
+	if st, ok := p.routeSlots[key]; ok && st != nil {
 		return st.live
 	}
 	return 0
 }
 
-// routeSlotQueued reports the entry's parked waiter count (tests).
-func (p *Pool) routeSlotQueued(entry *tokenEntry) int {
+// routeSlotQueued reports the key's parked waiter count (tests).
+func (p *Pool) routeSlotQueued(key any) int {
 	p.routeMu.Lock()
 	defer p.routeMu.Unlock()
-	if st, ok := p.routeSlots[entry]; ok && st != nil && st.waiters != nil {
+	if st, ok := p.routeSlots[key]; ok && st != nil && st.waiters != nil {
 		return st.waiters.Len()
 	}
 	return 0

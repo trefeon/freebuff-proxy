@@ -183,6 +183,48 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		return nil, p.bridgeDayRequestLimitError(entry)
 	}
 
+	// Smart-routing live-turn slot (route_smart.go, TOKEN_MAX_CONCURRENT):
+	// the bridge entry gets the same hard wall as a pooled token — one
+	// live-turn lane per entry with a FIFO queue, keyed by the entry
+	// pointer exactly like the pooled lanes. It is taken BEFORE any
+	// upstream session or run work so a queued request never burns a
+	// session slot or a run START while it waits. Overflow and QUEUE_WAIT
+	// expiry return the same 429 rate-limit shape the pooled path uses
+	// (bridge has no failover, so it goes straight back to the client);
+	// the caller's own ctx expiry passes through. The permit rides the
+	// lease and is released by LeaseRelease/LeaseAbandon; the deferred
+	// release below is the error-path net, disarmed once a lease owns it.
+	// Skipped entirely when ROUTING_SMART is off: bridge then keeps its
+	// per-entry single-flight as the only pacing.
+	var routeSlot *routeSlotPermit
+	if cfg.RoutingSmart {
+		// TOKEN_MAX_CONCURRENT=0 skips slot gating entirely: no counter,
+		// no queue — the upstream quota/429 is the brake.
+		if slotCap, slotDepth, slotWait := routeSlotParams(cfg); slotCap > 0 {
+			permit, _, slotErr := p.routeSlotAcquire(ctx, entry, 0, slotCap, slotDepth, slotWait)
+			if slotErr != nil {
+				if routeIsQueueExhausted(slotErr) {
+					p.logger.Debug("pool: bridge live-turn queue exhausted", "token", bridgeTokenLabel(entry), "err", slotErr)
+					return nil, routeQueueRateLimit(slotErr.(*routeQueueExhaustedError), model, slotCap, p.routeSlotLive(entry))
+				}
+				return nil, slotErr
+			}
+			routeSlot = permit
+		}
+	}
+	// slotLeased disarms the error-path release below: set once the lease
+	// (or an explicit release) owns the permit. The defer is registered
+	// only when a permit was actually taken, so the off-path and
+	// unlimited-cap calls carry no deferred work at all.
+	slotLeased := false
+	if routeSlot != nil {
+		defer func() {
+			if !slotLeased {
+				routeSlot.Release()
+			}
+		}()
+	}
+
 	// Per-entry single-flight: concurrent requests for the same bridge
 	// token share one session creation. The leader creates the session;
 	// followers block on the admissionGate channel until it completes.
@@ -228,15 +270,6 @@ admitRetry:
 				entry.mu.Unlock()
 			}()
 
-			// Session-create admission gate (issue #86): global + per-model
-			// concurrency limiter.
-			permit, gerr := p.gate.acquire(ctx, model)
-			if gerr != nil {
-				entry.mu.Lock()
-				entry.admissionErr = gerr
-				entry.mu.Unlock()
-				return
-			}
 			// Issue #94(b): WAITING_ROOM_CHAIN gate — when the upstream last
 			// refused this bridge token with 428 waiting_room_required, fire
 			// the reference pre-session ad-chain + streak flow (best-effort,
@@ -249,7 +282,6 @@ admitRetry:
 			}
 			sessionStart := time.Now()
 			_, serr := entry.session.EnsureSessionForModel(ctx, model)
-			permit.Release()
 			phasetiming.FromContext(ctx).Since(phasetiming.SessionRefreshMS, sessionStart)
 			entry.mu.Lock()
 			entry.admissionErr = serr
@@ -281,6 +313,11 @@ admitRetry:
 			if isQuotaExhaustedError(rle) {
 				if fb := cfg.QuotaFallbackModels[model]; fb != "" && fb != model {
 					p.logger.Info("pool: bridge token quota exhausted on admission, falling back", "token", bridgeTokenLabel(entry), "requested", model, "fallback", fb)
+					// Drop this model's live-turn slot BEFORE the recursive
+					// acquire: the fallback contends the same bridge entry's
+					// lane, and holding it would park the child behind its
+					// parent until QUEUE_WAIT (a 429 at cap 1).
+					routeSlot.Release()
 					fbLease, fbErr := p.AcquireBridge(ctx, clientToken, fb)
 					if fbLease != nil {
 						fbLease.FallbackReason = "quota_exhausted"
@@ -400,23 +437,15 @@ sessionReady:
 		return nil, err
 	}
 
-	// Per-(entry,model) in-flight chat lease cap (burst queue), mirroring
-	// the pooled grant: park until a slot frees or the context expires
-	// (wait-or-503). Metering follows the entry's Freebucks prices. An
-	// eviction racing the wait aborts retryable instead of leasing a dead
-	// entry. The permit rides the lease (released via LeaseRelease/
-	// LeaseAbandon through the entry pointer).
-	chatPermit, _, err := p.chatGate.acquire(ctx, entry, effectiveModel, chatCap(cfg, chatBridgeMetered(ss, effectiveModel)))
-	if err != nil {
-		entry.runs.Release(run)
-		return nil, err
-	}
+	// The live-turn slot was taken before admission; re-check the entry is
+	// still cached before leasing (an eviction racing the admission window
+	// aborts retryable instead of leasing a dead entry). The deferred
+	// release above returns the slot on every error path.
 	p.bridgeMu.RLock()
 	evictedDuringWait := p.bridge[tokenKey(clientToken)] != entry
 	p.bridgeMu.RUnlock()
 	if evictedDuringWait {
 		entry.runs.Release(run)
-		chatPermit.Release()
 		return nil, fmt.Errorf("bridge: entry evicted during admission; retry the request")
 	}
 	p.logger.Debug("pool: bridge lease acquired", "model", effectiveModel, "agent", effectiveAgentID, "instance_id", ss.InstanceID,
@@ -427,8 +456,10 @@ sessionReady:
 	// Admission is always recorded (even with cap 0 = unlimited) so the
 	// bridge snapshot counters stay meaningful.
 	if !p.bridgeTryAdmitRequest(entry) {
-		p.LeaseRelease(&Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-			Bridge: entry, chat: chatPermit, AcquiredAt: time.Now()})
+		lease := &Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
+			Bridge: entry, routeSlot: routeSlot, AcquiredAt: time.Now()}
+		slotLeased = true
+		p.LeaseRelease(lease)
 		return nil, p.bridgeRpmLimitError(entry)
 	}
 	// Track the activity and end any idle-maintenance pause, mirroring
@@ -441,8 +472,9 @@ sessionReady:
 	p.idleFinished = false
 	p.sessionsEnded = false
 	p.lastActiveMu.Unlock()
+	slotLeased = true // the lease owns the slot now; the defer must not release it
 	return &Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-		Bridge: entry, chat: chatPermit, AcquiredAt: time.Now()}, nil
+		Bridge: entry, routeSlot: routeSlot, AcquiredAt: time.Now()}, nil
 }
 
 // ProbeNewToken validates a NOT-yet-added token against upstream with a

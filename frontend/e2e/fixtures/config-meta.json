@@ -218,26 +218,6 @@
     "description": "How long a bridge entry may sit unused before its runs are FINISHed and it is evicted from the cache (sliding TTL; zero or invalid → 72h)."
   },
   {
-    "key": "CHAT_MAX_INFLIGHT_METERED",
-    "group": "pool",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Cap on concurrent in-flight chat requests per token on metered (priced Freebucks) models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
-  },
-  {
-    "key": "CHAT_MAX_INFLIGHT_UNMETERED",
-    "group": "pool",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Cap on concurrent in-flight chat requests per token on unmetered (unpriced) models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
-  },
-  {
     "key": "IDLE_ROTATION_TIMEOUT",
     "group": "pool",
     "kind": "text",
@@ -452,26 +432,6 @@
     "essential": false,
     "hidden": true,
     "description": "Bounded deferred-FINISH worker queue for rotated/drained runs (full queue falls back to a synchronous FINISH)."
-  },
-  {
-    "key": "SESSION_CREATE_MAX_PARALLEL_GLOBAL",
-    "group": "pool",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Cap on concurrent in-flight session admissions (wait-or-503) across all models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
-  },
-  {
-    "key": "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
-    "group": "pool",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Per-model cap on concurrent in-flight session admissions (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
   },
   {
     "key": "SESSION_IDLE_END",

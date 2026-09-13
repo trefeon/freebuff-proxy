@@ -1,17 +1,14 @@
 package pool
 
-// Wave-3 pool tests: quota-aware token ordering (#85), the session-create
-// admission gate (#86), the local spend ledger (#87), run pre-create at
-// admission (#90a), abandoned-lease finish (#53/#114), and step recording
-// (#114: steps ride the FINISH payload).
+// Wave-3 pool tests: quota-aware token ordering (#85), the local spend
+// ledger (#87), run pre-create at admission (#90a), abandoned-lease finish
+// (#53/#114), and step recording (#114: steps ride the FINISH payload).
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
-	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
 )
 
@@ -185,109 +182,6 @@ func TestAcquireStaleQuotaNotCapped(t *testing.T) {
 	if len(order) != 1 || order[0] != 0 {
 		t.Errorf("order = %v, want [0]", order)
 	}
-}
-
-func TestCreateGateBlocksAtCapAndReleases(t *testing.T) {
-	// Per-model cap: a second acquire on the same model waits until the
-	// holder releases (the global cap leaves room, so only the model cap
-	// gates it).
-	g := newCreateGate(4, 1)
-	p1, err := g.acquire(context.Background(), "m1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	blocked := make(chan *createPermit, 1)
-	go func() {
-		p, _ := g.acquire(context.Background(), "m1")
-		blocked <- p
-	}()
-	select {
-	case <-blocked:
-		t.Fatal("per-model cap not enforced")
-	case <-time.After(100 * time.Millisecond):
-	}
-	p1.Release()
-	select {
-	case got := <-blocked:
-		if got == nil {
-			t.Fatal("waiter got nil permit")
-			return
-		}
-		got.Release()
-	case <-time.After(2 * time.Second):
-		t.Fatal("waiter not woken after release")
-	}
-
-	// Global cap: with every model cap free, the second acquire still waits
-	// until the global holder releases.
-	g2 := newCreateGate(1, 4)
-	p2, err := g2.acquire(context.Background(), "m1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	blocked2 := make(chan *createPermit, 1)
-	go func() {
-		p, _ := g2.acquire(context.Background(), "m2")
-		blocked2 <- p
-	}()
-	select {
-	case <-blocked2:
-		t.Fatal("global cap not enforced")
-	case <-time.After(100 * time.Millisecond):
-	}
-	p2.Release()
-	select {
-	case got := <-blocked2:
-		got.Release()
-	case <-time.After(2 * time.Second):
-		t.Fatal("global waiter not woken after release")
-	}
-}
-
-func TestCreateGateWaitExpiresWithCtx(t *testing.T) {
-	g := newCreateGate(1, 1)
-	p1, err := g.acquire(context.Background(), "m1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	_, err = g.acquire(ctx, "m1")
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("acquire at cap with expiring ctx = %v, want DeadlineExceeded", err)
-	}
-	p1.Release()
-}
-
-func TestAcquireCreateGateWaits(t *testing.T) {
-	// Global cap 1: while one admission holds the slot, a second Acquire
-	// must wait (its ctx deadline surfaces the wait-or-503 behavior).
-	mock0 := testutil.NewMock()
-	defer mock0.Close()
-	p := newTestPoolCfg(t, func(c *config.Config) {
-		c.SessionCreateMaxParallelGlobal = 1
-		c.SessionCreateMaxParallelPerModel = 1
-	}, mock0)
-
-	// Hold the gate slot.
-	permit, err := p.gate.acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
-	_, err = p.Acquire(ctx, modelA)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Acquire under gate cap = %v, want DeadlineExceeded (wait-or-503)", err)
-	}
-	permit.Release()
-
-	// After the release, Acquire succeeds.
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p.LeaseRelease(lease)
 }
 
 func TestSpendLedgerRollover(t *testing.T) {
