@@ -390,9 +390,9 @@ type Pool struct {
 	storeStateFile      string
 
 	// Runtime persistence (pool_persist.go, DB-unified-storage):
-	// write-through cache of the allowlisted counters (ledger counters,
-	// admissions counts, bridge daily usage + survivors, burst hits)
-	// through the PoolPersist interface. nil disables (in-memory only).
+	// write-through cache of the allowlisted counters (usage and Pacific-day
+	// request ledgers, session spend buckets, admissions counts) through
+	// the PoolPersist interface. nil disables (in-memory only).
 	// persistDirty is set lock-free on every mutation; the maintain tick
 	// plus a best-effort Shutdown pass flush it in the background, so the
 	// request hot path never blocks on the store.
