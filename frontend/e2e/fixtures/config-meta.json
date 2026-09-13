@@ -261,23 +261,21 @@
     "key": "CHAT_MAX_INFLIGHT_METERED",
     "group": "pool",
     "kind": "int",
-    "default": "1",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Cap on concurrent in-flight chat requests per token on metered (priced Freebucks) models (0 = unlimited)."
+    "description": "Cap on concurrent in-flight chat requests per token on metered (priced Freebucks) models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
   },
   {
     "key": "CHAT_MAX_INFLIGHT_UNMETERED",
     "group": "pool",
     "kind": "int",
-    "default": "3",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Cap on concurrent in-flight chat requests per token on unmetered (unpriced) models (0 = unlimited)."
+    "description": "Cap on concurrent in-flight chat requests per token on unmetered (unpriced) models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
   },
   {
     "key": "IDLE_ROTATION_TIMEOUT",
@@ -499,23 +497,21 @@
     "key": "SESSION_CREATE_MAX_PARALLEL_GLOBAL",
     "group": "pool",
     "kind": "int",
-    "default": "128",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Cap on concurrent in-flight session admissions (wait-or-503) across all models."
+    "description": "Cap on concurrent in-flight session admissions (wait-or-503) across all models (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
   },
   {
     "key": "SESSION_CREATE_MAX_PARALLEL_PER_MODEL",
     "group": "pool",
     "kind": "int",
-    "default": "32",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "hidden": true,
-    "description": "Per-model cap on concurrent in-flight session admissions."
+    "description": "Per-model cap on concurrent in-flight session admissions (0 = unlimited, the default — the upstream quota/429 is the natural brake). Set a value to bound a burst locally."
   },
   {
     "key": "SESSION_IDLE_END",
@@ -577,7 +573,7 @@
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Cap on concurrent live turns per pooled token (floor 1: lower values floor to 1, a zero live-turn cap could never serve). A lease is granted only while the token holds fewer live turns; excess waiters park FIFO until QUEUE_WAIT elapses. Applies live on reload. BUNKER PRESET: 1 — fully sequential turns per account, zero parallel fingerprint."
+    "description": "Cap on concurrent live turns per pooled token (default 2, the approved anti-ban pacing; 0 = unlimited, no slot gating at all). A lease is granted only while the token holds fewer live turns; excess waiters park FIFO until QUEUE_WAIT elapses. Applies live on reload. BUNKER PRESET: 1 — fully sequential turns per account, zero parallel fingerprint."
   },
   {
     "key": "TOKEN_ROTATION",
@@ -652,21 +648,21 @@
     "key": "MAX_REQUESTS_PER_DAY",
     "group": "quota",
     "kind": "int",
-    "default": "1500",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Per-token cap on successful chat requests per Pacific day (0 = unlimited). Locks the account until the daily quota reset (Pacific midnight, same instant upstream rolls its windows); capped tokens are skipped and the pool rolls to the next account."
+    "description": "Per-token cap on successful chat requests per Pacific day (0 = unlimited, the default — the upstream quota/429 is the real enforcement). When set, locks the account until the daily quota reset (Pacific midnight, same instant upstream rolls its windows); capped tokens are skipped and the pool rolls to the next account. Set a value to bound a runaway loop locally."
   },
   {
     "key": "MAX_REQUESTS_PER_MINUTE",
     "group": "quota",
     "kind": "int",
-    "default": "30",
+    "default": "0",
     "restart_only": false,
     "secret": false,
     "essential": false,
-    "description": "Per-token cap on admitted chat requests per rolling 60s window (0 = unlimited). Throttles upstream-visible request bursts so each account stays under abuse-detection rates; a runaway loop locks within a minute and the pool rolls to the next account."
+    "description": "Per-token cap on admitted chat requests per rolling 60s window (0 = unlimited, the default — the upstream quota/429 is the real enforcement). When set, throttles upstream-visible request bursts; a runaway loop locks within a minute and the pool rolls to the next account. Set a value to bound a runaway loop locally."
   },
   {
     "key": "MAX_SPEND_PER_DAY",

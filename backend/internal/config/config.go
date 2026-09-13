@@ -63,16 +63,19 @@ type Config struct {
 	LogRingSize       int
 	MaxMessagesPerDay int // 0 = unlimited: per-token cap on successful chats per 24h
 	// MaxRequestsPerDay is the per-token cap on successful chat requests in
-	// the current Pacific day (MAX_REQUESTS_PER_DAY; default 1500, 0 =
-	// unlimited). Enforced in acquire like the daily message cap; resets at
-	// Pacific midnight — the same instant upstream rolls its daily quota
-	// windows — so a locked token unlocks in sync with the official reset.
+	// the current Pacific day (MAX_REQUESTS_PER_DAY; 0 = unlimited, the
+	// default — the upstream quota/429 is the real enforcement). Enforced
+	// in acquire like the daily message cap; resets at Pacific midnight —
+	// the same instant upstream rolls its daily quota windows — so a locked
+	// token unlocks in sync with the official reset. Set a value to bound
+	// a runaway loop locally.
 	MaxRequestsPerDay int
 	// MaxRequestsPerMinute is the per-token cap on ADMITTED chat requests in
-	// a rolling 60s window (MAX_REQUESTS_PER_MINUTE; default 30, 0 =
-	// unlimited). Admission counting (not success-only) throttles the exact
-	// request rate upstream observes — including retries that later fail —
-	// keeping each account under abuse-detection burst patterns.
+	// a rolling 60s window (MAX_REQUESTS_PER_MINUTE; 0 = unlimited, the
+	// default — the upstream quota/429 is the real enforcement). Admission
+	// counting (not success-only) throttles the exact request rate upstream
+	// observes — including retries that later fail. Set a value to bound a
+	// runaway loop locally.
 	MaxRequestsPerMinute int
 	// BridgeDailyLimit is the global daily chat cap across ALL bridge-mode
 	// entries (BRIDGE_DAILY_LIMIT; 0 = unlimited). Enforced in AcquireBridge
@@ -120,16 +123,17 @@ type Config struct {
 	// SessionCreateMaxParallelGlobal / SessionCreateMaxParallelPerModel cap
 	// concurrent in-flight session admissions (issue #86): the pool's create
 	// gate returns 503 when a cap is hit instead of hammering upstream.
-	// SESSION_CREATE_MAX_PARALLEL_GLOBAL default 128; _PER_MODEL default 32.
+	// 0 = unlimited (the default — the upstream quota/429 is the natural
+	// brake); set a value to bound a burst locally.
 	SessionCreateMaxParallelGlobal   int
 	SessionCreateMaxParallelPerModel int
 	// ChatMaxInflightMetered / ChatMaxInflightUnmetered cap concurrent
 	// in-flight chat requests per token, split by cost class (chat burst
-	// queue): metered models (a priced Freebucks row) default 1, unmetered
-	// models (no price row) default 3. The pool's chat gate queues excess
-	// admissions instead of hammering upstream. 0 = unlimited, mirroring
-	// the SESSION_CREATE_MAX_PARALLEL convention. Live-apply (atomic
-	// pointer swap, no pool rebuild).
+	// queue): metered models (a priced Freebucks row) vs unmetered models
+	// (no price row). The pool's chat gate queues excess admissions instead
+	// of hammering upstream. 0 = unlimited (the default — the upstream
+	// quota/429 is the natural brake); set a value to bound a burst
+	// locally. Live-apply (atomic pointer swap, no pool rebuild).
 	ChatMaxInflightMetered   int
 	ChatMaxInflightUnmetered int
 	// RunFinishQueueSize is the bounded deferred-FINISH worker queue size
@@ -296,12 +300,13 @@ type Config struct {
 	// Live-apply (atomic pointer swap, no pool rebuild).
 	RoutingSmart bool
 	// TokenMaxConcurrent caps concurrent live turns per pooled token
-	// (TOKEN_MAX_CONCURRENT; default 2, floor 1): a token leases a new
-	// turn only while fewer than this many are live on that account, so
-	// one account never fans out past the cap no matter how many models
-	// share it. Values below 1 floor to 1 (a zero live-turn cap could
-	// never serve). The strictest anti-ban posture is 1 (bunker: fully
-	// sequential turns per account). Live-apply (read per Acquire).
+	// (TOKEN_MAX_CONCURRENT; default 2, the approved anti-ban pacing): a
+	// token leases a new turn only while fewer than this many are live on
+	// that account, so one account never fans out past the cap no matter
+	// how many models share it. 0 = unlimited (no slot gating at all, for
+	// full operator control); negative values floor to 0. The strictest
+	// anti-ban posture is 1 (bunker: fully sequential turns per account).
+	// Live-apply (read per Acquire).
 	TokenMaxConcurrent int
 	// QueueWait bounds how long one Acquire parks on a full token's FIFO
 	// slot queue before failing over (QUEUE_WAIT; default 30s).

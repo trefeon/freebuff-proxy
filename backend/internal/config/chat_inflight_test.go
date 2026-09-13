@@ -6,8 +6,8 @@ import (
 )
 
 // Chat-burst queue knobs: per-token concurrent in-flight chat caps split by
-// cost class (CHAT_MAX_INFLIGHT_METERED default 1, CHAT_MAX_INFLIGHT_UNMETERED
-// default 3, 0 = unlimited) across every tier (env, .env, DB overlay) plus
+// cost class (CHAT_MAX_INFLIGHT_METERED default 0, CHAT_MAX_INFLIGHT_UNMETERED
+// default 0, 0 = unlimited) across every tier (env, .env, DB overlay) plus
 // shape validation (non-negative). Metered vs unmetered reuses the Freebucks
 // prices lookup (nil price = unmetered); no new classification lives here.
 func TestChatInflightDefaults(t *testing.T) {
@@ -16,11 +16,11 @@ func TestChatInflightDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ChatMaxInflightMetered != 1 {
-		t.Errorf("ChatMaxInflightMetered = %d, want 1 (default)", cfg.ChatMaxInflightMetered)
+	if cfg.ChatMaxInflightMetered != 0 {
+		t.Errorf("ChatMaxInflightMetered = %d, want 0 (default unlimited)", cfg.ChatMaxInflightMetered)
 	}
-	if cfg.ChatMaxInflightUnmetered != 3 {
-		t.Errorf("ChatMaxInflightUnmetered = %d, want 3 (default)", cfg.ChatMaxInflightUnmetered)
+	if cfg.ChatMaxInflightUnmetered != 0 {
+		t.Errorf("ChatMaxInflightUnmetered = %d, want 0 (default unlimited)", cfg.ChatMaxInflightUnmetered)
 	}
 	if !cfg.BurstBalanceEnabled {
 		t.Error("BurstBalanceEnabled = false, want true (default on)")
@@ -96,8 +96,8 @@ func TestChatInflightValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load with CHAT_MAX_INFLIGHT_METERED=many failed: %v (unparseable ints keep the default)", err)
 	}
-	if cfg.ChatMaxInflightMetered != 1 {
-		t.Errorf("ChatMaxInflightMetered = %d with CHAT_MAX_INFLIGHT_METERED=many, want 1 (default kept)", cfg.ChatMaxInflightMetered)
+	if cfg.ChatMaxInflightMetered != 0 {
+		t.Errorf("ChatMaxInflightMetered = %d with CHAT_MAX_INFLIGHT_METERED=many, want 0 (default kept)", cfg.ChatMaxInflightMetered)
 	}
 }
 

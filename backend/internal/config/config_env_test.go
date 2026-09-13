@@ -638,15 +638,16 @@ func TestMaxMessagesPerDay(t *testing.T) {
 	}
 }
 
-// TestRequestLimits pins the per-token RPD/RPM knobs (user-mandated
-// 2026-09-05, anti-abuse): defaults 1500/day + 30/min when unset, env
-// overrides, unparseable env ignored (file value kept), and JSON file
-// values. 0 = unlimited (explicit).
+// TestRequestLimits pins the per-token RPD/RPM knobs: defaults 0/0
+// (unlimited — the upstream quota/429 is the real enforcement) when unset,
+// env overrides, explicit zero = unlimited, unparseable env ignored (file
+// value kept), and JSON file values. Set a value to bound a runaway loop
+// locally.
 func TestRequestLimits(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok")
 
-	// Defaults when unset: 1500 requests/day, 30 requests/min.
+	// Defaults when unset: 0 requests/day, 0 requests/min (unlimited).
 	if cfg, err := Load(""); err != nil {
 		t.Fatalf("Load: %v", err)
 	} else if cfg.MaxRequestsPerDay != defaultMaxRequestsPerDay {
