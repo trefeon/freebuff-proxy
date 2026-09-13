@@ -133,14 +133,6 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.SessionProbeCacheTTL.String(), false
 	case "SESSION_RE_ADMIT_LEAD":
 		return c.SessionReAdmitLead.String(), false
-	case "SESSION_CREATE_MAX_PARALLEL_GLOBAL":
-		return strconv.Itoa(c.SessionCreateMaxParallelGlobal), false
-	case "SESSION_CREATE_MAX_PARALLEL_PER_MODEL":
-		return strconv.Itoa(c.SessionCreateMaxParallelPerModel), false
-	case "CHAT_MAX_INFLIGHT_METERED":
-		return strconv.Itoa(c.ChatMaxInflightMetered), false
-	case "CHAT_MAX_INFLIGHT_UNMETERED":
-		return strconv.Itoa(c.ChatMaxInflightUnmetered), false
 	case "RUN_FINISH_QUEUE_SIZE":
 		return strconv.Itoa(c.RunFinishQueueSize), false
 	case "RUN_FINISH_INLINE_TIMEOUT":

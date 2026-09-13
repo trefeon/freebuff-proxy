@@ -3,7 +3,8 @@ package pool
 // Unlimited-by-default throttle tests: every local throttle treats 0 as
 // unlimited (the upstream quota/429 is the natural brake), while an
 // explicit value still enforces. Covers the per-minute gate, the per-day
-// gate, the chat gate, the create gate, and the live-turn slot cap.
+// gate, and the live-turn slot cap (which paces both pooled and bridge
+// lanes).
 
 import (
 	"context"
@@ -112,93 +113,6 @@ func TestExplicitPerDayCapStillEnforces(t *testing.T) {
 	if !strings.Contains(err.Error(), "daily request limit reached") {
 		t.Errorf("third acquire err = %v, want daily-limit refusal", err)
 	}
-}
-
-// TestChatGateUnlimitedDefault proves 0 caps grant untracked permits at
-// once: three simultaneously-held leases on one lane, nothing tracked.
-func TestChatGateUnlimitedDefault(t *testing.T) {
-	p, _ := newChatGatePool(t, 0, 0)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var leases []*Lease
-	for i := range 3 {
-		lease, err := p.Acquire(ctx, modelA)
-		if err != nil {
-			t.Fatalf("held acquire %d err = %v, want immediate grant (unlimited)", i, err)
-		}
-		leases = append(leases, lease)
-	}
-	if got := p.chatGate.totalHeld(); got != 0 {
-		t.Errorf("tracked chat-lane holds = %d, want 0 (untracked unlimited grants)", got)
-	}
-	for _, lease := range leases {
-		p.LeaseRelease(lease)
-	}
-}
-
-// TestCreateGateUnlimited proves 0 caps grant immediately: three held
-// permits, a loosened gate unblocks, negatives normalize, and a single
-// capped dimension still enforces.
-func TestCreateGateUnlimited(t *testing.T) {
-	t.Run("zero caps grant at once", func(t *testing.T) {
-		g := newCreateGate(0, 0)
-		var held []*createPermit
-		for range 3 {
-			permit, err := g.acquire(context.Background(), "m1")
-			if err != nil {
-				t.Fatalf("acquire err = %v, want immediate grant (unlimited)", err)
-			}
-			held = append(held, permit)
-		}
-		for _, permit := range held {
-			permit.Release()
-		}
-	})
-
-	t.Run("loosening to unlimited unblocks", func(t *testing.T) {
-		g := newCreateGate(1, 1)
-		held, err := g.acquire(context.Background(), "m1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		g.setLimits(0, 0)
-		permit, err := g.acquire(context.Background(), "m1")
-		if err != nil {
-			t.Fatalf("acquire after loosening err = %v, want immediate grant", err)
-		}
-		permit.Release()
-		held.Release()
-	})
-
-	t.Run("negative normalizes to unlimited", func(t *testing.T) {
-		g := newCreateGate(-5, -2)
-		permit, err := g.acquire(context.Background(), "m1")
-		if err != nil {
-			t.Fatalf("acquire err = %v, want immediate grant", err)
-		}
-		permit.Release()
-	})
-
-	t.Run("single capped dimension still enforces", func(t *testing.T) {
-		g := newCreateGate(0, 1)
-		held, err := g.acquire(context.Background(), "m1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer held.Release()
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
-		defer cancel()
-		if _, err := g.acquire(ctx, "m1"); !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("second same-model acquire = %v, want DeadlineExceeded", err)
-		}
-		// A different model is unaffected by the per-model cap.
-		other, err := g.acquire(context.Background(), "m2")
-		if err != nil {
-			t.Fatalf("other-model acquire err = %v, want success", err)
-		}
-		other.Release()
-	})
 }
 
 // TestSlotCapUnlimitedSkipsGating proves TOKEN_MAX_CONCURRENT=0 skips slot

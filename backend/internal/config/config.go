@@ -120,22 +120,6 @@ type Config struct {
 	TransientRetries int               // max additional attempts after a transient transport failure (0 = disabled; default 1)
 	SessionPersist   bool              // true = persist session state to disk so restart resumes unexpired sessions (SESSION_PERSIST)
 	SessionStateFile string            // path to the session state file (SESSION_STATE_FILE; default .freebuff-session-state.json)
-	// SessionCreateMaxParallelGlobal / SessionCreateMaxParallelPerModel cap
-	// concurrent in-flight session admissions (issue #86): the pool's create
-	// gate returns 503 when a cap is hit instead of hammering upstream.
-	// 0 = unlimited (the default — the upstream quota/429 is the natural
-	// brake); set a value to bound a burst locally.
-	SessionCreateMaxParallelGlobal   int
-	SessionCreateMaxParallelPerModel int
-	// ChatMaxInflightMetered / ChatMaxInflightUnmetered cap concurrent
-	// in-flight chat requests per token, split by cost class (chat burst
-	// queue): metered models (a priced Freebucks row) vs unmetered models
-	// (no price row). The pool's chat gate queues excess admissions instead
-	// of hammering upstream. 0 = unlimited (the default — the upstream
-	// quota/429 is the natural brake); set a value to bound a burst
-	// locally. Live-apply (atomic pointer swap, no pool rebuild).
-	ChatMaxInflightMetered   int
-	ChatMaxInflightUnmetered int
 	// RunFinishQueueSize is the bounded deferred-FINISH worker queue size
 	// (issue #90, RUN_FINISH_QUEUE_SIZE default 64): rotated/drained runs
 	// are FINISHed by a background worker; when the queue is full the caller

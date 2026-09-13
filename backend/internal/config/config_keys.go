@@ -55,55 +55,51 @@ type rawConfig struct {
 	BridgeEnabled bool `json:"BRIDGE_ENABLED"`
 	// BridgeIdleEvict is the sliding-TTL string for idle bridge-entry
 	// eviction (BRIDGE_IDLE_EVICT; default "72h", zero-tolerant → 72h).
-	BridgeIdleEvict                  string                  `json:"BRIDGE_IDLE_EVICT"`
-	MaxSpendPerDay                   *int                    `json:"MAX_SPEND_PER_DAY"`
-	IdleRotationTimeout              string                  `json:"IDLE_ROTATION_TIMEOUT"`
-	SafeMode                         bool                    `json:"SAFE_MODE"`
-	SessionIdleEnd                   string                  `json:"SESSION_IDLE_END"`
-	ModelsHideUnavailable            bool                    `json:"MODELS_HIDE_UNAVAILABLE"`
-	ModelsAllow                      modelsAllowList         `json:"MODELS_ALLOW"`
-	CORSAllowedOrigin                string                  `json:"CORS_ALLOWED_ORIGIN"`
-	RequestJitter                    string                  `json:"REQUEST_JITTER"`
-	CLIVersion                       string                  `json:"CLI_VERSION"`
-	ModelAliases                     string                  `json:"MODEL_ALIASES"`
-	TransientRetries                 *int                    `json:"TRANSIENT_RETRIES"`
-	SessionPersist                   bool                    `json:"SESSION_PERSIST"`
-	SessionStateFile                 string                  `json:"SESSION_STATE_FILE"`
-	HTTP2Upstream                    bool                    `json:"HTTP2_UPSTREAM"`
-	SessionCreateMaxParallelGlobal   *int                    `json:"SESSION_CREATE_MAX_PARALLEL_GLOBAL"`
-	SessionCreateMaxParallelPerModel *int                    `json:"SESSION_CREATE_MAX_PARALLEL_PER_MODEL"`
-	ChatMaxInflightMetered           *int                    `json:"CHAT_MAX_INFLIGHT_METERED"`
-	ChatMaxInflightUnmetered         *int                    `json:"CHAT_MAX_INFLIGHT_UNMETERED"`
-	RunFinishQueueSize               *int                    `json:"RUN_FINISH_QUEUE_SIZE"`
-	RunFinishInlineTimeout           string                  `json:"RUN_FINISH_INLINE_TIMEOUT"`
-	RunsDrainQueueCap                *int                    `json:"RUNS_DRAIN_QUEUE_CAP"`
-	RunsDrainTTL                     string                  `json:"RUNS_DRAIN_TTL"`
-	SessionReAdmitLead               string                  `json:"SESSION_RE_ADMIT_LEAD"`
-	SessionProbeCacheTTL             string                  `json:"SESSION_PROBE_CACHE_TTL"`
-	ModelUnavailableCacheTTL         string                  `json:"MODEL_UNAVAILABLE_CACHE_TTL"`
-	QuotaFallbackModels              quotaFallbackModelsList `json:"QUOTA_FALLBACK_MODELS"`
-	WebhookURL                       string                  `json:"WEBHOOK_URL"`
-	FallbackAfter                    string                  `json:"FALLBACK_AFTER_MS"`
-	FallbackModels                   string                  `json:"FALLBACK_MODEL"`
-	AdoptCLISession                  bool                    `json:"ADOPT_CLI_SESSION"`
-	MaturityEnabled                  bool                    `json:"MATURITY_ENABLED"`
-	MaturityDryRun                   bool                    `json:"MATURITY_DRY_RUN"`
-	MaturityTouchModel               string                  `json:"MATURITY_TOUCH_MODEL"`
-	MaturityTargetDays               *int                    `json:"MATURITY_TARGET_DAYS"`
-	QuotaAutoProbe                   bool                    `json:"QUOTA_AUTO_PROBE"`
-	QuotaProbeActiveInterval         string                  `json:"QUOTA_PROBE_ACTIVE_INTERVAL"`
-	QuotaProbeIdleHeartbeat          string                  `json:"QUOTA_PROBE_IDLE_HEARTBEAT"`
-	WaitingRoomChain                 bool                    `json:"WAITING_ROOM_CHAIN"`
-	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
-	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
-	TokenRotation                    string                  `json:"TOKEN_ROTATION"`
-	RateLimitFailover                *bool                   `json:"RATE_LIMIT_FAILOVER"`
-	ModelLocks                       string                  `json:"MODEL_LOCKS"`
-	DashboardEnabled                 bool                    `json:"DASHBOARD_ENABLED"`
-	DashboardRequireLogin            bool                    `json:"DASHBOARD_REQUIRE_LOGIN"`
-	CompressPrompt                   string                  `json:"COMPRESS_PROMPT"`
-	CacheControlInjection            string                  `json:"CACHE_CONTROL_INJECTION"`
-	ReasoningInContent               string                  `json:"REASONING_IN_CONTENT"`
+	BridgeIdleEvict          string                  `json:"BRIDGE_IDLE_EVICT"`
+	MaxSpendPerDay           *int                    `json:"MAX_SPEND_PER_DAY"`
+	IdleRotationTimeout      string                  `json:"IDLE_ROTATION_TIMEOUT"`
+	SafeMode                 bool                    `json:"SAFE_MODE"`
+	SessionIdleEnd           string                  `json:"SESSION_IDLE_END"`
+	ModelsHideUnavailable    bool                    `json:"MODELS_HIDE_UNAVAILABLE"`
+	ModelsAllow              modelsAllowList         `json:"MODELS_ALLOW"`
+	CORSAllowedOrigin        string                  `json:"CORS_ALLOWED_ORIGIN"`
+	RequestJitter            string                  `json:"REQUEST_JITTER"`
+	CLIVersion               string                  `json:"CLI_VERSION"`
+	ModelAliases             string                  `json:"MODEL_ALIASES"`
+	TransientRetries         *int                    `json:"TRANSIENT_RETRIES"`
+	SessionPersist           bool                    `json:"SESSION_PERSIST"`
+	SessionStateFile         string                  `json:"SESSION_STATE_FILE"`
+	HTTP2Upstream            bool                    `json:"HTTP2_UPSTREAM"`
+	RunFinishQueueSize       *int                    `json:"RUN_FINISH_QUEUE_SIZE"`
+	RunFinishInlineTimeout   string                  `json:"RUN_FINISH_INLINE_TIMEOUT"`
+	RunsDrainQueueCap        *int                    `json:"RUNS_DRAIN_QUEUE_CAP"`
+	RunsDrainTTL             string                  `json:"RUNS_DRAIN_TTL"`
+	SessionReAdmitLead       string                  `json:"SESSION_RE_ADMIT_LEAD"`
+	SessionProbeCacheTTL     string                  `json:"SESSION_PROBE_CACHE_TTL"`
+	ModelUnavailableCacheTTL string                  `json:"MODEL_UNAVAILABLE_CACHE_TTL"`
+	QuotaFallbackModels      quotaFallbackModelsList `json:"QUOTA_FALLBACK_MODELS"`
+	WebhookURL               string                  `json:"WEBHOOK_URL"`
+	FallbackAfter            string                  `json:"FALLBACK_AFTER_MS"`
+	FallbackModels           string                  `json:"FALLBACK_MODEL"`
+	AdoptCLISession          bool                    `json:"ADOPT_CLI_SESSION"`
+	MaturityEnabled          bool                    `json:"MATURITY_ENABLED"`
+	MaturityDryRun           bool                    `json:"MATURITY_DRY_RUN"`
+	MaturityTouchModel       string                  `json:"MATURITY_TOUCH_MODEL"`
+	MaturityTargetDays       *int                    `json:"MATURITY_TARGET_DAYS"`
+	QuotaAutoProbe           bool                    `json:"QUOTA_AUTO_PROBE"`
+	QuotaProbeActiveInterval string                  `json:"QUOTA_PROBE_ACTIVE_INTERVAL"`
+	QuotaProbeIdleHeartbeat  string                  `json:"QUOTA_PROBE_IDLE_HEARTBEAT"`
+	WaitingRoomChain         bool                    `json:"WAITING_ROOM_CHAIN"`
+	RateLimitPerIP           *float64                `json:"RATE_LIMIT_PER_IP"`
+	RateLimitBurst           *int                    `json:"RATE_LIMIT_BURST"`
+	TokenRotation            string                  `json:"TOKEN_ROTATION"`
+	RateLimitFailover        *bool                   `json:"RATE_LIMIT_FAILOVER"`
+	ModelLocks               string                  `json:"MODEL_LOCKS"`
+	DashboardEnabled         bool                    `json:"DASHBOARD_ENABLED"`
+	DashboardRequireLogin    bool                    `json:"DASHBOARD_REQUIRE_LOGIN"`
+	CompressPrompt           string                  `json:"COMPRESS_PROMPT"`
+	CacheControlInjection    string                  `json:"CACHE_CONTROL_INJECTION"`
+	ReasoningInContent       string                  `json:"REASONING_IN_CONTENT"`
 	// RoutingSmart records ROUTING_SMART (default true via
 	// defaultRawConfig): the smart-routing master switch.
 	RoutingSmart bool `json:"ROUTING_SMART"`
@@ -165,55 +161,51 @@ func (q *quotaFallbackModelsList) UnmarshalJSON(data []byte) error {
 
 func defaultRawConfig() rawConfig {
 	return rawConfig{
-		ListenAddr:                       "127.0.0.1:3457",       // loopback by default (PRD §3); containers set LISTEN_ADDR=:3457
-		UpstreamBaseURL:                  "https://codebuff.com", // normalized to www.
-		RotationInterval:                 "6h",
-		RequestTimeout:                   "15m",
-		HTTPReadTimeout:                  "60s",
-		SessionCallTimeout:               "30s",
-		TokenRotation:                    "drain",
-		RateLimitFailover:                new(true),
-		CostMode:                         "free",
-		RegistryRefresh:                  "6h",
-		MaxSpendPerDay:                   nil,   // 0 = unlimited advisory spend ceiling (never enforced)
-		IdleRotationTimeout:              "",    // "" = disabled (unset → SAFE_MODE preset may fill)
-		BridgeEnabled:                    true,  // hybrid by default: AUTH_TOKENS + bridge relay share one instance
-		BridgeIdleEvict:                  "72h", // sliding-TTL for idle bridge-entry eviction
-		SafeMode:                         true,  // anti-ban presets on by default; set SAFE_MODE=false to disable
-		SessionIdleEnd:                   "",    // "" = disabled (opt-in: ending a session forces a fresh admission when the user returns)
-		DashboardEnabled:                 true,  // dashboard on by default; set DASHBOARD_ENABLED=false to disable
-		DashboardRequireLogin:            true,  // require login on by default; set DASHBOARD_REQUIRE_LOGIN=false to disable
-		LogAccess:                        true,
-		DevToolsEnabled:                  false,       // per-request access lines on by default; LOG_ACCESS=false disables them
-		LogRingSize:                      ptrInt(500), // dashboard log viewer ring capacity (T19)
-		CORSAllowedOrigin:                "*",         // browser clients reach /v1/* cross-origin by default
-		RequestJitter:                    "",          // "" = disabled (unset → SAFE_MODE preset may fill)
-		CLIVersion:                       "0.10.7",
-		TransientRetries:                 nil,  // nil = 1 (one retry after a transient transport failure; 0 disables)
-		SessionPersist:                   true, // session persistence on by default: restart resumes unexpired sessions
-		SessionStateFile:                 ".freebuff-session-state.json",
-		HTTP2Upstream:                    true,       // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
-		SessionCreateMaxParallelGlobal:   ptrInt(0),  // #86: concurrent session admissions cap (0 = unlimited)
-		SessionCreateMaxParallelPerModel: ptrInt(0),  // #86: per-model concurrent admissions cap (0 = unlimited)
-		ChatMaxInflightMetered:           ptrInt(0),  // chat burst queue metered cap (0 = unlimited)
-		ChatMaxInflightUnmetered:         ptrInt(0),  // chat burst queue unmetered cap (0 = unlimited)
-		RunFinishQueueSize:               ptrInt(64), // #90: bounded deferred-FINISH queue
-		RunFinishInlineTimeout:           "250ms",    // #90: inline FINISH fallback bound
-		RunsDrainQueueCap:                ptrInt(64), // #55: draining-runs list cap
-		RunsDrainTTL:                     "10m",      // #55: draining-runs TTL eviction
-		SessionReAdmitLead:               "60s",      // #99: pre-emptive re-admit lead
-		SessionProbeCacheTTL:             "15s",      // #60: admission probe cache TTL
-		FallbackAfter:                    "0",        // #100: queue-wait fallback threshold (ms); 0 = disabled by default
-		RoutingSmart:                     true,       // smart pool routing on by default; false restores the legacy acquire path
-		TokenMaxConcurrent:               ptrInt(2),  // per-token live turns (floor 1; bunker strictness is 1)
-		QueueWait:                        "30s",      // FIFO slot-queue wait bound per parked Acquire
-		QueueDepth:                       ptrInt(16), // parked FIFO waiters per token (0 = fail over at once when full)
-		MaturityEnabled:                  true,       // streak-maturity automation on by default; dry-run probes prove schedule before live touches
-		MaturityDryRun:                   true,       // maturity touches probe only until the operator proves the schedule
-		QuotaAutoProbe:                   true,       // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
-		QuotaProbeActiveInterval:         "60s",      // busy-pool probe cadence
-		QuotaProbeIdleHeartbeat:          "30m",      // idle-pool probe heartbeat (also the 429-backoff ceiling)
-		MaturityTouchModel:               "",         // empty default (= auto): cheapest served unmetered row, explicit id overrides
+		ListenAddr:               "127.0.0.1:3457",       // loopback by default (PRD §3); containers set LISTEN_ADDR=:3457
+		UpstreamBaseURL:          "https://codebuff.com", // normalized to www.
+		RotationInterval:         "6h",
+		RequestTimeout:           "15m",
+		HTTPReadTimeout:          "60s",
+		SessionCallTimeout:       "30s",
+		TokenRotation:            "drain",
+		RateLimitFailover:        new(true),
+		CostMode:                 "free",
+		RegistryRefresh:          "6h",
+		MaxSpendPerDay:           nil,   // 0 = unlimited advisory spend ceiling (never enforced)
+		IdleRotationTimeout:      "",    // "" = disabled (unset → SAFE_MODE preset may fill)
+		BridgeEnabled:            true,  // hybrid by default: AUTH_TOKENS + bridge relay share one instance
+		BridgeIdleEvict:          "72h", // sliding-TTL for idle bridge-entry eviction
+		SafeMode:                 true,  // anti-ban presets on by default; set SAFE_MODE=false to disable
+		SessionIdleEnd:           "",    // "" = disabled (opt-in: ending a session forces a fresh admission when the user returns)
+		DashboardEnabled:         true,  // dashboard on by default; set DASHBOARD_ENABLED=false to disable
+		DashboardRequireLogin:    true,  // require login on by default; set DASHBOARD_REQUIRE_LOGIN=false to disable
+		LogAccess:                true,
+		DevToolsEnabled:          false,       // per-request access lines on by default; LOG_ACCESS=false disables them
+		LogRingSize:              ptrInt(500), // dashboard log viewer ring capacity (T19)
+		CORSAllowedOrigin:        "*",         // browser clients reach /v1/* cross-origin by default
+		RequestJitter:            "",          // "" = disabled (unset → SAFE_MODE preset may fill)
+		CLIVersion:               "0.10.7",
+		TransientRetries:         nil,  // nil = 1 (one retry after a transient transport failure; 0 disables)
+		SessionPersist:           true, // session persistence on by default: restart resumes unexpired sessions
+		SessionStateFile:         ".freebuff-session-state.json",
+		HTTP2Upstream:            true,       // h2 ALPN matches real browsers (reference proxy-freebuff USE_HTTP2 default '1'); HTTP2_UPSTREAM=false forces h1 (#51)
+		RunFinishQueueSize:       ptrInt(64), // #90: bounded deferred-FINISH queue
+		RunFinishInlineTimeout:   "250ms",    // #90: inline FINISH fallback bound
+		RunsDrainQueueCap:        ptrInt(64), // #55: draining-runs list cap
+		RunsDrainTTL:             "10m",      // #55: draining-runs TTL eviction
+		SessionReAdmitLead:       "60s",      // #99: pre-emptive re-admit lead
+		SessionProbeCacheTTL:     "15s",      // #60: admission probe cache TTL
+		FallbackAfter:            "0",        // #100: queue-wait fallback threshold (ms); 0 = disabled by default
+		RoutingSmart:             true,       // smart pool routing on by default; false restores the legacy acquire path
+		TokenMaxConcurrent:       ptrInt(2),  // per-token live turns (floor 1; bunker strictness is 1)
+		QueueWait:                "30s",      // FIFO slot-queue wait bound per parked Acquire
+		QueueDepth:               ptrInt(16), // parked FIFO waiters per token (0 = fail over at once when full)
+		MaturityEnabled:          true,       // streak-maturity automation on by default; dry-run probes prove schedule before live touches
+		MaturityDryRun:           true,       // maturity touches probe only until the operator proves the schedule
+		QuotaAutoProbe:           true,       // quota auto-probe scheduler on by default; false restores pre-scheduler behavior
+		QuotaProbeActiveInterval: "60s",      // busy-pool probe cadence
+		QuotaProbeIdleHeartbeat:  "30m",      // idle-pool probe heartbeat (also the 429-backoff ceiling)
+		MaturityTouchModel:       "",         // empty default (= auto): cheapest served unmetered row, explicit id overrides
 	}
 }
 
