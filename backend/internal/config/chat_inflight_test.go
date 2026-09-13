@@ -22,9 +22,6 @@ func TestChatInflightDefaults(t *testing.T) {
 	if cfg.ChatMaxInflightUnmetered != 0 {
 		t.Errorf("ChatMaxInflightUnmetered = %d, want 0 (default unlimited)", cfg.ChatMaxInflightUnmetered)
 	}
-	if !cfg.BurstBalanceEnabled {
-		t.Error("BurstBalanceEnabled = false, want true (default on)")
-	}
 }
 
 func TestChatInflightEnvOverrides(t *testing.T) {

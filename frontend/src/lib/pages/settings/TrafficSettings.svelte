@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from "svelte";
   import SettingsCard from "../../components/SettingsCard.svelte";
   import SettingsRow from "../../components/SettingsRow.svelte";
   import DbBadge from "../../components/DbOverrideBadge.svelte";
@@ -16,11 +15,10 @@
   /**
    * Traffic & Rate Limiting settings card (Pool group).
    * Built using the SettingsCard and SettingsRow template components.
-   * Leads with a bespoke Rotation & Burst section (relocated from the
+   * Leads with a bespoke Rotation section (relocated from the
    * Tokens page): the TOKEN_ROTATION radiogroup + RATE_LIMIT_FAILOVER
    * toggle persist through the whole-file .env flow (onField, batched
-   * into the page Save), while the BURST_* knobs save per key to the DB
-   * overlay (DbOverrideSave) exactly as they did on Tokens.
+   * into the page Save).
    * All keys apply live on reload (none is restart-only).
    *
    * @prop {Record<string, string>} formValues
@@ -65,8 +63,8 @@
     "Per-token cap on successful chat requests per Pacific day. A capped account is skipped and the pool rolls to the next one; all tokens unlock at Pacific midnight — the same instant upstream resets its daily quota windows. 0 = no cap, empty = default (1500).";
   const MAX_DAY_HINT = "0 = no cap · recommended 1500";
 
-  // Rotation & Burst copy (relocated verbatim from Tokens.svelte).
-  const ROT_SECTION = "Rotation & Burst";
+  // Rotation copy (relocated verbatim from Tokens.svelte).
+  const ROT_SECTION = "Rotation";
   const ROT_POLICY_LABEL = "Token Rotation Policy";
   const ROT_DRAIN_BTN = "Drain (Safest)";
   const ROT_RR_BTN = "Round Robin (1:1)";
@@ -87,18 +85,7 @@
   const FAILOVER_LABEL = "Auto Failover on Rate Limit (429)";
   const FAILOVER_DESC =
     "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.";
-  const BURST_LABEL = "Burst Balance (opt-in)";
-  // Region accessible name: exact "Burst Balance" (e2e region contract —
-  // the visible heading keeps the "(opt-in)" suffix, as on Tokens).
-  const BURST_REGION = "Burst Balance";
-  const BURST_DESC =
-    "When one model is hammered, spread its burst across up to the max-token accounts once threshold admissions land inside the window — other models keep the strategy above. Caution: spreading looks less like single-user traffic than drain; keep off unless one model's bursts throttle a single account while siblings sit idle.";
-  const BURST_WINDOW_LABEL = "Window";
-  const BURST_WINDOW_UNIT = "minutes";
-  const BURST_THRESHOLD_LABEL = "Threshold";
-  const BURST_THRESHOLD_UNIT = "requests";
-  const BURST_MAX_LABEL = "Max tokens";
-  const BURST_MAX_UNIT = "accounts";
+
 
   let q = $derived(query.trim().toLowerCase());
   function hit(...parts) {
@@ -110,10 +97,6 @@
     hit(
       "TOKEN_ROTATION",
       "RATE_LIMIT_FAILOVER",
-      "BURST_BALANCE_ENABLED",
-      "BURST_WINDOW",
-      "BURST_THRESHOLD",
-      "BURST_MAX_TOKENS",
       ROT_SECTION,
       ROT_POLICY_LABEL,
       ROT_DRAIN_BTN,
@@ -130,12 +113,6 @@
       ROT_RANDOM_BODY,
       FAILOVER_LABEL,
       FAILOVER_DESC,
-      BURST_LABEL,
-      BURST_REGION,
-      BURST_DESC,
-      BURST_WINDOW_LABEL,
-      BURST_THRESHOLD_LABEL,
-      BURST_MAX_LABEL,
       "Token Rotation & Handling Policy",
       "Strategy used by the gateway to select upstream accounts for model requests.",
     ),
@@ -190,76 +167,6 @@
     onField("RATE_LIMIT_FAILOVER", v ? "true" : "false");
   }
 
-  // ---------------------------------------------------------------------------
-  // Burst balance (ADR-0023, opt-in): enable + window/threshold/max-tokens.
-  // Persisted per key through the DB settings overlay (DbOverrideSave),
-  // never through the whole-file .env save above. Effective values load
-  // from GET /admin/api/settings so overlay rows win like everywhere else.
-  // (Copied verbatim from Tokens.svelte.)
-  // ---------------------------------------------------------------------------
-  let burstEnabled = $state(false);
-  let burstWindowMin = $state(1);
-  let burstThreshold = $state(20);
-  let burstMaxTokens = $state(2);
-  // Stepper cap for the spread width: the live pool size (Tokens.svelte used
-  // its token table for this); falls back to 8 when the fetch fails.
-  let tokenCount = $state(8);
-
-  function parseWindowMinutes(v) {
-    if (v == null) return null;
-    const m = String(v)
-      .trim()
-      .toLowerCase()
-      .match(/^(\d+(?:\.\d+)?)\s*(ns|us|µs|ms|s|m|h)$/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    const perMin = {
-      ns: 1 / 6e10,
-      us: 1 / 6e7,
-      µs: 1 / 6e7,
-      ms: 1 / 6e4,
-      s: 1 / 60,
-      m: 1,
-      h: 60,
-    }[m[2]];
-    return Math.max(1, Math.round(n * perMin));
-  }
-
-  async function refetchBurst() {
-    try {
-      const res = await fetchAPI(adminApi.settings);
-      const byKey = {};
-      for (const e of res?.settings ?? []) byKey[e.key] = e.value;
-      if (byKey.BURST_BALANCE_ENABLED !== undefined) {
-        burstEnabled =
-          String(byKey.BURST_BALANCE_ENABLED).toLowerCase() === "true";
-      }
-      const w = parseWindowMinutes(byKey.BURST_WINDOW);
-      if (w != null) burstWindowMin = w;
-      const th = Number.parseInt(byKey.BURST_THRESHOLD, 10);
-      if (Number.isFinite(th) && th >= 1) burstThreshold = th;
-      const mt = Number.parseInt(byKey.BURST_MAX_TOKENS, 10);
-      if (Number.isFinite(mt) && mt >= 2) burstMaxTokens = mt;
-    } catch {
-      // Keep last-known values: a failed background refresh must not wipe
-      // the burst controls (first load simply keeps the defaults).
-    }
-  }
-
-  onMount(() => {
-    refetchBurst();
-    (async () => {
-      try {
-        const res = await fetchAPI(adminApi.tokens);
-        const n = Number(res?.token_count ?? res?.tokens?.length);
-        if (Number.isFinite(n) && n >= 2) tokenCount = n;
-      } catch {
-        // Keep the fallback cap: the stepper still clamps to >= 2 and the
-        // server range-checks BURST_MAX_TOKENS on overlay save.
-      }
-    })();
-  });
 </script>
 
 {#if !q || visible > 0}
@@ -293,7 +200,7 @@
     {/snippet}
 
     {#if showRotation}
-      <!-- Rotation & Burst (relocated from Tokens.svelte) -->
+      <!-- Rotation (relocated from Tokens.svelte) -->
       <div class="space-y-3 py-4">
         <p
           class="text-xs font-semibold uppercase tracking-wider text-[var(--fp-muted)]"
@@ -402,93 +309,6 @@
             onchange={(v) => toggleRateLimitFailover(v)}
           />
         </div>
-        <!-- Burst Balance (opt-in, ADR-0023): per-key DB-overlay saves -->
-        <section
-          aria-label={$tr(BURST_REGION)}
-          class="pt-3 border-t border-[var(--fp-border)] space-y-3"
-        >
-          <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-          >
-            <div class="space-y-0.5">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-semibold text-[var(--fp-text)]">
-                  {$tr(BURST_LABEL)}
-                </span>
-                <span class="led {burstEnabled ? 'led-good' : 'led-dim'}"
-                ></span>
-              </div>
-              <p class="text-[11px] text-[var(--fp-muted)] leading-relaxed">
-                {$tr(BURST_DESC)}
-              </p>
-            </div>
-            <ToggleSwitch
-              checked={burstEnabled}
-              ariaLabel="Burst Balance"
-              onchange={(v) => (burstEnabled = v)}
-            />
-          </div>
-          <DbOverrideSave
-            settingKey="BURST_BALANCE_ENABLED"
-            value={String(burstEnabled)}
-          />
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <FieldBox
-              label={$tr(BURST_WINDOW_LABEL)}
-              unit={$tr(BURST_WINDOW_UNIT)}
-              class="min-w-0"
-            >
-              <Stepper
-                bind:value={burstWindowMin}
-                min={1}
-                max={60}
-                ariaLabel={$tr("Burst window (minutes)")}
-                decreaseLabel={$tr("Decrease burst window")}
-                increaseLabel={$tr("Increase burst window")}
-              />
-              <DbOverrideSave
-                settingKey="BURST_WINDOW"
-                value={`${burstWindowMin}m`}
-              />
-            </FieldBox>
-            <FieldBox
-              label={$tr(BURST_THRESHOLD_LABEL)}
-              unit={$tr(BURST_THRESHOLD_UNIT)}
-              class="min-w-0"
-            >
-              <Stepper
-                bind:value={burstThreshold}
-                min={1}
-                max={1000}
-                ariaLabel={$tr("Burst threshold (requests)")}
-                decreaseLabel={$tr("Decrease burst threshold")}
-                increaseLabel={$tr("Increase burst threshold")}
-              />
-              <DbOverrideSave
-                settingKey="BURST_THRESHOLD"
-                value={String(burstThreshold)}
-              />
-            </FieldBox>
-            <FieldBox
-              label={$tr(BURST_MAX_LABEL)}
-              unit={$tr(BURST_MAX_UNIT)}
-              class="min-w-0"
-            >
-              <Stepper
-                bind:value={burstMaxTokens}
-                min={2}
-                max={Math.max(2, tokenCount)}
-                ariaLabel={$tr("Burst max tokens")}
-                decreaseLabel={$tr("Decrease burst max tokens")}
-                increaseLabel={$tr("Increase burst max tokens")}
-              />
-              <DbOverrideSave
-                settingKey="BURST_MAX_TOKENS"
-                value={String(burstMaxTokens)}
-              />
-            </FieldBox>
-          </div>
-        </section>
       </div>
     {/if}
 

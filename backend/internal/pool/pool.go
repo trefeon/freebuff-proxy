@@ -380,14 +380,6 @@ type Pool struct {
 	// on different tokens for the same model). Guarded by admissionsMu.
 	admissionsMu sync.Mutex
 	admissions   map[string]int
-	// Burst balance (ADR-0023, opt-in): per-model sliding-window admission
-	// timestamps plus the engaged-episode flags behind one mutex. In-memory
-	// only (a restart starts un-tripped); pruned on the maintain tick.
-	// Guarded by burstMu; nil maps read as empty and are allocated on the
-	// first recorded admission.
-	burstMu   sync.Mutex
-	burstHits map[string][]burstHit
-	burstOn   map[string]bool
 
 	// lastBulkProbe is the pool-scoped timestamp of the last bulk probe
 	// pass (manual Probe-all button or stale visit auto-probe, ADR-0025).
@@ -698,7 +690,7 @@ func New(cfg *config.Config, clients []*upstream.Client, sessions []*session.Man
 		return nil, fmt.Errorf("pool: %d sessions for %d tokens", len(sessions), len(cfg.AuthTokens))
 	}
 
-	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]*admissionGate), burstHits: make(map[string][]burstHit), burstOn: make(map[string]bool)}
+	p := &Pool{reg: reg, logger: slog.Default(), bridge: make(map[string]*bridgeEntry), unfit: make(map[unfitKey]unfitEntry), bridgeCreateGate: make(chan struct{}, 4), lastTokenByModel: make(map[string]int), admissions: make(map[string]int), modelAdmissionGate: make(map[string]*admissionGate)}
 	p.probeCtx, p.probeCancel = context.WithCancel(context.Background())
 	p.cfg.Store(cfg)
 	p.gate = newCreateGate(cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)

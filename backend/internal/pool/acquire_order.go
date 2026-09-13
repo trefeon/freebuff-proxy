@@ -180,17 +180,6 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 		order = append(order, coldTokens...)
 		order = append(order, mismatchedHot...)
 	}
-	// Burst balance (ADR-0023, opt-in): while this model's sliding-window
-	// admission count exceeds its threshold, THAT model's order switches to
-	// least_used among healthy tokens, capped at BURST_MAX_TOKENS distinct
-	// accounts. Disabled or below-threshold: order untouched (the default
-	// path is byte-identical). The availability sort below still applies,
-	// so demoted over-cap tokens are reached when the spread set fails.
-	if cfg := p.cfg.Load(); cfg != nil && cfg.BurstBalanceEnabled {
-		if plan := p.burstPlanForModel(cfg, model, time.Now()); plan.active {
-			order = plan.apply(leastUsedOrder(toks, model, eligible))
-		}
-	}
 
 	// Smart availability (rate-limit handling): demote tokens that are
 	// cooling down or banned behind tokens that can serve right now, and
@@ -247,9 +236,7 @@ func (p *Pool) acquireOrder(toks *[]*tokenEntry, start int, model string) ([]int
 
 // leastUsedOrder ranks eligible token indexes with the LARGEST Freebucks
 // balance first (preserve balance; ADR-0027: session-count remaining is
-// envelope data, never ranking input). Shared by the "least_used" strategy
-// and the burst-balance override (ADR-0023) so the two rankings cannot
-// drift.
+// envelope data, never ranking input).
 func leastUsedOrder(toks *[]*tokenEntry, model string, eligible func(int) bool) []int {
 	var eligibleTokens []int
 	for idx := range *toks {

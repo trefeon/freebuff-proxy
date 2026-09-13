@@ -93,10 +93,6 @@ type rawConfig struct {
 	QuotaAutoProbe                   bool                    `json:"QUOTA_AUTO_PROBE"`
 	QuotaProbeActiveInterval         string                  `json:"QUOTA_PROBE_ACTIVE_INTERVAL"`
 	QuotaProbeIdleHeartbeat          string                  `json:"QUOTA_PROBE_IDLE_HEARTBEAT"`
-	BurstBalanceEnabled              bool                    `json:"BURST_BALANCE_ENABLED"`
-	BurstWindow                      string                  `json:"BURST_WINDOW"`
-	BurstThreshold                   *int                    `json:"BURST_THRESHOLD"`
-	BurstMaxTokens                   *int                    `json:"BURST_MAX_TOKENS"`
 	WaitingRoomChain                 bool                    `json:"WAITING_ROOM_CHAIN"`
 	RateLimitPerIP                   *float64                `json:"RATE_LIMIT_PER_IP"`
 	RateLimitBurst                   *int                    `json:"RATE_LIMIT_BURST"`
@@ -208,10 +204,6 @@ func defaultRawConfig() rawConfig {
 		SessionReAdmitLead:               "60s",      // #99: pre-emptive re-admit lead
 		SessionProbeCacheTTL:             "15s",      // #60: admission probe cache TTL
 		FallbackAfter:                    "0",        // #100: queue-wait fallback threshold (ms); 0 = disabled by default
-		BurstBalanceEnabled:              true,       // burst spreading on by default; false restores drain-only selection
-		BurstWindow:                      "1m",       // sliding window for counting same-model admissions toward BURST_THRESHOLD
-		BurstThreshold:                   ptrInt(20), // same-model admissions inside BURST_WINDOW that trip spreading for that model
-		BurstMaxTokens:                   ptrInt(2),  // distinct accounts one model's burst spreads across (minimum 2)
 		RoutingSmart:                     true,       // smart pool routing on by default; false restores the legacy acquire path
 		TokenMaxConcurrent:               ptrInt(2),  // per-token live turns (floor 1; bunker strictness is 1)
 		QueueWait:                        "30s",      // FIFO slot-queue wait bound per parked Acquire
