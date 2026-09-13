@@ -892,6 +892,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/admin/tokens/{id}/refund-refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Replay one token's parked pending-refund DELETE (same instance; drops the result if the account changed) */
+    post: operations["tokenRefundRefresh"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/admin/tokens/{id}/session": {
     parameters: {
       query?: never;
@@ -2798,6 +2815,28 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Fire one manual maturity touch outside the daily slot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResultEnvelope"];
+        };
+      };
+    };
+  };
+  tokenRefundRefresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Replay one token's parked pending-refund DELETE (same instance; drops the result if the account changed) */
       200: {
         headers: {
           [name: string]: unknown;

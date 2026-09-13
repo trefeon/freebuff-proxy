@@ -9,6 +9,7 @@ import (
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/dashboard"
 	"freebuff-proxy/backend/internal/modelcat"
+	"freebuff-proxy/backend/internal/pool"
 	"io"
 	"net/http"
 	"strconv"
@@ -152,6 +153,38 @@ func (a *adminHandlers) handleTokenDropSession(w http.ResponseWriter, r *http.Re
 	}
 	a.logfunc().Info("dashboard token session dropped", "token", id)
 	a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" session dropped — next request will re-admit fresh.")
+}
+
+func (a *adminHandlers) handleTokenRefundRefresh(w http.ResponseWriter, r *http.Request) {
+	id, err := tokenActionID(r)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		var res pool.RefundRefreshResult
+		res, err = a.pool.RefreshTokenRefund(ctx, id)
+		if err == nil {
+			switch {
+			case res.Settled:
+				unit := "Freebucks"
+				if res.Amount == 1 {
+					unit = "Freebuck"
+				}
+				a.logfunc().Info("dashboard token refund settled", "token", id, "amount", res.Amount)
+				a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" refund settled: "+strconv.FormatFloat(res.Amount, 'f', -1, 64)+" "+unit+" returned to wallet.")
+			case res.Dropped:
+				a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" account changed during refresh — result dropped.")
+			case res.Pending:
+				a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" refund still awaiting final usage.")
+			default:
+				a.dash.RenderConfigResult(w, r, true, "Token "+strconv.Itoa(id)+" has no pending refund.")
+			}
+			return
+		}
+	}
+	if err != nil {
+		a.dash.RenderConfigResult(w, r, false, "Refund refresh failed: "+err.Error())
+		return
+	}
 }
 
 // spawnModelFromRequest reads the spawn model id from a form field or a JSON

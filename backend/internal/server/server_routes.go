@@ -130,6 +130,8 @@ func (s *Server) adminHandler(r dashboard.AdminRoute) http.Handler {
 		return http.HandlerFunc(s.admin.handleTokenFinish)
 	case "POST /admin/tokens/{id}/drop-session":
 		return http.HandlerFunc(s.admin.handleTokenDropSession)
+	case "POST /admin/tokens/{id}/refund-refresh":
+		return http.HandlerFunc(s.admin.handleTokenRefundRefresh)
 	case "POST /admin/tokens/{id}/test":
 		return http.HandlerFunc(s.admin.handleTokenTest)
 	case "POST /admin/tokens/{id}/session":

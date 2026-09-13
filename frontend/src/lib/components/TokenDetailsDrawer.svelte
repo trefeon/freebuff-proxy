@@ -9,6 +9,7 @@
     Lock,
   } from "@lucide/svelte";
   import Button from "./Button.svelte";
+  import RefundLines from "./RefundLines.svelte";
   import {
     fallbackModelOptions,
     fetchModelOptions,
@@ -261,16 +262,11 @@
       <span class="fp-num">{fmtCountdown(sessionRemaining)}</span>
     </div>
   {/if}
-  {#if token.pending_refund}
-    <p
-      class="mb-2 px-2 py-1 rounded bg-[var(--fp-warning)]/10 text-xs text-[var(--fp-warning)]"
-      data-testid="refund-line"
-    >
-      {$tr(
-        "Your refund is awaiting final usage, once settled it will appear in your wallet",
-      )}
-    </p>
-  {/if}
+  <RefundLines
+    {token}
+    pendingClass="mb-2 px-2 py-1 rounded bg-[var(--fp-warning)]/10 text-xs text-[var(--fp-warning)]"
+    settledClass="mb-2 px-2 py-1 rounded bg-[var(--fp-success)]/10 text-xs text-[var(--fp-success)]"
+  />
   {#if token.session_remaining_seconds > 0}
     <div class="mb-2 flex justify-end">
       <Button
