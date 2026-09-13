@@ -357,6 +357,68 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(refund).toContainText("awaiting final usage");
   });
 
+  test("Accounts pending refund replays to a settled line on refresh", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    const state = JSON.parse(JSON.stringify(f.tokens));
+    state.tokens[0].pending_refund = "inst-abc-123";
+    delete state.tokens[0].last_refund;
+    await mockDashboard(page, f, { tokens: state });
+    // Mutable tokens payload: the refund-refresh replay settles the parked
+    // release, and the next tokens fetch carries the receipt.
+    await page.unroute("**/admin/api/tokens*");
+    await page.route("**/admin/api/tokens*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(state),
+      });
+    });
+    await page.route("**/admin/tokens/0/refund-refresh", async (route) => {
+      delete state.tokens[0].pending_refund;
+      state.tokens[0].last_refund = 1.5;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          message: "Token 0 refund settled: 1.5 Freebucks returned to wallet.",
+        }),
+      });
+    });
+    const replayed = page.waitForRequest(
+      (r) =>
+        r.method() === "POST" &&
+        r.url().includes("/admin/tokens/0/refund-refresh"),
+    );
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
+    await page.getByRole("button", { name: "Accounts" }).click();
+    // The pending line fires one automatic refresh on first render (pinned
+    // by the sibling test); the mock settles fast, so assert the replay
+    // POST plus the settled line replacing the pending one.
+    await replayed;
+    await expect(page.getByTestId("refund-settled-line")).toContainText(
+      "1.5 Freebucks returned to your wallet.",
+    );
+    await expect(page.getByTestId("refund-line")).toHaveCount(0);
+  });
+
+  test("Accounts settled zero refund renders the zero line", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    // A zero receipt is settled, not unknown: last_refund 0 renders.
+    const zeroTokens = JSON.parse(JSON.stringify(f.tokens));
+    zeroTokens.tokens[0].last_refund = 0;
+    await mockDashboard(page, f, { tokens: zeroTokens });
+    await page.goto("http://127.0.0.1:4173/admin/#plans");
+    await page.getByRole("button", { name: "Accounts" }).click();
+    await expect(page.getByTestId("refund-settled-line").first()).toContainText(
+      "0 Freebucks returned to your wallet.",
+    );
+  });
+
   test("Models rows render NEW markers and training warnings", async ({
     page,
   }) => {

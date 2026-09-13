@@ -322,6 +322,12 @@ type Pool struct {
 	// current idle stretch. Guarded by lastActiveMu.
 	sessionsEnded bool
 
+	// refundMu + refundInflight cap concurrent pending-refund refreshes per
+	// account (single-flight): concurrent RefreshTokenRefund calls for the
+	// same slot join the in-flight replay instead of re-DELETEing. Guarded
+	// by refundMu; entries are deleted when the flight lands.
+	refundMu       sync.Mutex
+	refundInflight map[int]*refundFlight
 	// Bridge mode (no AUTH_TOKENS): lazily-created per-client-token entries.
 	// bridgeOrder keeps the LRU order, oldest first. Guarded by bridgeMu.
 	bridgeMu    sync.RWMutex
