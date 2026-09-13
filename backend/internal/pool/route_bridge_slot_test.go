@@ -314,14 +314,13 @@ func TestBridgeSlotReleaseOnErrorPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("per-minute refusal", func(t *testing.T) {
+	t.Run("back-to-back acquires succeed without local caps", func(t *testing.T) {
 		mock := testutil.NewMock()
 		defer mock.Close()
 		p := newBridgeSmartPool(t, func(c *config.Config) {
 			c.TokenMaxConcurrent = 1
-			c.MaxRequestsPerMinute = 1
 		}, mock)
-		const token = "bridge-slot-rpm"
+		const token = "bridge-slot-nocap"
 		entry := bridgeLane(t, p, token)
 
 		lease, err := p.AcquireBridge(context.Background(), token, modelA)
@@ -332,13 +331,13 @@ func TestBridgeSlotReleaseOnErrorPaths(t *testing.T) {
 		if got := p.routeSlotLive(entry); got != 0 {
 			t.Fatalf("live slots after release = %d, want 0", got)
 		}
-		_, err = p.AcquireBridge(context.Background(), token, modelA)
-		var rle *upstream.RateLimitError
-		if !errors.As(err, &rle) {
-			t.Fatalf("refusal err = %T %v, want *upstream.RateLimitError", err, err)
+		lease2, err := p.AcquireBridge(context.Background(), token, modelA)
+		if err != nil {
+			t.Fatalf("second acquire err = %v, want success (no local caps remain)", err)
 		}
+		p.LeaseRelease(lease2)
 		if got := p.routeSlotLive(entry); got != 0 {
-			t.Errorf("live slots after per-minute refusal = %d, want 0 (slot released)", got)
+			t.Errorf("live slots after second release = %d, want 0 (slot released)", got)
 		}
 	})
 

@@ -33,24 +33,18 @@ type rawConfig struct {
 	ActingUserID       string   `json:"ACTING_USER_ID"`
 	// LegacyActingUserID is the pre-rename JSON key (USER_ID) — merged at
 	// the end of Load when no ACTING_USER_ID source set a value (#126).
-	LegacyActingUserID   string `json:"USER_ID"`
-	TLSFingerprint       string `json:"TLS_FINGERPRINT"`
-	RegistryRefresh      string `json:"REGISTRY_REFRESH"`
-	DebugDump            bool   `json:"DEBUG_DUMP"`
-	DevToolsEnabled      bool   `json:"DEVTOOLS_ENABLED"`
-	LogFile              string `json:"LOG_FILE"`
-	LogLevel             string `json:"LOG_LEVEL"`
-	LogFormat            string `json:"LOG_FORMAT"`
-	LogAccess            bool   `json:"LOG_ACCESS"`
-	LogRingSize          *int   `json:"LOG_RING_SIZE"`
-	LogConsoleWindow     string `json:"LOG_CONSOLE_WINDOW"`
-	LogTableRetention    string `json:"LOG_TABLE_RETENTION"`
-	MaxMessagesPerDay    *int   `json:"MAX_MESSAGES_PER_DAY"`
-	MaxRequestsPerDay    *int   `json:"MAX_REQUESTS_PER_DAY"`
-	MaxRequestsPerMinute *int   `json:"MAX_REQUESTS_PER_MINUTE"`
-	// BridgeDailyLimit is the global daily chat cap across all bridge
-	// entries (BRIDGE_DAILY_LIMIT; 0 = unlimited).
-	BridgeDailyLimit *int `json:"BRIDGE_DAILY_LIMIT"`
+	LegacyActingUserID string `json:"USER_ID"`
+	TLSFingerprint     string `json:"TLS_FINGERPRINT"`
+	RegistryRefresh    string `json:"REGISTRY_REFRESH"`
+	DebugDump          bool   `json:"DEBUG_DUMP"`
+	DevToolsEnabled    bool   `json:"DEVTOOLS_ENABLED"`
+	LogFile            string `json:"LOG_FILE"`
+	LogLevel           string `json:"LOG_LEVEL"`
+	LogFormat          string `json:"LOG_FORMAT"`
+	LogAccess          bool   `json:"LOG_ACCESS"`
+	LogRingSize        *int   `json:"LOG_RING_SIZE"`
+	LogConsoleWindow   string `json:"LOG_CONSOLE_WINDOW"`
+	LogTableRetention  string `json:"LOG_TABLE_RETENTION"`
 	// BridgeEnabled records BRIDGE_ENABLED (default true via
 	// defaultRawConfig): whether bridge-mode traffic is accepted alongside
 	// the AUTH_TOKENS pool (hybrid mode).
@@ -58,7 +52,6 @@ type rawConfig struct {
 	// BridgeIdleEvict is the sliding-TTL string for idle bridge-entry
 	// eviction (BRIDGE_IDLE_EVICT; default "72h", zero-tolerant → 72h).
 	BridgeIdleEvict          string                  `json:"BRIDGE_IDLE_EVICT"`
-	MaxSpendPerDay           *int                    `json:"MAX_SPEND_PER_DAY"`
 	IdleRotationTimeout      string                  `json:"IDLE_ROTATION_TIMEOUT"`
 	SafeMode                 bool                    `json:"SAFE_MODE"`
 	SessionIdleEnd           string                  `json:"SESSION_IDLE_END"`
@@ -173,7 +166,6 @@ func defaultRawConfig() rawConfig {
 		RateLimitFailover:        new(true),
 		CostMode:                 "free",
 		RegistryRefresh:          "6h",
-		MaxSpendPerDay:           nil,   // 0 = unlimited advisory spend ceiling (never enforced)
 		IdleRotationTimeout:      "",    // "" = disabled (unset → SAFE_MODE preset may fill)
 		BridgeEnabled:            true,  // hybrid by default: AUTH_TOKENS + bridge relay share one instance
 		BridgeIdleEvict:          "72h", // sliding-TTL for idle bridge-entry eviction

@@ -78,13 +78,13 @@ func TestLiveViewOverviewOmitsStatic(t *testing.T) {
 	live := getJSON(t, ts.URL+"/admin/api/overview?view=live")
 
 	// Full shape keeps the restart/deploy-only fields.
-	for _, k := range []string{"mode", "model_count", "safe_mode", "transient_retries", "max_messages_per_day", "upstream_sync", "base_url"} {
+	for _, k := range []string{"mode", "model_count", "safe_mode", "transient_retries", "upstream_sync", "base_url"} {
 		if _, ok := full[k]; !ok {
 			t.Errorf("full overview missing %q", k)
 		}
 	}
 	// Live shape omits them but keeps the live numbers.
-	for _, k := range []string{"mode", "model_count", "safe_mode", "transient_retries", "max_messages_per_day", "upstream_sync", "base_url", "models"} {
+	for _, k := range []string{"mode", "model_count", "safe_mode", "transient_retries", "upstream_sync", "base_url", "models"} {
 		if _, ok := live[k]; ok {
 			t.Errorf("live overview carries static %q", k)
 		}
@@ -106,7 +106,7 @@ func TestLiveViewOverviewOmitsStatic(t *testing.T) {
 		t.Fatalf("live overview tokens len = %d, want 1", len(toks))
 	}
 	card, _ := toks[0].(map[string]any)
-	for _, k := range []string{"email", "account_id", "daily_limit", "standing_level", "has_standing", "referral_code", "has_referral"} {
+	for _, k := range []string{"email", "account_id", "standing_level", "has_standing", "referral_code", "has_referral"} {
 		if _, ok := card[k]; ok {
 			t.Errorf("live token card carries static %q", k)
 		}
@@ -123,7 +123,7 @@ func TestLiveViewOverviewOmitsStatic(t *testing.T) {
 		t.Fatalf("full overview tokens len = %d, want 1", len(fullToks))
 	}
 	fullCard, _ := fullToks[0].(map[string]any)
-	for _, k := range []string{"index", "session_status", "daily_limit", "has_standing", "has_referral"} {
+	for _, k := range []string{"index", "session_status", "has_standing", "has_referral"} {
 		if _, ok := fullCard[k]; !ok {
 			t.Errorf("full token card missing %q", k)
 		}
@@ -249,21 +249,19 @@ func TestLiveViewCarriesSessionCountdown(t *testing.T) {
 	}
 }
 
-// TestTokensLimitsSyncLive verifies that both full tokens and live hot-poll tokens
-// carry RequestsPerMinuteLimit and RequestsPerDayLimit when configured.
-func TestTokensLimitsSyncLive(t *testing.T) {
+// TestTokensPerDaySyncLive verifies that both full tokens and live hot-poll
+// tokens carry the Pacific-day request count.
+func TestTokensPerDaySyncLive(t *testing.T) {
 	mock := testutil.NewMock()
 	t.Cleanup(mock.Close)
 	cfg := &config.Config{
-		AuthTokens:           []string{"tok-0"},
-		ListenAddr:           "127.0.0.1:3457",
-		RotationInterval:     time.Hour,
-		RequestTimeout:       15 * time.Minute,
-		SessionCallTimeout:   5 * time.Second,
-		RegistryRefresh:      6 * time.Hour,
-		UpstreamBaseURL:      mock.URL(),
-		MaxRequestsPerMinute: 15,
-		MaxRequestsPerDay:    1000,
+		AuthTokens:         []string{"tok-0"},
+		ListenAddr:         "127.0.0.1:3457",
+		RotationInterval:   time.Hour,
+		RequestTimeout:     15 * time.Minute,
+		SessionCallTimeout: 5 * time.Second,
+		RegistryRefresh:    6 * time.Hour,
+		UpstreamBaseURL:    mock.URL(),
 	}
 	client, err := upstream.New("tok-0", cfg)
 	if err != nil {
@@ -289,23 +287,15 @@ func TestTokensLimitsSyncLive(t *testing.T) {
 	if len(fullToks) != 1 {
 		t.Fatalf("full tokens len = %d, want 1", len(fullToks))
 	}
-	fullCard, _ := fullToks[0].(map[string]any)
-	if got := int(fullCard["requests_per_minute_limit"].(float64)); got != 15 {
-		t.Errorf("full requests_per_minute_limit = %d, want 15", got)
-	}
-	if got := int(fullCard["requests_per_day_limit"].(float64)); got != 1000 {
-		t.Errorf("full requests_per_day_limit = %d, want 1000", got)
+	if _, ok := fullToks[0].(map[string]any)["requests_per_day"]; !ok {
+		t.Error("full card missing requests_per_day")
 	}
 
 	liveToks, _ := live["tokens"].([]any)
 	if len(liveToks) != 1 {
 		t.Fatalf("live tokens len = %d, want 1", len(liveToks))
 	}
-	liveCard, _ := liveToks[0].(map[string]any)
-	if got := int(liveCard["requests_per_minute_limit"].(float64)); got != 15 {
-		t.Errorf("live requests_per_minute_limit = %d, want 15", got)
-	}
-	if got := int(liveCard["requests_per_day_limit"].(float64)); got != 1000 {
-		t.Errorf("live requests_per_day_limit = %d, want 1000", got)
+	if _, ok := liveToks[0].(map[string]any)["requests_per_day"]; !ok {
+		t.Error("live card missing requests_per_day")
 	}
 }

@@ -28,19 +28,14 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			"ActiveRuns":           snap.ActiveRuns,
 			"Requests":             snap.Requests,
 			"Messages24h":          snap.Messages24h,
-			"DailyLimit":           snap.DailyLimit,
-			"UsagePct":             snap.UsagePct,
-			// Spend ledger (issue #87/#122): Pacific-day/week/month buckets
-			// plus the advisory MAX_SPEND_PER_DAY ceiling (SpendLimit/
-			// SpendPct, informational — the upstream $ ceilings are
-			// server-enforced) and the spend_limited refusal counter.
+			// Spend ledger: Pacific-day/week/month buckets plus the
+			// spend_limited refusal counter. The upstream $ ceilings are
+			// server-enforced; the ledger only records events.
 			"Spend24h":                  snap.Spend24h,
 			"SpendDay":                  snap.SpendDay,
 			"SpendWeek":                 snap.SpendWeek,
 			"SpendMonth":                snap.SpendMonth,
 			"SpendDayStart":             snap.SpendDayStart,
-			"SpendLimit":                snap.SpendLimit,
-			"SpendPct":                  snap.SpendPct,
 			"SpendLimited":              snap.SpendLimited,
 			"RiskLevel":                 snap.RiskLevel,
 			"country":                   snap.CountryCode,
@@ -84,7 +79,6 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			"requests":       bs.Requests,
 			"model":          bs.Model,
 			"spend_day":      bs.SpendDay,
-			"spend_pct":      bs.SpendPct,
 		}
 		if bs.CooldownUntil.After(time.Now()) {
 			entry["cooldown_until"] = bs.CooldownUntil

@@ -272,7 +272,7 @@ func TestDashboardConfigLoopbackAllowedWhenUnset(t *testing.T) {
 	// A save from a loopback client succeeds (temp dir: never touch a repo
 	// .env). No process env override (TestMain strips ambient config env).
 	t.Chdir(t.TempDir())
-	body := "SAFE_MODE=false\nMAX_MESSAGES_PER_DAY=7\n"
+	body := "SAFE_MODE=false\nTRANSIENT_RETRIES=3\n"
 	save := httptest.NewRequest(http.MethodPost, "/admin/config", strings.NewReader(body))
 	save.Header.Set("Content-Type", "text/plain")
 	save.RemoteAddr = "127.0.0.1:1234"
@@ -676,7 +676,7 @@ func TestDashboardConfigSave(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)
 
-	content := "# my config\nMAX_MESSAGES_PER_DAY=7\nSAFE_MODE=true\n"
+	content := "# my config\nTRANSIENT_RETRIES=3\nSAFE_MODE=true\n"
 	resp := postConfig(t, ts.URL, cookie, content)
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
@@ -790,7 +790,7 @@ func TestDashboardConfigPage(t *testing.T) {
 // rewrite a Windows-edited file with mixed line endings.
 func TestDashboardTokenAddPreservesCRLF(t *testing.T) {
 	t.Chdir(t.TempDir())
-	seed := "SAFE_MODE=true\r\nMAX_MESSAGES_PER_DAY=7\r\n"
+	seed := "SAFE_MODE=true\r\nTRANSIENT_RETRIES=3\r\n"
 	if err := os.WriteFile(".env", []byte(seed), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -920,7 +920,7 @@ func TestDashboardConfigSaveURLEncoded(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)
 
-	content := "# my config\nMAX_MESSAGES_PER_DAY=7\nSAFE_MODE=true\n"
+	content := "# my config\nTRANSIENT_RETRIES=3\nSAFE_MODE=true\n"
 	resp := postForm(t, ts.URL, cookie, "/admin/config", url.Values{"content": {content}})
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
@@ -938,47 +938,29 @@ func TestDashboardConfigSaveURLEncoded(t *testing.T) {
 	}
 }
 
-// TestDashboardConfigSaveSyncsLimitsToLiveTokens proves that saving
-// MAX_REQUESTS_PER_MINUTE and MAX_REQUESTS_PER_DAY via POST /admin/config
-// immediately updates both the full /admin/api/tokens and the hot-poll
-// /admin/api/tokens?view=live endpoints with the new limits.
-func TestDashboardConfigSaveSyncsLimitsToLiveTokens(t *testing.T) {
+// TestDashboardConfigSaveSyncsPerDayToLiveTokens proves that saving a live
+// knob via POST /admin/config immediately updates both the full
+// /admin/api/tokens and the hot-poll /admin/api/tokens?view=live endpoints
+// with the per-day display.
+func TestDashboardConfigSaveSyncsPerDayToLiveTokens(t *testing.T) {
 	t.Chdir(t.TempDir())
 	ts := dashboardServer(t, "secret", func(c *config.Config) {
 		c.AuthTokens = []string{"tok-0"}
-		c.MaxRequestsPerMinute = 30
-		c.MaxRequestsPerDay = 1500
 	})
 	cookie := authedCookie(t, ts)
 	respPre := get(t, ts.URL+"/admin/api/tokens?view=live", cookie)
 	if respPre.StatusCode != http.StatusOK {
 		t.Fatalf("pre-save status = %d", respPre.StatusCode)
 	}
-	var pre map[string]any
-	if err := json.Unmarshal([]byte(bodyOf(t, respPre)), &pre); err != nil {
-		t.Fatal(err)
-	}
-	preToks := pre["tokens"].([]any)
-	if len(preToks) != 1 {
-		t.Fatalf("pre tokens len = %d, want 1", len(preToks))
-	}
-	preCard := preToks[0].(map[string]any)
-	if got := int(preCard["requests_per_minute_limit"].(float64)); got != 30 {
-		t.Errorf("initial requests_per_minute_limit = %d, want 30", got)
-	}
-	if got := int(preCard["requests_per_day_limit"].(float64)); got != 1500 {
-		t.Errorf("initial requests_per_day_limit = %d, want 1500", got)
-	}
+	_ = respPre.Body.Close()
 
-	// Save new limits: 15 req/min, 1000 req/day.
-	content := "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secret\nMAX_REQUESTS_PER_MINUTE=15\nMAX_REQUESTS_PER_DAY=1000\n"
+	content := "AUTH_TOKENS=tok-0\nADMIN_TOKEN=secret\nTOKEN_MAX_CONCURRENT=1\n"
 	saveResp := postForm(t, ts.URL, cookie, "/admin/config", url.Values{"content": {content}})
 	if saveResp.StatusCode != http.StatusOK {
-		t.Fatalf("save status = %d, want 200", saveResp.StatusCode)
+		t.Fatalf("save status = %d", saveResp.StatusCode)
 	}
 	_ = saveResp.Body.Close()
 
-	// Hot-poll ?view=live must immediately reflect the new limits.
 	respLive := get(t, ts.URL+"/admin/api/tokens?view=live", cookie)
 	if respLive.StatusCode != http.StatusOK {
 		t.Fatalf("live status = %d", respLive.StatusCode)
@@ -991,33 +973,8 @@ func TestDashboardConfigSaveSyncsLimitsToLiveTokens(t *testing.T) {
 	if len(liveToks) != 1 {
 		t.Fatalf("live tokens len = %d, want 1", len(liveToks))
 	}
-	liveCard := liveToks[0].(map[string]any)
-	if got := int(liveCard["requests_per_minute_limit"].(float64)); got != 15 {
-		t.Errorf("live requests_per_minute_limit = %d, want 15", got)
-	}
-	if got := int(liveCard["requests_per_day_limit"].(float64)); got != 1000 {
-		t.Errorf("live requests_per_day_limit = %d, want 1000", got)
-	}
-
-	// Full /admin/api/tokens must also reflect the new limits.
-	respFull := get(t, ts.URL+"/admin/api/tokens", cookie)
-	if respFull.StatusCode != http.StatusOK {
-		t.Fatalf("full status = %d", respFull.StatusCode)
-	}
-	var full map[string]any
-	if err := json.Unmarshal([]byte(bodyOf(t, respFull)), &full); err != nil {
-		t.Fatal(err)
-	}
-	fullToks := full["tokens"].([]any)
-	if len(fullToks) != 1 {
-		t.Fatalf("full tokens len = %d, want 1", len(fullToks))
-	}
-	fullCard := fullToks[0].(map[string]any)
-	if got := int(fullCard["requests_per_minute_limit"].(float64)); got != 15 {
-		t.Errorf("full requests_per_minute_limit = %d, want 15", got)
-	}
-	if got := int(fullCard["requests_per_day_limit"].(float64)); got != 1000 {
-		t.Errorf("full requests_per_day_limit = %d, want 1000", got)
+	if _, ok := liveToks[0].(map[string]any)["requests_per_day"]; !ok {
+		t.Error("live card missing requests_per_day")
 	}
 }
 

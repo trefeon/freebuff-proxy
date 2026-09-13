@@ -50,14 +50,6 @@
   const RL_IP_DESC =
     "Maximum requests per second allowed from any single client IP address. Prevents rapid agent loops from depleting the pool. Set to 0 for no cap.";
   const RL_IP_HINT = "0 = no cap (recommended for a single-user gateway)";
-  const MAX_MIN_LABEL = "Max Requests per Minute (per account)";
-  const MAX_MIN_DESC =
-    "Per-token cap on admitted chat requests in a rolling 60s window. Throttles the request rate upstream actually observes — a runaway loop locks within a minute and the pool rolls to the next account. 0 = no cap, empty = default (30).";
-  const MAX_MIN_HINT = "0 = no cap · recommended 30";
-  const MAX_DAY_LABEL = "Max Requests per Day (per account)";
-  const MAX_DAY_DESC =
-    "Per-token cap on successful chat requests per Pacific day. A capped account is skipped and the pool rolls to the next one; all tokens unlock at Pacific midnight — the same instant upstream resets its daily quota windows. 0 = no cap, empty = default (1500).";
-  const MAX_DAY_HINT = "0 = no cap · recommended 1500";
 
   // Rotation copy (relocated verbatim from Tokens.svelte).
   const ROT_SECTION = "Rotation";
@@ -115,19 +107,7 @@
   let showIp = $derived(
     hit("RATE_LIMIT_PER_IP", RL_IP_LABEL, RL_IP_DESC, RL_IP_HINT),
   );
-  let showMin = $derived(
-    hit("MAX_REQUESTS_PER_MINUTE", MAX_MIN_LABEL, MAX_MIN_DESC, MAX_MIN_HINT),
-  );
-  let showDay = $derived(
-    hit("MAX_REQUESTS_PER_DAY", MAX_DAY_LABEL, MAX_DAY_DESC, MAX_DAY_HINT),
-  );
-  let visibleRateKeys = $derived(
-    [
-      showIp ? "RATE_LIMIT_PER_IP" : null,
-      showMin ? "MAX_REQUESTS_PER_MINUTE" : null,
-      showDay ? "MAX_REQUESTS_PER_DAY" : null,
-    ].filter((k) => k !== null),
-  );
+  let visibleRateKeys = $derived(showIp ? ["RATE_LIMIT_PER_IP"] : []);
   // The bespoke section counts as one row for the "N of M" search count.
   let visible = $derived((showRotation ? 1 : 0) + visibleRateKeys.length);
   $effect(() => {
@@ -360,124 +340,6 @@
           </div>
           <p class="text-[10px] text-[var(--fp-dim)] mt-1">
             {$tr(RL_IP_HINT)}
-          </p>
-        </div>
-      </SettingsRow>
-    {/if}
-
-    {#if showMin}
-      <!-- Per-token Per-Minute Request Limit -->
-      <SettingsRow
-        first={visibleRateKeys[0] === "MAX_REQUESTS_PER_MINUTE"}
-        last={visibleRateKeys[visibleRateKeys.length - 1] ===
-          "MAX_REQUESTS_PER_MINUTE"}
-        label={$tr(MAX_MIN_LABEL)}
-        description={$tr(MAX_MIN_DESC)}
-      >
-        {#snippet badge()}
-          <code
-            class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
-            >MAX_REQUESTS_PER_MINUTE</code
-          >
-          {#if !env.MAX_REQUESTS_PER_MINUTE}
-            <span
-              class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
-              >{$tr("default")}</span
-            >
-          {/if}
-          {#if sources.MAX_REQUESTS_PER_MINUTE === "db"}
-            <DbBadge settingKey="MAX_REQUESTS_PER_MINUTE" {onReset} />
-          {/if}
-        {/snippet}
-        {#snippet extra()}
-          <DbOverrideSave
-            settingKey="MAX_REQUESTS_PER_MINUTE"
-            value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
-            {onSaved}
-          />
-        {/snippet}
-
-        <div class="w-full sm:w-44">
-          <div class="relative">
-            <input
-              type="number"
-              min="0"
-              step="1"
-              aria-label="MAX_REQUESTS_PER_MINUTE"
-              class="fp-input w-full !text-xs !py-1.5 !pr-14"
-              placeholder="30"
-              value={formValues.MAX_REQUESTS_PER_MINUTE ?? "30"}
-              oninput={(e) => {
-                const val = e.currentTarget.value.trim();
-                onField("MAX_REQUESTS_PER_MINUTE", val);
-              }}
-            />
-            <span
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none"
-              >req/min</span
-            >
-          </div>
-          <p class="text-[10px] text-[var(--fp-dim)] mt-1">
-            {$tr(MAX_MIN_HINT)}
-          </p>
-        </div>
-      </SettingsRow>
-    {/if}
-
-    {#if showDay}
-      <!-- Per-token Per-Day Request Limit -->
-      <SettingsRow
-        first={visibleRateKeys[0] === "MAX_REQUESTS_PER_DAY"}
-        last={visibleRateKeys[visibleRateKeys.length - 1] ===
-          "MAX_REQUESTS_PER_DAY"}
-        label={$tr(MAX_DAY_LABEL)}
-        description={$tr(MAX_DAY_DESC)}
-      >
-        {#snippet badge()}
-          <code
-            class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-mono"
-            >MAX_REQUESTS_PER_DAY</code
-          >
-          {#if !env.MAX_REQUESTS_PER_DAY}
-            <span
-              class="text-[10px] px-1.5 py-0.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-surface-2)] text-[var(--fp-dim)] font-semibold uppercase tracking-wider shrink-0"
-              >{$tr("default")}</span
-            >
-          {/if}
-          {#if sources.MAX_REQUESTS_PER_DAY === "db"}
-            <DbBadge settingKey="MAX_REQUESTS_PER_DAY" {onReset} />
-          {/if}
-        {/snippet}
-        {#snippet extra()}
-          <DbOverrideSave
-            settingKey="MAX_REQUESTS_PER_DAY"
-            value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
-            {onSaved}
-          />
-        {/snippet}
-
-        <div class="w-full sm:w-44">
-          <div class="relative">
-            <input
-              type="number"
-              min="0"
-              step="1"
-              aria-label="MAX_REQUESTS_PER_DAY"
-              class="fp-input w-full !text-xs !py-1.5 !pr-14"
-              placeholder="1500"
-              value={formValues.MAX_REQUESTS_PER_DAY ?? "1500"}
-              oninput={(e) => {
-                const val = e.currentTarget.value.trim();
-                onField("MAX_REQUESTS_PER_DAY", val);
-              }}
-            />
-            <span
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-text-muted pointer-events-none"
-              >req/day</span
-            >
-          </div>
-          <p class="text-[10px] text-[var(--fp-dim)] mt-1">
-            {$tr(MAX_DAY_HINT)}
           </p>
         </div>
       </SettingsRow>

@@ -30,7 +30,6 @@ type overviewData struct {
 	ModelCount           int               `json:"model_count"`
 	Uptime               string            `json:"uptime"`
 	SafeMode             bool              `json:"safe_mode"`
-	MaxMessagesPerDay    int               `json:"max_messages_per_day"`
 	TransientRetries     int64             `json:"transient_retries"`
 	FingerprintRotations int64             `json:"fingerprint_rotations"`
 	Tokens               []tokenCard       `json:"tokens"`
@@ -67,41 +66,31 @@ type upstreamFile struct {
 	Status    string `json:"status"` // DRIFT | MISSING_UPSTREAM | SAME
 }
 type tokenCard struct {
-	Index         int    `json:"index"`
-	Email         string `json:"email,omitempty"`
-	AccountID     string `json:"account_id,omitempty"`
-	SessionStatus string `json:"session_status"`
-	AccessTier    string `json:"access_tier,omitempty"`
-	QueuePosition int    `json:"queue_position"`
-	QueueDepth    int    `json:"queue_depth"`
-	ActiveRuns    int    `json:"active_runs"`
-	Requests      int    `json:"requests"`
-	Messages24h   int    `json:"messages_24h"`
-	DailyLimit    int    `json:"daily_limit"`
-	UsagePct      int    `json:"usage_pct"`
-	// Per-token request limits (issue: RPD/RPM): live counters + configured
-	// caps (0 = unlimited) + time until the next Pacific midnight (the
-	// official daily reset) in seconds, so the dashboard can show usage and
-	// lock state per account.
-	RequestsPerMinute      int     `json:"requests_per_minute"`
-	RequestsPerDay         int     `json:"requests_per_day"`
-	RequestsPerMinuteLimit int     `json:"requests_per_minute_limit"`
-	RequestsPerDayLimit    int     `json:"requests_per_day_limit"`
-	RequestsPerDayResetIn  int     `json:"requests_per_day_reset_in"` // seconds
-	RiskLevel              string  `json:"risk_level"`
-	CooldownActive         bool    `json:"cooldown_active"`
-	CooldownUntil          string  `json:"cooldown_until"`
-	Locked                 bool    `json:"locked"`
-	BanType                string  `json:"ban_type,omitempty"`
-	BannedUntil            string  `json:"banned_until,omitempty"`
-	TransientRetries       int64   `json:"transient_retries"`
-	AllowlistSkips         int64   `json:"allowlist_skips,omitempty"`
-	HasStanding            bool    `json:"has_standing"`
-	StandingLevel          string  `json:"standing_level"`
-	StandingLabel          string  `json:"standing_label"`
-	StandingScore          float64 `json:"standing_score"`
-	StandingNextLevel      string  `json:"standing_next_level"`
-	StandingNextLevelAt    string  `json:"standing_next_level_at"`
+	Index               int     `json:"index"`
+	Email               string  `json:"email,omitempty"`
+	AccountID           string  `json:"account_id,omitempty"`
+	SessionStatus       string  `json:"session_status"`
+	AccessTier          string  `json:"access_tier,omitempty"`
+	QueuePosition       int     `json:"queue_position"`
+	QueueDepth          int     `json:"queue_depth"`
+	ActiveRuns          int     `json:"active_runs"`
+	Requests            int     `json:"requests"`
+	Messages24h         int     `json:"messages_24h"`
+	RequestsPerDay      int     `json:"requests_per_day"`
+	RiskLevel           string  `json:"risk_level"`
+	CooldownActive      bool    `json:"cooldown_active"`
+	CooldownUntil       string  `json:"cooldown_until"`
+	Locked              bool    `json:"locked"`
+	BanType             string  `json:"ban_type,omitempty"`
+	BannedUntil         string  `json:"banned_until,omitempty"`
+	TransientRetries    int64   `json:"transient_retries"`
+	AllowlistSkips      int64   `json:"allowlist_skips,omitempty"`
+	HasStanding         bool    `json:"has_standing"`
+	StandingLevel       string  `json:"standing_level"`
+	StandingLabel       string  `json:"standing_label"`
+	StandingScore       float64 `json:"standing_score"`
+	StandingNextLevel   string  `json:"standing_next_level"`
+	StandingNextLevelAt string  `json:"standing_next_level_at"`
 	// Standing cap + earn-back hints (issue #140, FreebuffStandingInfo):
 	// cappedBy/cappedReason name the trust cap holding the level, blurb is
 	// upstream's human explanation, nextSteps the suggested actions.
@@ -237,7 +226,6 @@ type bridgeTokenCard struct {
 	CooldownUntil string         `json:"cooldown_until"`
 	SessionActive bool           `json:"session_active"`
 	SpendDay      float64        `json:"spend_day"`
-	SpendPct      int            `json:"spend_pct"`
 	BanType       string         `json:"ban_type,omitempty"`
 	BannedUntil   string         `json:"banned_until,omitempty"`
 	Freebucks     *freebucksCard `json:"freebucks,omitempty"`
@@ -264,7 +252,6 @@ func bridgeCardFromSnapshot(snap pool.BridgeTokenSnapshot) bridgeTokenCard {
 		CooldownUntil: shortTime(snap.CooldownUntil),
 		SessionActive: snap.SessionActive,
 		SpendDay:      snap.SpendDay,
-		SpendPct:      snap.SpendPct,
 		BanType:       snap.BanType,
 		BannedUntil:   bannedUntil,
 		Freebucks:     freebucksCardFromInfo(snap.Freebucks),
@@ -353,7 +340,6 @@ func (d *Dashboard) overviewData(r *http.Request) overviewData {
 		ModelCount:           len(servedModels(d.reg)),
 		Uptime:               humanDuration(time.Since(d.started)),
 		SafeMode:             cfg.SafeMode,
-		MaxMessagesPerDay:    cfg.MaxMessagesPerDay,
 		TransientRetries:     ps.TransientRetries,
 		FingerprintRotations: ps.FingerprintRotations,
 		BridgeTokens:         d.pool.BridgeCount(),
@@ -379,9 +365,9 @@ func (d *Dashboard) overviewData(r *http.Request) overviewData {
 
 // overviewLiveData is the hot-poll subset of overviewData (issue #322):
 // live numbers only. Restart/deploy-only fields (base_url, mode, models,
-// safe_mode, max_messages_per_day, transient_retries, upstream_sync) and
-// account-stable card fields ride the once-per-mount full fetch; the SPA
-// merges them back over this shape.
+// safe_mode, transient_retries, upstream_sync) and account-stable card
+// fields ride the once-per-mount full fetch; the SPA merges them back over
+// this shape.
 type overviewLiveData struct {
 	Uptime           string            `json:"uptime"`
 	Tokens           []tokenLiveCard   `json:"tokens"`
@@ -636,8 +622,8 @@ func (d *Dashboard) sessionQuotaFor(t pool.TokenSnapshot, sample bool) tokenSess
 
 // tokenLiveDetail is the hot-poll subset of tokenDetail (issue #322): the
 // live card plus the shared session/quota block. Account-stable card fields
-// (email, account_id, daily_limit, standing_*, referral_*) ride the
-// once-per-mount full fetch; the SPA merges them back by index.
+// (email, account_id, standing_*, referral_*) ride the once-per-mount full
+// fetch; the SPA merges them back by index.
 type tokenLiveDetail struct {
 	tokenLiveCard
 	tokenSessionQuota

@@ -95,18 +95,12 @@ func TestPoolPersistRestartRestoresLedger(t *testing.T) {
 	p1.recordChatEntry(entry)
 	p1.recordSpendEntry(entry, 100)
 	p1.recordSpendLimited(0)
-	now := time.Now()
 	p1.admissionsMu.Lock()
 	if p1.admissions == nil {
 		p1.admissions = make(map[string]int)
 	}
 	p1.admissions[modelA] = 0
 	p1.admissionsMu.Unlock()
-	p1.markPersistDirty()
-	p1.bridgeMu.Lock()
-	p1.bridgeDailyUsage = 7
-	p1.bridgeSurvivors = append(p1.bridgeSurvivors, bridgeSurvivor{count: 2, evicted: now})
-	p1.bridgeMu.Unlock()
 	p1.markPersistDirty()
 
 	if err := p1.FlushPoolPersist(); err != nil {
@@ -142,12 +136,6 @@ func TestPoolPersistRestartRestoresLedger(t *testing.T) {
 	if adm != 0 {
 		t.Fatalf("restored admissions[%q] = %d, want 0", modelA, adm)
 	}
-	p2.bridgeMu.Lock()
-	usage, surv := p2.bridgeDailyUsage, len(p2.bridgeSurvivors)
-	p2.bridgeMu.Unlock()
-	if usage != 7 || surv != 1 {
-		t.Fatalf("restored bridge = usage %d survivors %d, want 7/1", usage, surv)
-	}
 }
 
 // TestPoolPersistExpiredWindowsIgnored proves TTL/expiry is enforced on
@@ -170,7 +158,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 	}
 
 	// Age every persisted timestamp 25h into the past (past the 24h usage
-	// window, the 60s rpm window and the survivor
 	// window) and push the spend day bucket 3 days back so it rolls.
 	age := func(ms int64) int64 { return ms - int64(25*time.Hour/time.Millisecond) }
 	mem.mu.Lock()
@@ -184,9 +171,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 			for i := range blob.Usage {
 				blob.Usage[i] = age(blob.Usage[i])
 			}
-			for i := range blob.Requests {
-				blob.Requests[i] = age(blob.Requests[i])
-			}
 			for i := range blob.Spend.Rolling {
 				blob.Spend.Rolling[i].At = age(blob.Spend.Rolling[i].At)
 			}
@@ -195,12 +179,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 			mem.rows[k] = mustMarshalPool(blob)
 		}
 	}
-	// Age the bridge usage row away entirely: drop it so usage restores 0,
-	// and store one expired survivor.
-	delete(mem.rows, poolStateBridgeUsage)
-	mem.rows[poolStateBridgeSurvivors] = mustMarshalPool([]poolSurvivorBlob{
-		{Count: 5, Evicted: age(time.Now().UnixMilli())},
-	})
 	mem.mu.Unlock()
 
 	p2 := newTestPool(t, mock)
@@ -212,12 +190,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 	}
 	if got := p2.spendSnapshot(0).Day; got != 0 {
 		t.Fatalf("stale spend day restored = %d, want 0 (rolled)", got)
-	}
-	p2.bridgeMu.Lock()
-	usage, surv := p2.bridgeDailyUsage, len(p2.bridgeSurvivors)
-	p2.bridgeMu.Unlock()
-	if usage != 0 || surv != 0 {
-		t.Fatalf("expired bridge restored = usage %d survivors %d, want 0/0", usage, surv)
 	}
 }
 

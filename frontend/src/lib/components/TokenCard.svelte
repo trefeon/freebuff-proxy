@@ -225,16 +225,8 @@
   <td class="num">
     <div class="flex flex-col items-end gap-0.5">
       <span class="text-xs text-[var(--fp-muted)]">
-        {#if token.daily_limit > 0}
-          <span class="fp-num text-[var(--fp-text)]"
-            >{token.messages_24h}/{token.daily_limit}</span
-          >
-          {$tr("msgs today")}
-          (<span class="fp-num text-[var(--fp-text)]">{token.usage_pct}%</span>)
-        {:else}
-          <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
-          {$tr("msgs 24h")}
-        {/if}
+        <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
+        {$tr("msgs 24h")}
       </span>
       <span class="text-[11px] text-[var(--fp-dim)]">
         runs <span class="fp-num text-[var(--fp-text)]"

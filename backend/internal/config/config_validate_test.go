@@ -79,9 +79,6 @@ func TestSafeMode(t *testing.T) {
 			t.Fatalf("Load: %v", err)
 		}
 
-		if cfg.MaxMessagesPerDay != 0 {
-			t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited default, no SafeMode preset)", cfg.MaxMessagesPerDay)
-		}
 		if cfg.IdleRotationTimeout != 30*time.Minute {
 			t.Errorf("IdleRotationTimeout = %v, want 30m under SafeMode", cfg.IdleRotationTimeout)
 		}
@@ -90,20 +87,16 @@ func TestSafeMode(t *testing.T) {
 		}
 	})
 
-	t.Run("explicit zero MaxMessagesPerDay under SafeMode", func(t *testing.T) {
+	t.Run("explicit zero knobs under SafeMode", func(t *testing.T) {
 		clearEnv(t)
 		t.Setenv("AUTH_TOKENS", "tok-1")
 		t.Setenv("SAFE_MODE", "true")
-		t.Setenv("MAX_MESSAGES_PER_DAY", "0")
 
 		cfg, err := Load("")
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
 
-		if cfg.MaxMessagesPerDay != 0 {
-			t.Errorf("MaxMessagesPerDay = %d, want 0 (explicit unlimited)", cfg.MaxMessagesPerDay)
-		}
 		if cfg.RequestJitter != 200*time.Millisecond {
 			t.Errorf("RequestJitter = %v, want 200ms under SafeMode", cfg.RequestJitter)
 		}
@@ -128,9 +121,6 @@ func TestSafeMode(t *testing.T) {
 			t.Errorf("RequestJitter = %v, want 0 (explicit 0 beats the preset)", cfg.RequestJitter)
 		}
 		// Unset knobs still get the presets; the daily cap stays unlimited.
-		if cfg.MaxMessagesPerDay != 0 {
-			t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited default, no SafeMode preset)", cfg.MaxMessagesPerDay)
-		}
 		if cfg.TLSFingerprint != "" {
 			t.Errorf("TLSFingerprint = %q, want empty (CLI-faithful, no browser JA3) under SafeMode", cfg.TLSFingerprint)
 		}
@@ -146,9 +136,6 @@ func TestSafeMode(t *testing.T) {
 			t.Fatalf("Load: %v", err)
 		}
 
-		if cfg.MaxMessagesPerDay != 0 {
-			t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited)", cfg.MaxMessagesPerDay)
-		}
 		if cfg.IdleRotationTimeout != 0 {
 			t.Errorf("IdleRotationTimeout = %v, want 0 (disabled)", cfg.IdleRotationTimeout)
 		}
@@ -233,10 +220,6 @@ func TestValidate(t *testing.T) {
 		{"zero session timeout", func(c *Config) { c.SessionCallTimeout = 0 }},
 		{"zero registry refresh", func(c *Config) { c.RegistryRefresh = 0 }},
 		{"bad cost mode", func(c *Config) { c.CostMode = "Free" }},
-		{"negative max messages", func(c *Config) { c.MaxMessagesPerDay = -1 }},
-		{"negative max requests per day", func(c *Config) { c.MaxRequestsPerDay = -1 }},
-		{"negative max requests per minute", func(c *Config) { c.MaxRequestsPerMinute = -1 }},
-		{"negative max spend", func(c *Config) { c.MaxSpendPerDay = -1 }},
 		{"negative rate limit per ip", func(c *Config) { c.RateLimitPerIP = -1 }},
 		{"negative rate limit burst", func(c *Config) { c.RateLimitBurst = -1 }},
 		{"session persist with empty state file", func(c *Config) { c.SessionPersist = true; c.SessionStateFile = "" }},
@@ -309,12 +292,10 @@ func TestValidateModeKnobs(t *testing.T) {
 		RegistryRefresh:    6 * time.Hour,
 	}
 	for _, cost := range []string{"", "free"} {
-		for _, mmd := range []int{0, 1} {
-			c := good
-			c.CostMode, c.MaxMessagesPerDay = cost, mmd
-			if err := c.Validate(); err != nil {
-				t.Errorf("Validate(COST_MODE=%q MAX=%d) = %v, want nil", cost, mmd, err)
-			}
+		c := good
+		c.CostMode = cost
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate(COST_MODE=%q) = %v, want nil", cost, err)
 		}
 	}
 }

@@ -178,112 +178,9 @@ func TestAcquireCancelledMidFailover(t *testing.T) {
 // (bridgeUsageCount / bridgeDailyLimitError), which had zero coverage: a
 // bridge entry capped at MAX_MESSAGES_PER_DAY=1 gets a 429 on the second
 // acquire, and two client tokens have independent caps.
-func TestBridgeDailyMessageCap(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	mock.ChatBody = testutil.SSEEvent(`{"id":"chatcmpl-b1","object":"chat.completion.chunk","created":1,"model":"` + modelA + `","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}]}`)
-	p := newBridgePool(t, mock)
-	cfg := p.cfg.Load()
-	cfg.MaxMessagesPerDay = 1
-	p.cfg.Store(cfg)
-
-	// Client A: the first chat succeeds (and records usage)...
-	lease, err := p.AcquireBridge(context.Background(), "client-a", modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chatOnce(t, p, lease)
-	p.LeaseRelease(lease)
-
-	// ...the second acquire is capped with a 429 + window-reset RetryAfter.
-	_, err = p.AcquireBridge(context.Background(), "client-a", modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("capped acquire: want *upstream.RateLimitError, got %v", err)
-	}
-	if !errors.Is(err, upstream.ErrRateLimited) {
-		t.Error("errors.Is(ErrRateLimited) = false")
-	}
-	if rle.RetryAfter <= 0 || rle.RetryAfter > usageWindow {
-		t.Errorf("RetryAfter = %s, want within (0, 24h]", rle.RetryAfter)
-	}
-	if rle.Limit != 1 || rle.RecentCount != 1 {
-		t.Errorf("quota = %v/%v, want 1/1", rle.RecentCount, rle.Limit)
-	}
-
-	// Client B's cap is independent: its first chat still succeeds even
-	// though client A already used its slot.
-	leaseB, err := p.AcquireBridge(context.Background(), "client-b", modelA)
-	if err != nil {
-		t.Fatalf("client B acquire failed despite independent cap: %v", err)
-	}
-	chatOnce(t, p, leaseB)
-	p.LeaseRelease(leaseB)
-
-	// And client B is capped on its second acquire too.
-	_, err = p.AcquireBridge(context.Background(), "client-b", modelA)
-	if !errors.Is(err, upstream.ErrRateLimited) {
-		t.Fatalf("client B second acquire = %v, want ErrRateLimited", err)
-	}
-	if got := p.bridgeUsageCount(p.bridgeToken("client-a")); got != 1 {
-		t.Errorf("client A usage = %d, want 1 (unchanged by client B)", got)
-	}
-}
 
 // TestBridgeDailyUsageCounter verifies that the global bridgeDailyUsage
 // counter is incremented by bridgeRecordChat and reset by bridgeMaintain.
-func TestBridgeDailyUsageCounter(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	mock.ChatBody = testutil.SSEEvent(`{"id":"chatcmpl-b1","object":"chat.completion.chunk","created":1,"model":"` + modelA + `","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}]}`)
-	p := newBridgePool(t, mock)
-
-	// Create a bridge entry and record 5 chats.
-	lease, err := p.AcquireBridge(context.Background(), "counter-client", modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 5 {
-		chatOnce(t, p, lease)
-	}
-	p.LeaseRelease(lease)
-
-	// Verify global counter matches per-entry usage.
-	p.bridgeMu.Lock()
-	got := p.bridgeDailyUsage
-	p.bridgeMu.Unlock()
-	if got != 5 {
-		t.Fatalf("bridgeDailyUsage = %d, want 5", got)
-	}
-	entry := p.bridgeToken("counter-client")
-	if got := p.bridgeUsageCount(entry); got != 5 {
-		t.Fatalf("per-entry usage = %d, want 5", got)
-	}
-
-	// Set BridgeDailyLimit=3; AcquireBridge must return an error.
-	cfg := p.cfg.Load()
-	cfg.BridgeDailyLimit = 3
-	p.cfg.Store(cfg)
-	_, err = p.AcquireBridge(context.Background(), "counter-client", modelA)
-	if err == nil {
-		t.Fatal("expected error for bridge daily limit, got nil")
-		return
-	}
-	if !strings.Contains(err.Error(), "daily limit") {
-		t.Fatalf("error = %q, want substring 'daily limit'", err)
-	}
-
-	// Run bridgeMaintain to trigger the counter reset (no entries evict
-	// since the entry was just used). The counter should recompute from
-	// live entries (still 5, all within the 24h window).
-	p.bridgeMaintain(context.Background(), false)
-	p.bridgeMu.Lock()
-	got = p.bridgeDailyUsage
-	p.bridgeMu.Unlock()
-	if got != 5 {
-		t.Fatalf("after maintain: bridgeDailyUsage = %d, want 5", got)
-	}
-}
 
 // TestBridgeIdlePause is the regression guard for the bridge idle bug:
 // AcquireBridge never updated p.lastActive, so IDLE_ROTATION_TIMEOUT was
@@ -924,39 +821,6 @@ func TestUnlockToken(t *testing.T) {
 // TestDailyCapExactRetryAfter pins the daily-cap RetryAfter exactly: with a
 // known oldest usage timestamp, usageResetIn is time.Until(oldest+24h) (the
 // moment the slot frees) — the existing tests only bounds-check (0, 24h].
-func TestDailyCapExactRetryAfter(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPool(t, mock)
-	cfg := p.cfg.Load()
-	cfg.MaxMessagesPerDay = 1
-	p.cfg.Store(cfg)
-
-	// Seed usage with a KNOWN oldest timestamp.
-	oldest := time.Now().Add(-2 * time.Hour)
-	p.roster.mu.Lock()
-	(*p.roster.Load())[0].ledger.usage = []time.Time{oldest}
-	p.roster.mu.Unlock()
-
-	want := time.Until(oldest.Add(usageWindow))
-	got := p.usageResetIn(0)
-	if d := got - want; d < -time.Second || d > time.Second {
-		t.Errorf("usageResetIn = %v, want ~%v (until oldest+24h)", got, want)
-	}
-	if got <= 0 {
-		t.Fatalf("usageResetIn = %v, want > 0", got)
-	}
-
-	// The surfaced 429 carries the same exact reset.
-	_, err := p.Acquire(context.Background(), modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("want *upstream.RateLimitError, got %v", err)
-	}
-	if d := rle.RetryAfter - want; d < -time.Second || d > time.Second {
-		t.Errorf("RetryAfter = %v, want ~%v (until oldest+24h)", rle.RetryAfter, want)
-	}
-}
 
 // TestCooldownAfterBanClearsBanMemory is the pool-level pin for the
 // Cooldown bug (see runs.TestCooldownClearsBanAndCountryWindows): after a

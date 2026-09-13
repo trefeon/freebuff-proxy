@@ -149,10 +149,18 @@ func TestRefreshTokenRefundDropsOnAccountSwitch(t *testing.T) {
 		res, err := p.RefreshTokenRefund(ctx, 0)
 		done <- outcome{res, err}
 	}()
+	// consumed tracks arrivals already attributed to counted DELETEs. Each
+	// DELETE sends exactly one arrival, so consuming in order keeps the
+	// channel in sync with the counter: a later wait cannot mistake a
+	// stale buffered arrival for a new DELETE. (The old form seeded from
+	// deletes.Load() but consumed from the channel, so a wait issued
+	// after its DELETEs had already arrived could return on stale
+	// arrivals — e.g. waitDeletes(3) returning with only 2 DELETEs, which
+	// then surfaced as Settled instead of Dropped.)
+	var consumed int64
 	waitDeletes := func(n int64, what string) {
 		t.Helper()
-		seen := deletes.Load()
-		for i := seen; i < n; i++ {
+		for ; consumed < n; consumed++ {
 			select {
 			case <-arrived:
 			case <-time.After(5 * time.Second):

@@ -40,15 +40,10 @@ import (
 	"freebuff-proxy/backend/internal/upstream"
 )
 
-// usageWindow is the rolling window for the per-token daily message cap
-// (MAX_MESSAGES_PER_DAY): a token may send at most N successful chat
-// requests per 24h of usage history.
+// usageWindow is the rolling window of per-token successful chat history:
+// it feeds the dashboard's messages_24h display. No local cap reads it —
+// upstream quota/429 is the brake.
 const usageWindow = 24 * time.Hour
-
-// rpmWindow is the rolling window for the per-token per-minute request cap
-// (MAX_REQUESTS_PER_MINUTE): a token may admit at most N chat requests per
-// 60s of admission history.
-const rpmWindow = 60 * time.Second
 
 // shutdownTimeout bounds each token's Shutdown during Pool.Shutdown when the
 // caller's context carries no earlier deadline.
@@ -113,21 +108,12 @@ type TokenSnapshot struct {
 	SessionExpiresAt time.Time `json:"session_expires_at,omitempty"`
 	ActiveRuns       int
 	Requests         int
-	Messages24h      int // successful chats in the last 24h (MAX_MESSAGES_PER_DAY usage)
-	DailyLimit       int // configured MAX_MESSAGES_PER_DAY (0 = unlimited)
-	UsagePct         int // percentage of daily limit used (0 when unlimited)
-	// RequestsPerMinute / RequestsPerDay are the local per-token request
-	// counters (MAX_REQUESTS_PER_MINUTE: admitted chats in the rolling 60s
-	// window; MAX_REQUESTS_PER_DAY: successful chats in the current Pacific
-	// day, rolling at Pacific midnight). The ...Limit fields carry the
-	// configured caps (0 = unlimited) and RequestsPerDayResetIn the time
-	// until the next Pacific midnight (the official daily reset instant).
-	RequestsPerMinute      int           `json:"requests_per_minute"`
-	RequestsPerDay         int           `json:"requests_per_day"`
-	RequestsPerMinuteLimit int           `json:"requests_per_minute_limit"`
-	RequestsPerDayLimit    int           `json:"requests_per_day_limit"`
-	RequestsPerDayResetIn  time.Duration `json:"requests_per_day_reset_in"`
-	RiskLevel              string        // "low", "moderate", "high", "critical" account safety indicator (#6)
+	Messages24h      int // successful chats in the last 24h (dashboard display; upstream quota/429 is the enforcement)
+	// RequestsPerDay is the per-token successful-chat count in the current
+	// Pacific day, rolling at Pacific midnight. Read by the dashboard
+	// per-day display and the maturity client-active skip.
+	RequestsPerDay int    `json:"requests_per_day"`
+	RiskLevel      string // "low", "moderate", "high", "critical" account safety indicator (#6)
 	// Spend24h / SpendDay / SpendWeek / SpendMonth are the local per-token
 	// spend ledger (issue #87/#122): tokens spent in the rolling 24h window
 	// and the current Pacific day/week/month buckets (with rollover —
@@ -140,15 +126,9 @@ type TokenSnapshot struct {
 	SpendDayStart   time.Time
 	SpendWeekStart  time.Time
 	SpendMonthStart time.Time
-	// SpendLimit is the configured MAX_SPEND_PER_DAY ADVISORY ceiling in
-	// ledger units (0 = unlimited). Never enforced: the upstream $ ceilings
-	// ($15 full / $5 limited / $0.50 restricted, server-enforced, issue
-	// #122) are the real gate and the proxy cannot know the account's
-	// restricted cohort. SpendPct is the Pacific-day bucket's percentage of
-	// SpendLimit (0 when unlimited). SpendLimited counts upstream
-	// spend_limited refusals observed for this token since process start.
-	SpendLimit   int64
-	SpendPct     int
+	// SpendLimited counts upstream spend_limited refusals observed for this
+	// token since process start. The upstream $ ceilings are server-enforced;
+	// the ledger only records the events.
 	SpendLimited int
 	// CountryCode / CountryBlockReason are the token's last known upstream
 	// region-block state. CountryBlockReason is non-empty when the account
@@ -331,19 +311,6 @@ type Pool struct {
 	// arrive simultaneously.
 	bridgeCreateGate chan struct{}
 
-	// bridgeDailyUsage tracks the total number of successful chats across
-	// ALL bridge entries for the BRIDGE_DAILY_LIMIT global cap.
-	// Guarded by bridgeMu.
-	bridgeDailyUsage int
-
-	// bridgeSurvivors preserves the 24h-window usage of evicted bridge
-	// entries so an eviction does not reset an active client's contribution
-	// to the global BRIDGE_DAILY_LIMIT between maintain recomputes
-	// (review 2026-08-31 P3). Bounded; survivors expire after one usage
-	// window. Guarded by bridgeMu. Type and helpers live in
-	// bridge_cache.go.
-	bridgeSurvivors []bridgeSurvivor
-
 	// unfit is the per-(egress, model) unfit registry (issue #74): models
 	// refused upstream with limited_ip on this egress are marked unfit for
 	// modelUnfitTTL so new requests are refused fast (409 model_ip_limited)
@@ -423,9 +390,9 @@ type Pool struct {
 	storeStateFile      string
 
 	// Runtime persistence (pool_persist.go, DB-unified-storage):
-	// write-through cache of the allowlisted counters (ledger counters,
-	// admissions counts, bridge daily usage + survivors, burst hits)
-	// through the PoolPersist interface. nil disables (in-memory only).
+	// write-through cache of the allowlisted counters (usage and Pacific-day
+	// request ledgers, session spend buckets, admissions counts) through
+	// the PoolPersist interface. nil disables (in-memory only).
 	// persistDirty is set lock-free on every mutation; the maintain tick
 	// plus a best-effort Shutdown pass flush it in the background, so the
 	// request hot path never blocks on the store.
@@ -1099,17 +1066,13 @@ func (p *Pool) Chat(ctx context.Context, lease *Lease, opts upstream.ChatOptions
 		return nil, errors.New("pool: chat: invalid lease")
 	}
 	rc, err := t.client.ChatCompletions(ctx, opts, body)
-	// Per-minute request accounting (MAX_REQUESTS_PER_MINUTE) happens at
-	// lease-grant time in Acquire/AcquireBridge — atomically, so a burst
-	// cannot pass the cap before any record lands. Only the success-side
-	// records (daily message cap, Pacific-day request cap) live here.
+	// Only the success-side usage records live here: the rolling 24h chat
+	// history that feeds the dashboard's messages_24h display and the
+	// Pacific-day request count for the per-day display and maturity skip.
+	// Bridge entries keep no local ledger — their pacing is the live-turn
+	// slot plus the FIFO queue. Upstream quota/429 is the enforcement.
 	if err == nil {
-		if t.bridge != nil {
-			// Only chats that actually went upstream count against the
-			// daily cap; errors are not recorded. The Pacific-day request
-			// count (MAX_REQUESTS_PER_DAY) rides the same success path.
-			p.bridgeRecordChat(t.bridge)
-		} else if t.entry != nil {
+		if t.entry != nil {
 			p.recordChatEntry(t.entry)
 		}
 		p.requestsServed.Add(1)

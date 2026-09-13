@@ -18,8 +18,6 @@ function tokenRow(
     active_runs: 0,
     requests: 0,
     messages_24h: 0,
-    daily_limit: 0,
-    usage_pct: 0,
     risk_level: "low",
     cooldown_active: false,
     cooldown_until: "",
@@ -713,25 +711,8 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       f,
       {
         tokens: tokensPayload([
-          tokenRow(0, {
-            has_quota: true,
-            quota: [],
-            requests_per_minute: 2,
-            requests_per_minute_limit: 30,
-            requests_per_day: 5,
-            requests_per_day_limit: 1500,
-            requests_per_day_reset_in: 3600,
-          }),
-          tokenRow(1, {
-            has_quota: true,
-            quota: [],
-            requests_per_minute: 12,
-            requests_per_minute_limit: 30,
-            // Day-capped: the card shows the Pacific-midnight reset countdown.
-            requests_per_day: 1500,
-            requests_per_day_limit: 1500,
-            requests_per_day_reset_in: 3600,
-          }),
+          tokenRow(0, { has_quota: true, quota: [] }),
+          tokenRow(1, { has_quota: true, quota: [] }),
         ]),
       },
       { loginPage: true },
@@ -765,12 +746,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
     // The accounting revamp notice is gone from this page (no per-card
     // explainers; the served-models list lives once on the Models tab).
     await expect(page.getByText("Meet Freebucks")).toHaveCount(0);
-    await expect(page.getByText("Unmetered Models")).toHaveCount(0);
-    // Compact rows: one per pooled account; a day-capped account keeps the
-    // status chip while the countdown lives once in the shared strip.
     await expect(page.getByTestId("account-row")).toHaveCount(2);
-    await expect(page.getByText("daily limit reached")).toHaveCount(1);
-    await expect(page.getByTestId("reset-strip")).toHaveCount(0);
   });
 
   // ---------------------------------------------------------------------------
@@ -782,17 +758,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
       page,
       f,
       {
-        tokens: tokensPayload([
-          tokenRow(0, {
-            has_quota: true,
-            quota: [],
-            requests_per_minute: 2,
-            requests_per_minute_limit: 30,
-            requests_per_day: 5,
-            requests_per_day_limit: 1500,
-            requests_per_day_reset_in: 3600,
-          }),
-        ]),
+        tokens: tokensPayload([tokenRow(0, { has_quota: true, quota: [] })]),
       },
       { loginPage: true },
     );
@@ -814,13 +780,7 @@ test.describe("operator UX journey (hermetic mocks)", () => {
               active_runs: 0,
               requests: 0,
               messages_24h: 0,
-              usage_pct: 0,
               risk_level: "low",
-              requests_per_minute: 2,
-              requests_per_minute_limit: 30,
-              requests_per_day: 5,
-              requests_per_day_limit: 1500,
-              requests_per_day_reset_in: 3600,
               session_instance: "",
               session_model: "",
               session_remaining_seconds: 0,

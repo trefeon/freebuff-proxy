@@ -1,10 +1,9 @@
 package pool
 
-// Unlimited-by-default throttle tests: every local throttle treats 0 as
-// unlimited (the upstream quota/429 is the natural brake), while an
-// explicit value still enforces. Covers the per-minute gate, the per-day
-// gate, and the live-turn slot cap (which paces both pooled and bridge
-// lanes).
+// Burst regression tests: no local request/message/spend cap remains --
+// upstream quota/429 is the enforcement and the smart-routing live-turn
+// slot plus FIFO queue paces bursts. Covers the pooled burst, the bridge
+// burst, the per-day display ledger, and the live-turn slot cap.
 
 import (
 	"context"
@@ -18,25 +17,66 @@ import (
 	"freebuff-proxy/backend/internal/upstream"
 )
 
-// TestUnlimitedDefaultPerMinuteGate proves a hand-built pool with no caps
-// configured (zero values, as Load now produces) never trips the
-// per-minute gate: repeated acquires all succeed even past the old cap.
-func TestUnlimitedDefaultPerMinuteGate(t *testing.T) {
+// TestPooledBurstHasNoLocalRefusal proves a pooled burst far past every
+// deleted cap scale (per-minute, per-day, daily-message, spend, bridge
+// global) is never refused locally: with slot gating off, 50 sequential
+// acquires all succeed. Any reintroduced local cap check would refuse
+// partway and fail this test.
+func TestPooledBurstHasNoLocalRefusal(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
-	p := newTestPool(t, mock)
+	p := newTestPoolCfg(t, func(c *config.Config) {
+		c.UpstreamBaseURL = mock.URL()
+		c.TokenMaxConcurrent = 0
+	}, mock)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	for i := range 5 {
+	for i := range 50 {
 		lease, err := p.Acquire(ctx, modelA)
 		if err != nil {
-			t.Fatalf("acquire %d err = %v, want success (default unlimited)", i, err)
+			if errors.Is(err, upstream.ErrRateLimited) {
+				t.Fatalf("acquire %d rate-limited, want success (no local caps remain)", i)
+			}
+			t.Fatalf("acquire %d err = %v, want success (no local caps remain)", i, err)
 		}
+		chatOnce(t, p, lease)
 		p.LeaseRelease(lease)
 	}
-	if got := p.rpmCount(0); got != 5 {
-		t.Errorf("rpmCount = %d, want 5 (admissions still recorded)", got)
+	if got := p.usageCount(0); got != 50 {
+		t.Errorf("usageCount = %d, want 50 (display ledger still records)", got)
+	}
+	if got := p.dayRequestCount(0); got != 50 {
+		t.Errorf("dayRequestCount = %d, want 50 (per-day display still records)", got)
+	}
+	if got := p.requestsServed.Load(); got != 50 {
+		t.Errorf("requestsServed = %d, want 50 (lifetime total still records)", got)
+	}
+}
+
+// TestBridgeBurstHasNoLocalRefusal proves a bridge burst far past every
+// deleted cap scale is never refused locally: with slot gating off, 50
+// sequential bridge acquires for one client token all succeed. Any
+// reintroduced bridge rpm/daily/global cap check would refuse partway.
+func TestBridgeBurstHasNoLocalRefusal(t *testing.T) {
+	mock := testutil.NewMock()
+	defer mock.Close()
+	p := newTestPoolCfg(t, func(c *config.Config) {
+		c.UpstreamBaseURL = mock.URL()
+		c.TokenMaxConcurrent = 0
+	}, mock)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for i := range 50 {
+		lease, err := p.AcquireBridge(ctx, "burst-client", modelA)
+		if err != nil {
+			if strings.Contains(err.Error(), "limit") || errors.Is(err, upstream.ErrRateLimited) {
+				t.Fatalf("bridge acquire %d refused (%v), want success (no local caps remain)", i, err)
+			}
+			t.Fatalf("bridge acquire %d err = %v, want success (no local caps remain)", i, err)
+		}
+		p.LeaseRelease(lease)
 	}
 }
 
@@ -62,56 +102,6 @@ func TestUnlimitedDefaultPerDayGate(t *testing.T) {
 	}
 	if _, err := p.Acquire(ctx, modelA); err != nil {
 		t.Fatalf("acquire past recorded day usage err = %v, want success (default unlimited)", err)
-	}
-}
-
-// TestExplicitPerMinuteCapStillEnforces proves opting in still works:
-// MAX_REQUESTS_PER_MINUTE=2 refuses the third acquire with the existing
-// 429 shape.
-func TestExplicitPerMinuteCapStillEnforces(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPoolCfg(t, func(c *config.Config) { c.MaxRequestsPerMinute = 2 }, mock)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for i := range 2 {
-		lease, err := p.Acquire(ctx, modelA)
-		if err != nil {
-			t.Fatalf("acquire %d err = %v", i, err)
-		}
-		p.LeaseRelease(lease)
-	}
-	_, err := p.Acquire(ctx, modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("third acquire err = %T %v, want *upstream.RateLimitError", err, err)
-	}
-	if !strings.Contains(err.Error(), "per-minute request limit reached") {
-		t.Errorf("error = %q, want per-minute wording", err.Error())
-	}
-}
-
-// TestExplicitPerDayCapStillEnforces proves opting in still works:
-// MAX_REQUESTS_PER_DAY=2 refuses the third acquire after two chats.
-func TestExplicitPerDayCapStillEnforces(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPoolCfg(t, func(c *config.Config) { c.MaxRequestsPerDay = 2 }, mock)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for i := range 2 {
-		lease, err := p.Acquire(ctx, modelA)
-		if err != nil {
-			t.Fatalf("acquire %d err = %v", i, err)
-		}
-		chatOnce(t, p, lease)
-		p.LeaseRelease(lease)
-	}
-	_, err := p.Acquire(ctx, modelA)
-	if !strings.Contains(err.Error(), "daily request limit reached") {
-		t.Errorf("third acquire err = %v, want daily-limit refusal", err)
 	}
 }
 

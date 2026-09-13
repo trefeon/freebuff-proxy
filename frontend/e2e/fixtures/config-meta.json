@@ -544,16 +544,6 @@
     "description": "After an upstream 428 waiting_room_required, fire the reference ad-chain + streak requests before the next session create (best-effort, never blocks)."
   },
   {
-    "key": "BRIDGE_DAILY_LIMIT",
-    "group": "quota",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Global daily chat cap across ALL bridge-mode entries (0 = unlimited)."
-  },
-  {
     "key": "FALLBACK_AFTER_MS",
     "group": "quota",
     "kind": "int",
@@ -573,46 +563,6 @@
     "essential": false,
     "hidden": true,
     "description": "Map model=fallback (comma-separated) to re-route a request when its queue wait passes FALLBACK_AFTER_MS. Empty default: no fallback."
-  },
-  {
-    "key": "MAX_MESSAGES_PER_DAY",
-    "group": "quota",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Per-token daily cap on successful chats (0 = unlimited; the upstream 429 lock is the real enforcement)."
-  },
-  {
-    "key": "MAX_REQUESTS_PER_DAY",
-    "group": "quota",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Per-token cap on successful chat requests per Pacific day (0 = unlimited, the default — the upstream quota/429 is the real enforcement). When set, locks the account until the daily quota reset (Pacific midnight, same instant upstream rolls its windows); capped tokens are skipped and the pool rolls to the next account. Set a value to bound a runaway loop locally."
-  },
-  {
-    "key": "MAX_REQUESTS_PER_MINUTE",
-    "group": "quota",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Per-token cap on admitted chat requests per rolling 60s window (0 = unlimited, the default — the upstream quota/429 is the real enforcement). When set, throttles upstream-visible request bursts; a runaway loop locks within a minute and the pool rolls to the next account. Set a value to bound a runaway loop locally."
-  },
-  {
-    "key": "MAX_SPEND_PER_DAY",
-    "group": "quota",
-    "kind": "int",
-    "default": "0",
-    "restart_only": false,
-    "secret": false,
-    "essential": false,
-    "description": "Advisory per-token Pacific-day spend ceiling in ledger units (0 = unlimited). Never enforced — surfacing only, on /healthz."
   },
   {
     "key": "QUOTA_FALLBACK_MODELS",

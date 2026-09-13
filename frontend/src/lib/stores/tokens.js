@@ -17,9 +17,9 @@ import { createQueryStore } from "./query.js";
 
 const INTERVAL_MS = 10000;
 
-// Issue #322: account-stable fields (email/account_id, daily_limit,
-// standing_*, referral_*) ride a once-per-mount full fetch; the 10s hot poll
-// hits ?view=live and merges over the cached static snapshot. A full refresh
+// Issue #322: account-stable fields (email/account_id, standing_*,
+// referral_*) ride a once-per-mount full fetch; the 10s hot poll hits
+// ?view=live and merges over the cached static snapshot. A full refresh
 // every ~5min (plus every mutation and every full-shape SSE push) picks up
 // mid-session changes (trust updates, referral consumption, pool edits).
 const LIVE_QS = "?view=live";
@@ -39,7 +39,6 @@ const STATIC_TOKEN_KEYS = [
   "email",
   "account_id",
   "access_tier",
-  "daily_limit",
   "has_standing",
   "standing_level",
   "standing_label",
