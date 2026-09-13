@@ -206,7 +206,7 @@ func TestSettingsPostRejects(t *testing.T) {
 	for _, kv := range [][2]string{
 		{"NOPE_NOT_A_KEY", "x"},
 		{"SAFE_MODE", "banana"},
-		{"MAX_REQUESTS_PER_MINUTE", "lots"},
+		{"RATE_LIMIT_BURST", "lots"},
 		{"RATE_LIMIT_PER_IP", "fast"},
 		{"HTTP_READ_TIMEOUT", "soon"},
 		{"LOG_LEVEL", ""},
@@ -221,7 +221,7 @@ func TestSettingsPostRejects(t *testing.T) {
 
 	// Rejections store nothing: the source map stays clean.
 	entries := settingsSources(t, ts, cookie)
-	for _, key := range []string{"SAFE_MODE", "MAX_REQUESTS_PER_MINUTE", "RATE_LIMIT_PER_IP", "HTTP_READ_TIMEOUT"} {
+	for _, key := range []string{"SAFE_MODE", "RATE_LIMIT_BURST", "RATE_LIMIT_PER_IP", "HTTP_READ_TIMEOUT"} {
 		if entries[key]["source"] == "db" {
 			t.Errorf("%s source = db after rejected POSTs, want no overlay row", key)
 		}
@@ -335,17 +335,17 @@ func TestSettingsPostNumericCoercion(t *testing.T) {
 	ts, cookie, csrf := settingsTestServer(t)
 
 	code, res := settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
-		map[string]any{"key": "MAX_REQUESTS_PER_MINUTE", "value": float64(30)})
+		map[string]any{"key": "RATE_LIMIT_BURST", "value": float64(30)})
 	if code != http.StatusOK || res["ok"] != true || res["code"] != "setting_saved" {
 		t.Fatalf("POST int key with 30.0 = %d %v, want 200 setting_saved", code, res)
 	}
 	entries := settingsSources(t, ts, cookie)
-	if entries["MAX_REQUESTS_PER_MINUTE"]["value"] != "30" || entries["MAX_REQUESTS_PER_MINUTE"]["source"] != "db" {
-		t.Fatalf("MAX_REQUESTS_PER_MINUTE entry = %v, want value=30 source=db", entries["MAX_REQUESTS_PER_MINUTE"])
+	if entries["RATE_LIMIT_BURST"]["value"] != "30" || entries["RATE_LIMIT_BURST"]["source"] != "db" {
+		t.Fatalf("RATE_LIMIT_BURST entry = %v, want value=30 source=db", entries["RATE_LIMIT_BURST"])
 	}
 
 	code, res = settingsDo(t, http.MethodPost, ts.URL+"/admin/api/settings", cookie, csrf,
-		map[string]any{"key": "MAX_REQUESTS_PER_MINUTE", "value": 30.5})
+		map[string]any{"key": "RATE_LIMIT_BURST", "value": 30.5})
 	if code != http.StatusBadRequest {
 		t.Fatalf("POST int key with 30.5 = %d %v, want 400", code, res)
 	}
@@ -355,8 +355,8 @@ func TestSettingsPostNumericCoercion(t *testing.T) {
 
 	// The rejected write stores nothing: the effective value is untouched.
 	entries = settingsSources(t, ts, cookie)
-	if entries["MAX_REQUESTS_PER_MINUTE"]["value"] != "30" {
-		t.Errorf("MAX_REQUESTS_PER_MINUTE after rejected POST = %v, want value=30", entries["MAX_REQUESTS_PER_MINUTE"])
+	if entries["RATE_LIMIT_BURST"]["value"] != "30" {
+		t.Errorf("RATE_LIMIT_BURST after rejected POST = %v, want value=30", entries["RATE_LIMIT_BURST"])
 	}
 }
 

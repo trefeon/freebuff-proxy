@@ -21,8 +21,6 @@ function tokenRow(
     active_runs: 0,
     requests: 0,
     messages_24h: 0,
-    daily_limit: 0,
-    usage_pct: 0,
     risk_level: "low",
     cooldown_active: false,
     cooldown_until: "",

@@ -559,7 +559,7 @@ func TestDashboardModeSwitchVerifyFailureRollsBack(t *testing.T) {
 // file preserved — never a silent empty .env.
 func TestDashboardConfigSaveEmptyContentRejected(t *testing.T) {
 	t.Chdir(t.TempDir())
-	original := "SAFE_MODE=true\nMAX_MESSAGES_PER_DAY=7\n"
+	original := "SAFE_MODE=true\nTRANSIENT_RETRIES=3\n"
 	if err := os.WriteFile(".env", []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -627,7 +627,7 @@ func TestDashboardConfigSaveConcurrent(t *testing.T) {
 	ts := dashboardServer(t, "secret", nil)
 	cookie := authedCookie(t, ts)
 
-	contentA := "# config A\nSAFE_MODE=true\nMAX_MESSAGES_PER_DAY=7\n"
+	contentA := "# config A\nSAFE_MODE=true\nTRANSIENT_RETRIES=3\n"
 	contentB := "# config B\nSAFE_MODE=false\nLISTEN_ADDR=127.0.0.1:9999\n"
 
 	var wg sync.WaitGroup

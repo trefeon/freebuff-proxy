@@ -127,20 +127,6 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 		return nil, fmt.Errorf("bridge token %s is locked by administrator", tokenKey(clientToken))
 	}
 
-	// Global bridge daily limit check — before per-entry check, reject
-	// if the total across ALL bridge entries exceeds BRIDGE_DAILY_LIMIT.
-	if cfg.BridgeDailyLimit > 0 {
-		// TOCTOU: snapshot read, then compare after unlock. Worst case: one
-		// extra request past the limit. Acceptable for a best-effort cap.
-		p.bridgeMu.Lock()
-		total := p.bridgeDailyUsage
-		p.bridgeMu.Unlock()
-		if total >= cfg.BridgeDailyLimit {
-			p.logger.Debug("pool: bridge global daily limit reached", "limit", cfg.BridgeDailyLimit, "used", total)
-			return nil, fmt.Errorf("bridge: global daily limit %d reached (%d used)", cfg.BridgeDailyLimit, total)
-		}
-	}
-
 	// Cooldown: skip the entry during its window; surface the remembered
 	// ban/country-block/rate-limit error so the client keeps getting 403/429
 	// instead of a generic failure (mirrors the fixed-token cooldown-skip
@@ -164,23 +150,6 @@ func (p *Pool) AcquireBridge(ctx context.Context, clientToken, model string) (*L
 			}
 			return nil, fmt.Errorf("bridge: token cooling down until %s", until.Format(time.RFC3339))
 		}
-	}
-
-	// Daily rolling cap, per client token (mirrors the fixed-token path).
-	if cfg.MaxMessagesPerDay > 0 && p.bridgeUsageCount(entry) >= cfg.MaxMessagesPerDay {
-		p.logger.Debug("pool: bridge entry daily message limit", "limit", cfg.MaxMessagesPerDay)
-		return nil, p.bridgeDailyLimitError(entry)
-	}
-	// Per-minute request cap (MAX_REQUESTS_PER_MINUTE), per client token.
-	if cfg.MaxRequestsPerMinute > 0 && p.bridgeRpmCount(entry) >= cfg.MaxRequestsPerMinute {
-		p.logger.Debug("pool: bridge entry per-minute request limit", "limit", cfg.MaxRequestsPerMinute)
-		return nil, p.bridgeRpmLimitError(entry)
-	}
-	// Daily request cap (MAX_REQUESTS_PER_DAY), per client token: unlocks at
-	// the next Pacific midnight (the official daily reset instant).
-	if cfg.MaxRequestsPerDay > 0 && p.bridgeDayRequestCount(entry) >= cfg.MaxRequestsPerDay {
-		p.logger.Debug("pool: bridge entry daily request limit", "limit", cfg.MaxRequestsPerDay)
-		return nil, p.bridgeDayRequestLimitError(entry)
 	}
 
 	// Smart-routing live-turn slot (route_smart.go, TOKEN_MAX_CONCURRENT):
@@ -450,18 +419,6 @@ sessionReady:
 	}
 	p.logger.Debug("pool: bridge lease acquired", "model", effectiveModel, "agent", effectiveAgentID, "instance_id", ss.InstanceID,
 		"country", ss.CountryCode)
-	// MAX_REQUESTS_PER_MINUTE admission enforced atomically at grant time,
-	// mirroring Acquire: the pre-filter above only reads the window, and a
-	// concurrent burst must not pass the cap before any record lands.
-	// Admission is always recorded (even with cap 0 = unlimited) so the
-	// bridge snapshot counters stay meaningful.
-	if !p.bridgeTryAdmitRequest(entry) {
-		lease := &Lease{Token: -1, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: ss.InstanceID,
-			Bridge: entry, routeSlot: routeSlot, AcquiredAt: time.Now()}
-		slotLeased = true
-		p.LeaseRelease(lease)
-		return nil, p.bridgeRpmLimitError(entry)
-	}
 	// Track the activity and end any idle-maintenance pause, mirroring
 	// Acquire: without this, IDLE_ROTATION_TIMEOUT was dead config in
 	// bridge mode — lastActive stayed zero forever, so the pool never

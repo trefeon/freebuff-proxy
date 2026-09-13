@@ -38,22 +38,21 @@ func TestEffectiveOverlayRoundTrip(t *testing.T) {
 	// clearEnv pins AUTO_DISCOVER_TOKEN=false in the environment; the export
 	// must capture an explicit env value here, so set it directly.
 	envSet := map[string]string{
-		"AUTH_TOKENS":             "fb-test-fake-token-1,fb-test-fake-token-2",
-		"ADMIN_TOKEN":             "fb-test-fake-admin-1",
-		"API_KEYS":                "fb-test-fake-client-1",
-		"WEBHOOK_URL":             "https://example.invalid/hook",
-		"UPSTREAM_BASE_URL":       "https://example.invalid",
-		"LOG_LEVEL":               "debug",
-		"MAX_REQUESTS_PER_DAY":    "765",
-		"MAX_REQUESTS_PER_MINUTE": "7",
-		"SAFE_MODE":               "false",
-		"AUTO_DISCOVER_TOKEN":     "false",
-		"BRIDGE_ENABLED":          "false",
-		"MODELS_ALLOW":            "deepseek/deepseek-v4-flash",
-		"MODEL_LOCKS":             "0:z-ai/glm-5.2",
-		"FALLBACK_MODEL":          "a=b",
-		"REASONING_IN_CONTENT":    "thinking",
-		"RATE_LIMIT_PER_IP":       "2.5",
+		"AUTH_TOKENS":          "fb-test-fake-token-1,fb-test-fake-token-2",
+		"ADMIN_TOKEN":          "fb-test-fake-admin-1",
+		"API_KEYS":             "fb-test-fake-client-1",
+		"WEBHOOK_URL":          "https://example.invalid/hook",
+		"UPSTREAM_BASE_URL":    "https://example.invalid",
+		"LOG_LEVEL":            "debug",
+		"RATE_LIMIT_BURST":     "7",
+		"SAFE_MODE":            "false",
+		"AUTO_DISCOVER_TOKEN":  "false",
+		"BRIDGE_ENABLED":       "false",
+		"MODELS_ALLOW":         "deepseek/deepseek-v4-flash",
+		"MODEL_LOCKS":          "0:z-ai/glm-5.2",
+		"FALLBACK_MODEL":       "a=b",
+		"REASONING_IN_CONTENT": "thinking",
+		"RATE_LIMIT_PER_IP":    "2.5",
 	}
 	for k, v := range envSet {
 		t.Setenv(k, v)

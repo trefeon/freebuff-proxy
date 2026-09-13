@@ -73,28 +73,6 @@ type Config struct {
 	// A non-positive value falls back to the default at load: a zero age
 	// would delete every history row on the next purge tick.
 	LogTableRetention time.Duration
-	MaxMessagesPerDay int // 0 = unlimited: per-token cap on successful chats per 24h
-	// MaxRequestsPerDay is the per-token cap on successful chat requests in
-	// the current Pacific day (MAX_REQUESTS_PER_DAY; 0 = unlimited, the
-	// default — the upstream quota/429 is the real enforcement). Enforced
-	// in acquire like the daily message cap; resets at Pacific midnight —
-	// the same instant upstream rolls its daily quota windows — so a locked
-	// token unlocks in sync with the official reset. Set a value to bound
-	// a runaway loop locally.
-	MaxRequestsPerDay int
-	// MaxRequestsPerMinute is the per-token cap on ADMITTED chat requests in
-	// a rolling 60s window (MAX_REQUESTS_PER_MINUTE; 0 = unlimited, the
-	// default — the upstream quota/429 is the real enforcement). Admission
-	// counting (not success-only) throttles the exact request rate upstream
-	// observes — including retries that later fail. Set a value to bound a
-	// runaway loop locally.
-	MaxRequestsPerMinute int
-	// BridgeDailyLimit is the global daily chat cap across ALL bridge-mode
-	// entries (BRIDGE_DAILY_LIMIT; 0 = unlimited). Enforced in AcquireBridge
-	// before the per-entry check so a flood of distinct client tokens cannot
-	// collectively exceed the operator's budget.
-	BridgeDailyLimit    int
-	MaxSpendPerDay      int64         // 0 = unlimited: ADVISORY per-token Pacific-day spend ceiling in ledger units (tokens from upstream usage blocks; issue #122). Never blocks — the upstream $ ceilings ($15 full / $5 limited / $1 elevated [SG/CN since 2026-09, was $5] / $0.50 restricted, plus $7 full / $3 limited paid floor for flagged email/egress reasons since 6341ef3, compose by minimum, server-enforced; restricted reasons take a 2x HARD mid-session cut at FREEBUFF_SPEND_CEILING_HARD_MULTIPLIER) are the real gate. Surfaced as SpendLimit/SpendPct on /healthz so operator comparisons align with the Pacific-midnight reset.
 	IdleRotationTimeout time.Duration // 0 = disabled: pause rotation/refresh after this idle period
 	SessionIdleEnd      time.Duration // 0 = disabled: end upstream sessions after this idle period (SESSION_IDLE_END)
 	// BridgeEnabled gates bridge-mode traffic when AUTH_TOKENS are configured

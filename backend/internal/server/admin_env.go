@@ -400,8 +400,6 @@ func effectiveConfigKV(cfg *config.Config) map[string]string {
 		"LOG_RING_SIZE":               strconv.Itoa(cfg.LogRingSize),
 		"LOG_CONSOLE_WINDOW":          cfg.LogConsoleWindow.String(),
 		"LOG_TABLE_RETENTION":         cfg.LogTableRetention.String(),
-		"MAX_MESSAGES_PER_DAY":        strconv.Itoa(cfg.MaxMessagesPerDay),
-		"MAX_SPEND_PER_DAY":           strconv.FormatInt(cfg.MaxSpendPerDay, 10),
 		"IDLE_ROTATION_TIMEOUT":       cfg.IdleRotationTimeout.String(),
 		"SESSION_IDLE_END":            cfg.SessionIdleEnd.String(),
 		"SAFE_MODE":                   strconv.FormatBool(cfg.SafeMode),

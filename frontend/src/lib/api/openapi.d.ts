@@ -1319,7 +1319,6 @@ export interface components {
         requests: number;
         session_active: boolean;
         spend_day: number;
-        spend_pct: number;
         status: string;
       }[];
       bridge_tokens: number;
@@ -1327,7 +1326,6 @@ export interface components {
       has_tokens: boolean;
       in_bridge: boolean;
       is_default_admin_token: boolean;
-      max_messages_per_day: number;
       mode: string;
       model_count: number;
       models: string[];
@@ -1344,7 +1342,6 @@ export interface components {
         banned_until?: string;
         cooldown_active: boolean;
         cooldown_until: string;
-        daily_limit: number;
         email?: string;
         freebucks?: {
           balance: number;
@@ -1414,10 +1411,6 @@ export interface components {
         referral_sessions_left: number;
         requests: number;
         requests_per_day: number;
-        requests_per_day_limit: number;
-        requests_per_day_reset_in: number;
-        requests_per_minute: number;
-        requests_per_minute_limit: number;
         risk_level: string;
         session_status: string;
         standing_blurb?: string;
@@ -1439,7 +1432,6 @@ export interface components {
         streak_updated_at?: string;
         today_used?: boolean;
         transient_retries: number;
-        usage_pct: number;
       }[];
       transient_retries: number;
       upstream_sync?: {
@@ -1537,12 +1529,9 @@ export interface components {
         requests: number;
         session_active: boolean;
         spend_day: number;
-        spend_pct: number;
         status: string;
       }[];
       bridge_tokens: number;
-      chat_max_inflight_metered: number;
-      chat_max_inflight_unmetered: number;
       has_tokens: boolean;
       in_bridge: boolean;
       maturity_dry_run: boolean;

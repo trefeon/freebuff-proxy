@@ -393,17 +393,6 @@ func (p *Pool) routeScore(cfg *config.Config, toks *[]*tokenEntry, idx int, mode
 	if lockedOutByModel(cfg, p.reg, idx, model) {
 		return 0, false, "model allowlist"
 	}
-	if cfg != nil {
-		if cfg.MaxMessagesPerDay > 0 && p.usageCount(idx) >= cfg.MaxMessagesPerDay {
-			return 0, false, "daily message cap"
-		}
-		if cfg.MaxRequestsPerMinute > 0 && p.rpmCount(idx) >= cfg.MaxRequestsPerMinute {
-			return 0, false, "per-minute request cap"
-		}
-		if cfg.MaxRequestsPerDay > 0 && p.dayRequestCount(idx) >= cfg.MaxRequestsPerDay {
-			return 0, false, "daily request cap"
-		}
-	}
 	p.lastTokenMu.Lock()
 	lastUsed, hasLastUsed := p.lastTokenByModel[model]
 	p.lastTokenMu.Unlock()

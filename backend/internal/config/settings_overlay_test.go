@@ -49,14 +49,14 @@ func TestSettingsOverlayIntBool(t *testing.T) {
 	clearEnv(t)
 	t.Chdir(t.TempDir())
 	cfg, err := LoadOpts("", LoadOptions{Overlay: map[string]string{
-		"MAX_REQUESTS_PER_MINUTE": "7",
-		"SAFE_MODE":               "false",
+		"RATE_LIMIT_BURST": "7",
+		"SAFE_MODE":        "false",
 	}})
 	if err != nil {
 		t.Fatalf("LoadOpts: %v", err)
 	}
-	if cfg.MaxRequestsPerMinute != 7 {
-		t.Errorf("MaxRequestsPerMinute = %d, want 7", cfg.MaxRequestsPerMinute)
+	if cfg.RateLimitBurst != 7 {
+		t.Errorf("RateLimitBurst = %d, want 7", cfg.RateLimitBurst)
 	}
 	if cfg.SafeMode {
 		t.Error("SafeMode = true, want false (overlay)")
@@ -185,33 +185,33 @@ func TestOverlayCoversCatalog(t *testing.T) {
 // handler, but Validate itself accepts them so migrated rows read back.
 func TestValidateSettingValue(t *testing.T) {
 	for key, value := range map[string]string{
-		"LOG_LEVEL":               "debug",
-		"SAFE_MODE":               "false",
-		"MAX_REQUESTS_PER_MINUTE": "30",
-		"RATE_LIMIT_PER_IP":       "2.5",
-		"MODELS_ALLOW":            "deepseek/deepseek-v4-flash",
-		"MATURITY_TARGET_DAYS":    "14",
-		"HTTP_READ_TIMEOUT":       "90s",
-		"AUTH_TOKENS":             "fb-test-fake-token-1",
-		"ADMIN_TOKEN":             "fb-test-fake-admin-1",
-		"API_KEYS":                "fb-test-fake-client-1",
-		"WEBHOOK_URL":             "https://example.invalid/hook",
-		"UPSTREAM_BASE_URL":       "https://example.invalid",
-		"AUTO_DISCOVER_TOKEN":     "false",
+		"LOG_LEVEL":            "debug",
+		"SAFE_MODE":            "false",
+		"RATE_LIMIT_BURST":     "30",
+		"RATE_LIMIT_PER_IP":    "2.5",
+		"MODELS_ALLOW":         "deepseek/deepseek-v4-flash",
+		"MATURITY_TARGET_DAYS": "14",
+		"HTTP_READ_TIMEOUT":    "90s",
+		"AUTH_TOKENS":          "fb-test-fake-token-1",
+		"ADMIN_TOKEN":          "fb-test-fake-admin-1",
+		"API_KEYS":             "fb-test-fake-client-1",
+		"WEBHOOK_URL":          "https://example.invalid/hook",
+		"UPSTREAM_BASE_URL":    "https://example.invalid",
+		"AUTO_DISCOVER_TOKEN":  "false",
 	} {
 		if err := ValidateSettingValue(key, value); err != nil {
 			t.Errorf("ValidateSettingValue(%s,%s) = %v, want nil", key, value, err)
 		}
 	}
 	for key, value := range map[string]string{
-		"NOPE_NOT_A_KEY":          "x",
-		"DB_PATH":                 "/tmp/x.db",
-		"SAFE_MODE":               "banana",
-		"MAX_REQUESTS_PER_MINUTE": "lots",
-		"RATE_LIMIT_PER_IP":       "fast",
-		"MATURITY_TARGET_DAYS":    "seven",
-		"LOG_LEVEL":               "",
-		"":                        "x",
+		"NOPE_NOT_A_KEY":       "x",
+		"DB_PATH":              "/tmp/x.db",
+		"SAFE_MODE":            "banana",
+		"RATE_LIMIT_BURST":     "lots",
+		"RATE_LIMIT_PER_IP":    "fast",
+		"MATURITY_TARGET_DAYS": "seven",
+		"LOG_LEVEL":            "",
+		"":                     "x",
 	} {
 		if err := ValidateSettingValue(key, value); err == nil {
 			t.Errorf("ValidateSettingValue(%q,%q) accepted, want an error", key, value)
@@ -239,8 +239,8 @@ func TestSettingSources(t *testing.T) {
 	if sources["BRIDGE_ENABLED"] != "db" {
 		t.Errorf("BRIDGE_ENABLED source = %q, want db", sources["BRIDGE_ENABLED"])
 	}
-	if sources["MAX_REQUESTS_PER_MINUTE"] != "default" {
-		t.Errorf("MAX_REQUESTS_PER_MINUTE source = %q, want default", sources["MAX_REQUESTS_PER_MINUTE"])
+	if sources["RATE_LIMIT_BURST"] != "default" {
+		t.Errorf("RATE_LIMIT_BURST source = %q, want default", sources["RATE_LIMIT_BURST"])
 	}
 
 	// Without overlay or env, the .env key reports file.
@@ -358,14 +358,14 @@ func TestSettingSourcesDotenvUserIDAlias(t *testing.T) {
 // AUTH_TOKENS presence is the bridge-mode pin).
 func TestOverlayFromRowsDropsMalformed(t *testing.T) {
 	ov := OverlayFromRows(map[string]string{
-		"config:SAFE_MODE":               "false",
-		"config:LOG_LEVEL":               "debug",
-		"config:MAX_REQUESTS_PER_MINUTE": "30",
-		"config:RATE_LIMIT_PER_IP":       "2.5",
-		"config:NOPE_NOT_A_KEY":          "x",
-		"theme":                          "dark",
+		"config:SAFE_MODE":         "false",
+		"config:LOG_LEVEL":         "debug",
+		"config:RATE_LIMIT_BURST":  "30",
+		"config:RATE_LIMIT_PER_IP": "2.5",
+		"config:NOPE_NOT_A_KEY":    "x",
+		"theme":                    "dark",
 	})
-	for _, key := range []string{"SAFE_MODE", "LOG_LEVEL", "MAX_REQUESTS_PER_MINUTE", "RATE_LIMIT_PER_IP"} {
+	for _, key := range []string{"SAFE_MODE", "LOG_LEVEL", "RATE_LIMIT_BURST", "RATE_LIMIT_PER_IP"} {
 		if _, ok := ov[key]; !ok {
 			t.Errorf("OverlayFromRows dropped valid row %s: %v", key, ov)
 		}
@@ -374,11 +374,11 @@ func TestOverlayFromRowsDropsMalformed(t *testing.T) {
 		t.Errorf("OverlayFromRows = %v, want exactly the 4 valid rows", ov)
 	}
 	malformed := OverlayFromRows(map[string]string{
-		"config:SAFE_MODE":               "banana",
-		"config:MAX_REQUESTS_PER_MINUTE": "lots",
-		"config:RATE_LIMIT_PER_IP":       "fast",
-		"config:MATURITY_TARGET_DAYS":    "seven",
-		"config:LOG_LEVEL2":              "debug",
+		"config:SAFE_MODE":            "banana",
+		"config:RATE_LIMIT_BURST":     "lots",
+		"config:RATE_LIMIT_PER_IP":    "fast",
+		"config:MATURITY_TARGET_DAYS": "seven",
+		"config:LOG_LEVEL2":           "debug",
 	})
 	if len(malformed) != 0 {
 		t.Errorf("OverlayFromRows kept malformed rows: %v", malformed)
@@ -404,19 +404,19 @@ func TestSettingSourcesJSONEmptyIsDefault(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	path := filepath.Join(dir, "config.json")
-	body := `{"LOG_LEVEL":"","SAFE_MODE":"   ","MAX_REQUESTS_PER_MINUTE":null,` +
-		`"RATE_LIMIT_PER_IP":"2.5","MAX_REQUESTS_PER_DAY":0,"MODELS_HIDE_UNAVAILABLE":false,` +
+	body := `{"LOG_LEVEL":"","SAFE_MODE":"   ","RATE_LIMIT_BURST":null,` +
+		`"RATE_LIMIT_PER_IP":"2.5","QUEUE_DEPTH":0,"MODELS_HIDE_UNAVAILABLE":false,` +
 		`"ACTING_USER_ID":"","USER_ID":"user-json-legacy"}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	sources := SettingSources(path, nil)
-	for key := range map[string]bool{"LOG_LEVEL": true, "SAFE_MODE": true, "MAX_REQUESTS_PER_MINUTE": true} {
+	for key := range map[string]bool{"LOG_LEVEL": true, "SAFE_MODE": true, "RATE_LIMIT_BURST": true} {
 		if sources[key] != "default" {
 			t.Errorf("%s source = %q, want default (empty JSON value)", key, sources[key])
 		}
 	}
-	for key := range map[string]bool{"RATE_LIMIT_PER_IP": true, "MAX_REQUESTS_PER_DAY": true, "MODELS_HIDE_UNAVAILABLE": true} {
+	for key := range map[string]bool{"RATE_LIMIT_PER_IP": true, "QUEUE_DEPTH": true, "MODELS_HIDE_UNAVAILABLE": true} {
 		if sources[key] != "file" {
 			t.Errorf("%s source = %q, want file (explicit JSON value)", key, sources[key])
 		}

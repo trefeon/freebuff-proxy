@@ -427,15 +427,15 @@ func TestMetricsEndpoint(t *testing.T) {
 	}
 }
 
-// TestHealthzSpend pins the /healthz spend surface (issue #122): the ledger
-// buckets fed by the chat feeder, the advisory MAX_SPEND_PER_DAY ceiling
-// (SpendLimit), the capped SpendPct, and the SpendLimited refusal counter.
+// TestHealthzSpend pins the /healthz spend surface: the ledger buckets fed
+// by the chat feeder and the SpendLimited refusal counter. No advisory
+// ceiling remains; the upstream dollar ceilings are server-enforced.
 func TestHealthzSpend(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mock.ChatBody = testutil.SSEEvent(chunk("chatcmpl-s1", 1, `"choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]`)) +
 		testutil.SSEEvent(chunk("chatcmpl-s1", 1, `"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":2,"total_tokens":13}`))
-	ts, _ := newTestServerCfg(t, nil, func(c *config.Config) { c.MaxSpendPerDay = 100 }, mock)
+	ts, _ := newTestServerCfg(t, nil, nil, mock)
 
 	req := `{"model":"` + modelA + `","messages":[{"role":"user","content":"hi"}],"stream":true}`
 	resp, data := doJSON(t, http.MethodPost, ts.URL+"/v1/chat/completions", []byte(req), nil)
@@ -449,8 +449,6 @@ func TestHealthzSpend(t *testing.T) {
 	var tok struct {
 		Spend24h     int64 `json:"Spend24h"`
 		SpendDay     int64 `json:"SpendDay"`
-		SpendLimit   int64 `json:"SpendLimit"`
-		SpendPct     int   `json:"SpendPct"`
 		SpendLimited int   `json:"SpendLimited"`
 	}
 	for {
@@ -462,8 +460,6 @@ func TestHealthzSpend(t *testing.T) {
 			Tokens []struct {
 				Spend24h     int64 `json:"Spend24h"`
 				SpendDay     int64 `json:"SpendDay"`
-				SpendLimit   int64 `json:"SpendLimit"`
-				SpendPct     int   `json:"SpendPct"`
 				SpendLimited int   `json:"SpendLimited"`
 			} `json:"tokens"`
 		}
@@ -481,12 +477,6 @@ func TestHealthzSpend(t *testing.T) {
 			t.Fatalf("healthz spend did not reach 13/13 within %s (last: %d/%d)", waitSpendTimeout, tok.SpendDay, tok.Spend24h)
 		}
 		time.Sleep(10 * time.Millisecond)
-	}
-	if tok.SpendLimit != 100 {
-		t.Errorf("SpendLimit = %d, want 100 (MAX_SPEND_PER_DAY)", tok.SpendLimit)
-	}
-	if tok.SpendPct != 13 {
-		t.Errorf("SpendPct = %d, want 13 (13 of 100)", tok.SpendPct)
 	}
 	if tok.SpendLimited != 0 {
 		t.Errorf("SpendLimited = %d, want 0 (no upstream spend_limited refusals)", tok.SpendLimited)

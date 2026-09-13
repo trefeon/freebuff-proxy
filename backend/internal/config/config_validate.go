@@ -39,16 +39,6 @@ func (c Config) Validate() error {
 		return errors.New("SESSION_STATE_FILE cannot be empty when SESSION_PERSIST is enabled")
 	case c.CostMode != "" && c.CostMode != "free":
 		return errors.New(`COST_MODE must be "free" or unset -- any other value (e.g. a typo) routes requests as PAID and fresh free accounts get 402 "Out of credits"`)
-	case c.MaxMessagesPerDay < 0:
-		return errors.New("MAX_MESSAGES_PER_DAY cannot be negative")
-	case c.MaxRequestsPerDay < 0:
-		return errors.New("MAX_REQUESTS_PER_DAY cannot be negative")
-	case c.MaxRequestsPerMinute < 0:
-		return errors.New("MAX_REQUESTS_PER_MINUTE cannot be negative")
-	case c.BridgeDailyLimit < 0:
-		return errors.New("BRIDGE_DAILY_LIMIT cannot be negative")
-	case c.MaxSpendPerDay < 0:
-		return errors.New("MAX_SPEND_PER_DAY cannot be negative")
 	case c.LogRingSize != 0 && (c.LogRingSize < 50 || c.LogRingSize > 5000):
 		return errors.New("LOG_RING_SIZE must be between 50 and 5000 (default 500)")
 	case c.RateLimitPerIP < 0:

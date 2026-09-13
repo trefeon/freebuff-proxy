@@ -569,14 +569,14 @@ func TestRouteScorerWeights(t *testing.T) {
 		}
 	})
 
-	t.Run("daily cap disqualifies", func(t *testing.T) {
-		p := newPool(t, func(c *config.Config) { c.MaxMessagesPerDay = 1 })
+	t.Run("usage does not disqualify without local caps", func(t *testing.T) {
+		p := newPool(t, nil)
 		p.recordChat(0)
-		if _, ok := scoreOf(p, 0, modelA); ok {
-			t.Error("capped token eligible, want disqualified")
+		if _, ok := scoreOf(p, 0, modelA); !ok {
+			t.Error("used token disqualified, want eligible (no local caps remain)")
 		}
 		if _, ok := scoreOf(p, 1, modelA); !ok {
-			t.Error("uncapped token disqualified, want eligible")
+			t.Error("fresh token disqualified, want eligible")
 		}
 	})
 }

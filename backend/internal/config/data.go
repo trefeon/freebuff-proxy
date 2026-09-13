@@ -81,14 +81,6 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return c.LogConsoleWindow.String(), false
 	case "LOG_TABLE_RETENTION":
 		return c.LogTableRetention.String(), false
-	case "MAX_MESSAGES_PER_DAY":
-		return strconv.Itoa(c.MaxMessagesPerDay), false
-	case "MAX_REQUESTS_PER_DAY":
-		return strconv.Itoa(c.MaxRequestsPerDay), false
-	case "MAX_REQUESTS_PER_MINUTE":
-		return strconv.Itoa(c.MaxRequestsPerMinute), false
-	case "MAX_SPEND_PER_DAY":
-		return strconv.FormatInt(c.MaxSpendPerDay, 10), false
 	case "IDLE_ROTATION_TIMEOUT":
 		return c.IdleRotationTimeout.String(), false
 	case "SAFE_MODE":
@@ -123,8 +115,6 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.FormatBool(c.BridgeEnabled), false
 	case "BRIDGE_IDLE_EVICT":
 		return c.BridgeIdleEvict.String(), false
-	case "BRIDGE_DAILY_LIMIT":
-		return strconv.Itoa(c.BridgeDailyLimit), false
 	case "FALLBACK_AFTER_MS":
 		return strconv.Itoa(int(c.FallbackAfter.Milliseconds())), false
 	case "FALLBACK_MODEL":

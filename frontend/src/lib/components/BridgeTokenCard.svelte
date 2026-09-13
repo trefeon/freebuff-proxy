@@ -12,16 +12,6 @@
    */
   let { card, now = Date.now() } = $props();
 
-  let pct = $derived(Math.min(100, Math.max(0, card.spend_pct ?? 0)));
-  let barColor = $derived(
-    pct >= 100
-      ? "#ef4444"
-      : pct >= 80
-        ? "#f97316"
-        : pct >= 60
-          ? "#f59e0b"
-          : "#10b981",
-  );
   let cooldown = $derived(
     card.cooldown_until ? formatLocalDate(card.cooldown_until) : "—",
   );
@@ -87,18 +77,6 @@
         class="fp-num shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded border border-[var(--fp-border)] bg-[var(--fp-surface)] text-[var(--fp-muted)] tabular-nums"
         >{card.spend_day ?? 0}</span
       >
-    </div>
-    <div
-      class="h-[6px] w-full rounded-full bg-[var(--fp-inset)] overflow-hidden"
-      role="progressbar"
-      aria-valuenow={pct}
-      aria-valuemin="0"
-      aria-valuemax="100"
-    >
-      <div
-        class="h-full rounded-full transition-all duration-300"
-        style="width: {pct}%; background: {barColor}"
-      ></div>
     </div>
   </div>
 

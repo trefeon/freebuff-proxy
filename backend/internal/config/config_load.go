@@ -13,15 +13,6 @@ import (
 	"time"
 )
 
-// Default per-token request limits: 0 = unlimited. The upstream quota and
-// its 429 lock are the real enforcement — rate-limited tokens are locked
-// in memory until the reset window — so no local cap applies unless the
-// operator sets one explicitly (e.g. to bound a runaway loop locally).
-const (
-	defaultMaxRequestsPerDay    = 0 // successful chats per Pacific day (resets with the official daily quota)
-	defaultMaxRequestsPerMinute = 0 // admitted chat requests per rolling 60s window
-)
-
 // LoadOptions configures LoadOpts. DiscoverCLIToken, when non-nil, sources
 // an empty AUTH_TOKENS pool from the official CLI login files (issue #283);
 // the cmd entrypoint wires clicreds.DiscoverToken here. A nil value keeps
@@ -104,11 +95,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideInt(&raw.LogRingSize, "LOG_RING_SIZE")
 	overrideString(&raw.LogConsoleWindow, "LOG_CONSOLE_WINDOW")
 	overrideString(&raw.LogTableRetention, "LOG_TABLE_RETENTION")
-	overrideInt(&raw.MaxMessagesPerDay, "MAX_MESSAGES_PER_DAY")
-	overrideInt(&raw.MaxRequestsPerDay, "MAX_REQUESTS_PER_DAY")
-	overrideInt(&raw.MaxRequestsPerMinute, "MAX_REQUESTS_PER_MINUTE")
-	overrideInt(&raw.BridgeDailyLimit, "BRIDGE_DAILY_LIMIT")
-	overrideInt(&raw.MaxSpendPerDay, "MAX_SPEND_PER_DAY")
 	overrideBool(&raw.BridgeEnabled, "BRIDGE_ENABLED")
 	overrideString(&raw.BridgeIdleEvict, "BRIDGE_IDLE_EVICT")
 	overrideString(&raw.IdleRotationTimeout, "IDLE_ROTATION_TIMEOUT")
@@ -290,37 +276,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		return Config{}, err
 	}
 
-	// MAX_MESSAGES_PER_DAY defaults to 0 (unlimited): the upstream 429 lock
-	// is the real quota enforcement — rate-limited tokens are locked in
-	// memory until the reset window, so no local cap is needed to prevent
-	// spam traffic. Explicit values always win.
-	maxMessagesPerDay := 0
-	if raw.MaxMessagesPerDay != nil {
-		maxMessagesPerDay = *raw.MaxMessagesPerDay
-	}
-
-	// MAX_REQUESTS_PER_DAY defaults to 0 = unlimited (per-token,
-	// Pacific-day): the upstream quota/429 is the real enforcement. Set a
-	// value to bound a runaway loop locally; explicit values always win.
-	maxRequestsPerDay := defaultMaxRequestsPerDay
-	if raw.MaxRequestsPerDay != nil {
-		maxRequestsPerDay = *raw.MaxRequestsPerDay
-	}
-
-	// MAX_REQUESTS_PER_MINUTE defaults to 0 = unlimited (per-token, rolling
-	// 60s): the upstream quota/429 is the real enforcement. Set a value to
-	// bound a runaway loop locally; explicit values always win.
-	maxRequestsPerMinute := defaultMaxRequestsPerMinute
-	if raw.MaxRequestsPerMinute != nil {
-		maxRequestsPerMinute = *raw.MaxRequestsPerMinute
-	}
-
-	// BRIDGE_DAILY_LIMIT (B5): global daily chat cap across ALL bridge
-	// entries. 0 = unlimited (default). Explicit values always win.
-	bridgeDailyLimit := 0
-	if raw.BridgeDailyLimit != nil {
-		bridgeDailyLimit = *raw.BridgeDailyLimit
-	}
 	// BRIDGE_IDLE_EVICT is zero-tolerant: "" or "0" fall back to the 72h
 	// default (a zero TTL would evict every bridge entry on the first idle
 	// pass, defeating the cache).
@@ -333,16 +288,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		if bridgeIdleEvict <= 0 {
 			bridgeIdleEvict = 72 * time.Hour
 		}
-	}
-
-	// MAX_SPEND_PER_DAY (issue #122): advisory per-token Pacific-day spend
-	// ceiling in ledger units, default 0 (unlimited). Deliberately NOT
-	// enforced — the upstream $ ceilings are server-side and the proxy
-	// cannot know the account's restricted cohort; surfaced as
-	// SpendLimit/SpendPct on /healthz.
-	maxSpendPerDay := int64(0)
-	if raw.MaxSpendPerDay != nil {
-		maxSpendPerDay = int64(*raw.MaxSpendPerDay)
 	}
 
 	// TRANSIENT_RETRIES: nil defaults to 1 (one additional attempt after a
@@ -562,11 +507,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		LogRingSize:              logRingSize,
 		LogConsoleWindow:         logConsoleWindow,
 		LogTableRetention:        logTableRetention,
-		MaxMessagesPerDay:        maxMessagesPerDay,
-		MaxRequestsPerDay:        maxRequestsPerDay,
-		MaxRequestsPerMinute:     maxRequestsPerMinute,
-		BridgeDailyLimit:         bridgeDailyLimit,
-		MaxSpendPerDay:           maxSpendPerDay,
 		BridgeEnabled:            raw.BridgeEnabled,
 		BridgeIdleEvict:          bridgeIdleEvict,
 		IdleRotationTimeout:      idleRotationTimeout,
@@ -653,8 +593,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	// SafeMode presets: when SAFE_MODE=true, apply recommended defaults for
 	// account-safety knobs that were NOT explicitly configured. Explicit
 	// "0"/disabled values always win (IDLE_ROTATION_TIMEOUT=0 or
-	// REQUEST_JITTER=0 stay disabled). MAX_MESSAGES_PER_DAY is never preset:
-	// it defaults to 0 (unlimited); the upstream 429 lock enforces quotas.
+	// REQUEST_JITTER=0 stay disabled).
 	if cfg.SafeMode {
 		if !idleRotationSet && cfg.IdleRotationTimeout == 0 {
 			cfg.IdleRotationTimeout = 30 * time.Minute
@@ -763,11 +702,6 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideIntFrom(&raw.LogRingSize, get, "LOG_RING_SIZE")
 	overrideStringFrom(&raw.LogConsoleWindow, get, "LOG_CONSOLE_WINDOW")
 	overrideStringFrom(&raw.LogTableRetention, get, "LOG_TABLE_RETENTION")
-	overrideIntFrom(&raw.MaxMessagesPerDay, get, "MAX_MESSAGES_PER_DAY")
-	overrideIntFrom(&raw.MaxRequestsPerDay, get, "MAX_REQUESTS_PER_DAY")
-	overrideIntFrom(&raw.MaxRequestsPerMinute, get, "MAX_REQUESTS_PER_MINUTE")
-	overrideIntFrom(&raw.BridgeDailyLimit, get, "BRIDGE_DAILY_LIMIT")
-	overrideIntFrom(&raw.MaxSpendPerDay, get, "MAX_SPEND_PER_DAY")
 	overrideBoolFrom(&raw.BridgeEnabled, get, "BRIDGE_ENABLED")
 	overrideStringFrom(&raw.BridgeIdleEvict, get, "BRIDGE_IDLE_EVICT")
 	overrideStringFrom(&raw.IdleRotationTimeout, get, "IDLE_ROTATION_TIMEOUT")
@@ -973,7 +907,7 @@ func parseBoolPtr(s string) (*bool, bool) {
 	return new(b), true
 }
 
-// overrideInt sets target from MAX_MESSAGES_PER_DAY-style env vars; unset or
+// overrideInt sets target from int env vars; unset or
 // unparseable values leave the file/default value untouched.
 func overrideInt(target **int, envName string) {
 	override(target, os.Getenv, envName, parseIntPtr)

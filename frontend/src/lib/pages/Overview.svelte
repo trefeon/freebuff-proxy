@@ -26,9 +26,9 @@
   let error = $state("");
 
   // Issue #322: restart/deploy-only fields (mode, model_count, safe_mode,
-  // transient_retries, max_messages_per_day, upstream_sync) and account-stable
-  // card fields (email, standing_*, referral_*) ride a once-per-mount full
-  // fetch; the 15s hot poll hits ?view=live and merges over the cached static
+  // transient_retries, upstream_sync) and account-stable card fields
+  // (email, standing_*, referral_*) ride a once-per-mount full fetch; the
+  // 15s hot poll hits ?view=live and merges over the cached static
   // snapshot. A full refresh every ~5min (or when the cache is empty) picks
   // up mid-session changes (mode switches, trust updates, registry syncs).
   const STATIC_TOP_KEYS = [
@@ -39,7 +39,6 @@
     "models",
     "model_count",
     "safe_mode",
-    "max_messages_per_day",
     "transient_retries",
     "fingerprint_rotations",
     "is_default_admin_token",
@@ -48,7 +47,6 @@
   const STATIC_TOKEN_KEYS = [
     "email",
     "account_id",
-    "daily_limit",
     "has_standing",
     "standing_level",
     "standing_label",

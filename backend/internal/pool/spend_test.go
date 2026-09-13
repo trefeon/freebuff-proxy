@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
 	"freebuff-proxy/backend/internal/upstream"
 )
@@ -260,34 +259,6 @@ func TestRecordSpendLimited(t *testing.T) {
 		t.Errorf("bridge SpendLimited = %d, want 1 (only spend_limited counted)", bv.SpendLimited)
 	}
 	bp.LeaseRelease(blease)
-}
-
-// TestSpendPct pins the advisory ceiling surface (issue #122): the
-// Pacific-day bucket vs MAX_SPEND_PER_DAY, capped at 100%.
-func TestSpendPct(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPoolCfg(t, func(c *config.Config) { c.MaxSpendPerDay = 1000 }, mock)
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p.RecordSpend(lease, 300)
-	p.LeaseRelease(lease)
-
-	snaps := p.Snapshot()
-	if len(snaps) != 1 {
-		t.Fatalf("tokens = %d, want 1", len(snaps))
-	}
-	if snaps[0].SpendLimit != 1000 {
-		t.Errorf("SpendLimit = %d, want 1000 (MAX_SPEND_PER_DAY)", snaps[0].SpendLimit)
-	}
-	if snaps[0].SpendPct != 30 {
-		t.Errorf("SpendPct = %d, want 30 (300 of 1000)", snaps[0].SpendPct)
-	}
-	if snaps[0].SpendDay != 300 {
-		t.Errorf("SpendDay = %d, want 300", snaps[0].SpendDay)
-	}
 }
 
 // TestSpendBucketUpdateLogs verifies the spend-bucket update log: a spend record emits one Debug

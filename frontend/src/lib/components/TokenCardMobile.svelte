@@ -186,18 +186,8 @@
     <div class="fp-inset px-2.5 py-2 text-xs">
       <div class="grid grid-cols-2 gap-2">
         <div class="min-w-0 text-[var(--fp-muted)]">
-          {#if token.daily_limit > 0}
-            <span class="fp-num text-[var(--fp-text)]"
-              >{token.messages_24h}/{token.daily_limit}</span
-            >
-            {$tr("msgs today")}
-            (<span class="fp-num">{token.usage_pct}%</span>)
-          {:else}
-            <span class="fp-num text-[var(--fp-text)]"
-              >{token.messages_24h}</span
-            >
-            {$tr("msgs 24h")}
-          {/if}
+          <span class="fp-num text-[var(--fp-text)]">{token.messages_24h}</span>
+          {$tr("msgs 24h")}
         </div>
         <div class="min-w-0 text-[var(--fp-dim)]">
           <span

@@ -209,10 +209,10 @@ func (r *tokenRoster) recordChat(token int) {
 }
 
 // recordChatEntry appends one successful upstream chat for a lease's backing
-// entry by pointer, plus the Pacific-day successful-request count
-// (MAX_REQUESTS_PER_DAY). The entry owns its ledger, so no index lookup is
-// needed; a retired (removed) entry's ledger is never read again, so
-// recording on it is harmless.
+// entry by pointer, plus the Pacific-day successful-request count for the
+// dashboard per-day display and the maturity client-active skip. The entry
+// owns its ledger, so no index lookup is needed; a retired (removed)
+// entry's ledger is never read again, so recording on it is harmless.
 func (r *tokenRoster) recordChatEntry(entry *tokenEntry) {
 	if entry == nil {
 		return
@@ -222,50 +222,6 @@ func (r *tokenRoster) recordChatEntry(entry *tokenEntry) {
 	now := time.Now()
 	entry.ledger.recordChat(now)
 	entry.ledger.recordDayRequest(now)
-}
-
-// tryAdmitRequest atomically checks and records one ADMITTED chat request
-// for the entry (MAX_REQUESTS_PER_MINUTE) under the roster lock: the 60s
-// window is pruned and the request appended only while the count is below
-// the cap. Returns false when the window is full — the caller treats the
-// token as rate-limited and moves on. Atomicity is the point: the old
-// check-in-Acquire / record-in-Chat split let a concurrent burst (agent
-// spawn batches) pass the cap before any record landed.
-func (r *tokenRoster) tryAdmitRequest(entry *tokenEntry, cap int) bool {
-	if entry == nil {
-		return false
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if cap > 0 && entry.ledger.rpmCount(time.Now()) >= cap {
-		return false
-	}
-	entry.ledger.recordRequest(time.Now())
-	return true
-}
-
-// rpmCount returns the entry at token's admitted-request count in the
-// rolling 60s window, pruning expired timestamps.
-func (r *tokenRoster) rpmCount(token int) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cur := *r.toks.Load()
-	if token < 0 || token >= len(cur) {
-		return 0
-	}
-	return cur[token].ledger.rpmCount(time.Now())
-}
-
-// rpmResetIn returns how long until the entry at token's oldest admitted
-// request ages out of the 60s window.
-func (r *tokenRoster) rpmResetIn(token int) time.Duration {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cur := *r.toks.Load()
-	if token < 0 || token >= len(cur) {
-		return 0
-	}
-	return cur[token].ledger.rpmResetIn(time.Now())
 }
 
 // dayRequestCount returns the entry at token's successful-request count in
@@ -280,18 +236,6 @@ func (r *tokenRoster) dayRequestCount(token int) int {
 	return cur[token].ledger.dayRequestCount(time.Now())
 }
 
-// dayRequestResetIn returns how long until the next Pacific midnight (the
-// official daily quota reset instant).
-func (r *tokenRoster) dayRequestResetIn(token int) time.Duration {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cur := *r.toks.Load()
-	if token < 0 || token >= len(cur) {
-		return 0
-	}
-	return cur[token].ledger.dayRequestResetIn(time.Now())
-}
-
 // usageCount returns the entry at token's in-window chat count, pruning
 // expired timestamps.
 func (r *tokenRoster) usageCount(token int) int {
@@ -302,18 +246,6 @@ func (r *tokenRoster) usageCount(token int) int {
 		return 0
 	}
 	return cur[token].ledger.usageCount(time.Now())
-}
-
-// usageResetIn returns how long until the entry at token's oldest usage
-// timestamp ages out of the window.
-func (r *tokenRoster) usageResetIn(token int) time.Duration {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cur := *r.toks.Load()
-	if token < 0 || token >= len(cur) {
-		return 0
-	}
-	return cur[token].ledger.usageResetIn(time.Now())
 }
 
 // recordSpend adds tokens to the entry at token's spend ledger.

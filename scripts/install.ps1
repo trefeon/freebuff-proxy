@@ -338,7 +338,7 @@ if (-not $NoEnv) {
         Invoke-WebRequest -Uri $exampleUrl -OutFile $envPath
         Write-Host ".env downloaded from the documented .env.example" -ForegroundColor Green
       } catch {
-        [System.IO.File]::WriteAllText($envPath, "AUTH_TOKENS=`nLISTEN_ADDR=127.0.0.1:3457`nCOST_MODE=free`nMAX_MESSAGES_PER_DAY=0`nIDLE_ROTATION_TIMEOUT=0`n", (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($envPath, "AUTH_TOKENS=`nLISTEN_ADDR=127.0.0.1:3457`nCOST_MODE=free`nIDLE_ROTATION_TIMEOUT=0`n", (New-Object System.Text.UTF8Encoding($false)))
         Write-Host ".env created (minimal fallback)" -ForegroundColor Yellow
       }
     }
@@ -388,9 +388,8 @@ if (-not $NoEnv) {
       Write-Host "AUTH_TOKENS left empty. The proxy starts in bridge mode; clients must send their own token." -ForegroundColor Yellow
     }
   }
-  Set-EnvValue "MAX_MESSAGES_PER_DAY" "0"
   Set-EnvValue "IDLE_ROTATION_TIMEOUT" "30m"
-  Write-Host "Safety defaults: MAX_MESSAGES_PER_DAY=0 (unlimited with zero-spam 429 locks), IDLE_ROTATION_TIMEOUT=30m" -ForegroundColor Green
+  Write-Host "Safety defaults: IDLE_ROTATION_TIMEOUT=30m" -ForegroundColor Green
 }
 # --- 9. next steps & doctor check -------------------------------------------
 Write-Host ""

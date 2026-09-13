@@ -146,117 +146,6 @@ func TestBestRateLimitMinSelection(t *testing.T) {
 	}
 }
 
-func TestDailyMessageCap(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPool(t, mock)
-	cfg := p.cfg.Load()
-	cfg.MaxMessagesPerDay = 2
-	p.cfg.Store(cfg)
-
-	for i := 0; i < 2; i++ {
-		lease, err := p.Acquire(context.Background(), modelA)
-		if err != nil {
-			t.Fatal(err)
-		}
-		chatOnce(t, p, lease)
-		p.LeaseRelease(lease)
-	}
-	if got := p.Snapshot()[0].Messages24h; got != 2 {
-		t.Errorf("Messages24h = %d, want 2", got)
-	}
-
-	// The third acquire hits the cap: the only token is daily-limited, so
-	// the pool surfaces a 429 with the time until a slot frees.
-	_, err := p.Acquire(context.Background(), modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("want *upstream.RateLimitError for capped token, got %v", err)
-	}
-	if !errors.Is(err, upstream.ErrRateLimited) {
-		t.Error("errors.Is(ErrRateLimited) = false")
-	}
-	if rle.RetryAfter <= 0 || rle.RetryAfter > usageWindow {
-		t.Errorf("RetryAfter = %s, want within (0, 24h]", rle.RetryAfter)
-	}
-	if rle.Limit != 2 || rle.RecentCount != 2 {
-		t.Errorf("quota = %v/%v, want 2/2", rle.RecentCount, rle.Limit)
-	}
-	if !strings.Contains(err.Error(), "daily message limit reached") {
-		t.Errorf("error = %q, want daily-limit message", err)
-	}
-	if got := p.Snapshot()[0].Messages24h; got != 2 {
-		t.Errorf("Messages24h = %d, want 2 (usage still visible)", got)
-	}
-}
-
-func TestDailyMessageCapFailover(t *testing.T) {
-	mock0 := testutil.NewMock()
-	defer mock0.Close()
-	mock1 := testutil.NewMock()
-	defer mock1.Close()
-	p := newTestPool(t, mock0, mock1)
-	cfg := p.cfg.Load()
-	cfg.MaxMessagesPerDay = 1
-	p.cfg.Store(cfg)
-
-	// Round-robin: first acquire lands on token-1; cap it with a chat.
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lease.Token != 0 {
-		t.Fatalf("first lease token = %d, want 0", lease.Token)
-	}
-	chatOnce(t, p, lease)
-	p.LeaseRelease(lease)
-
-	// Second acquire fails over to token-2 (token-1 is capped); cap it too.
-	lease, err = p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lease.Token != 1 {
-		t.Fatalf("second lease token = %d, want 1 (failover to uncapped)", lease.Token)
-	}
-	chatOnce(t, p, lease)
-	p.LeaseRelease(lease)
-
-	// Both tokens capped: the pool surfaces the daily-limit 429 (not a
-	// combined error).
-	_, err = p.Acquire(context.Background(), modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("want *upstream.RateLimitError when every token is capped, got %v", err)
-	}
-	if rle.RetryAfter <= 0 || rle.RetryAfter > usageWindow {
-		t.Errorf("RetryAfter = %s, want within (0, 24h]", rle.RetryAfter)
-	}
-}
-
-func TestDailyMessageCapDisabled(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPool(t, mock) // MaxMessagesPerDay = 0: unlimited
-
-	for i := 0; i < 3; i++ {
-		lease, err := p.Acquire(context.Background(), modelA)
-		if err != nil {
-			t.Fatal(err)
-		}
-		chatOnce(t, p, lease)
-		p.LeaseRelease(lease)
-	}
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatalf("acquire with cap 0 must not be limited, got %v", err)
-	}
-	p.LeaseRelease(lease)
-	if got := p.Snapshot()[0].Messages24h; got != 3 {
-		t.Errorf("Messages24h = %d, want 3 (usage still tracked)", got)
-	}
-}
-
 // TestSetConfigAppendsNewTokens pins the reload growth path: a token
 // appended to AUTH_TOKENS gets an entry built exactly like AddToken (usage
 // and spend slices extended in lockstep), so the new slot serves traffic
@@ -297,38 +186,6 @@ func TestSetConfigAppendsNewTokens(t *testing.T) {
 // config bug: the pool kept the *config.Config it was built with, so a
 // reloaded config (dashboard save / admin reload) never took effect for
 // the daily message cap. SetConfig must swap the pointer the pool reads.
-func TestSetConfigReloadsDailyLimit(t *testing.T) {
-	mock := testutil.NewMock()
-	defer mock.Close()
-	p := newTestPool(t, mock)
-
-	// One successful chat under the default (unlimited) config.
-	lease, err := p.Acquire(context.Background(), modelA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chatOnce(t, p, lease)
-	p.LeaseRelease(lease)
-
-	// Reload a config with a daily cap of 1.
-	newCfg := *p.cfg.Load()
-	newCfg.MaxMessagesPerDay = 1
-	p.SetConfig(&newCfg)
-
-	// The next acquire must respect the NEW limit: one chat is already on
-	// the books, so the cap bites immediately.
-	_, err = p.Acquire(context.Background(), modelA)
-	var rle *upstream.RateLimitError
-	if !errors.As(err, &rle) {
-		t.Fatalf("want *upstream.RateLimitError after SetConfig cap, got %v", err)
-	}
-	if !errors.Is(err, upstream.ErrRateLimited) {
-		t.Error("errors.Is(ErrRateLimited) = false")
-	}
-	if rle.Limit != 1 {
-		t.Errorf("quota limit = %v, want 1 (reloaded config)", rle.Limit)
-	}
-}
 
 // TestSetConfigWarnsOnPersistenceChange pins the reload warning: session
 // persistence is fixed at startup (the store is built from the boot config
@@ -609,26 +466,23 @@ func TestAcquireChatConcurrentTokenMutation(t *testing.T) {
 		t.Fatalf("attempts=%d but success=%d failure=%d", attempts, success, failure)
 	}
 	t.Logf("hammer: attempts=%d success=%d failure=%d", attempts, success, failure)
+	_ = attempts
 	if success == 0 {
 		t.Fatal("no chat succeeded under the hammer; mutation churn starved the workers")
 	}
 }
 
 // TestUsageAccountingConcurrentTokenMutation is the regression guard for
-// the usage-slice indexing race: recordChat/usageCount/usageResetIn index
-// p.msgsPerToken, which RemoveAllTokens (nil) and RemoveLastToken (truncate)
-// mutate concurrently — usageResetIn previously had no bounds check at all
-// and panicked the moment a capped Acquire raced a removal. This hammers the
-// daily-cap path (usageCount + dailyLimitError -> usageResetIn) and feeds
+// the usage-slice indexing race: recordChat/usageCount index entry ledgers, which RemoveAllTokens (nil) and RemoveLastToken (truncate)
+// mutate concurrently — a bounds check keeps Acquire safe under removal. This hammers Acquire and feeds
 // usage via recordChat from a seeder goroutine while the driver churns the
-// token list. Assertion: no panic, every Acquire succeeds or fails cleanly,
-// and the cap path actually fired.
+// token list. Assertion: no panic and every Acquire succeeds or fails cleanly
+// (no local cap remains to refuse).
 func TestUsageAccountingConcurrentTokenMutation(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	p := newTestPoolCfg(t, func(c *config.Config) {
 		c.UpstreamBaseURL = mock.URL()
-		c.MaxMessagesPerDay = 3
 	}, mock)
 
 	ctx := context.Background()
@@ -646,17 +500,18 @@ func TestUsageAccountingConcurrentTokenMutation(t *testing.T) {
 	for range 5 {
 		p.recordChat(0)
 	}
-	if _, err := p.Acquire(ctx, modelA); !errors.Is(err, upstream.ErrRateLimited) {
-		t.Fatalf("capped Acquire err = %v, want ErrRateLimited", err)
+	if lease, err := p.Acquire(ctx, modelA); err != nil {
+		t.Fatalf("Acquire after usage err = %v, want success (no local caps remain)", err)
+	} else {
+		p.LeaseRelease(lease)
 	}
 
 	var (
-		mu        sync.Mutex
-		panics    []string
-		attempts  int
-		success   int
-		failure   int
-		capped429 int
+		mu       sync.Mutex
+		panics   []string
+		attempts int
+		success  int
+		failure  int
 	)
 	var wg sync.WaitGroup
 	for w := 0; w < workers; w++ {
@@ -677,9 +532,6 @@ func TestUsageAccountingConcurrentTokenMutation(t *testing.T) {
 						mu.Lock()
 						attempts++
 						failure++
-						if errors.Is(err, upstream.ErrRateLimited) {
-							capped429++
-						}
 						mu.Unlock()
 						return
 					}
@@ -708,9 +560,8 @@ func TestUsageAccountingConcurrentTokenMutation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("AddToken: %v", err)
 		}
-		// Seed the fresh generation past the cap immediately so the pool is
-		// capped for nearly its whole lifetime: a worker Acquire that lands
-		// here hits the daily-cap path instead of a fresh-token success.
+		// Seed usage on the fresh generation so usage/day ledgers stay hot
+		// while workers acquire.
 		for range 3 {
 			p.recordChat(idx)
 		}
@@ -733,7 +584,7 @@ func TestUsageAccountingConcurrentTokenMutation(t *testing.T) {
 	if attempts != success+failure {
 		t.Fatalf("attempts=%d but success=%d failure=%d", attempts, success, failure)
 	}
-	t.Logf("hammer: attempts=%d success=%d failure=%d capped429=%d", attempts, success, failure, capped429)
+	t.Logf("hammer: attempts=%d success=%d failure=%d", attempts, success, failure)
 }
 
 // ── Wave 1 issue tests (#81, #77) ────────────────────────────────────────

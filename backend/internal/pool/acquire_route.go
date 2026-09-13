@@ -171,7 +171,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 	var banned []*upstream.BanError
 	var countryBlocked []*upstream.CountryBlockedError
 	var modelLimited []*upstream.LimitedIpError
-	var dailyLimited []*upstream.RateLimitError
 	for _, idx := range order {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -189,24 +188,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			continue
 		}
 		name := fmt.Sprintf("token-%d", idx+1)
-
-		// Per-minute request cap (MAX_REQUESTS_PER_MINUTE) and daily request
-		// cap (MAX_REQUESTS_PER_DAY): mirrors the direct loop — capped
-		// tokens are skipped so the pool rolls to the next account; the
-		// day-cap error rides the rate-limited bucket with RetryAfter =
-		// next Pacific midnight (the official daily reset instant).
-		if cfg.MaxRequestsPerMinute > 0 && p.rpmCount(idx) >= cfg.MaxRequestsPerMinute {
-			rateLimited = append(rateLimited, p.rpmLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
-			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
-			continue
-		}
-		if cfg.MaxRequestsPerDay > 0 && p.dayRequestCount(idx) >= cfg.MaxRequestsPerDay {
-			rateLimited = append(rateLimited, p.dayRequestLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: daily request limit (%d) reached", name, cfg.MaxRequestsPerDay))
-			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
-			continue
-		}
 
 		// Quarantined tokens (terminal account state: banned,
 		// country_blocked, 401 invalid) are permanently skipped — the pool
@@ -321,29 +302,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			}
 		}
 
-		// Daily rolling cap: a token that already sent its
-		// MAX_MESSAGES_PER_DAY successful chats in the last 24h is skipped
-		// like a cooldown; when every token is capped, the pool surfaces a
-		// 429 with the earliest window reset.
-		if cfg.MaxMessagesPerDay > 0 && p.usageCount(idx) >= cfg.MaxMessagesPerDay {
-			dailyLimited = append(dailyLimited, p.dailyLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: daily message limit (%d) reached", name, cfg.MaxMessagesPerDay))
-			p.logger.Debug("pool: token skipped (daily message limit)", "token", idx+1, "limit", cfg.MaxMessagesPerDay)
-			continue
-		}
-		// No second per-minute pre-filter here: MAX_REQUESTS_PER_MINUTE is
-		// pre-filtered above and enforced atomically at lease grant
-		// (tryAdmitRequest) — nothing between mutates the RPM window.
-		// Daily request cap (MAX_REQUESTS_PER_DAY): a token that already
-		// sent its daily successful-request quota is skipped like the daily
-		// message cap; it unlocks at the next Pacific midnight — the same
-		// instant upstream rolls its daily quota windows.
-		if cfg.MaxRequestsPerDay > 0 && p.dayRequestCount(idx) >= cfg.MaxRequestsPerDay {
-			dailyLimited = append(dailyLimited, p.dayRequestLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: daily request limit (%d) reached", name, cfg.MaxRequestsPerDay))
-			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
-			continue
-		}
 		// Smart-routing live-turn slot (TOKEN_MAX_CONCURRENT, route_smart.go):
 		// a lease is granted only while the token holds fewer live turns
 		// than the cap; otherwise the caller parks FIFO until QUEUE_WAIT
@@ -588,21 +546,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		if cfg.RoutingSmart {
 			p.routeNoteGranted(tok)
 		}
-		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
-		// lease grant. The pre-filter above only reads the rolling window;
-		// recording later (in Chat) raced it — a concurrent burst (agent
-		// spawn batches) all passed the cap before any record landed. On a
-		// full window the run is released and the token counted as
-		// rate-limited so the loop tries the next one. Admission is always
-		// recorded (even with cap 0 = unlimited) so the token snapshot
-		// counters stay meaningful.
-		if !p.tryAdmitRequest(tok) {
-			p.LeaseRelease(lease)
-			rateLimited = appendRateLimit(rateLimited, p.rpmLimitError(idx))
-			errs = append(errs, fmt.Sprintf("%s: per-minute request limit (%d) reached", name, cfg.MaxRequestsPerMinute))
-			p.logger.Debug("pool: token skipped (per-minute request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerMinute)
-			continue
-		}
 		// Track the activity and end any idle-maintenance pause: the next
 		// maintain tick resumes rotation/refresh work.
 		p.lastActiveMu.Lock()
@@ -621,11 +564,11 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 
 	// Failover precedence (PRD §6 error matrix): when buckets are mixed the
 	// highest-precedence non-empty bucket wins — ban > country-blocked >
-	// model-IP-limited > rate-limit > ip-capped > waiting-room > daily cap.
+	// model-IP-limited > rate-limit > ip-capped > waiting-room.
 	// Each bucket contributes its best error (first ban, shortest rate
-	// window, first ip_capped, lowest queue position, earliest daily
-	// reset). Only when every bucket is empty — all tokens failed with
-	// errors outside the matrix — is the generic error surfaced.
+	// window, first ip_capped, lowest queue position). Only when every bucket
+	// is empty — all tokens failed with errors outside the matrix — is the
+	// generic error surfaced.
 	// Freebucks-capped tokens were excluded in acquireOrder (never
 	// attempted); their rate-limit reasons land here so a fully-capped pool
 	// surfaces a real 429 with the earliest window reset instead of a
@@ -696,9 +639,6 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		wr := bestWaitingRoom(waiting)
 		p.logger.Debug("pool: waiting room surfaced", "position", wr.Position, "queue_depth", wr.QueueDepth, "retry_after", wr.RetryAfter.String())
 		return nil, wr
-	}
-	if len(dailyLimited) > 0 {
-		return nil, bestDailyLimit(dailyLimited)
 	}
 	return nil, fmt.Errorf("unable to acquire run from any token: %s", strings.Join(errs, "; "))
 }

@@ -39,18 +39,14 @@ import (
 //
 //	pool/ledger/<sha256hex(token)>       one AccountLedger blob per token
 //	pool/admissions                       in-flight session admissions by model
-//	pool/bridge/usage                     global bridge daily counter
-//	pool/bridge/survivors                 evicted bridge usage survivors
 //	pool/probe/scheduler                  smart-probe scheduler timer (pool-scoped)
 //	pool/probe/quota/<sha256hex(token)>   live quota cache per token (SHA-keyed:
 //	                                      roster order is unstable across restarts)
 const (
-	poolStateAdmissions      = "pool/admissions"
-	poolStateBridgeUsage     = "pool/bridge/usage"
-	poolStateBridgeSurvivors = "pool/bridge/survivors"
-	poolLedgerPrefix         = "pool/ledger/"
-	poolProbeScheduler       = "pool/probe/scheduler"
-	poolProbeQuotaPrefix     = "pool/probe/quota/"
+	poolStateAdmissions  = "pool/admissions"
+	poolLedgerPrefix     = "pool/ledger/"
+	poolProbeScheduler   = "pool/probe/scheduler"
+	poolProbeQuotaPrefix = "pool/probe/quota/"
 )
 
 // PoolPersist is the persistence backend for pool runtime state. Values
@@ -88,15 +84,8 @@ type poolSpendBlob struct {
 type poolLedgerBlob struct {
 	Usage       []int64       `json:"usage"`
 	Spend       poolSpendBlob `json:"spend"`
-	Requests    []int64       `json:"requests"`
 	ReqDayStart int64         `json:"req_day_start"`
 	ReqDayCount int64         `json:"req_day_count"`
-}
-
-// poolSurvivorBlob is one evicted bridge entry's carried usage.
-type poolSurvivorBlob struct {
-	Count   int   `json:"count"`
-	Evicted int64 `json:"evicted"`
 }
 
 // poolSmartProbeBlob is the JSON-stable mirror of the persisted scheduler
@@ -317,18 +306,6 @@ func (p *Pool) snapshotPoolState() (staged []poolKV, liveLedgers, liveQuotas map
 	p.admissionsMu.Unlock()
 	staged = append(staged, poolKV{key: poolStateAdmissions, val: mustMarshalPool(adm)})
 
-	// Bridge daily usage + survivors (survivor eviction times as millis).
-	p.bridgeMu.Lock()
-	usage := p.bridgeDailyUsage
-	survivors := make([]poolSurvivorBlob, 0, len(p.bridgeSurvivors))
-	for _, s := range p.bridgeSurvivors {
-		survivors = append(survivors, poolSurvivorBlob{Count: s.count, Evicted: s.evicted.UnixMilli()})
-	}
-	p.bridgeMu.Unlock()
-	staged = append(staged,
-		poolKV{key: poolStateBridgeUsage, val: mustMarshalPool(usage)},
-		poolKV{key: poolStateBridgeSurvivors, val: mustMarshalPool(survivors)},
-	)
 	return staged, liveLedgers, liveQuotas
 }
 
@@ -341,9 +318,6 @@ func marshalLedger(l *AccountLedger) poolLedgerBlob {
 	}
 	for _, t := range l.usage {
 		blob.Usage = append(blob.Usage, t.UnixMilli())
-	}
-	for _, t := range l.requests {
-		blob.Requests = append(blob.Requests, t.UnixMilli())
 	}
 	if l.spend != nil {
 		sp := poolSpendBlob{
@@ -368,9 +342,9 @@ func marshalLedger(l *AccountLedger) poolLedgerBlob {
 // SetPoolPersist; direct calls remain for tests and pre-Start restores.
 // Missing rows stay zero-valued (a fresh boot behaves exactly as before);
 // corrupt rows warn and are skipped — restore never fails the boot.
-// TTL/expiry is enforced on the way in: out-of-window usage/request/burst/
-// survivor timestamps are dropped and stale spend buckets roll, so a
-// restart never resurrects expired windows. Restored quota rows seed the
+// TTL/expiry is enforced on the way in: out-of-window usage timestamps are
+// dropped and stale spend buckets roll, so a restart never resurrects
+// expired windows. Restored quota rows seed the
 // session cache as last-known (stale-marked, dashboard-visible at once);
 // the scheduler's freshness gate re-probes them only once aged out.
 func (p *Pool) RestorePoolPersist() {
@@ -383,7 +357,6 @@ func (p *Pool) RestorePoolPersist() {
 	now := time.Now()
 	p.restoreLedgers(st, now)
 	p.restoreAdmissions(st)
-	p.restoreBridge(st, now)
 	p.restoreSmartProbe(st)
 	p.restoreProbeQuota(st)
 }
@@ -535,17 +508,10 @@ func (p *Pool) restoreLedgers(st PoolPersist, now time.Time) {
 // the roster (or bridge) mutex.
 func installLedger(l *AccountLedger, blob poolLedgerBlob, now time.Time) {
 	usageCutoff := now.Add(-usageWindow)
-	rpmCutoff := now.Add(-rpmWindow)
 	l.usage = l.usage[:0]
 	for _, ms := range blob.Usage {
 		if t := time.UnixMilli(ms); !t.Before(usageCutoff) {
 			l.usage = append(l.usage, t)
-		}
-	}
-	l.requests = l.requests[:0]
-	for _, ms := range blob.Requests {
-		if t := time.UnixMilli(ms); !t.Before(rpmCutoff) {
-			l.requests = append(l.requests, t)
 		}
 	}
 	// Pacific-day bucket: dayRequestCount rolls a stale bucket on read as a
@@ -598,44 +564,5 @@ func (p *Pool) restoreAdmissions(st PoolPersist) {
 	}
 	for m, idx := range adm {
 		p.admissions[m] = idx
-	}
-}
-
-func (p *Pool) restoreBridge(st PoolPersist, now time.Time) {
-	if raw, ok, err := st.LoadPoolState(poolStateBridgeUsage); err != nil {
-		p.logger.Warn("pool: runtime persist restore failed (starting fresh)", "key", poolStateBridgeUsage, "error", err)
-	} else if ok {
-		var usage int
-		if err := json.Unmarshal(raw, &usage); err != nil {
-			p.logger.Warn("pool: runtime persist row corrupt (starting fresh)", "key", poolStateBridgeUsage, "error", err)
-		} else if usage > 0 {
-			p.bridgeMu.Lock()
-			p.bridgeDailyUsage = usage
-			p.bridgeMu.Unlock()
-		}
-	}
-	raw, ok, err := st.LoadPoolState(poolStateBridgeSurvivors)
-	if err != nil {
-		p.logger.Warn("pool: runtime persist restore failed (starting fresh)", "key", poolStateBridgeSurvivors, "error", err)
-		return
-	}
-	if !ok {
-		return
-	}
-	var stored []poolSurvivorBlob
-	if err := json.Unmarshal(raw, &stored); err != nil {
-		p.logger.Warn("pool: runtime persist row corrupt (starting fresh)", "key", poolStateBridgeSurvivors, "error", err)
-		return
-	}
-	p.bridgeMu.Lock()
-	defer p.bridgeMu.Unlock()
-	for _, s := range stored {
-		evicted := time.UnixMilli(s.Evicted)
-		if now.Sub(evicted) < usageWindow && s.Count > 0 {
-			p.bridgeSurvivors = append(p.bridgeSurvivors, bridgeSurvivor{count: s.Count, evicted: evicted})
-			if len(p.bridgeSurvivors) >= maxBridgeSurvivors {
-				break
-			}
-		}
 	}
 }

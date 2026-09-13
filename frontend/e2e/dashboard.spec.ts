@@ -1045,7 +1045,7 @@ test.describe("dashboard hermetic mocks", () => {
     await expect(
       tokensTable.locator("tbody tr").filter({ hasText: "Account #2" }),
     ).toContainText("moderate");
-    await expect(tokensTable.getByText("msgs today").first()).toBeVisible();
+    await expect(tokensTable.getByText("msgs 24h").first()).toBeVisible();
     await expect(tokensTable.getByText("reqs").first()).toBeVisible();
 
     // Navigate to Activity and check filter labelling + live region. Live is

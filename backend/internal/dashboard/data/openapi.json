@@ -1241,9 +1241,6 @@
                 "spend_day": {
                   "type": "number"
                 },
-                "spend_pct": {
-                  "type": "integer"
-                },
                 "status": {
                   "type": "string"
                 }
@@ -1257,7 +1254,6 @@
                 "requests",
                 "session_active",
                 "spend_day",
-                "spend_pct",
                 "status"
               ],
               "type": "object"
@@ -1278,9 +1274,6 @@
           },
           "is_default_admin_token": {
             "type": "boolean"
-          },
-          "max_messages_per_day": {
-            "type": "integer"
           },
           "mode": {
             "type": "string"
@@ -1335,9 +1328,6 @@
                 },
                 "cooldown_until": {
                   "type": "string"
-                },
-                "daily_limit": {
-                  "type": "integer"
                 },
                 "email": {
                   "type": "string"
@@ -1568,18 +1558,6 @@
                 "requests_per_day": {
                   "type": "integer"
                 },
-                "requests_per_day_limit": {
-                  "type": "integer"
-                },
-                "requests_per_day_reset_in": {
-                  "type": "integer"
-                },
-                "requests_per_minute": {
-                  "type": "integer"
-                },
-                "requests_per_minute_limit": {
-                  "type": "integer"
-                },
                 "risk_level": {
                   "type": "string"
                 },
@@ -1649,16 +1627,12 @@
                 },
                 "transient_retries": {
                   "type": "integer"
-                },
-                "usage_pct": {
-                  "type": "integer"
                 }
               },
               "required": [
                 "active_runs",
                 "cooldown_active",
                 "cooldown_until",
-                "daily_limit",
                 "has_referral",
                 "has_standing",
                 "index",
@@ -1671,10 +1645,6 @@
                 "referral_sessions_left",
                 "requests",
                 "requests_per_day",
-                "requests_per_day_limit",
-                "requests_per_day_reset_in",
-                "requests_per_minute",
-                "requests_per_minute_limit",
                 "risk_level",
                 "session_status",
                 "standing_label",
@@ -1682,8 +1652,7 @@
                 "standing_next_level",
                 "standing_next_level_at",
                 "standing_score",
-                "transient_retries",
-                "usage_pct"
+                "transient_retries"
               ],
               "type": "object"
             },
@@ -1775,7 +1744,6 @@
           "has_tokens",
           "in_bridge",
           "is_default_admin_token",
-          "max_messages_per_day",
           "mode",
           "model_count",
           "models",
@@ -2062,9 +2030,6 @@
                 "spend_day": {
                   "type": "number"
                 },
-                "spend_pct": {
-                  "type": "integer"
-                },
                 "status": {
                   "type": "string"
                 }
@@ -2078,7 +2043,6 @@
                 "requests",
                 "session_active",
                 "spend_day",
-                "spend_pct",
                 "status"
               ],
               "type": "object"
@@ -2086,12 +2050,6 @@
             "type": "array"
           },
           "bridge_tokens": {
-            "type": "integer"
-          },
-          "chat_max_inflight_metered": {
-            "type": "integer"
-          },
-          "chat_max_inflight_unmetered": {
             "type": "integer"
           },
           "has_tokens": {
@@ -2155,8 +2113,6 @@
         },
         "required": [
           "bridge_tokens",
-          "chat_max_inflight_metered",
-          "chat_max_inflight_unmetered",
           "has_tokens",
           "in_bridge",
           "maturity_dry_run",

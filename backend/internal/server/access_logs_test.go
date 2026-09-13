@@ -239,7 +239,7 @@ func TestConfigSaveLogsChangedKeys(t *testing.T) {
 
 	// Loopback remote + Host: the open-mode adminSensitive gate requires it.
 	req := httptest.NewRequest(http.MethodPost, "/admin/config",
-		strings.NewReader("SAFE_MODE=false\nAUTH_TOKENS=tok-a\nADMIN_TOKEN=new-secret-xyz\nMAX_MESSAGES_PER_DAY=10\n"))
+		strings.NewReader("SAFE_MODE=false\nAUTH_TOKENS=tok-a\nADMIN_TOKEN=new-secret-xyz\nTRANSIENT_RETRIES=3\n"))
 	req.Header.Set("Content-Type", "text/plain")
 	req.RemoteAddr = "127.0.0.1:1234"
 	req.Host = "127.0.0.1:3457"
@@ -256,7 +256,7 @@ func TestConfigSaveLogsChangedKeys(t *testing.T) {
 	if !strings.Contains(logs, "changed_keys=") {
 		t.Fatalf("save INFO missing changed_keys: %s", logs)
 	}
-	for _, key := range []string{"ADMIN_TOKEN", "MAX_MESSAGES_PER_DAY", "SAFE_MODE"} {
+	for _, key := range []string{"ADMIN_TOKEN", "TRANSIENT_RETRIES", "SAFE_MODE"} {
 		if !strings.Contains(logs, key) {
 			t.Errorf("changed_keys missing %q: %s", key, logs)
 		}
@@ -266,7 +266,7 @@ func TestConfigSaveLogsChangedKeys(t *testing.T) {
 		t.Errorf("AUTH_TOKENS listed as changed despite the same count: %s", logs)
 	}
 	// Values — including the new ADMIN_TOKEN secret — must never appear.
-	for _, leaked := range []string{"new-secret-xyz", "SAFE_MODE=false", "MAX_MESSAGES_PER_DAY=10"} {
+	for _, leaked := range []string{"new-secret-xyz", "SAFE_MODE=false", "TRANSIENT_RETRIES=3"} {
 		if strings.Contains(logs, leaked) {
 			t.Errorf("config save log leaked %q: %s", leaked, logs)
 		}

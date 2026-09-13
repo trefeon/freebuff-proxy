@@ -325,7 +325,6 @@ func TestDotenvFullKeySet(t *testing.T) {
 		"MODELS_ALLOW=deepseek/deepseek-v4-flash,z-ai/glm-5.2",
 		"CORS_ALLOWED_ORIGIN=https://dashboard.example.com",
 		"TRANSIENT_RETRIES=2",
-		"MAX_SPEND_PER_DAY=500",
 	}, "\n")
 	if err := os.WriteFile(".env", []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -355,9 +354,6 @@ func TestDotenvFullKeySet(t *testing.T) {
 	}
 	if cfg.CORSAllowedOrigin != "https://dashboard.example.com" {
 		t.Errorf("CORSAllowedOrigin = %q, want https://dashboard.example.com (from .env)", cfg.CORSAllowedOrigin)
-	}
-	if cfg.MaxSpendPerDay != 500 {
-		t.Errorf("MaxSpendPerDay = %d, want 500 (from .env)", cfg.MaxSpendPerDay)
 	}
 }
 
@@ -589,180 +585,28 @@ func TestModelUnavailableCacheTTLEnv(t *testing.T) {
 	}
 }
 
-func TestMaxMessagesPerDay(t *testing.T) {
+// TestDeletedCapsIgnored proves the five superseded caps are gone from the
+// knob chain: env, JSON file, and .env values for the deleted keys do not
+// fail the load and leave no overlay-driven state. Upstream quota/429 is
+// the enforcement; slots pace bursts.
+func TestDeletedCapsIgnored(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("AUTH_TOKENS", "tok")
-
-	// default: 0 (unlimited; no SafeMode preset)
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load: %v", err)
-	} else if cfg.MaxMessagesPerDay != 0 {
-		t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited default)", cfg.MaxMessagesPerDay)
+	for _, k := range []string{"MAX_MESSAGES_PER_DAY", "MAX_REQUESTS_PER_DAY", "MAX_REQUESTS_PER_MINUTE", "MAX_SPEND_PER_DAY", "BRIDGE_DAILY_LIMIT"} {
+		t.Setenv(k, "7")
 	}
-
-	// SAFE_MODE=false restores unlimited
-	t.Setenv("SAFE_MODE", "false")
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (SAFE_MODE=false): %v", err)
-	} else if cfg.MaxMessagesPerDay != 0 {
-		t.Errorf("MaxMessagesPerDay = %d, want 0 (unlimited with SAFE_MODE=false)", cfg.MaxMessagesPerDay)
-	}
-	t.Setenv("SAFE_MODE", "")
-
-	// env override
-	t.Setenv("MAX_MESSAGES_PER_DAY", "25")
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (env): %v", err)
-	} else if cfg.MaxMessagesPerDay != 25 {
-		t.Errorf("MaxMessagesPerDay = %d, want 25 (env)", cfg.MaxMessagesPerDay)
-	}
-
-	// unparseable env value is ignored (keeps the file value)
 	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"MAX_MESSAGES_PER_DAY": 3}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"MAX_MESSAGES_PER_DAY": 3, "MAX_REQUESTS_PER_DAY": 42}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MAX_MESSAGES_PER_DAY", "soon")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (bad env + file): %v", err)
-	} else if cfg.MaxMessagesPerDay != 3 {
-		t.Errorf("MaxMessagesPerDay = %d, want 3 (bad env ignored, file kept)", cfg.MaxMessagesPerDay)
+	if _, err := Load(path); err != nil {
+		t.Fatalf("Load with deleted keys = %v, want nil (ignored)", err)
 	}
-
-	// JSON file value
-	t.Setenv("MAX_MESSAGES_PER_DAY", "")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (file): %v", err)
-	} else if cfg.MaxMessagesPerDay != 3 {
-		t.Errorf("MaxMessagesPerDay = %d, want 3 (file)", cfg.MaxMessagesPerDay)
-	}
-}
-
-// TestRequestLimits pins the per-token RPD/RPM knobs: defaults 0/0
-// (unlimited — the upstream quota/429 is the real enforcement) when unset,
-// env overrides, explicit zero = unlimited, unparseable env ignored (file
-// value kept), and JSON file values. Set a value to bound a runaway loop
-// locally.
-func TestRequestLimits(t *testing.T) {
-	clearEnv(t)
-	t.Setenv("AUTH_TOKENS", "tok")
-
-	// Defaults when unset: 0 requests/day, 0 requests/min (unlimited).
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load: %v", err)
-	} else if cfg.MaxRequestsPerDay != defaultMaxRequestsPerDay {
-		t.Errorf("MaxRequestsPerDay = %d, want %d (default)", cfg.MaxRequestsPerDay, defaultMaxRequestsPerDay)
-	} else if cfg.MaxRequestsPerMinute != defaultMaxRequestsPerMinute {
-		t.Errorf("MaxRequestsPerMinute = %d, want %d (default)", cfg.MaxRequestsPerMinute, defaultMaxRequestsPerMinute)
-	}
-
-	// Env override.
-	t.Setenv("MAX_REQUESTS_PER_DAY", "500")
-	t.Setenv("MAX_REQUESTS_PER_MINUTE", "10")
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (env): %v", err)
-	} else if cfg.MaxRequestsPerDay != 500 || cfg.MaxRequestsPerMinute != 10 {
-		t.Errorf("env overrides = %d/%d, want 500/10", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
-	}
-
-	// Explicit zero = unlimited.
-	t.Setenv("MAX_REQUESTS_PER_DAY", "0")
-	t.Setenv("MAX_REQUESTS_PER_MINUTE", "0")
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (zero): %v", err)
-	} else if cfg.MaxRequestsPerDay != 0 || cfg.MaxRequestsPerMinute != 0 {
-		t.Errorf("explicit zero = %d/%d, want 0/0 (unlimited)", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
-	}
-
-	// Unparseable env values are ignored (file values kept).
-	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"MAX_REQUESTS_PER_DAY": 42, "MAX_REQUESTS_PER_MINUTE": 7}`), 0o644); err != nil {
+	if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok\nMAX_MESSAGES_PER_DAY=9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MAX_REQUESTS_PER_DAY", "soon")
-	t.Setenv("MAX_REQUESTS_PER_MINUTE", "never")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (bad env + file): %v", err)
-	} else if cfg.MaxRequestsPerDay != 42 || cfg.MaxRequestsPerMinute != 7 {
-		t.Errorf("bad env ignored = %d/%d, want file 42/7", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
-	}
-
-	// JSON file value with env unset.
-	t.Setenv("MAX_REQUESTS_PER_DAY", "")
-	t.Setenv("MAX_REQUESTS_PER_MINUTE", "")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (file): %v", err)
-	} else if cfg.MaxRequestsPerDay != 42 || cfg.MaxRequestsPerMinute != 7 {
-		t.Errorf("file = %d/%d, want 42/7", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
-	}
-
-	// .env file value (clearEnv chdirs to a fresh temp dir, so ./.env is the
-	// file ResolveEnvFile reads).
-	t.Setenv("MAX_REQUESTS_PER_DAY", "")
-	t.Setenv("MAX_REQUESTS_PER_MINUTE", "")
-	if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok\nMAX_REQUESTS_PER_DAY=1000\nMAX_REQUESTS_PER_MINUTE=15\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (.env): %v", err)
-	} else if cfg.MaxRequestsPerDay != 1000 || cfg.MaxRequestsPerMinute != 15 {
-		t.Errorf(".env values = %d/%d, want 1000/15", cfg.MaxRequestsPerDay, cfg.MaxRequestsPerMinute)
-	}
-}
-
-// TestMaxSpendPerDay pins the advisory spend-ceiling knob (issue #122):
-// default 0 (unlimited), env override, unparseable env ignored, JSON file
-// value, and .env value. The knob is advisory-only — the upstream $ ceilings
-// are server-enforced and the pool never blocks on it.
-func TestMaxSpendPerDay(t *testing.T) {
-	clearEnv(t)
-	t.Setenv("AUTH_TOKENS", "tok")
-
-	// default: 0 (unlimited)
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load: %v", err)
-	} else if cfg.MaxSpendPerDay != 0 {
-		t.Errorf("MaxSpendPerDay = %d, want 0 (unlimited default)", cfg.MaxSpendPerDay)
-	}
-
-	// env override
-	t.Setenv("MAX_SPEND_PER_DAY", "1000")
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (env): %v", err)
-	} else if cfg.MaxSpendPerDay != 1000 {
-		t.Errorf("MaxSpendPerDay = %d, want 1000 (env)", cfg.MaxSpendPerDay)
-	}
-
-	// unparseable env value is ignored (keeps the file value)
-	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"MAX_SPEND_PER_DAY": 250}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("MAX_SPEND_PER_DAY", "soon")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (bad env + file): %v", err)
-	} else if cfg.MaxSpendPerDay != 250 {
-		t.Errorf("MaxSpendPerDay = %d, want 250 (bad env ignored, file kept)", cfg.MaxSpendPerDay)
-	}
-
-	// JSON file value
-	t.Setenv("MAX_SPEND_PER_DAY", "")
-	if cfg, err := Load(path); err != nil {
-		t.Fatalf("Load (file): %v", err)
-	} else if cfg.MaxSpendPerDay != 250 {
-		t.Errorf("MaxSpendPerDay = %d, want 250 (file)", cfg.MaxSpendPerDay)
-	}
-
-	// .env value (clearEnv chdirs to a fresh temp dir, so ./.env is the
-	// file ResolveEnvFile reads)
-	t.Setenv("MAX_SPEND_PER_DAY", "")
-	if err := os.WriteFile(".env", []byte("AUTH_TOKENS=tok\nMAX_SPEND_PER_DAY=75\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if cfg, err := Load(""); err != nil {
-		t.Fatalf("Load (.env): %v", err)
-	} else if cfg.MaxSpendPerDay != 75 {
-		t.Errorf("MaxSpendPerDay = %d, want 75 (from .env)", cfg.MaxSpendPerDay)
+	if _, err := Load(""); err != nil {
+		t.Fatalf("Load (.env deleted key) = %v, want nil (ignored)", err)
 	}
 }
 

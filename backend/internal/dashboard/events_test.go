@@ -136,7 +136,7 @@ func TestEventStreamHubLifecycle(t *testing.T) {
 	h.mu.Unlock()
 }
 
-func TestTokenStateHashDetectsLimitsChange(t *testing.T) {
+func TestTokenStateHashDetectsUsageChange(t *testing.T) {
 	d := &Dashboard{}
 	td1 := tokensData{
 		Mode:       "pooled",
@@ -144,9 +144,8 @@ func TestTokenStateHashDetectsLimitsChange(t *testing.T) {
 		Tokens: []tokenDetail{
 			{
 				tokenCard: tokenCard{
-					Index:                  0,
-					RequestsPerMinuteLimit: 30,
-					RequestsPerDayLimit:    1500,
+					Index:          0,
+					RequestsPerDay: 10,
 				},
 			},
 		},
@@ -159,15 +158,14 @@ func TestTokenStateHashDetectsLimitsChange(t *testing.T) {
 		Tokens: []tokenDetail{
 			{
 				tokenCard: tokenCard{
-					Index:                  0,
-					RequestsPerMinuteLimit: 15,
-					RequestsPerDayLimit:    1000,
+					Index:          0,
+					RequestsPerDay: 11,
 				},
 			},
 		},
 	}
 	h2 := d.tokenStateHash(td2)
 	if h1 == h2 {
-		t.Errorf("tokenStateHash did not change when limits changed (%s == %s)", h1, h2)
+		t.Errorf("tokenStateHash did not change when per-day usage changed (%s == %s)", h1, h2)
 	}
 }

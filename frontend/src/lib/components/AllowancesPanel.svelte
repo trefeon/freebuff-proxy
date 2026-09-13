@@ -100,13 +100,6 @@
     return parts.join(" · ");
   }
 
-  function dayCapped(token) {
-    return (
-      token.requests_per_day_limit > 0 &&
-      token.requests_per_day >= token.requests_per_day_limit
-    );
-  }
-
   function quotaExempt(token) {
     return Boolean(
       token.freebucks?.quota_exempt ?? token.freebucks?.quotaExempt,
@@ -213,11 +206,6 @@
                 "Server-authorized: new sessions stay usable at zero balance",
               )}>{$tr("quota exempt")}</span
             >
-          {/if}
-          {#if dayCapped(token)}
-            <span class="text-[11px] text-[#f5a623] font-medium">
-              {$tr("daily limit reached")}
-            </span>
           {/if}
         </div>
         {#if token.freebucks}
