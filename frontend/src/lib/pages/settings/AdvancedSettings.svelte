@@ -46,14 +46,10 @@
   } = $props();
 
   // Keys owned by the curated section components above (Gateway, Traffic —
-  // including the Rotation & Burst block — ModelRouting); Advanced shows
+  // including the Rotation block — ModelRouting); Advanced shows
   // everything else the catalog exposes.
   const COVERED = new Set([
     "BRIDGE_ENABLED",
-    "BURST_BALANCE_ENABLED",
-    "BURST_MAX_TOKENS",
-    "BURST_THRESHOLD",
-    "BURST_WINDOW",
     "HTTP_READ_TIMEOUT",
     "LOG_LEVEL",
     "MAX_REQUESTS_PER_DAY",

@@ -23,7 +23,7 @@ import (
 // live-only and never blocks the request hot path.
 //
 // Persist allowlist (parent-scoped): ledger counters, admissions counts,
-// bridge daily usage plus survivors, burst hits, the smart-probe scheduler
+// bridge daily usage plus survivors, the smart-probe scheduler
 // timer (lastProbe, backoff, overloadedAt, idleSlept) and the live
 // per-token quota cache (QuotaByModel + QuotaSavedAt). Never persisted:
 // live handles (channels, sync.Once, WaitGroup, CancelFunc,
@@ -39,7 +39,6 @@ import (
 //
 //	pool/ledger/<sha256hex(token)>       one AccountLedger blob per token
 //	pool/admissions                       in-flight session admissions by model
-//	pool/burst                            per-model sliding-window burst hits
 //	pool/bridge/usage                     global bridge daily counter
 //	pool/bridge/survivors                 evicted bridge usage survivors
 //	pool/probe/scheduler                  smart-probe scheduler timer (pool-scoped)
@@ -47,7 +46,6 @@ import (
 //	                                      roster order is unstable across restarts)
 const (
 	poolStateAdmissions      = "pool/admissions"
-	poolStateBurst           = "pool/burst"
 	poolStateBridgeUsage     = "pool/bridge/usage"
 	poolStateBridgeSurvivors = "pool/bridge/survivors"
 	poolLedgerPrefix         = "pool/ledger/"
@@ -93,12 +91,6 @@ type poolLedgerBlob struct {
 	Requests    []int64       `json:"requests"`
 	ReqDayStart int64         `json:"req_day_start"`
 	ReqDayCount int64         `json:"req_day_count"`
-}
-
-// poolBurstHit is one burst admission at Unix millis UTC.
-type poolBurstHit struct {
-	At  int64 `json:"at"`
-	Tok int   `json:"tok"`
 }
 
 // poolSurvivorBlob is one evicted bridge entry's carried usage.
@@ -325,19 +317,6 @@ func (p *Pool) snapshotPoolState() (staged []poolKV, liveLedgers, liveQuotas map
 	p.admissionsMu.Unlock()
 	staged = append(staged, poolKV{key: poolStateAdmissions, val: mustMarshalPool(adm)})
 
-	// Burst hits (millis; restore prunes out-of-window hits).
-	p.burstMu.Lock()
-	burst := make(map[string][]poolBurstHit, len(p.burstHits))
-	for m, hits := range p.burstHits {
-		cp := make([]poolBurstHit, 0, len(hits))
-		for _, h := range hits {
-			cp = append(cp, poolBurstHit{At: h.at.UnixMilli(), Tok: h.tok})
-		}
-		burst[m] = cp
-	}
-	p.burstMu.Unlock()
-	staged = append(staged, poolKV{key: poolStateBurst, val: mustMarshalPool(burst)})
-
 	// Bridge daily usage + survivors (survivor eviction times as millis).
 	p.bridgeMu.Lock()
 	usage := p.bridgeDailyUsage
@@ -404,7 +383,6 @@ func (p *Pool) RestorePoolPersist() {
 	now := time.Now()
 	p.restoreLedgers(st, now)
 	p.restoreAdmissions(st)
-	p.restoreBurst(st, now)
 	p.restoreBridge(st, now)
 	p.restoreSmartProbe(st)
 	p.restoreProbeQuota(st)
@@ -620,41 +598,6 @@ func (p *Pool) restoreAdmissions(st PoolPersist) {
 	}
 	for m, idx := range adm {
 		p.admissions[m] = idx
-	}
-}
-
-func (p *Pool) restoreBurst(st PoolPersist, now time.Time) {
-	raw, ok, err := st.LoadPoolState(poolStateBurst)
-	if err != nil {
-		p.logger.Warn("pool: runtime persist restore failed (starting fresh)", "key", poolStateBurst, "error", err)
-		return
-	}
-	if !ok {
-		return
-	}
-	var stored map[string][]poolBurstHit
-	if err := json.Unmarshal(raw, &stored); err != nil {
-		p.logger.Warn("pool: runtime persist row corrupt (starting fresh)", "key", poolStateBurst, "error", err)
-		return
-	}
-	window := defaultBurstWindow
-	if cfg := p.cfg.Load(); cfg != nil {
-		if w, _, _ := burstLimits(cfg); w > 0 {
-			window = w
-		}
-	}
-	cutoff := now.Add(-window)
-	p.burstMu.Lock()
-	defer p.burstMu.Unlock()
-	if p.burstHits == nil {
-		p.burstHits = make(map[string][]burstHit)
-	}
-	for m, hits := range stored {
-		for _, h := range hits {
-			if t := time.UnixMilli(h.At); t.After(cutoff) {
-				p.burstHits[m] = append(p.burstHits[m], burstHit{at: t, tok: h.Tok})
-			}
-		}
 	}
 }
 

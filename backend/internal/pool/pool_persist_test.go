@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
 )
 
@@ -81,15 +80,15 @@ func (m *memPoolPersist) keys() []string {
 	return out
 }
 
-// TestPoolPersistRestartRestoresLedgerAndBurst records ledger + spend +
-// burst + admissions + bridge state on one pool, flushes, rebuilds a fresh
+// TestPoolPersistRestartRestoresLedger records ledger + spend +
+// admissions + bridge state on one pool, flushes, rebuilds a fresh
 // pool over the same store, and proves the counters survive the restart.
-func TestPoolPersistRestartRestoresLedgerAndBurst(t *testing.T) {
+func TestPoolPersistRestartRestoresLedger(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mem := newMemPoolPersist()
 
-	p1 := newTestPoolCfg(t, func(cfg *config.Config) { cfg.BurstBalanceEnabled = true }, mock)
+	p1 := newTestPool(t, mock)
 	p1.SetPoolPersist(mem)
 	toks := p1.roster.Load()
 	entry := (*toks)[0]
@@ -97,9 +96,6 @@ func TestPoolPersistRestartRestoresLedgerAndBurst(t *testing.T) {
 	p1.recordSpendEntry(entry, 100)
 	p1.recordSpendLimited(0)
 	now := time.Now()
-	for range 3 {
-		p1.burstRecordAt(modelB, 0, now)
-	}
 	p1.admissionsMu.Lock()
 	if p1.admissions == nil {
 		p1.admissions = make(map[string]int)
@@ -127,7 +123,7 @@ func TestPoolPersistRestartRestoresLedgerAndBurst(t *testing.T) {
 		}
 	}
 
-	p2 := newTestPoolCfg(t, func(cfg *config.Config) { cfg.BurstBalanceEnabled = true }, mock)
+	p2 := newTestPool(t, mock)
 	p2.SetPoolPersist(mem)
 	p2.RestorePoolPersist()
 
@@ -139,12 +135,6 @@ func TestPoolPersistRestartRestoresLedgerAndBurst(t *testing.T) {
 	}
 	if got := p2.spendSnapshot(0).SpendLimited; got != 1 {
 		t.Fatalf("restored spendLimited = %d, want 1", got)
-	}
-	p2.burstMu.Lock()
-	n := len(p2.burstHits[modelB])
-	p2.burstMu.Unlock()
-	if n != 3 {
-		t.Fatalf("restored burst hits = %d, want 3", n)
 	}
 	p2.admissionsMu.Lock()
 	adm := p2.admissions[modelA]
@@ -161,27 +151,26 @@ func TestPoolPersistRestartRestoresLedgerAndBurst(t *testing.T) {
 }
 
 // TestPoolPersistExpiredWindowsIgnored proves TTL/expiry is enforced on
-// restore: out-of-window usage, spend, burst and survivor timestamps are
+// restore: out-of-window usage, spend and survivor timestamps are
 // dropped instead of resurrected.
 func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 	mock := testutil.NewMock()
 	defer mock.Close()
 	mem := newMemPoolPersist()
 
-	p1 := newTestPoolCfg(t, func(cfg *config.Config) { cfg.BurstBalanceEnabled = true }, mock)
+	p1 := newTestPool(t, mock)
 	p1.SetPoolPersist(mem)
 	toks := p1.roster.Load()
 	entry := (*toks)[0]
 	p1.recordChatEntry(entry)
 	p1.recordSpendEntry(entry, 100)
-	p1.burstRecordAt(modelB, 0, time.Now())
 	p1.markPersistDirty()
 	if err := p1.FlushPoolPersist(); err != nil {
 		t.Fatalf("FlushPoolPersist: %v", err)
 	}
 
 	// Age every persisted timestamp 25h into the past (past the 24h usage
-	// window, the 60s rpm window, the 1m burst window and the survivor
+	// window, the 60s rpm window and the survivor
 	// window) and push the spend day bucket 3 days back so it rolls.
 	age := func(ms int64) int64 { return ms - int64(25*time.Hour/time.Millisecond) }
 	mem.mu.Lock()
@@ -204,18 +193,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 			blob.Spend.DayStart = bucketStart(time.Now().Add(-72*time.Hour), "day")
 			blob.Spend.DayUsed = 100
 			mem.rows[k] = mustMarshalPool(blob)
-		case k == poolStateBurst:
-			var stored map[string][]poolBurstHit
-			if err := json.Unmarshal(raw, &stored); err != nil {
-				t.Fatalf("unmarshal burst: %v", err)
-			}
-			for m, hits := range stored {
-				for i := range hits {
-					hits[i].At = age(hits[i].At)
-				}
-				stored[m] = hits
-			}
-			mem.rows[k] = mustMarshalPool(stored)
 		}
 	}
 	// Age the bridge usage row away entirely: drop it so usage restores 0,
@@ -226,7 +203,7 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 	})
 	mem.mu.Unlock()
 
-	p2 := newTestPoolCfg(t, func(cfg *config.Config) { cfg.BurstBalanceEnabled = true }, mock)
+	p2 := newTestPool(t, mock)
 	p2.SetPoolPersist(mem)
 	p2.RestorePoolPersist()
 
@@ -235,12 +212,6 @@ func TestPoolPersistExpiredWindowsIgnored(t *testing.T) {
 	}
 	if got := p2.spendSnapshot(0).Day; got != 0 {
 		t.Fatalf("stale spend day restored = %d, want 0 (rolled)", got)
-	}
-	p2.burstMu.Lock()
-	n := len(p2.burstHits[modelB])
-	p2.burstMu.Unlock()
-	if n != 0 {
-		t.Fatalf("expired burst hits restored = %d, want 0", n)
 	}
 	p2.bridgeMu.Lock()
 	usage, surv := p2.bridgeDailyUsage, len(p2.bridgeSurvivors)

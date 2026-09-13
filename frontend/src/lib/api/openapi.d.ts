@@ -1541,7 +1541,6 @@ export interface components {
         status: string;
       }[];
       bridge_tokens: number;
-      burst_balance_enabled: boolean;
       chat_max_inflight_metered: number;
       chat_max_inflight_unmetered: number;
       has_tokens: boolean;

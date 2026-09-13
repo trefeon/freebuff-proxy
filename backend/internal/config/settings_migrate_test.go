@@ -54,7 +54,6 @@ func TestEffectiveOverlayRoundTrip(t *testing.T) {
 		"FALLBACK_MODEL":          "a=b",
 		"REASONING_IN_CONTENT":    "thinking",
 		"RATE_LIMIT_PER_IP":       "2.5",
-		"BURST_WINDOW":            "90s",
 	}
 	for k, v := range envSet {
 		t.Setenv(k, v)

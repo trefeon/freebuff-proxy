@@ -274,25 +274,6 @@ type Config struct {
 	// message content for clients that do not render a reasoning channel
 	// (REASONING_IN_CONTENT; default "" = off). See CompressPrompt.
 	ReasoningInContent string
-	// BurstBalanceEnabled opts into per-model burst spreading (ADR-0023,
-	// BURST_BALANCE_ENABLED; default true): while one model's sliding-window
-	// admissions exceed BURST_THRESHOLD, that model's selection switches to
-	// least_used across at most BURST_MAX_TOKENS accounts. False restores
-	// exact drain-only selection. Live-apply (atomic pointer swap, no pool
-	// rebuild).
-	BurstBalanceEnabled bool
-	// BurstWindow is the sliding window for counting same-model admissions
-	// toward BURST_THRESHOLD (BURST_WINDOW; default 1m). Zero = unset (the
-	// pool normalizes to its default); negative is rejected in Validate.
-	BurstWindow time.Duration
-	// BurstThreshold is the same-model admission count inside BurstWindow
-	// that trips spreading for that model (BURST_THRESHOLD; default 20).
-	// Zero = unset; negative is rejected in Validate.
-	BurstThreshold int
-	// BurstMaxTokens caps the distinct accounts one model's burst spreads
-	// across (BURST_MAX_TOKENS; default 2, minimum 2 — enforced in
-	// Validate). Zero = unset.
-	BurstMaxTokens int
 	// RoutingSmart is the master switch for smart pool routing
 	// (ROUTING_SMART; default true): per-token live-turn slot semaphore
 	// with a FIFO waiter queue plus the unified scorer over eligible

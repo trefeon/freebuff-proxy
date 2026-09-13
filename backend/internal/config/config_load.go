@@ -145,10 +145,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideBool(&raw.QuotaAutoProbe, "QUOTA_AUTO_PROBE")
 	overrideString(&raw.QuotaProbeActiveInterval, "QUOTA_PROBE_ACTIVE_INTERVAL")
 	overrideString(&raw.QuotaProbeIdleHeartbeat, "QUOTA_PROBE_IDLE_HEARTBEAT")
-	overrideBool(&raw.BurstBalanceEnabled, "BURST_BALANCE_ENABLED")
-	overrideString(&raw.BurstWindow, "BURST_WINDOW")
-	overrideInt(&raw.BurstThreshold, "BURST_THRESHOLD")
-	overrideInt(&raw.BurstMaxTokens, "BURST_MAX_TOKENS")
 	overrideBool(&raw.RoutingSmart, "ROUTING_SMART")
 	overrideInt(&raw.TokenMaxConcurrent, "TOKEN_MAX_CONCURRENT")
 	overrideString(&raw.QueueWait, "QUEUE_WAIT")
@@ -481,20 +477,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	// unmetered row per token. "auto" is accepted as an explicit alias;
 	// an explicit provider/model id overrides auto.
 	maturityTouchModel := strings.TrimSpace(raw.MaturityTouchModel)
-	// BURST_WINDOW is zero-tolerant: "" falls back to the 1m default (a zero
-	// window would trip on every admission past the threshold count of zero
-	// history); an explicit non-positive value falls back the same way.
-	burstWindow := time.Minute
-	if v := strings.TrimSpace(raw.BurstWindow); v != "" {
-		burstWindow, err = parseDuration(v, "BURST_WINDOW")
-		if err != nil {
-			return Config{}, err
-		}
-		if burstWindow <= 0 {
-			burstWindow = time.Minute
-		}
-	}
-	// Probe cadences are zero-tolerant like BURST_WINDOW: "" falls back to
+	// Probe cadences are zero-tolerant: "" falls back to
 	// the documented default, and an explicit non-positive value falls back
 	// the same way (a zero cadence would probe on every tick).
 	quotaProbeActiveInterval := 60 * time.Second
@@ -517,16 +500,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 			quotaProbeIdleHeartbeat = 30 * time.Minute
 		}
 	}
-	// BURST_THRESHOLD defaults to 20; BURST_MAX_TOKENS defaults to 2 (an
-	// explicit value below 2 is range-checked in Validate).
-	burstThreshold := 20
-	if raw.BurstThreshold != nil {
-		burstThreshold = *raw.BurstThreshold
-	}
-	burstMaxTokens := 2
-	if raw.BurstMaxTokens != nil {
-		burstMaxTokens = *raw.BurstMaxTokens
-	}
 	// TOKEN_MAX_CONCURRENT defaults to 2 (the approved anti-ban pacing).
 	// 0 = unlimited: no live-turn slot gating applies at all. Negative
 	// values floor to 0 instead of failing the load.
@@ -537,7 +510,7 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if tokenMaxConcurrent < 0 {
 		tokenMaxConcurrent = 0
 	}
-	// QUEUE_WAIT is zero-tolerant like BURST_WINDOW: "" falls back to the
+	// QUEUE_WAIT is zero-tolerant: "" falls back to the
 	// 30s default, and an explicit non-positive value falls back the same
 	// way (a zero wait would never park, defeating the FIFO queue).
 	queueWait := 30 * time.Second
@@ -623,10 +596,6 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		QuotaAutoProbe:                   raw.QuotaAutoProbe,
 		QuotaProbeActiveInterval:         quotaProbeActiveInterval,
 		QuotaProbeIdleHeartbeat:          quotaProbeIdleHeartbeat,
-		BurstBalanceEnabled:              raw.BurstBalanceEnabled,
-		BurstWindow:                      burstWindow,
-		BurstThreshold:                   burstThreshold,
-		BurstMaxTokens:                   burstMaxTokens,
 		RoutingSmart:                     raw.RoutingSmart,
 		TokenMaxConcurrent:               tokenMaxConcurrent,
 		QueueWait:                        queueWait,
@@ -835,10 +804,6 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideBoolFrom(&raw.QuotaAutoProbe, get, "QUOTA_AUTO_PROBE")
 	overrideStringFrom(&raw.QuotaProbeActiveInterval, get, "QUOTA_PROBE_ACTIVE_INTERVAL")
 	overrideStringFrom(&raw.QuotaProbeIdleHeartbeat, get, "QUOTA_PROBE_IDLE_HEARTBEAT")
-	overrideBoolFrom(&raw.BurstBalanceEnabled, get, "BURST_BALANCE_ENABLED")
-	overrideStringFrom(&raw.BurstWindow, get, "BURST_WINDOW")
-	overrideIntFrom(&raw.BurstThreshold, get, "BURST_THRESHOLD")
-	overrideIntFrom(&raw.BurstMaxTokens, get, "BURST_MAX_TOKENS")
 	overrideBoolFrom(&raw.RoutingSmart, get, "ROUTING_SMART")
 	overrideIntFrom(&raw.TokenMaxConcurrent, get, "TOKEN_MAX_CONCURRENT")
 	overrideStringFrom(&raw.QueueWait, get, "QUEUE_WAIT")

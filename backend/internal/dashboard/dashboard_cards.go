@@ -437,7 +437,6 @@ type tokensData struct {
 	// the window math lives in one DST-safe place (pool.MaturityWindow).
 	MaturityWindowStart string `json:"maturity_window_start,omitempty"`
 	MaturityWindowEnd   string `json:"maturity_window_end,omitempty"`
-	BurstEnabled        bool   `json:"burst_balance_enabled"`
 	ChatMaxMetered      int    `json:"chat_max_inflight_metered"`
 	ChatMaxUnmetered    int    `json:"chat_max_inflight_unmetered"`
 }
@@ -502,7 +501,6 @@ func (d *Dashboard) tokensData() tokensData {
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
 		MaturityDryRun:    cfg.MaturityDryRun,
-		BurstEnabled:      cfg.BurstBalanceEnabled,
 		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
 		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}
@@ -659,7 +657,6 @@ type tokensLiveData struct {
 	TokenRotation     string            `json:"token_rotation,omitempty"`
 	RateLimitFailover bool              `json:"rate_limit_failover"`
 	MaturityEnabled   bool              `json:"maturity_enabled"`
-	BurstEnabled      bool              `json:"burst_balance_enabled"`
 	ChatMaxMetered    int               `json:"chat_max_inflight_metered"`
 	ChatMaxUnmetered  int               `json:"chat_max_inflight_unmetered"`
 }
@@ -677,7 +674,6 @@ func (d *Dashboard) tokensLiveData() tokensLiveData {
 		TokenRotation:     cfg.TokenRotation,
 		RateLimitFailover: cfg.RateLimitFailover,
 		MaturityEnabled:   cfg.MaturityEnabled,
-		BurstEnabled:      cfg.BurstBalanceEnabled,
 		ChatMaxMetered:    cfg.ChatMaxInflightMetered,
 		ChatMaxUnmetered:  cfg.ChatMaxInflightUnmetered,
 	}

@@ -61,12 +61,6 @@ func (c Config) Validate() error {
 		return errors.New("RATE_LIMIT_BURST cannot be negative")
 	case c.MaturityTargetDays < 0 || c.MaturityTargetDays > 28:
 		return errors.New("MATURITY_TARGET_DAYS must be between 1 and 28 (one full streak interval is 7)")
-	case c.BurstMaxTokens != 0 && c.BurstMaxTokens < 2:
-		return errors.New("BURST_MAX_TOKENS must be at least 2 (burst spreading needs two or more accounts)")
-	case c.BurstThreshold < 0:
-		return errors.New("BURST_THRESHOLD cannot be negative")
-	case c.BurstWindow < 0:
-		return errors.New("BURST_WINDOW cannot be negative")
 	case c.QueueDepth < 0:
 		return errors.New("QUEUE_DEPTH cannot be negative (0 disables slot queueing)")
 	case c.TokenMaxConcurrent < 0:

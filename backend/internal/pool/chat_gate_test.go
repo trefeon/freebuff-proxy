@@ -15,6 +15,7 @@ import (
 
 	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/testutil"
+	"freebuff-proxy/backend/internal/upstream"
 )
 
 // newChatGatePool wires a single-token pool with the burst-queue caps set
@@ -41,10 +42,26 @@ func chatLane(p *Pool, idx int, model string) chatGateKey {
 	return chatGateKey{owner: (*toks)[idx], model: model}
 }
 
+// seedChatQuota installs a known Freebucks position with spendable balance
+// and a price for modelA so it classifies metered. Balances cover the
+// price, so the token is never Freebucks-capped.
+func seedChatQuota(t *testing.T, p *Pool, token, remaining int, reset time.Time) {
+	t.Helper()
+	toks := p.roster.Load()
+	(*toks)[token].session.UpdateQuotaFromProbe(&upstream.SessionState{
+		Freebucks: &upstream.FreebucksInfo{
+			Balance: float64(remaining),
+			Daily:   upstream.FreebucksWindow{Limit: 20, Spent: 0, Remaining: 20, ResetAt: reset},
+			Wallet:  upstream.FreebucksWallet{},
+			Prices:  map[string]float64{modelA: 1},
+		},
+	})
+}
+
 // seedChatMetered prices modelA on token 0 so it classifies metered.
 func seedChatMetered(t *testing.T, p *Pool) {
 	t.Helper()
-	seedBurstQuota(t, p, 0, 10, time.Now().Add(time.Hour))
+	seedChatQuota(t, p, 0, 10, time.Now().Add(time.Hour))
 }
 
 // runsInflight reports token 0's run inflight count.
