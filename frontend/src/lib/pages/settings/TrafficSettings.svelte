@@ -4,13 +4,9 @@
   import DbBadge from "../../components/DbOverrideBadge.svelte";
   import DbOverrideSave from "../../components/DbOverrideSave.svelte";
   import ToggleSwitch from "../../components/ToggleSwitch.svelte";
-  import Stepper from "../../components/Stepper.svelte";
-  import FieldBox from "../../components/FieldBox.svelte";
   import { Activity } from "@lucide/svelte";
   import { tr } from "../../i18n.js";
   import { parseEnv } from "../../utils/env.js";
-  import { fetchAPI } from "../../api/client.js";
-  import { adminApi } from "../../api/paths.js";
 
   /**
    * Traffic & Rate Limiting settings card (Pool group).
@@ -85,7 +81,6 @@
   const FAILOVER_LABEL = "Auto Failover on Rate Limit (429)";
   const FAILOVER_DESC =
     "When enabled, an in-flight request encountering a 429 rate limit or account throttle immediately leases another healthy pool token and retries seamlessly without failing the request.";
-
 
   let q = $derived(query.trim().toLowerCase());
   function hit(...parts) {
@@ -166,7 +161,6 @@
     const v = typeof next === "boolean" ? next : !rateLimitFailover;
     onField("RATE_LIMIT_FAILOVER", v ? "true" : "false");
   }
-
 </script>
 
 {#if !q || visible > 0}
