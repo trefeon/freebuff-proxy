@@ -91,22 +91,28 @@ func TestRoutingKnobFloors(t *testing.T) {
 	unsetConfigEnv(t)
 	withRoutingEnvUnset(t)
 	t.Setenv("AUTH_TOKENS", "tok-1")
-	// TOKEN_MAX_CONCURRENT floors at 1: a zero live-turn cap could never
-	// serve, so 0/negative values floor instead of failing the load.
-	for _, v := range []string{"0", "-3"} {
-		t.Setenv("TOKEN_MAX_CONCURRENT", v)
-		cfg, err := Load("")
-		if err != nil {
-			t.Fatalf("Load(TOKEN_MAX_CONCURRENT=%s): %v", v, err)
-		}
-		if cfg.TokenMaxConcurrent != 1 {
-			t.Errorf("TokenMaxConcurrent(%s) = %d, want floor 1", v, cfg.TokenMaxConcurrent)
-		}
+	// TOKEN_MAX_CONCURRENT=0 means unlimited (no slot gating at all);
+	// negative values floor to 0 instead of failing the load.
+	t.Setenv("TOKEN_MAX_CONCURRENT", "0")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load(TOKEN_MAX_CONCURRENT=0): %v", err)
+	}
+	if cfg.TokenMaxConcurrent != 0 {
+		t.Errorf("TokenMaxConcurrent(0) = %d, want 0 (unlimited)", cfg.TokenMaxConcurrent)
+	}
+	t.Setenv("TOKEN_MAX_CONCURRENT", "-3")
+	cfg, err = Load("")
+	if err != nil {
+		t.Fatalf("Load(TOKEN_MAX_CONCURRENT=-3): %v", err)
+	}
+	if cfg.TokenMaxConcurrent != 0 {
+		t.Errorf("TokenMaxConcurrent(-3) = %d, want floor 0", cfg.TokenMaxConcurrent)
 	}
 	// QUEUE_DEPTH=0 disables queueing (fail over at once when full).
 	t.Setenv("TOKEN_MAX_CONCURRENT", "2")
 	t.Setenv("QUEUE_DEPTH", "0")
-	cfg, err := Load("")
+	cfg, err = Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -138,6 +144,21 @@ func TestRoutingKnobValidation(t *testing.T) {
 	t.Setenv("QUEUE_WAIT", "bogus")
 	if _, err := Load(""); err == nil {
 		t.Error("bogus QUEUE_WAIT accepted")
+	}
+	// Hand-built configs bypass the Load floor: Validate rejects negatives
+	// directly (Load itself floors them to 0 = unlimited, proven above).
+	t.Setenv("QUEUE_WAIT", "30s")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	cfg.TokenMaxConcurrent = -1
+	if err := cfg.Validate(); err == nil {
+		t.Error("negative TokenMaxConcurrent accepted")
+	}
+	cfg.TokenMaxConcurrent = 0
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("TokenMaxConcurrent=0 rejected: %v (0 = unlimited)", err)
 	}
 }
 

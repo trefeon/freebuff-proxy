@@ -698,16 +698,17 @@ func TestRouteSmartTransientHookFires(t *testing.T) {
 	}
 }
 
-// TestRouteSlotParamsFloors pins the defensive floors for hand-built
-// configs that bypass Load (nil and zero configs).
+// TestRouteSlotParamsFloors pins the defensive defaults for hand-built
+// configs that bypass Load (nil and zero configs): a zero TokenMaxConcurrent
+// is unlimited (the acquire hook skips slot gating entirely).
 func TestRouteSlotParamsFloors(t *testing.T) {
 	cap, depth, wait := routeSlotParams(nil)
 	if cap != 2 || depth != 16 || wait != 30*time.Second {
 		t.Errorf("nil params = %d/%d/%v, want 2/16/30s", cap, depth, wait)
 	}
 	cap, depth, wait = routeSlotParams(&config.Config{})
-	if cap != 1 || depth != 0 || wait != 30*time.Second {
-		t.Errorf("zero params = %d/%d/%v, want 1/0/30s", cap, depth, wait)
+	if cap != 0 || depth != 0 || wait != 30*time.Second {
+		t.Errorf("zero params = %d/%d/%v, want 0/0/30s (unlimited)", cap, depth, wait)
 	}
 	cap, depth, wait = routeSlotParams(&config.Config{TokenMaxConcurrent: 3, QueueDepth: 5, QueueWait: 7 * time.Second})
 	if cap != 3 || depth != 5 || wait != 7*time.Second {

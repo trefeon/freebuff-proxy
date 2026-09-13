@@ -7,19 +7,15 @@ package pool
 // an acquire parks on a broadcast channel until a slot frees or its context
 // expires (the caller's deadline becomes the 503).
 //
-// Defaults match the reference: 128 global, 32 per model.
+// 0 (or negative) means UNLIMITED on either dimension: no local concurrency
+// cap applies and the upstream quota/429 is the natural brake. The config
+// defaults are 0, so the effective default is unlimited — set a value to
+// bound a burst locally.
 
 import (
 	"context"
 	"errors"
 	"sync"
-)
-
-// Default session-create gate caps (issue #86), matching
-// reference/gateways/freebuff-reverse .../create_gate.go defaults.
-const (
-	defaultMaxParallelCreatesGlobal   = 128
-	defaultMaxParallelCreatesPerModel = 32
 )
 
 // ErrCreateGateBusy is returned by createGate.acquire when the gate is at
@@ -56,16 +52,18 @@ type createGate struct {
 	pending map[uint64]string // id → model
 }
 
-// newCreateGate builds the gate with the given caps (<= 0 falls back to the
-// defaults).
+// newCreateGate builds the gate with the given caps. A cap <= 0 means
+// UNLIMITED on that dimension (no local concurrency cap; the upstream
+// quota/429 is the natural brake). The clamp only applies between two
+// positive caps, so it can never resurrect a cap when unlimited.
 func newCreateGate(maxGlobal, maxPerModel int) *createGate {
-	if maxGlobal <= 0 {
-		maxGlobal = defaultMaxParallelCreatesGlobal
+	if maxGlobal < 0 {
+		maxGlobal = 0
 	}
-	if maxPerModel <= 0 {
-		maxPerModel = defaultMaxParallelCreatesPerModel
+	if maxPerModel < 0 {
+		maxPerModel = 0
 	}
-	if maxPerModel > maxGlobal {
+	if maxGlobal > 0 && maxPerModel > maxGlobal {
 		maxPerModel = maxGlobal
 	}
 	return &createGate{
@@ -77,32 +75,40 @@ func newCreateGate(maxGlobal, maxPerModel int) *createGate {
 	}
 }
 
-// setLimits updates the caps at runtime (config reload). Values <= 0 fall
-// back to the defaults.
+// setLimits updates the caps at runtime (config reload). A cap <= 0 means
+// UNLIMITED on that dimension; the clamp only applies between two positive
+// caps. Loosening to unlimited wakes parked waiters to re-check.
 func (g *createGate) setLimits(maxGlobal, maxPerModel int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if maxGlobal <= 0 {
-		maxGlobal = defaultMaxParallelCreatesGlobal
+	if maxGlobal < 0 {
+		maxGlobal = 0
 	}
-	if maxPerModel <= 0 {
-		maxPerModel = defaultMaxParallelCreatesPerModel
+	if maxPerModel < 0 {
+		maxPerModel = 0
 	}
-	if maxPerModel > maxGlobal {
+	if maxGlobal > 0 && maxPerModel > maxGlobal {
 		maxPerModel = maxGlobal
 	}
 	g.maxGlobal = maxGlobal
 	g.maxPerModel = maxPerModel
-	// A tightened cap may now admit nobody; wake waiters to re-check.
+	// A changed cap may now admit parked waiters (or nobody); wake them to
+	// re-check.
 	g.notifyLocked()
 }
 
 // acquire reserves one create slot for model, waiting until a slot frees or
 // ctx expires. It returns a permit on success and ctx.Err() (surfaced as
-// 503 by the server) when the wait exceeds the caller's deadline.
+// 503 by the server) when the wait exceeds the caller's deadline. When both
+// caps are unlimited the grant is an untracked permit immediately (mirroring
+// chatGate.acquire's cap <= 0 fast path); a single unlimited dimension
+// simply never blocks that dimension in canAcquireLocked.
 func (g *createGate) acquire(ctx context.Context, model string) (*createPermit, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if g.unlimited() {
+		return &createPermit{}, nil
 	}
 	for {
 		g.mu.Lock()
@@ -127,15 +133,23 @@ func (g *createGate) acquire(ctx context.Context, model string) (*createPermit, 
 	}
 }
 
-// canAcquireLocked reports whether a create for model fits the caps.
+// canAcquireLocked reports whether a create for model fits the caps. A cap
+// <= 0 is unlimited and never blocks its dimension.
 func (g *createGate) canAcquireLocked(model string) bool {
-	if g.global >= g.maxGlobal {
+	if g.maxGlobal > 0 && g.global >= g.maxGlobal {
 		return false
 	}
-	if g.byModel[model] >= g.maxPerModel {
+	if g.maxPerModel > 0 && g.byModel[model] >= g.maxPerModel {
 		return false
 	}
 	return true
+}
+
+// unlimited reports whether both caps are unlimited (untracked grants).
+func (g *createGate) unlimited() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.maxGlobal <= 0 && g.maxPerModel <= 0
 }
 
 // release returns a permit's slot and wakes every waiter.

@@ -356,18 +356,22 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		var routeSlot *routeSlotPermit
 		if cfg.RoutingSmart {
 			slotCap, slotDepth, slotWait := routeSlotParams(cfg)
-			permit, _, slotErr := p.routeSlotAcquire(ctx, tok, idx+1, slotCap, slotDepth, slotWait)
-			if slotErr != nil {
-				if routeIsQueueExhausted(slotErr) {
-					live := p.routeSlotLive(tok)
-					rateLimited = appendRateLimit(rateLimited, routeQueueRateLimit(slotErr.(*routeQueueExhaustedError), model, slotCap, live))
-					errs = append(errs, fmt.Sprintf("%s: %v", name, slotErr))
-					p.logger.Debug("pool: token skipped (live-turn queue exhausted)", "token", idx+1, "err", slotErr)
-					continue
+			// TOKEN_MAX_CONCURRENT=0 skips slot gating entirely: no
+			// counter, no queue — the upstream quota/429 is the brake.
+			if slotCap > 0 {
+				permit, _, slotErr := p.routeSlotAcquire(ctx, tok, idx+1, slotCap, slotDepth, slotWait)
+				if slotErr != nil {
+					if routeIsQueueExhausted(slotErr) {
+						live := p.routeSlotLive(tok)
+						rateLimited = appendRateLimit(rateLimited, routeQueueRateLimit(slotErr.(*routeQueueExhaustedError), model, slotCap, live))
+						errs = append(errs, fmt.Sprintf("%s: %v", name, slotErr))
+						p.logger.Debug("pool: token skipped (live-turn queue exhausted)", "token", idx+1, "err", slotErr)
+						continue
+					}
+					return nil, slotErr
 				}
-				return nil, slotErr
+				routeSlot = permit
 			}
-			routeSlot = permit
 		}
 
 		// Session-create admission gate (issue #86): concurrent session

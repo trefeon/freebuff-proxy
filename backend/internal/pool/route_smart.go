@@ -3,11 +3,10 @@
 // weighted pick, behind the ROUTING_SMART master switch.
 //
 // Shape (approved step-1):
-//   - TOKEN_MAX_CONCURRENT (default 2, floor 1) is a hard wall per account
-//     on live turns: a lease is granted only while the token holds fewer
-//     live turns than the cap; LeaseRelease/LeaseAbandon returns the slot
-//     and wakes the FIFO head.
-//   - Per-token FIFO wait queue: waiters park with the caller ctx plus the
+//   - TOKEN_MAX_CONCURRENT (default 2, the approved anti-ban pacing;
+//     0 = unlimited) is a hard wall per account on live turns: a lease is
+//     granted only while the token holds fewer live turns than the cap;
+//     LeaseRelease/LeaseAbandon returns the slot and wakes the FIFO head.
 //     QUEUE_WAIT (default 30s) deadline and the QUEUE_DEPTH (default 16)
 //     cap. Overflow and timeout return the typed queue-exhausted signal
 //     below, which the failover loop maps to the existing 429 rate-limit
@@ -105,19 +104,16 @@ func (e *routeQueueExhaustedError) Error() string {
 
 // routeSlotParams resolves the live slot cap, queue depth and wait bound
 // for one acquire. A nil config yields the documented defaults; the loader
-// floors TOKEN_MAX_CONCURRENT at 1 and rejects negative QUEUE_DEPTH, so the
-// defensive branches below only fire for hand-built configs that bypass
-// Load (unit tests).
+// floors a negative TOKEN_MAX_CONCURRENT to 0 and rejects negative
+// QUEUE_DEPTH, so the defensive branches below only fire for hand-built
+// configs that bypass Load (unit tests). A cap <= 0 means UNLIMITED: the
+// acquire hook skips slot gating entirely (no counter, no queue).
 func routeSlotParams(cfg *config.Config) (cap, depth int, wait time.Duration) {
 	cap, depth, wait = 2, 16, 30*time.Second
 	if cfg == nil {
 		return cap, depth, wait
 	}
-	if cfg.TokenMaxConcurrent >= 1 {
-		cap = cfg.TokenMaxConcurrent
-	} else {
-		cap = 1
-	}
+	cap = cfg.TokenMaxConcurrent
 	if cfg.QueueDepth >= 0 {
 		depth = cfg.QueueDepth
 	}
@@ -476,7 +472,9 @@ func (p *Pool) routeSmartRank(cfg *config.Config, toks *[]*tokenEntry, base []in
 			score:   score,
 			idle:    (*toks)[idx].routeLastLease.Load(),
 			basePos: pos,
-			free:    p.routeSlotLive((*toks)[idx]) < capN,
+			// Unlimited (cap <= 0) skips slot gating: every token is
+			// free, so the scorer alone decides.
+			free: capN <= 0 || p.routeSlotLive((*toks)[idx]) < capN,
 		})
 	}
 	if len(cands) == 0 {

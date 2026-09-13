@@ -13,12 +13,13 @@ import (
 	"time"
 )
 
-// Default per-token request limits (anti-abuse posture, user-mandated
-// 2026-09-05): each account stays well under upstream abuse-detection
-// volume while the multi-token pool rolls capped tokens. 0 = unlimited.
+// Default per-token request limits: 0 = unlimited. The upstream quota and
+// its 429 lock are the real enforcement — rate-limited tokens are locked
+// in memory until the reset window — so no local cap applies unless the
+// operator sets one explicitly (e.g. to bound a runaway loop locally).
 const (
-	defaultMaxRequestsPerDay    = 1500 // successful chats per Pacific day (resets with the official daily quota)
-	defaultMaxRequestsPerMinute = 30   // admitted chat requests per rolling 60s window
+	defaultMaxRequestsPerDay    = 0 // successful chats per Pacific day (resets with the official daily quota)
+	defaultMaxRequestsPerMinute = 0 // admitted chat requests per rolling 60s window
 )
 
 // LoadOptions configures LoadOpts. DiscoverCLIToken, when non-nil, sources
@@ -253,23 +254,22 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 			modelUnavailableCacheTTL = time.Hour
 		}
 	}
-	sessionCreateMaxGlobal := 128
+	sessionCreateMaxGlobal := 0
 	if raw.SessionCreateMaxParallelGlobal != nil {
 		sessionCreateMaxGlobal = *raw.SessionCreateMaxParallelGlobal
 	}
-	sessionCreateMaxPerModel := 32
+	sessionCreateMaxPerModel := 0
 	if raw.SessionCreateMaxParallelPerModel != nil {
 		sessionCreateMaxPerModel = *raw.SessionCreateMaxParallelPerModel
 	}
-	// CHAT_MAX_INFLIGHT_METERED defaults to 1 (metered models spend
-	// Freebucks, so one in-flight chat per token); _UNMETERED defaults to
-	// 3 (unpriced rows are free, so more parallelism is safe). 0 =
-	// unlimited; explicit values always win.
-	chatMaxInflightMetered := 1
+	// SESSION_CREATE_MAX_PARALLEL_* and CHAT_MAX_INFLIGHT_* default to 0 =
+	// unlimited: the upstream quota/429 is the natural brake, and no local
+	// concurrency cap applies unless the operator sets one explicitly.
+	chatMaxInflightMetered := 0
 	if raw.ChatMaxInflightMetered != nil {
 		chatMaxInflightMetered = *raw.ChatMaxInflightMetered
 	}
-	chatMaxInflightUnmetered := 3
+	chatMaxInflightUnmetered := 0
 	if raw.ChatMaxInflightUnmetered != nil {
 		chatMaxInflightUnmetered = *raw.ChatMaxInflightUnmetered
 	}
@@ -324,19 +324,17 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		maxMessagesPerDay = *raw.MaxMessagesPerDay
 	}
 
-	// MAX_REQUESTS_PER_DAY defaults to 1500 (per-token, Pacific-day): sized
-	// for ~6 concurrent agent sessions over a full working day while each
-	// account stays under abuse-detection volume; the pool rolls capped
-	// tokens. 0 = unlimited; explicit values always win.
+	// MAX_REQUESTS_PER_DAY defaults to 0 = unlimited (per-token,
+	// Pacific-day): the upstream quota/429 is the real enforcement. Set a
+	// value to bound a runaway loop locally; explicit values always win.
 	maxRequestsPerDay := defaultMaxRequestsPerDay
 	if raw.MaxRequestsPerDay != nil {
 		maxRequestsPerDay = *raw.MaxRequestsPerDay
 	}
 
-	// MAX_REQUESTS_PER_MINUTE defaults to 30 (per-token, rolling 60s):
-	// ~2-3x the worst realistic minute for 6 parallel subagent sessions
-	// (spawn batches of 6-8 land within seconds) yet tight enough to lock
-	// a runaway loop (>=1 req/s) within a minute. 0 = unlimited.
+	// MAX_REQUESTS_PER_MINUTE defaults to 0 = unlimited (per-token, rolling
+	// 60s): the upstream quota/429 is the real enforcement. Set a value to
+	// bound a runaway loop locally; explicit values always win.
 	maxRequestsPerMinute := defaultMaxRequestsPerMinute
 	if raw.MaxRequestsPerMinute != nil {
 		maxRequestsPerMinute = *raw.MaxRequestsPerMinute
@@ -529,16 +527,15 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if raw.BurstMaxTokens != nil {
 		burstMaxTokens = *raw.BurstMaxTokens
 	}
-	// TOKEN_MAX_CONCURRENT defaults to 2 with a hard floor of 1: a zero
-	// live-turn cap could never serve, so 0/negative values floor to 1
-	// instead of failing the load (the bunker-strict posture is an
-	// explicit 1).
+	// TOKEN_MAX_CONCURRENT defaults to 2 (the approved anti-ban pacing).
+	// 0 = unlimited: no live-turn slot gating applies at all. Negative
+	// values floor to 0 instead of failing the load.
 	tokenMaxConcurrent := 2
 	if raw.TokenMaxConcurrent != nil {
 		tokenMaxConcurrent = *raw.TokenMaxConcurrent
 	}
-	if tokenMaxConcurrent < 1 {
-		tokenMaxConcurrent = 1
+	if tokenMaxConcurrent < 0 {
+		tokenMaxConcurrent = 0
 	}
 	// QUEUE_WAIT is zero-tolerant like BURST_WINDOW: "" falls back to the
 	// 30s default, and an explicit non-positive value falls back the same

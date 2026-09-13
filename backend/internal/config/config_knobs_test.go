@@ -16,8 +16,8 @@ func TestWave3KnobDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.SessionCreateMaxParallelGlobal != 128 || cfg.SessionCreateMaxParallelPerModel != 32 {
-		t.Errorf("gate caps = %d/%d, want 128/32", cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
+	if cfg.SessionCreateMaxParallelGlobal != 0 || cfg.SessionCreateMaxParallelPerModel != 0 {
+		t.Errorf("gate caps = %d/%d, want 0/0 (default unlimited)", cfg.SessionCreateMaxParallelGlobal, cfg.SessionCreateMaxParallelPerModel)
 	}
 	if cfg.RunFinishQueueSize != 64 {
 		t.Errorf("RunFinishQueueSize = %d, want 64", cfg.RunFinishQueueSize)
