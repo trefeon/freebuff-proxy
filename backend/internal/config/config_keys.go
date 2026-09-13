@@ -33,18 +33,18 @@ type rawConfig struct {
 	ActingUserID       string   `json:"ACTING_USER_ID"`
 	// LegacyActingUserID is the pre-rename JSON key (USER_ID) — merged at
 	// the end of Load when no ACTING_USER_ID source set a value (#126).
-	LegacyActingUserID   string `json:"USER_ID"`
-	TLSFingerprint       string `json:"TLS_FINGERPRINT"`
-	RegistryRefresh      string `json:"REGISTRY_REFRESH"`
-	DebugDump            bool   `json:"DEBUG_DUMP"`
-	DevToolsEnabled      bool   `json:"DEVTOOLS_ENABLED"`
-	LogFile              string `json:"LOG_FILE"`
-	LogLevel             string `json:"LOG_LEVEL"`
-	LogFormat            string `json:"LOG_FORMAT"`
-	LogAccess            bool   `json:"LOG_ACCESS"`
-	LogRingSize          *int   `json:"LOG_RING_SIZE"`
-	LogConsoleWindow     string `json:"LOG_CONSOLE_WINDOW"`
-	LogTableRetention    string `json:"LOG_TABLE_RETENTION"`
+	LegacyActingUserID string `json:"USER_ID"`
+	TLSFingerprint     string `json:"TLS_FINGERPRINT"`
+	RegistryRefresh    string `json:"REGISTRY_REFRESH"`
+	DebugDump          bool   `json:"DEBUG_DUMP"`
+	DevToolsEnabled    bool   `json:"DEVTOOLS_ENABLED"`
+	LogFile            string `json:"LOG_FILE"`
+	LogLevel           string `json:"LOG_LEVEL"`
+	LogFormat          string `json:"LOG_FORMAT"`
+	LogAccess          bool   `json:"LOG_ACCESS"`
+	LogRingSize        *int   `json:"LOG_RING_SIZE"`
+	LogConsoleWindow   string `json:"LOG_CONSOLE_WINDOW"`
+	LogTableRetention  string `json:"LOG_TABLE_RETENTION"`
 	// BridgeEnabled records BRIDGE_ENABLED (default true via
 	// defaultRawConfig): whether bridge-mode traffic is accepted alongside
 	// the AUTH_TOKENS pool (hybrid mode).

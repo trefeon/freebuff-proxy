@@ -72,7 +72,7 @@ type Config struct {
 	// 168h = 7d). Quota and maturity history keep their own 90d retention.
 	// A non-positive value falls back to the default at load: a zero age
 	// would delete every history row on the next purge tick.
-	LogTableRetention time.Duration
+	LogTableRetention   time.Duration
 	IdleRotationTimeout time.Duration // 0 = disabled: pause rotation/refresh after this idle period
 	SessionIdleEnd      time.Duration // 0 = disabled: end upstream sessions after this idle period (SESSION_IDLE_END)
 	// BridgeEnabled gates bridge-mode traffic when AUTH_TOKENS are configured
