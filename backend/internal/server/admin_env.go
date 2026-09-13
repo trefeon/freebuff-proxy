@@ -429,6 +429,10 @@ func effectiveConfigKV(cfg *config.Config) map[string]string {
 		"QUOTA_FALLBACK_MODELS":       strconv.Itoa(len(cfg.QuotaFallbackModels)),
 		"TOKEN_ROTATION":              cfg.TokenRotation,
 		"RATE_LIMIT_FAILOVER":         strconv.FormatBool(cfg.RateLimitFailover),
+		"ROUTING_SMART":               strconv.FormatBool(cfg.RoutingSmart),
+		"TOKEN_MAX_CONCURRENT":        strconv.Itoa(cfg.TokenMaxConcurrent),
+		"QUEUE_WAIT":                  cfg.QueueWait.String(),
+		"QUEUE_DEPTH":                 strconv.Itoa(cfg.QueueDepth),
 		"BRIDGE_ENABLED":              strconv.FormatBool(cfg.BridgeEnabled),
 		"BRIDGE_IDLE_EVICT":           cfg.BridgeIdleEvict.String(),
 	}

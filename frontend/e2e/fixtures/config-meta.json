@@ -351,6 +351,26 @@
     "description": "How long a model_unavailable admission refusal is remembered per model (off-window models short-circuit to the fallback within the TTL)."
   },
   {
+    "key": "QUEUE_DEPTH",
+    "group": "pool",
+    "kind": "int",
+    "default": "16",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Cap on parked FIFO waiters per token for smart-routing live-turn slots (0 = no queueing: fail over at once when no slot is free; negative rejects the config). A full queue fails over with the existing 429 shape. Applies live on reload."
+  },
+  {
+    "key": "QUEUE_WAIT",
+    "group": "pool",
+    "kind": "text",
+    "default": "30s",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "How long one acquire parks on a full token's FIFO live-turn queue before failing over with the existing 429 shape (Go duration, e.g. 5s, 30s). Zero-tolerant: empty or non-positive values fall back to 30s. Applies live on reload."
+  },
+  {
     "key": "QUOTA_AUTO_PROBE",
     "group": "pool",
     "kind": "bool",
@@ -420,6 +440,16 @@
     "essential": false,
     "hidden": true,
     "description": "Agent-run rotation interval."
+  },
+  {
+    "key": "ROUTING_SMART",
+    "group": "pool",
+    "kind": "bool",
+    "default": "true",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Master switch for smart pool routing: per-token live-turn slots with a FIFO waiter queue plus the unified scorer over eligible tokens. Applies live on reload; false restores the legacy acquire path exactly."
   },
   {
     "key": "RUNS_DRAIN_QUEUE_CAP",
@@ -538,6 +568,16 @@
     "essential": false,
     "hidden": true,
     "description": "Path of the session state file (used when SESSION_PERSIST=true; token-keyed, 0600, raw tokens never written)."
+  },
+  {
+    "key": "TOKEN_MAX_CONCURRENT",
+    "group": "pool",
+    "kind": "int",
+    "default": "2",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Cap on concurrent live turns per pooled token (floor 1: lower values floor to 1, a zero live-turn cap could never serve). A lease is granted only while the token holds fewer live turns; excess waiters park FIFO until QUEUE_WAIT elapses. Applies live on reload. BUNKER PRESET: 1 — fully sequential turns per account, zero parallel fingerprint."
   },
   {
     "key": "TOKEN_ROTATION",
