@@ -60,7 +60,19 @@ type Config struct {
 	LogAccess         bool   // true = per-request access log lines (LOG_ACCESS; default true, an empty .env line keeps it enabled)
 	// LogRingSize is the bounded in-memory log ring capacity behind the
 	// dashboard log viewer (LOG_RING_SIZE; default 500, validated 50..5000).
-	LogRingSize       int
+	LogRingSize int
+	// LogConsoleWindow is the dashboard log console's default VIEW window
+	// (LOG_CONSOLE_WINDOW; default 1h). It only bounds which rows the console
+	// query asks for — it never changes what the spill stores, so shrinking
+	// it hides nothing permanently. A non-positive value falls back to the
+	// default at load.
+	LogConsoleWindow time.Duration
+	// LogTableRetention is the storage retention age applied to log_entries
+	// AND request_records by the history purge (LOG_TABLE_RETENTION; default
+	// 168h = 7d). Quota and maturity history keep their own 90d retention.
+	// A non-positive value falls back to the default at load: a zero age
+	// would delete every history row on the next purge tick.
+	LogTableRetention time.Duration
 	MaxMessagesPerDay int // 0 = unlimited: per-token cap on successful chats per 24h
 	// MaxRequestsPerDay is the per-token cap on successful chat requests in
 	// the current Pacific day (MAX_REQUESTS_PER_DAY; 0 = unlimited, the
@@ -288,6 +300,14 @@ type Config struct {
 
 // DefaultAdminToken is the default dashboard admin password ("123456") used when ADMIN_TOKEN is unconfigured or empty.
 const DefaultAdminToken = "123456"
+
+// Defaults for the dashboard log surface. DefaultLogConsoleWindow bounds the
+// console's default view only (nothing is deleted); DefaultLogTableRetention
+// is the age at which log_entries and request_records rows are purged.
+const (
+	DefaultLogConsoleWindow  = time.Hour
+	DefaultLogTableRetention = 168 * time.Hour
+)
 
 // IsDefaultAdminToken reports whether AdminToken matches the factory default credentials ("123456").
 func (c *Config) IsDefaultAdminToken() bool {

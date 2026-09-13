@@ -53,6 +53,20 @@
   let autoPoll = $state(true);
   let page = $state(0);
   let pageSize = $state(10);
+  // Console time window. "" = no override (the server applies
+  // LOG_CONSOLE_WINDOW, its default view window); picking an option sends
+  // ?window= for this browser. View-only: the server keeps storing rows for
+  // LOG_TABLE_RETENTION regardless of what is shown here.
+  let logWindow = $state("");
+  // Fixed selectable windows; a knob value outside this set simply leaves no
+  // pill active while the label still reports the effective window.
+  const LOG_WINDOWS = [
+    { id: "15m", label: "15m", seconds: 900 },
+    { id: "1h", label: "1h", seconds: 3600 },
+    { id: "6h", label: "6h", seconds: 21600 },
+    { id: "24h", label: "24h", seconds: 86400 },
+  ];
+  const LOG_WINDOW_OPTIONS = LOG_WINDOWS.map((w) => w.id);
   // The first poll (and the restore below) wait for the stored filters:
   // fetching early would flash an unfiltered paint and could land after the
   // restore, clobbering it out of order.
@@ -86,6 +100,18 @@
   function accIndex(tok) {
     const t = String(tok ?? "").trim();
     return /^\d+$/.test(t) ? Number(t) : null;
+  }
+
+  // goDurationSeconds parses the backend's Go duration strings ("1h0m0s",
+  // "15m0s") into seconds; null when the shape is unrecognized, so the label
+  // simply hides instead of printing a raw value.
+  function goDurationSeconds(raw) {
+    if (typeof raw !== "string" || raw === "") return null;
+    const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(raw);
+    if (!m || (!m[1] && !m[2] && !m[3])) return null;
+    return (
+      Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0)
+    );
   }
 
   // Console is the specialized inference-traffic view: ONLY /v1 lines.
@@ -431,6 +457,27 @@
     }
   }
   let entries = $derived.by(() => data?.entries || []);
+  // The server reports the effective window with every response, so the label
+  // never guesses: it follows the knob until an option overrides it.
+  let effectiveWindowSeconds = $derived.by(() =>
+    goDurationSeconds(data?.window),
+  );
+  let windowLabel = $derived.by(() => {
+    const secs = effectiveWindowSeconds;
+    if (secs === null) return "";
+    if (secs === 3600) return $tr("1 hour");
+    if (secs % 3600 === 0) return $tr("{hours} hours", { hours: secs / 3600 });
+    if (secs === 900) return $tr("15 minutes");
+    return $tr("{minutes} min", { minutes: Math.round(secs / 60) });
+  });
+  // Adopt the server's window as the active option when it matches one of the
+  // fixed choices, so the default (knob) value is visibly selected without
+  // sending an override.
+  $effect(() => {
+    if (logWindow !== "") return;
+    const match = LOG_WINDOWS.find((w) => w.seconds === effectiveWindowSeconds);
+    if (match) logWindow = match.id;
+  });
   let filteredEntries = $derived.by(() => {
     if (!hideAdmin) return entries;
     return entries.filter((e) => {
@@ -487,6 +534,8 @@
     try {
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient local query builder, not reactive state
       const query = new URLSearchParams();
+      // Time window for this request (the knob applies when empty).
+      if (logWindow) query.set("window", logWindow);
       // Table-only filters: the console is an unfiltered /v1 view — sending
       // stale table filters while it is visible emptied it with no visible
       // cause ("no request log" although traffic existed).
@@ -732,10 +781,26 @@
                 ? "model request"
                 : "model requests"}</span
             >
+            {#if windowLabel}
+              <span
+                class="font-mono text-[11px] text-[var(--fp-dim)] whitespace-nowrap"
+                >{$tr("last {window}", { window: windowLabel })}</span
+              >
+            {/if}
           </div>
           <div
             class="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:justify-end"
           >
+            <SegmentedControl
+              bind:value={logWindow}
+              options={LOG_WINDOW_OPTIONS}
+              size="xs"
+              ariaLabel={$tr("Log time window")}
+              onchange={() => {
+                page = 0;
+                fetchLogs();
+              }}
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -814,6 +879,16 @@
             </Button>
           </div>
         </div>
+        {#if data.truncated}
+          <p
+            class="px-2.5 sm:px-3 py-1.5 text-[11px] text-[var(--fp-dim)] bg-[var(--fp-surface)] border-b border-[var(--fp-border)]"
+          >
+            {$tr(
+              "Showing the newest {count} entries — this window holds more than the console displays.",
+              { count: entries.length },
+            )}
+          </p>
+        {/if}
         <!-- Terminal Console View: structured rows wrap (never truncate, never break-all) -->
         <div
           bind:this={consoleEl}

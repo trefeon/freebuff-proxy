@@ -77,6 +77,10 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.FormatBool(c.LogAccess), false
 	case "LOG_RING_SIZE":
 		return strconv.Itoa(c.LogRingSize), false
+	case "LOG_CONSOLE_WINDOW":
+		return c.LogConsoleWindow.String(), false
+	case "LOG_TABLE_RETENTION":
+		return c.LogTableRetention.String(), false
 	case "MAX_MESSAGES_PER_DAY":
 		return strconv.Itoa(c.MaxMessagesPerDay), false
 	case "MAX_REQUESTS_PER_DAY":

@@ -43,6 +43,8 @@ type rawConfig struct {
 	LogFormat            string `json:"LOG_FORMAT"`
 	LogAccess            bool   `json:"LOG_ACCESS"`
 	LogRingSize          *int   `json:"LOG_RING_SIZE"`
+	LogConsoleWindow     string `json:"LOG_CONSOLE_WINDOW"`
+	LogTableRetention    string `json:"LOG_TABLE_RETENTION"`
 	MaxMessagesPerDay    *int   `json:"MAX_MESSAGES_PER_DAY"`
 	MaxRequestsPerDay    *int   `json:"MAX_REQUESTS_PER_DAY"`
 	MaxRequestsPerMinute *int   `json:"MAX_REQUESTS_PER_MINUTE"`
@@ -182,6 +184,8 @@ func defaultRawConfig() rawConfig {
 		LogAccess:                true,
 		DevToolsEnabled:          false,       // per-request access lines on by default; LOG_ACCESS=false disables them
 		LogRingSize:              ptrInt(500), // dashboard log viewer ring capacity (T19)
+		LogConsoleWindow:         "1h",        // console view window only; the spill still stores everything
+		LogTableRetention:        "168h",      // 7d storage retention for log_entries and request_records
 		CORSAllowedOrigin:        "*",         // browser clients reach /v1/* cross-origin by default
 		RequestJitter:            "",          // "" = disabled (unset → SAFE_MODE preset may fill)
 		CLIVersion:               "0.10.7",
