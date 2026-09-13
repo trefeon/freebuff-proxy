@@ -181,7 +181,9 @@ export async function mockDashboard(
     });
   });
 
-  // Logs - handles ?level= & ?msg= filtering like the real Go handler.
+  // Logs - handles ?level= & ?msg= filtering like the real Go handler, and
+  // echoes the effective view window (the ?window= override, else the
+  // LOG_CONSOLE_WINDOW default the fixture stands in for).
   await page.route("**/admin/api/logs**", async (route) => {
     const url = new URL(route.request().url());
     const level = (url.searchParams.get("level") || "").toLowerCase();
@@ -189,6 +191,8 @@ export async function mockDashboard(
     const base = pick("logs");
     const logsData = base as unknown as {
       entries: Array<{ level: string; message: string }>;
+      window?: string;
+      truncated?: boolean;
     };
     let entries: Array<{ level: string; message: string }> =
       logsData.entries || [];
@@ -206,6 +210,8 @@ export async function mockDashboard(
       level: level,
       msg: msg,
       has_filter: !!(level || msg),
+      window: url.searchParams.get("window") || logsData.window || "1h0m0s",
+      truncated: logsData.truncated === true,
       entries,
     });
     await route.fulfill({ status: 200, contentType: "application/json", body });

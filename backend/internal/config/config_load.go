@@ -102,6 +102,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideString(&raw.LogFormat, "LOG_FORMAT")
 	overrideBool(&raw.LogAccess, "LOG_ACCESS")
 	overrideInt(&raw.LogRingSize, "LOG_RING_SIZE")
+	overrideString(&raw.LogConsoleWindow, "LOG_CONSOLE_WINDOW")
+	overrideString(&raw.LogTableRetention, "LOG_TABLE_RETENTION")
 	overrideInt(&raw.MaxMessagesPerDay, "MAX_MESSAGES_PER_DAY")
 	overrideInt(&raw.MaxRequestsPerDay, "MAX_REQUESTS_PER_DAY")
 	overrideInt(&raw.MaxRequestsPerMinute, "MAX_REQUESTS_PER_MINUTE")
@@ -367,6 +369,32 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		logRingSize = *raw.LogRingSize
 	}
 
+	// LOG_CONSOLE_WINDOW / LOG_TABLE_RETENTION are zero-tolerant like
+	// BURST_WINDOW: "" falls back to the documented default, and an explicit
+	// non-positive value falls back the same way. For the console window 0
+	// would show an empty view; for retention 0 would purge every row on the
+	// next tick — neither is ever what an operator meant.
+	logConsoleWindow := DefaultLogConsoleWindow
+	if v := strings.TrimSpace(raw.LogConsoleWindow); v != "" {
+		logConsoleWindow, err = parseDuration(v, "LOG_CONSOLE_WINDOW")
+		if err != nil {
+			return Config{}, err
+		}
+		if logConsoleWindow <= 0 {
+			logConsoleWindow = DefaultLogConsoleWindow
+		}
+	}
+	logTableRetention := DefaultLogTableRetention
+	if v := strings.TrimSpace(raw.LogTableRetention); v != "" {
+		logTableRetention, err = parseDuration(v, "LOG_TABLE_RETENTION")
+		if err != nil {
+			return Config{}, err
+		}
+		if logTableRetention <= 0 {
+			logTableRetention = DefaultLogTableRetention
+		}
+	}
+
 	// FALLBACK_AFTER_MS (issue #100): milliseconds, ""/0 = disabled. Any
 	// parse failure fails the load — a typo silently disabling model
 	// fallback would be worse than surfacing it.
@@ -532,6 +560,8 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		LogFormat:                logFormat,
 		LogAccess:                raw.LogAccess,
 		LogRingSize:              logRingSize,
+		LogConsoleWindow:         logConsoleWindow,
+		LogTableRetention:        logTableRetention,
 		MaxMessagesPerDay:        maxMessagesPerDay,
 		MaxRequestsPerDay:        maxRequestsPerDay,
 		MaxRequestsPerMinute:     maxRequestsPerMinute,
@@ -731,6 +761,8 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideStringFrom(&raw.LogFormat, get, "LOG_FORMAT")
 	overrideBoolFrom(&raw.LogAccess, get, "LOG_ACCESS")
 	overrideIntFrom(&raw.LogRingSize, get, "LOG_RING_SIZE")
+	overrideStringFrom(&raw.LogConsoleWindow, get, "LOG_CONSOLE_WINDOW")
+	overrideStringFrom(&raw.LogTableRetention, get, "LOG_TABLE_RETENTION")
 	overrideIntFrom(&raw.MaxMessagesPerDay, get, "MAX_MESSAGES_PER_DAY")
 	overrideIntFrom(&raw.MaxRequestsPerDay, get, "MAX_REQUESTS_PER_DAY")
 	overrideIntFrom(&raw.MaxRequestsPerMinute, get, "MAX_REQUESTS_PER_MINUTE")

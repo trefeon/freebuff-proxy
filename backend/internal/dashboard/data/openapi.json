@@ -789,6 +789,12 @@
           },
           "msg": {
             "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "window": {
+            "type": "string"
           }
         },
         "required": [
@@ -796,7 +802,9 @@
           "entries",
           "has_filter",
           "level",
-          "msg"
+          "msg",
+          "truncated",
+          "window"
         ],
         "type": "object"
       },
@@ -2454,6 +2462,15 @@
             "description": "Message substring filter",
             "in": "query",
             "name": "msg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "View window override (Go duration, clamped to 1m..168h)",
+            "in": "query",
+            "name": "window",
             "required": false,
             "schema": {
               "type": "string"

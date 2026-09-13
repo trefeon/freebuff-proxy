@@ -777,6 +777,47 @@ test.describe("dashboard hermetic mocks", () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test("Logs console labels the view window and widens it on demand", async ({
+    page,
+  }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f);
+
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
+    // The label follows the server's effective window (the fixture stands in
+    // for LOG_CONSOLE_WINDOW = 1h) and the matching option is active.
+    await expect(page.getByText("last 1 hour")).toBeVisible();
+    await expect(page.getByRole("button", { name: "1h" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // Picking a window re-queries with ?window= and relabels the view.
+    await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/admin/api/logs") &&
+          r.url().includes("window=6h") &&
+          r.status() === 200,
+        { timeout: 5000 },
+      ),
+      page.getByRole("button", { name: "6h" }).click(),
+    ]);
+    await expect(page.getByText("last 6 hours")).toBeVisible();
+  });
+
+  test("Logs console notes a truncated view window", async ({ page }) => {
+    const f = loadFixtures();
+    await mockDashboard(page, f, {
+      logs: { entries: f.logs.entries, window: "1h0m0s", truncated: true },
+    });
+
+    await page.goto("http://127.0.0.1:4173/admin/#activity");
+    await expect(
+      page.getByText(/this window holds more than the console displays/),
+    ).toBeVisible();
+  });
+
   test("Logs console follows newest entries and pauses on manual scroll-up", async ({
     page,
   }) => {

@@ -3,6 +3,8 @@
   "level": "",
   "msg": "",
   "has_filter": false,
+  "window": "1h0m0s",
+  "truncated": false,
   "entries": [
     {
       "time": "2026-08-27T10:00:00Z",

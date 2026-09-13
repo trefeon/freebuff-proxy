@@ -136,7 +136,7 @@ func (r *Ring) recent(n int) []Entry {
 	if n < 0 {
 		// S9: a negative count must return empty, not panic in make with a
 		// negative capacity. No in-repo caller passes one, but this is a
-		// public API (dashboard Recent(200)).
+		// public API (the dashboard log console calls it).
 		n = 0
 	}
 	if n > r.filled {

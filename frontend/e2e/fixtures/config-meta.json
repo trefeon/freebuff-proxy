@@ -104,6 +104,16 @@
     "description": "Log one access line per HTTP request (healthz/metrics/OPTIONS are rate-limited to 1/min regardless)."
   },
   {
+    "key": "LOG_CONSOLE_WINDOW",
+    "group": "general",
+    "kind": "text",
+    "default": "1h",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Default time window of the Activity console (Go duration, e.g. 15m, 1h, 24h). VIEW ONLY: it bounds which history rows the console asks for and never changes what is stored, so widening it reveals older entries without any reload. Zero or invalid falls back to 1h."
+  },
+  {
     "key": "LOG_FILE",
     "group": "general",
     "kind": "text",
@@ -154,6 +164,16 @@
     "secret": false,
     "essential": false,
     "description": "In-memory log ring capacity behind the dashboard log viewer (50-5000). Restart-only: the ring is allocated once at boot and a reload never resizes it."
+  },
+  {
+    "key": "LOG_TABLE_RETENTION",
+    "group": "general",
+    "kind": "text",
+    "default": "168h",
+    "restart_only": false,
+    "secret": false,
+    "essential": false,
+    "description": "Storage retention for the log_entries and request_records history tables (Go duration; default 168h = 7 days). This is what the purge actually deletes: rows older than this are gone for good, so keep it at least as long as the console window you want to read. Quota and maturity history keep their own 90-day retention. Zero or invalid falls back to 168h."
   },
   {
     "key": "SAFE_MODE",

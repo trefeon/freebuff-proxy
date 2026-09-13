@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"freebuff-proxy/backend/internal/config"
 	"freebuff-proxy/backend/internal/logring"
 	"freebuff-proxy/backend/internal/store"
 )
@@ -24,13 +25,12 @@ const (
 
 // History retention: the background consumer purges rows older than these
 // ages on retentionEvery. Logs and request outcomes are high-volume display
-// data (30d); quota and maturity are sparse change points (90d). Purge runs
-// on the spill goroutine only — never on a request path.
+// data and follow LOG_TABLE_RETENTION (default 7d, operator-tunable); quota
+// and maturity are sparse change points (90d, not tunable). Purge runs on
+// the spill goroutine only — never on a request path.
 var retentionEvery = time.Hour
 
 const (
-	retentionLogsDays     = 30
-	retentionRequestsDays = 30
 	retentionQuotaDays    = 90
 	retentionMaturityDays = 90
 )
@@ -124,11 +124,22 @@ func (d *Dashboard) purgeHistory() {
 	}
 	now := store.Millis(time.Now())
 	day := int64(24 * time.Hour / time.Millisecond)
+	// LOG_TABLE_RETENTION bounds the two high-volume display tables. The
+	// load-time guard already coerces a non-positive value to the default;
+	// this repeats it so a Dashboard built with a hand-made config (tests)
+	// can never purge everything.
+	tableRetention := config.DefaultLogTableRetention
+	if d.cfg != nil {
+		if v := d.cfg().LogTableRetention; v > 0 {
+			tableRetention = v
+		}
+	}
+	tableBefore := now - tableRetention.Milliseconds()
 	if err := d.hist.Purge(
-		now-retentionLogsDays*day,
+		tableBefore,
 		now-retentionQuotaDays*day,
 		now-retentionMaturityDays*day,
-		now-retentionRequestsDays*day,
+		tableBefore,
 	); err != nil {
 		d.logger.Warn("history purge failed", "err", err)
 	}
