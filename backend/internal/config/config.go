@@ -289,6 +289,31 @@ type Config struct {
 	// across (BURST_MAX_TOKENS; default 2, minimum 2 — enforced in
 	// Validate). Zero = unset.
 	BurstMaxTokens int
+	// RoutingSmart is the master switch for smart pool routing
+	// (ROUTING_SMART; default true): per-token live-turn slot semaphore
+	// with a FIFO waiter queue plus the unified scorer over eligible
+	// tokens. False restores the legacy acquire path byte-identically.
+	// Live-apply (atomic pointer swap, no pool rebuild).
+	RoutingSmart bool
+	// TokenMaxConcurrent caps concurrent live turns per pooled token
+	// (TOKEN_MAX_CONCURRENT; default 2, floor 1): a token leases a new
+	// turn only while fewer than this many are live on that account, so
+	// one account never fans out past the cap no matter how many models
+	// share it. Values below 1 floor to 1 (a zero live-turn cap could
+	// never serve). The strictest anti-ban posture is 1 (bunker: fully
+	// sequential turns per account). Live-apply (read per Acquire).
+	TokenMaxConcurrent int
+	// QueueWait bounds how long one Acquire parks on a full token's FIFO
+	// slot queue before failing over (QUEUE_WAIT; default 30s).
+	// Zero-tolerant like BURST_WINDOW: empty or non-positive values fall
+	// back to the default. Live-apply (read per Acquire).
+	QueueWait time.Duration
+	// QueueDepth caps parked FIFO waiters per token (QUEUE_DEPTH; default
+	// 16): a full queue fails over immediately instead of parking (the
+	// overflow surfaces the existing 429 shape, never a new code). 0 =
+	// no queueing (fail over at once when no live-turn slot is free);
+	// negative is rejected in Validate. Live-apply (read per Acquire).
+	QueueDepth int
 }
 
 // DefaultAdminToken is the default dashboard admin password ("123456") used when ADMIN_TOKEN is unconfigured or empty.

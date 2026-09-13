@@ -67,6 +67,8 @@ func (c Config) Validate() error {
 		return errors.New("BURST_THRESHOLD cannot be negative")
 	case c.BurstWindow < 0:
 		return errors.New("BURST_WINDOW cannot be negative")
+	case c.QueueDepth < 0:
+		return errors.New("QUEUE_DEPTH cannot be negative (0 disables slot queueing)")
 	}
 	for src, target := range c.QuotaFallbackModels {
 		if strings.TrimSpace(src) == "" || strings.TrimSpace(target) == "" {

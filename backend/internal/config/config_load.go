@@ -148,6 +148,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	overrideString(&raw.BurstWindow, "BURST_WINDOW")
 	overrideInt(&raw.BurstThreshold, "BURST_THRESHOLD")
 	overrideInt(&raw.BurstMaxTokens, "BURST_MAX_TOKENS")
+	overrideBool(&raw.RoutingSmart, "ROUTING_SMART")
+	overrideInt(&raw.TokenMaxConcurrent, "TOKEN_MAX_CONCURRENT")
+	overrideString(&raw.QueueWait, "QUEUE_WAIT")
+	overrideInt(&raw.QueueDepth, "QUEUE_DEPTH")
 	overrideBool(&raw.WaitingRoomChain, "WAITING_ROOM_CHAIN")
 	overrideFloat(&raw.RateLimitPerIP, "RATE_LIMIT_PER_IP")
 	overrideInt(&raw.RateLimitBurst, "RATE_LIMIT_BURST")
@@ -525,6 +529,36 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 	if raw.BurstMaxTokens != nil {
 		burstMaxTokens = *raw.BurstMaxTokens
 	}
+	// TOKEN_MAX_CONCURRENT defaults to 2 with a hard floor of 1: a zero
+	// live-turn cap could never serve, so 0/negative values floor to 1
+	// instead of failing the load (the bunker-strict posture is an
+	// explicit 1).
+	tokenMaxConcurrent := 2
+	if raw.TokenMaxConcurrent != nil {
+		tokenMaxConcurrent = *raw.TokenMaxConcurrent
+	}
+	if tokenMaxConcurrent < 1 {
+		tokenMaxConcurrent = 1
+	}
+	// QUEUE_WAIT is zero-tolerant like BURST_WINDOW: "" falls back to the
+	// 30s default, and an explicit non-positive value falls back the same
+	// way (a zero wait would never park, defeating the FIFO queue).
+	queueWait := 30 * time.Second
+	if v := strings.TrimSpace(raw.QueueWait); v != "" {
+		queueWait, err = parseDuration(v, "QUEUE_WAIT")
+		if err != nil {
+			return Config{}, err
+		}
+		if queueWait <= 0 {
+			queueWait = 30 * time.Second
+		}
+	}
+	// QUEUE_DEPTH defaults to 16; 0 disables queueing (fail over at once
+	// when no live-turn slot is free); negative is rejected in Validate.
+	queueDepth := 16
+	if raw.QueueDepth != nil {
+		queueDepth = *raw.QueueDepth
+	}
 
 	cfg := Config{
 		ListenAddr:                       strings.TrimSpace(raw.ListenAddr),
@@ -596,6 +630,10 @@ func LoadOpts(configPath string, opts LoadOptions) (Config, error) {
 		BurstWindow:                      burstWindow,
 		BurstThreshold:                   burstThreshold,
 		BurstMaxTokens:                   burstMaxTokens,
+		RoutingSmart:                     raw.RoutingSmart,
+		TokenMaxConcurrent:               tokenMaxConcurrent,
+		QueueWait:                        queueWait,
+		QueueDepth:                       queueDepth,
 		QuotaFallbackModels:              quotaFallbackModels,
 		WaitingRoomChain:                 raw.WaitingRoomChain,
 		RateLimitPerIP:                   rateLimitPerIP,
@@ -804,6 +842,10 @@ func applyMappedValues(raw *rawConfig, get func(string) string) {
 	overrideStringFrom(&raw.BurstWindow, get, "BURST_WINDOW")
 	overrideIntFrom(&raw.BurstThreshold, get, "BURST_THRESHOLD")
 	overrideIntFrom(&raw.BurstMaxTokens, get, "BURST_MAX_TOKENS")
+	overrideBoolFrom(&raw.RoutingSmart, get, "ROUTING_SMART")
+	overrideIntFrom(&raw.TokenMaxConcurrent, get, "TOKEN_MAX_CONCURRENT")
+	overrideStringFrom(&raw.QueueWait, get, "QUEUE_WAIT")
+	overrideIntFrom(&raw.QueueDepth, get, "QUEUE_DEPTH")
 	overrideBoolFrom(&raw.WaitingRoomChain, get, "WAITING_ROOM_CHAIN")
 	overrideFloatFrom(&raw.RateLimitPerIP, get, "RATE_LIMIT_PER_IP")
 	overrideIntFrom(&raw.RateLimitBurst, get, "RATE_LIMIT_BURST")

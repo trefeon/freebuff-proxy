@@ -131,6 +131,9 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 		// Leader failed (no token) or follower follow failed — fall through
 		// to normal hot-order path without publishing to leader's gate.
 		order, quotaLimited := p.acquireOrder(toks, start, model)
+		if cfg.RoutingSmart {
+			order = p.routeSmartRank(cfg, toks, order, model)
+		}
 		return p.leaseFromOrder(ctx, model, agentID, cfg, toks, order, quotaLimited)
 	}
 	// Hot-session-first selection (leader path): tokens that already hold a
@@ -142,6 +145,9 @@ func (p *Pool) Acquire(ctx context.Context, model string) (*Lease, error) {
 	// tokens from the round-robin start (cold path), exactly like the
 	// historical linear failover. When no token is hot the order is unchanged.
 	order, quotaLimited := p.acquireOrder(toks, start, model)
+	if cfg.RoutingSmart {
+		order = p.routeSmartRank(cfg, toks, order, model)
+	}
 	lease, err := p.leaseFromOrder(ctx, model, agentID, cfg, toks, order, quotaLimited)
 	if err == nil {
 		// Leader success: publish token via gate before channel close so
@@ -338,6 +344,31 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			p.logger.Debug("pool: token skipped (daily request limit)", "token", idx+1, "limit", cfg.MaxRequestsPerDay)
 			continue
 		}
+		// Smart-routing live-turn slot (TOKEN_MAX_CONCURRENT, route_smart.go):
+		// a lease is granted only while the token holds fewer live turns
+		// than the cap; otherwise the caller parks FIFO until QUEUE_WAIT
+		// elapses. The slot is taken BEFORE any upstream admission so a
+		// queued request never burns a session slot or run START while it
+		// waits. Overflow/timeout maps to the existing 429 rate-limit
+		// shape and fails over to the next token; the caller's own ctx
+		// expiry returns as-is (today's gate behavior). Skipped entirely
+		// when ROUTING_SMART is off (legacy path untouched).
+		var routeSlot *routeSlotPermit
+		if cfg.RoutingSmart {
+			slotCap, slotDepth, slotWait := routeSlotParams(cfg)
+			permit, _, slotErr := p.routeSlotAcquire(ctx, tok, idx+1, slotCap, slotDepth, slotWait)
+			if slotErr != nil {
+				if routeIsQueueExhausted(slotErr) {
+					live := p.routeSlotLive(tok)
+					rateLimited = appendRateLimit(rateLimited, routeQueueRateLimit(slotErr.(*routeQueueExhaustedError), model, slotCap, live))
+					errs = append(errs, fmt.Sprintf("%s: %v", name, slotErr))
+					p.logger.Debug("pool: token skipped (live-turn queue exhausted)", "token", idx+1, "err", slotErr)
+					continue
+				}
+				return nil, slotErr
+			}
+			routeSlot = permit
+		}
 
 		// Session-create admission gate (issue #86): concurrent session
 		// creates are bounded globally and per model; when the gate is at
@@ -361,6 +392,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			}
 			p.admissionsMu.Unlock()
 			p.markPersistDirty()
+			routeSlot.Release()
 			return nil, err
 		}
 		// Re-validate the entry is still current BEFORE the admission POST:
@@ -376,6 +408,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 			}
 			p.admissionsMu.Unlock()
 			p.markPersistDirty()
+			routeSlot.Release()
 			continue
 		}
 		sessionStart := time.Now()
@@ -458,9 +491,14 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				p.MarkModelUnfit(model, lie)
 				modelLimited = append(modelLimited, lie)
 				errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+				routeSlot.Release()
 				continue
 			}
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+			if cfg.RoutingSmart && c.unclassified() && wr == nil {
+				p.routeNoteTransient(tok)
+			}
+			routeSlot.Release()
 			continue
 		}
 		tok.runs.ClearCooldowns()
@@ -473,6 +511,7 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		// retiring manager — so skip instead (the removal path drains the
 		// retired entry once it observes the slip).
 		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
+			routeSlot.Release()
 			continue
 		}
 		ss := tok.session.Snapshot()
@@ -539,6 +578,10 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 				countryBlocked = appendCountryBlock(countryBlocked, cbe)
 			}
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+			if cfg.RoutingSmart && c.unclassified() {
+				p.routeNoteTransient(tok)
+			}
+			routeSlot.Release()
 			continue
 		}
 		p.logger.Debug("pool: lease acquired", "token", idx+1, "model", effectiveModel, "agent", effectiveAgentID, "instance_id", instanceID,
@@ -554,15 +597,20 @@ func (p *Pool) leaseFromOrder(ctx context.Context, model string, agentID string,
 		chatPermit, _, err := p.chatGate.acquire(ctx, tok, effectiveModel, chatCap(cfg, chatMetered(tok, effectiveModel)))
 		if err != nil {
 			tok.runs.Release(run)
+			routeSlot.Release()
 			return nil, err
 		}
 		if cur := p.roster.Load(); idx < 0 || idx >= len(*cur) || (*cur)[idx] != tok {
 			tok.runs.Release(run)
 			chatPermit.Release()
+			routeSlot.Release()
 			continue
 		}
 		lease := &Lease{Token: idx, Model: effectiveModel, AgentID: effectiveAgentID, Run: run, SessionInstanceID: instanceID,
-			entry: tok, chat: chatPermit, AcquiredAt: time.Now()}
+			entry: tok, chat: chatPermit, routeSlot: routeSlot, AcquiredAt: time.Now()}
+		if cfg.RoutingSmart {
+			p.routeNoteGranted(tok)
+		}
 		// MAX_REQUESTS_PER_MINUTE admission is enforced atomically HERE at
 		// lease grant. The pre-filter above only reads the rolling window;
 		// recording later (in Chat) raced it — a concurrent burst (agent

@@ -191,6 +191,14 @@ func renderKey(c *Config, key string) (val string, valueIsSecret bool) {
 		return strconv.Itoa(c.BurstThreshold), false
 	case "BURST_MAX_TOKENS":
 		return strconv.Itoa(c.BurstMaxTokens), false
+	case "ROUTING_SMART":
+		return strconv.FormatBool(c.RoutingSmart), false
+	case "TOKEN_MAX_CONCURRENT":
+		return strconv.Itoa(c.TokenMaxConcurrent), false
+	case "QUEUE_WAIT":
+		return c.QueueWait.String(), false
+	case "QUEUE_DEPTH":
+		return strconv.Itoa(c.QueueDepth), false
 	default:
 		// A catalog key with no Config field (new upstream knob not yet
 		// wired into Config): fall back to the catalog default so the
